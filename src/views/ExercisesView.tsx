@@ -6,7 +6,6 @@ import { speak, stopSpeaking } from '../utils/audio';
 import { splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
 import { ConjugatedForm } from '../components/ConjugatedForm';
-import { today } from '../utils/dates';
 
 export type ExerciseMode =
   | 'flash'
@@ -58,7 +57,6 @@ interface ExercisesViewProps {
   settings?: AppSettings;
   activeMode: ExerciseMode | null;
   practiceWordIds?: string[] | null;
-  dailyProgress?: { d: string; n: number; r: number };
   onSelectMode: (mode: ExerciseMode | null) => void;
   onRecordResult: (word: Word | CaseQuestion, mode: string, grade: number, isRetry: boolean) => void;
   onOpenHelp: (topic: string) => void;
@@ -70,7 +68,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   settings,
   activeMode,
   practiceWordIds,
-  dailyProgress,
   onSelectMode,
   onRecordResult,
   onOpenHelp,
@@ -196,15 +193,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       }
       qIds = pool.map(w => w.id).slice(0, settings?.rv || 20);
     } else if (activeMode === 'daily') {
-      const due = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due);
+      const due = pool.filter(w => w.last && w.due <= n);
       const nw = pool.filter(w => !w.last);
       const dailyNewLimit = settings?.nw ?? 10;
       const dailyRevLimit = settings?.rv ?? 20;
-      const completedNew = dailyProgress?.d === today() ? dailyProgress.n : 0;
-      const completedReviews = dailyProgress?.d === today() ? dailyProgress.r : 0;
-      const remainingNew = dailyNewLimit > 0 ? Math.max(0, dailyNewLimit - completedNew) : 0;
-      const remainingReviews = dailyRevLimit > 0 ? Math.max(0, dailyRevLimit - completedReviews) : 0;
-      qIds = [...due.slice(0, remainingReviews), ...nw.slice(0, remainingNew)].map(w => w.id);
+      qIds = [...due.slice(0, dailyRevLimit), ...nw.slice(0, dailyNewLimit)].map(w => w.id);
     } else if (activeMode === 'art') {
       qIds = pool.filter(w => !!w.art).sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'cloze') {
@@ -230,7 +223,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setCaseResult(null);
     setAnswerResult(null);
     setHintLevel(0);
-  }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct, settings?.nw, settings?.rv, settings?.leechN]);
+  }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct]);
 
   // Current item
   const currentItem = useMemo(() => {
@@ -581,28 +574,17 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
-        {/* Compact two-column present-tense table. Keep the profile's shared form segmentation/colors. */}
-        {w.conj && (() => {
-          const forms = splitConj(w.conj);
-          const renderPerson = (i: number) => {
-            const form = forms[i];
-            if (!form) return null;
-            return (
-              <div key={i} dir="ltr" className="flex min-w-0 items-baseline justify-start gap-1.5 leading-5">
-                <span className="w-[3.5rem] shrink-0 text-left text-slate-500 dark:text-slate-400">{P6[i]}</span>
-                <span className="min-w-0 text-left break-words">
-                  <HighlightedVerbForm verb={w.de} form={form} pronounIndex={i} sep={w.sep} />
-                </span>
-              </div>
-            );
-          };
-          return (
-            <div className="grid grid-cols-2 gap-x-3 text-[11px] sm:text-xs bg-white dark:bg-[#1b2029] p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
-              <div className="min-w-0 space-y-1">{[0, 1, 2].map(renderPerson)}</div>
-              <div className="min-w-0 space-y-1">{[3, 4, 5].map(renderPerson)}</div>
-            </div>
-          );
-        })()}
+        {/* Verb table with regular endings (blue) and irregular stem changes (red) - shared logic */}
+        {w.conj && (
+          <div className="text-xs bg-white dark:bg-[#1b2029] p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800 flex flex-wrap gap-2 justify-between">
+            {splitConj(w.conj).map((f, i) => (
+              <span key={i} dir="ltr" className="text-slate-600 dark:text-slate-300">
+                <b className="text-slate-400">{P6[i]}:</b>{' '}
+                <HighlightedVerbForm verb={w.de} form={f} pronounIndex={i} sep={w.sep} />
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Image if available */}
         {w.img && (
@@ -804,7 +786,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   }
 
   return (
-    <div className="space-y-4 text-right max-w-2xl mx-auto pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-10">
+    <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
       {/* Exercise Top Bar */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         {/* Help + Title */}
@@ -833,9 +815,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
           <button
             onClick={() => onSelectMode(null)}
-            className="text-xs bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 rounded-xl font-semibold transition"
+            className="w-9 h-9 bg-white hover:bg-slate-100 dark:bg-white dark:hover:bg-slate-100 text-slate-700 rounded-lg font-bold text-lg transition flex items-center justify-center"
+            title="خروج از تمرین"
+            aria-label="خروج از تمرین"
           >
-            خروج ✕
+            ×
           </button>
         </div>
       </div>
@@ -862,7 +846,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       </div>
 
       {/* Active Card Body */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-4 md:p-6 shadow-sm space-y-4 min-w-0">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
         {/* ========================================================= */}
         {/* FLASHCARD / REVIEW CARD (Sections 10 & 11) */}
         {/* ========================================================= */}
@@ -871,7 +855,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const isFaDir = currentCardDir === 'fa';
 
           return (
-            <div className="space-y-4 text-center pb-2">
+            <div className="space-y-4 text-center">
               {/* Question Face */}
               {!isFaDir ? (
                 <div className="py-4 space-y-2">
@@ -899,7 +883,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               ) : (
                 <div className="py-4 space-y-2">
-                  <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">
+                  <div className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">
                     {w.fa}
                   </div>
                   {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
@@ -922,7 +906,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                   {/* Rating / Decision Buttons */}
                   {activeMode === 'free' ? (
-                    <div className="flex flex-wrap items-center justify-center gap-3 pt-3 pb-3">
+                    <div className="flex items-center justify-center gap-3 pt-3">
                       <button
                         onClick={() => handleFreeKnow(0)}
                         className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 px-5 py-2.5 rounded-xl font-bold text-xs md:text-sm transition flex-1 max-w-xs"
@@ -937,7 +921,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 pb-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
                       <button
                         onClick={() => handleFlashGrade(0)}
                         className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-900 py-2.5 px-2 rounded-xl text-xs font-bold"
