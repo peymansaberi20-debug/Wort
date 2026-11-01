@@ -15,7 +15,6 @@ interface DuplicateDetectorModalProps {
   words: Word[];
   onClose: () => void;
   onDeleteWord: (word: Word) => void;
-  onBatchDelete: (wordIds: string[]) => void;
   onMergeWords: (canonicalId: string, mergedData: Partial<Word>, removedIds: string[]) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
@@ -24,7 +23,6 @@ export const DuplicateDetectorModal: React.FC<DuplicateDetectorModalProps> = ({
   words,
   onClose,
   onDeleteWord,
-  onBatchDelete,
   onMergeWords,
   onShowToast
 }) => {
@@ -157,14 +155,18 @@ export const DuplicateDetectorModal: React.FC<DuplicateDetectorModalProps> = ({
   };
 
   const handleDeleteEntry = (word: Word, group: DuplicateGroup) => {
-    onDeleteWord(word);
+    if (window.confirm(`آیا از حذف واژهٔ «${fullWord(word)}» اطمینان دارید؟`)) {
+      onDeleteWord(word);
+      onShowToast(`واژهٔ «${fullWord(word)}» حذف شد.`);
+    }
   };
 
   const handlePickCanonical = (canonical: Word, group: DuplicateGroup) => {
     const duplicates = group.words.filter(w => w.id !== canonical.id);
-    if (duplicates.length === 0) return;
-    // The App-level confirmation names the count and commits all selected source IDs atomically.
-    onBatchDelete(duplicates.map(word => word.id));
+    if (window.confirm(`واژهٔ «${fullWord(canonical)}» به‌عنوان نسخه اصلی نگه داشته شود و ${duplicates.length} مورد تکراری دیگر حذف شوند؟`)) {
+      duplicates.forEach(d => onDeleteWord(d));
+      onShowToast(`نسخهٔ اصلی حفظ شد و ${duplicates.length} مورد تکراری حذف گردید.`);
+    }
   };
 
   // AI-Assisted Merge
@@ -295,8 +297,6 @@ Reply with ONLY a valid JSON object matching these keys:
 
   const handleConfirmMerge = () => {
     if (!mergePreview) return;
-    const removedCount = mergePreview.removedIds.length;
-    if (!window.confirm(`با ثبت این ادغام، نسخهٔ اصلی حفظ و ${removedCount} واژهٔ منبع حذف می‌شود؛ سابقهٔ مرور آن‌ها به نسخهٔ اصلی منتقل خواهد شد. آیا ادامه می‌دهید؟`)) return;
     onMergeWords(mergePreview.canonicalId, mergePreview.draft, mergePreview.removedIds);
     setDismissedGroupIds(prev => new Set(prev).add(mergePreview.groupId));
     setMergePreview(null);
@@ -323,7 +323,7 @@ Reply with ONLY a valid JSON object matching these keys:
             onClick={onClose}
             className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
           >
-            ✕ بستن
+            ×
           </button>
         </div>
 
@@ -365,7 +365,7 @@ Reply with ONLY a valid JSON object matching these keys:
                 onClick={() => setMergePreview(null)}
                 className="text-xs text-slate-500 hover:text-slate-700"
               >
-                انصراف ✕
+                ×
               </button>
             </div>
 
