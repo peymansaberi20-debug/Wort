@@ -485,41 +485,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 7. Gemini AI Integration (Server-Side) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
-        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
-          <span>🤖</span> اتصال به هوش مصنوعی 
-        </h3>
-        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-relaxed">
-          کلیه فرایندهای هوش مصنوعی (تکمیل واژگان، ترجمه سریع، استخراج از تصاویر، تولید تمرین‌ها و ادغام لغات تکراری) با سرعت بالا از طریق سرور انجام می‌شوند.
-        </p>
-
-        <div className="space-y-3 text-xs md:text-sm">
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]">
-            <div>
-              <span className="font-bold block text-slate-800 dark:text-slate-200">مدل‌های فعال سرور:</span>
-              <span className="font-mono text-xs text-[#1f5fbf] dark:text-blue-400">gemini-3.1-flash-lite / gemini-3.8-flash</span>
-            </div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 text-xs font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              فعال روی سرور
-            </span>
-          </div>
-
-          <button
-            onClick={handleTestAi}
-            disabled={testing}
-            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition disabled:opacity-50"
-          >
-            {testing ? '⏳ در حال بررسی اتصال سرور...' : '🔌 بررسی وضعیت اتصال به هوش مصنوعی سرور'}
-          </button>
-
-          {testStatus && (
-            <p className="text-xs font-medium text-slate-700 dark:text-slate-300 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60">
-              {testStatus}
-            </p>
-          )}
-        </div>
-      </div>
+      <GeminiKeyCard />
 
       {/* ========================================================= */}
       {/* 8. Data Management & Destructive Actions (Section 8) */}
