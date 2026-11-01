@@ -33,6 +33,27 @@ import { VocabularyView } from './views/VocabularyView';
 import { ImportExportView } from './views/ImportExportView';
 import { SettingsView } from './views/SettingsView';
 
+const normalizeGermanDuplicateKey = (value: string) =>
+  (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
+
+const isDuplicateVocabularyEntry = (candidate: Partial<Word>, words: Word[], excludeId?: string | null) => {
+  const raw = normalizeGermanDuplicateKey(candidate.de || '');
+  const candidateMatch = /^(der|die|das)\s+(.+)$/i.exec(raw);
+  const de = normalizeGermanDuplicateKey(candidateMatch ? candidateMatch[2] : raw);
+  const art = candidateMatch ? candidateMatch[1].toLowerCase() : normalizeGermanDuplicateKey(candidate.art || '');
+  if (!de) return false;
+
+  return words.some(word => {
+    if (excludeId && word.id === excludeId) return false;
+    const existingRaw = normalizeGermanDuplicateKey(word.de || '');
+    const existingMatch = /^(der|die|das)\s+(.+)$/i.exec(existingRaw);
+    const existingDe = normalizeGermanDuplicateKey(existingMatch ? existingMatch[2] : existingRaw);
+    const existingArt = existingMatch ? existingMatch[1].toLowerCase() : normalizeGermanDuplicateKey(word.art || '');
+    if (existingDe !== de) return false;
+    return !art || !existingArt || existingArt === art;
+  });
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [extData, setExtData] = useState(() => getExtData());
@@ -177,9 +198,20 @@ export default function App() {
     showToast('همه اطلاعات با موفقیت ذخیره شد. می‌توانید با آسودگی خارج شوید.');
   };
 
-  // Add / Edit Word
+  // Add / Edit Word. Duplicate checks here are a final guard in addition to the form-level check.
   const handleSaveWord = (wordData: Partial<Word>, isEdit: boolean) => {
+    if (!isEdit && isDuplicateVocabularyEntry(wordData, state.words)) {
+      showToast('این واژه قبلاً در کتابخانه وجود دارد؛ واژهٔ تکراری ذخیره نشد.', true);
+      return;
+    }
+
     setState(prev => {
+      // Recheck against the latest state immediately before insertion to avoid stale-state duplicates.
+      if (!isEdit && isDuplicateVocabularyEntry(wordData, prev.words)) {
+        showToast('این واژه هم‌زمان به کتابخانه اضافه شده است؛ ثبت تکراری انجام نشد.', true);
+        return prev;
+      }
+
       const nextWords = [...prev.words];
       if (isEdit && editingWordId) {
         const idx = nextWords.findIndex(w => w.id === editingWordId);
@@ -198,10 +230,10 @@ export default function App() {
         }) as Word;
         if (newWord) nextWords.push(newWord);
       }
+      showToast(isEdit ? 'تغییرات واژه ذخیره شد.' : 'واژه با موفقیت به کتابخانه افزوده شد.');
       return { ...prev, words: nextWords };
     });
     setEditingWordId(null);
-    showToast(isEdit ? 'تغییرات واژه ذخیره شد.' : 'واژه با موفقیت به کتابخانه افزوده شد.');
   };
 
   // Delete single word
