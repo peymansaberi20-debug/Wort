@@ -161,7 +161,7 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
                               onClick={() => onIgnoreWord(word.id)}
                               className="bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1"
                             >
-                              🙈 نادیده بگیر
+                               نادیده بگیر
                             </button>
                             <button
                               onClick={() => onDeleteWord(word)}
