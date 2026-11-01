@@ -1,8 +1,33 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
+
+// Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
+const duplicateKey = (value: string) =>
+  (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
+
+const parseGermanEntry = (input: string, selectedArt = ''): { de: string; art: string } => {
+  const value = duplicateKey(input);
+  const match = /^(der|die|das)\s+(.+)$/i.exec(value);
+  const chosenArt = duplicateKey(selectedArt);
+  return {
+    de: match ? duplicateKey(match[2]) : value,
+    art: match ? match[1].toLowerCase() : (['der', 'die', 'das'].includes(chosenArt) ? chosenArt : '')
+  };
+};
+
+const findExistingDuplicate = (input: string, selectedArt: string, words: Word[], excludeId?: string | null): Word | null => {
+  const target = parseGermanEntry(input, selectedArt);
+  if (!target.de) return null;
+  return words.find(word => {
+    if (excludeId && word.id === excludeId) return false;
+    const existing = parseGermanEntry(word.de, word.art);
+    if (existing.de !== target.de) return false;
+    return !target.art || !existing.art || existing.art === target.art;
+  }) || null;
+};
 
 interface VocabularyViewProps {
   words: Word[];
@@ -82,6 +107,16 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [aiLoading, setAiLoading] = useState(false);
   const [translateLoading, setTranslateLoading] = useState(false);
   const [pasteAiJson, setPasteAiJson] = useState('');
+  const [duplicateWord, setDuplicateWord] = useState<Word | null>(null);
+  const wordsRef = useRef(words);
+  const aiOperationRef = useRef(false);
+  wordsRef.current = words;
+
+  const checkForDuplicate = (input = formDe, art = formArt): Word | null => {
+    const duplicate = findExistingDuplicate(input, art, wordsRef.current, editingWordId);
+    setDuplicateWord(duplicate);
+    return duplicate;
+  };
 
   // Categories list
   const categories = useMemo(() => getCategories(words), [words]);
@@ -197,16 +232,27 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   };
 
   const handleAiAutoFill = async () => {
+    if (aiOperationRef.current) return;
     if (!formDe.trim()) {
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
       return;
     }
+    if (checkForDuplicate()) {
+      onShowToast('این واژه از قبل در کتابخانه وجود دارد؛ هوش مصنوعی اجرا نشد.', true);
+      return;
+    }
+    aiOperationRef.current = true;
     setAiLoading(true);
     try {
-      const prompt = AIP(formDe.trim(), words, formCat && formCat !== '__new' ? formCat : undefined);
+      const prompt = AIP(formDe.trim(), wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
       const resText = await generateWithGemini(prompt, { timeoutMs: 25000 });
+      const duplicateAfterAi = checkForDuplicate();
+      if (duplicateAfterAi) {
+        onShowToast('این واژه در حین پردازش به کتابخانه اضافه شده است؛ اطلاعات تولیدشده اعمال نشد.', true);
+        return;
+      }
       const parsed = parseAI(resText);
-      const { ws, errs } = aiToIMP(parsed, words, formCat && formCat !== '__new' ? formCat : undefined);
+      const { ws, errs } = aiToIMP(parsed, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
       if (ws.length > 0) {
         const item = ws[0];
         if (item.art) setFormArt(item.art);
@@ -237,18 +283,30 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     } catch (err: any) {
       onShowToast(err.message || 'خطا در تکمیل با هوش مصنوعی', true);
     } finally {
+      aiOperationRef.current = false;
       setAiLoading(false);
     }
   };
 
   const handleQuickTranslate = async () => {
+    if (aiOperationRef.current) return;
     if (!formDe.trim()) {
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
       return;
     }
+    if (checkForDuplicate()) {
+      onShowToast('این واژه از قبل در کتابخانه وجود دارد؛ ترجمهٔ هوش مصنوعی اجرا نشد.', true);
+      return;
+    }
+    aiOperationRef.current = true;
     setTranslateLoading(true);
     try {
       const res = await quickTranslateWithGemini(formDe.trim());
+      const duplicateAfterTranslate = checkForDuplicate();
+      if (duplicateAfterTranslate) {
+        onShowToast('این واژه در حین ترجمه به کتابخانه اضافه شده است؛ ترجمه اعمال نشد.', true);
+        return;
+      }
       if (res && res.fa) {
         setFormFa(res.fa);
         if (res.art && !formArt) setFormArt(res.art.toLowerCase());
@@ -261,6 +319,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     } catch (err: any) {
       onShowToast(err.message || 'خطا در ترجمه سریع با هوش مصنوعی', true);
     } finally {
+      aiOperationRef.current = false;
       setTranslateLoading(false);
     }
   };
@@ -325,6 +384,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       return;
     }
 
+    if (checkForDuplicate()) {
+      onShowToast('این واژه قبلاً ثبت شده است. برای جلوگیری از ثبت تکراری، ذخیره انجام نشد.', true);
+      return;
+    }
+
     let finalCat = formCat;
     if (formCat === '__new') {
       finalCat = resolveCat(newCatInput, words);
@@ -359,6 +423,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       },
       isEditing
     );
+    setDuplicateWord(null);
     resetForm();
   };
 
@@ -428,10 +493,39 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
               dir="ltr"
               placeholder="z.B. Entscheidung یا gehen یا schön"
               value={formDe}
-              onChange={e => setFormDe(e.target.value)}
+              onChange={e => { setFormDe(e.target.value); setDuplicateWord(null); }}
               className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
             />
           </div>
+
+          {duplicateWord && (
+            <div role="alert" className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
+              <div className="font-extrabold text-amber-900 dark:text-amber-200">
+                ⚠️ این واژه از قبل در کتابخانه وجود دارد.
+              </div>
+              <div className="text-sm text-amber-900 dark:text-amber-100">
+                <span dir="ltr" className="font-bold">{duplicateWord.art ? `${duplicateWord.art} ` : ''}{duplicateWord.de}</span>
+                {duplicateWord.fa ? <span> — {duplicateWord.fa}</span> : null}
+                <div className="mt-1 text-xs opacity-80">برای جلوگیری از ثبت تکراری، تکمیل هوش مصنوعی و ذخیره متوقف شده‌اند. متن واردشده پاک نمی‌شود.</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); onSelectWord(existing); }}
+                  className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 text-xs font-bold transition"
+                >
+                  مشاهدهٔ پروفایل واژهٔ موجود
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWord(null)}
+                  className="rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-bold transition"
+                >
+                  بستن هشدار و ادامهٔ ویرایش
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* AI Helper Bar */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-2.5">
