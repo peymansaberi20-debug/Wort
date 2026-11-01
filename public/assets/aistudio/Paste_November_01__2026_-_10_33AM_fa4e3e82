@@ -1,0 +1,823 @@
+Master Implementation Prompt — WörterBuch German Vocabulary Learning App
+
+1. Role and Overall Objective
+
+Act as a senior full-stack engineer, UI/UX designer, and German-language learning application specialist.
+
+Inspect the existing WörterBuch application and implement all requirements in this prompt directly in the current project. This is an enhancement of an existing application, not a request to build a separate application from scratch.
+
+Before changing anything:
+
+* Inspect the current source code, components, data models, settings, event handlers, and application architecture.
+* Identify the causes of existing bugs rather than applying superficial workarounds.
+* Reuse existing components and data structures wherever practical.
+* Preserve existing vocabulary, translations, examples, learning progress, review history, categories, and user settings unless a requirement explicitly calls for modifying or deleting them.
+* Avoid regressions in existing functionality.
+* Do not replace working features with mockups, placeholder buttons, or simulated behavior.
+
+Implement the requirements below as a coherent, fully functional application. Do not stop after describing the proposed changes. Make the actual code changes, connect the relevant controls to real application behavior, and verify the results.
+
+⸻
+
+PART A — COMPLETE SETTINGS MODULE
+
+2. Appearance and Flashcard Direction
+
+2.1 Theme
+
+Provide a theme selector with:
+
+* Light mode
+* Dark mode
+
+Requirements:
+
+* Default: Light mode.
+* Apply the selected theme throughout the application.
+* Persist the selection across reloads and application restarts.
+* Ensure text, cards, dialogs, forms, and controls remain readable in both themes.
+
+2.2 Default Flashcard Direction
+
+Provide three options:
+
+* German → Persian
+* Persian → German
+* Random direction
+
+Use these internal values:
+
+* de
+* fa
+* rand
+
+Default: de.
+
+The random option must select a direction independently for each flashcard. Do not choose one direction for the entire session and reuse it for every card.
+
+3. Daily Learning Limits and Session Order
+
+3.1 New Words per Day
+
+* Setting key: nw
+* Numeric range: 0–500
+* Default: 10
+
+3.2 Reviews per Day
+
+* Setting key: rv
+* Numeric range: 0–500
+* Default: 20
+
+A value of zero must be handled consistently and must not accidentally cause an unlimited session unless that behavior is explicitly defined and communicated in the UI.
+
+3.3 Session Order
+
+Setting key: order.
+
+Options:
+
+* due: Review due cards first, then introduce new words.
+* new: Introduce new words first.
+* mix: Alternate between review cards and new words.
+* rand: Randomize the order of eligible cards.
+
+Default: due.
+
+Make sure the actual study-session scheduler respects the selected option.
+
+3.4 Category Filters
+
+Setting key: activeCats.
+
+Allow users to select which vocabulary categories participate in the daily learning session.
+
+Requirements:
+
+* Generate the category list dynamically from the application’s existing category data.
+* If no category is selected, include all categories.
+* Apply the filter to the daily study session without deleting or modifying excluded vocabulary.
+* Do not unexpectedly apply this setting to unrelated vocabulary-management screens.
+
+4. Review Algorithm and Difficult Words
+
+4.1 Review Interval Adjustment
+
+Setting key: ivlMod.
+
+Options:
+
+* 0.8: Strict mode — shorter review intervals.
+* 1.0: Normal mode.
+* 1.25: Relaxed mode — longer review intervals.
+
+Default: 1.0.
+
+This setting must affect the actual scheduling algorithm, not just the displayed interface. Apply it consistently while preserving the application’s existing spaced-repetition logic.
+
+Prevent invalid, negative, or non-finite intervals.
+
+4.2 Difficult-Word Threshold
+
+Setting key: leechN.
+
+* Numeric range: 2–20
+* Default: 4
+
+Use this value as the configurable repeated-error threshold.
+
+The existing application identifies a difficult word using the configured error threshold and an error ratio of at least 40%. Preserve that logic unless inspection reveals a bug requiring correction.
+
+4.3 Difficult-Word Action
+
+Setting key: leechAct.
+
+Options:
+
+* mark: Mark the word as difficult without suspending it.
+* suspend: Mark the word and exclude it from daily study and review sessions.
+
+Default: mark.
+
+Suspended words must remain available in vocabulary management and must not be deleted.
+
+5. Flashcard Timer
+
+5.1 Automatic Answer Reveal
+
+Setting key: revealSec.
+
+* Range: 0–120 seconds
+* Default: 0
+* Zero disables automatic reveal.
+
+If enabled, reveal the answer for the current flashcard after the configured delay.
+
+Critical requirements:
+
+* The timer must belong to the current card only.
+* Cancel or reset it when changing cards, restarting a session, closing the study view, or navigating away.
+* Never reveal the answer of a different card because of a timer started for a previous card.
+* Do not allow multiple stale timers to interfere with the current card.
+
+5.2 Show Study Timer
+
+Setting key: showTimer.
+
+* Default: false
+
+When enabled, display the timer in the study interface. When disabled, hide it without disrupting the study session.
+
+6. Pronunciation and Audio Settings
+
+6.1 Automatic Pronunciation
+
+Setting key: auto.
+
+* Default: false
+
+When enabled, automatically pronounce the German vocabulary word at the appropriate point in the flashcard workflow.
+
+6.2 Read the Example Sentence
+
+Setting key: autoEx.
+
+* Default: false
+
+When enabled, read the example sentence after pronouncing the vocabulary word, when an example exists.
+
+Avoid overlapping speech and cancel outdated speech when the current card changes.
+
+6.3 German Accent
+
+Setting key: vreg.
+
+Options:
+
+* Automatic/default: ""
+* German (Germany): de-DE
+* German (Austria): de-AT
+* German (Switzerland): de-CH
+
+Default: "".
+
+Use a compatible installed speech voice where possible. If the exact requested accent is unavailable, fall back gracefully and do not crash.
+
+6.4 Voice Selection
+
+Setting key: voice.
+
+* Default: automatic voice selection.
+* Populate the list using available German speech-synthesis voices.
+* Refresh the list when voices become available asynchronously.
+* Restore the selected voice when possible.
+* Handle unavailable or removed voices gracefully.
+
+6.5 Speech Rate
+
+Setting key: rate.
+
+* Range: 0.5–1.1
+* Step: 0.05
+* Default: 0.85
+
+Apply the selected rate to all relevant pronunciation actions.
+
+6.6 Test Voice
+
+Provide a functional “Test Voice” button that speaks:
+
+“Guten Tag! Ich lerne Deutsch in Wien.”
+
+The test must use the selected voice, accent preference, and speech rate.
+
+Retain concise compatibility guidance for iOS/iPadOS, Android, Windows, and macOS.
+
+7. Daily Goal and Backup Reminder
+
+7.1 Daily Goal
+
+Setting key: goal.
+
+* Range: 0–500
+* Default: 20
+* Zero disables the goal.
+
+Track daily progress accurately and reset the daily count according to the application’s existing date-handling logic.
+
+7.2 Backup Reminder Frequency
+
+Setting key: bkDays.
+
+Options:
+
+* 0: Disabled
+* 3: Every 3 days
+* 7: Every 7 days
+* 14: Every 14 days
+* 30: Every 30 days
+
+Default: 7.
+
+Persist the last relevant backup/reminder timestamp if necessary. Avoid repeatedly showing the same reminder during every render or navigation event.
+
+Do not claim that a backup has been created unless the application actually creates one.
+
+8. Data Management and Destructive Actions
+
+8.1 Clear Review History
+
+Provide a clearly labeled action to clear review history.
+
+Requirements:
+
+* Show a confirmation dialog before proceeding.
+* Clear review history.
+* Reset each vocabulary item’s review-related state to the application’s established initial values:
+    * last = 0
+    * due = 0
+    * ivl = 0
+    * ease = 2.5
+    * ok = 0
+    * bad = 0
+    * res = ""
+* Reset daily counters to the current date and zero counts.
+* Save the changes and refresh the interface.
+* Preserve vocabulary, translations, examples, categories, and unrelated settings.
+
+8.2 Delete All Vocabulary
+
+Provide a separate destructive action to delete all vocabulary.
+
+Requirements:
+
+* Require two explicit confirmation steps, consistent with the existing application design.
+* Delete vocabulary and review history.
+* Reset daily counters.
+* Persist the change and refresh the interface.
+* Clearly warn the user that this action is destructive and cannot be casually reversed.
+* Do not accidentally trigger this action from the review-history control.
+
+9. Settings Architecture and Persistence
+
+Maintain a centralized, consistent settings object with these defaults:
+
+* theme: "light"
+* dir: "de"
+* nw: 10
+* rv: 20
+* order: "due"
+* activeCats: []
+* ivlMod: 1
+* leechN: 4
+* leechAct: "mark"
+* revealSec: 0
+* showTimer: false
+* auto: false
+* autoEx: false
+* vreg: ""
+* voice: ""
+* rate: 0.85
+* goal: 20
+* bkDays: 7
+
+Requirements:
+
+* Preserve existing valid user settings.
+* Apply defaults only when a setting is missing or invalid.
+* Validate values loaded from storage.
+* Persist settings using the application’s existing storage mechanism.
+* Ensure changes take effect immediately where appropriate.
+* Do not overwrite vocabulary data when saving settings.
+* Maintain compatibility with previously saved application data.
+* Avoid duplicating event listeners or creating multiple conflicting state sources.
+
+⸻
+
+PART B — FLASHCARD AND VOCABULARY DISPLAY BUG FIXES
+
+10. Independent Answer Reveal for Every Vocabulary Card
+
+Fix the existing bug in which revealing the translation of one flashcard causes the translations of other cards to appear revealed as well.
+
+Required behavior:
+
+* Each vocabulary card must maintain its own independent answer-visibility state.
+* Clicking “Show Answer” on one card must reveal only that card.
+* Moving to another card must not inherit the previous card’s revealed state unless that same card was intentionally designed to retain its state.
+* Prefer resetting answer visibility when entering a new card or starting a new card presentation, unless the existing workflow requires otherwise.
+* Do not use one shared boolean to control visibility for every card.
+
+Use stable card or vocabulary identifiers when storing per-card UI state. Ensure that state is reset appropriately when a study session restarts or its card sequence changes.
+
+11. Hide Examples Until the Answer Is Revealed
+
+Initially hide both the translation and the example sentence for each flashcard.
+
+Required behavior:
+
+1. Display the German or Persian prompt according to the selected flashcard direction.
+2. Keep the translation hidden.
+3. Keep the example sentence hidden.
+4. When the user clicks “Show Answer,” reveal the translation and the corresponding example together.
+5. Keep this behavior independent for each vocabulary card.
+
+Additional requirements:
+
+* Do not reveal examples for unrelated cards.
+* Do not accidentally display an example when a translation is still hidden.
+* Handle missing translations or examples gracefully.
+* Ensure automatic answer reveal follows the same behavior as manual reveal.
+* Ensure the timer and audio settings do not bypass the card-specific visibility rules.
+
+⸻
+
+PART C — EXIT BUTTON AND RESPONSIVE INTERFACE
+
+12. Replace the Save and Exit Text with a Standard Exit Icon
+
+At the top of the application, remove the visible “Save and Exit” text label and replace it with a standard, recognizable software exit icon.
+
+Requirements:
+
+* Use an established icon from the project’s existing icon library if available.
+* Prefer a standard LogOut, DoorOpen, or equivalent exit-related icon, choosing the closest match to a conventional application exit control.
+* Display the icon without the visible text label.
+* Provide a tooltip and an accessible aria-label or equivalent accessible name, such as “Save and Exit.”
+* Preserve the existing save-before-exit behavior.
+* Ensure the button remains easy to recognize, keyboard accessible, and usable on mobile devices.
+* Do not silently remove the save operation when changing the UI.
+
+13. Prevent Search Input from Unexpectedly Zooming the Page
+
+Fix the issue in which clicking the vocabulary search input causes the page or interface to suddenly enlarge.
+
+Investigate the actual cause rather than masking the symptom.
+
+Requirements:
+
+* On mobile Safari and other affected mobile browsers, ensure the search input uses an appropriate font size, generally at least 16 CSS pixels on iOS, to prevent automatic focus zoom.
+* Check viewport configuration and responsive layout behavior.
+* Ensure focusing the input does not change the page scale unexpectedly.
+* Preserve normal text entry, keyboard access, and responsive behavior.
+* Do not disable user zoom globally as a workaround.
+
+⸻
+
+PART D — VOCABULARY SEARCH AND IMPORT/EXPORT
+
+14. Automatically Reveal Search Results Hidden Inside Collapsed Categories
+
+Fix the vocabulary search behavior.
+
+Current issue:
+A matching word may exist inside a collapsed category or subgroup. The search finds the word, but the user must manually expand the category to see it.
+
+Required behavior:
+
+* When a search query matches a vocabulary item, make the matching result visible immediately.
+* Automatically expand the relevant category or subgroup when necessary.
+* Ensure the matching word is visible without requiring additional manual clicks.
+* Support searches that return multiple results across different categories.
+* Highlight or otherwise clearly identify matching results where appropriate.
+* Preserve the user’s normal category-collapse behavior when the search is cleared.
+* Do not permanently change category organization or saved vocabulary merely because the user searched.
+* Ensure clearing the search restores the normal browsing interface.
+
+15. Fix the Overwrite Option in Import/Export
+
+In the Import/Export section, fix the overwrite option that currently fails when vocabulary is imported or added.
+
+First inspect the current import pipeline and determine exactly what the overwrite option is intended to replace.
+
+Required behavior:
+
+* When overwrite mode is selected, execute the intended replacement behavior reliably.
+* Ensure the option is actually passed through the import handler and applied during data processing.
+* Handle duplicate vocabulary identifiers and matching vocabulary entries consistently with the application’s data model.
+* Preserve unrelated settings and application state unless overwrite is explicitly designed to replace them.
+* Validate imported data before modifying existing data.
+* Handle malformed files and failed imports without leaving the vocabulary database partially corrupted.
+* Show a clear success, warning, or error message.
+* When overwrite is disabled, preserve the existing non-overwrite behavior and avoid unintended deletions.
+* Test the feature with existing words, duplicate entries, new entries, and invalid import data.
+
+Do not merely change the label or the appearance of the overwrite checkbox. The underlying import behavior must work.
+
+⸻
+
+PART E — AI VOCABULARY EXTRACTION FROM IMAGES AND HANDWRITING
+
+16. Improve the Speed of AI-Based Vocabulary Extraction
+
+The current process for extracting German vocabulary from images and handwritten material takes too long.
+
+Investigate the complete extraction pipeline and optimize it without sacrificing accuracy.
+
+Requirements:
+
+* Inspect image preprocessing, OCR or vision-model calls, prompt size, response parsing, retries, and UI state transitions.
+* Avoid redundant model calls and unnecessary image transformations.
+* Avoid sequential operations when independent operations can safely run in parallel.
+* Use an appropriately concise, structured extraction prompt.
+* Request structured, machine-readable output when supported by the existing model integration.
+* Use bounded timeouts and a sensible retry policy.
+* Avoid repeatedly processing the same image or text when a valid result is already available.
+* Show meaningful progress feedback while processing.
+* Keep the UI responsive during long-running tasks.
+* Handle network failures, rate limits, unreadable handwriting, and incomplete model responses gracefully.
+* Preserve extraction accuracy, especially for German umlauts, ß, capitalization, noun articles, word forms, and separable verbs.
+* Do not silently fabricate vocabulary or claim uncertain handwriting has been recognized with certainty.
+
+Where useful, separate vocabulary recognition from optional enrichment. Prioritize returning the recognized word list promptly rather than making users wait for unnecessary extra explanations.
+
+Do not switch to a different model or remove useful capabilities without first checking the existing implementation and its constraints.
+
+17. Collapse Extraction Details After Successful Extraction
+
+After AI vocabulary extraction from an image or handwritten source completes successfully:
+
+* Automatically collapse the image/input information and explanatory details section.
+* Display the extracted vocabulary list as the primary visible content.
+* Keep the extracted list easy to review and edit.
+* Preserve the ability to reopen the input and explanation section if the user wants to inspect or modify the source.
+* Do not collapse the interface before extraction has succeeded.
+* If extraction fails, keep the source information visible and display a useful error message.
+* Preserve the extracted results when the details section is collapsed or reopened.
+
+The goal is to minimize clutter and make the extracted vocabulary the immediate focus.
+
+⸻
+
+PART F — DUPLICATE AND SIMILAR VOCABULARY MANAGEMENT
+
+18. Add Duplicate and Similar-Word Detection
+
+Add a dedicated tool for finding duplicate and potentially similar vocabulary entries.
+
+This feature must be accessible from:
+
+1. The main vocabulary-management section.
+2. The grouped vocabulary-management view or its existing “Group Vocabulary” submenu.
+
+Do not create disconnected implementations for these locations. Reuse a shared component or service where practical.
+
+18.1 Detection
+
+Identify likely duplicates and similar entries using relevant information, including:
+
+* German headword.
+* Case-insensitive normalized spelling.
+* German capitalization.
+* Umlauts and ß, handled carefully so normalization does not create false matches.
+* Inflected forms and common spelling variants, where appropriate.
+* Persian translation.
+* Word category and grammatical information.
+* Existing vocabulary identifiers and source information, if available.
+
+Group the results into understandable categories such as:
+
+* Exact duplicates.
+* Likely duplicates.
+* Similar entries that require manual review.
+
+Do not automatically delete words just because their spellings or meanings are similar. Different German words may have different meanings or grammatical roles.
+
+18.2 User Actions
+
+For each detected group, let the user:
+
+* Keep both entries.
+* Delete a selected duplicate.
+* Select a canonical entry to retain.
+* Merge two or more entries into one final vocabulary record.
+
+Require confirmation before destructive operations.
+
+18.3 AI-Assisted Merge
+
+When the user explicitly chooses to merge entries, use AI to compare their available information and produce the best consolidated vocabulary record.
+
+Compare and reconcile, where applicable:
+
+* German headword and spelling.
+* Persian translations.
+* Part of speech.
+* Article and grammatical gender.
+* Plural form.
+* Conjugation or declension details.
+* Example sentences and their translations.
+* Synonyms and related forms.
+* Word category.
+* Learning notes and other vocabulary metadata.
+
+Merge rules:
+
+* Preserve the most accurate and useful information from both entries.
+* Prefer reliable, explicit source information over unsupported guesses.
+* Preserve distinct valid meanings rather than collapsing them into one incorrect translation.
+* Combine complementary examples when appropriate and remove redundant examples.
+* Avoid losing useful grammar or learning information.
+* If two entries represent different meanings or grammatical roles, warn the user and recommend keeping separate entries.
+* Show the proposed merged record for review before committing the change.
+* Allow the user to edit the proposed result before confirming.
+* Preserve relevant review progress and historical references when technically possible.
+* Update references so that no review history or category entry points to a deleted identifier.
+* Handle identifier conflicts safely.
+* Save the merged record only after the user confirms.
+
+If AI is unavailable or the merge request fails, provide a safe manual fallback and never delete the original entries automatically.
+
+⸻
+
+PART G — GRAMMAR EXERCISES
+
+19. Redesign the “Case and Preposition” Exercise
+
+Modify the existing “Case and Preposition” exercise so that learners must identify both the correct preposition and the following noun phrase’s article.
+
+The exercise must contain two separate blanks:
+
+1. A blank for the missing preposition.
+2. A blank for the correct article.
+
+Example structure:
+
+Ich gehe ___ ___ Bahnhof.
+
+The exact example sentence must be grammatically appropriate to the intended exercise.
+
+Required behavior:
+
+* The learner must enter both the preposition and the article.
+* Validate both answers.
+* Provide clear feedback identifying which blank is correct or incorrect.
+* Accept appropriate capitalization variants where suitable.
+* Preserve German grammatical correctness.
+* Generate exercises using the application’s existing vocabulary and grammar data wherever possible.
+* Ensure that the article is appropriate to the case governed by the preposition and to the noun’s grammatical gender and number.
+* Handle two-way prepositions according to the meaning of the sentence, including movement versus location where relevant.
+* Do not make the article the only tested answer.
+* Do not reduce the exercise to choosing the article while the preposition is already supplied.
+
+Where the existing app supports hints, provide them without revealing both answers prematurely.
+
+20. Visually Distinguish Regular Endings and Stem Changes in Verb Conjugation
+
+In the verb-conjugation section, visually distinguish regular conjugation endings from irregular stem changes.
+
+20.1 Regular Endings in Blue
+
+For regular verb conjugation, display the conjugation endings in blue.
+
+Typical endings include:
+
+* -e
+* -st
+* -t
+* -en
+* -t
+* -en
+
+Apply the highlighting at the correct character level, rather than coloring the entire conjugated word blue.
+
+20.2 Irregular Stem Changes in Red
+
+When a verb changes its stem in a conjugated form, highlight the changed stem character or characters in red.
+
+Example: fahren
+
+* du fährst: highlight the changed ä in red and the regular -st ending in blue.
+* er/sie/es fährt: highlight the changed ä in red and the regular -t ending in blue.
+
+Requirements:
+
+* Separate stem and ending segments using the actual conjugation data.
+* Color only the relevant changed characters red.
+* Color regular endings blue.
+* Keep unchanged stem characters in the normal text color.
+* Support umlauts, ß, and multi-character stem changes.
+* Do not hardcode highlighting only for fahren.
+* Apply the same logic to other verbs with stem-vowel changes or irregular conjugation patterns.
+* Handle verbs that have both a stem change and a regular ending.
+* Preserve readability in light and dark themes.
+* Provide a sensible fallback for verbs whose conjugation cannot be segmented confidently.
+
+Do not rely exclusively on string suffix matching if it would misclassify stem changes as regular endings. Use the app’s existing conjugation metadata or a reliable segmentation strategy.
+
+⸻
+
+PART H — COMPLETE WORD PROFILE ACCESS FROM ALL EXERCISES
+
+21. Add a “View Full Word Profile” Option to Every Exercise
+
+Provide a “View Full Word Profile” action in every exercise type throughout the application.
+
+When clicked:
+
+* Open the complete profile of the relevant vocabulary item in a modal or popup.
+* Reuse the existing vocabulary-profile component wherever possible.
+* Display the same complete vocabulary information available in the normal vocabulary view, including all available translations, article, plural, part of speech, examples, grammar details, conjugation information, and notes.
+* Do not create a reduced or separate profile that omits existing information.
+
+Modal Behavior
+
+* Keep the exercise state intact while the profile is open.
+* Do not reset the current question, typed answer, timer, score, progress, or selected exercise mode.
+* When the user closes the popup, return them to the exact same point in the exercise.
+* Do not automatically advance to the next question when the popup closes.
+* Prevent background interactions from accidentally submitting the exercise.
+* Ensure keyboard accessibility, sensible focus management, and mobile responsiveness.
+* If the exercise item has no complete profile, display the information available without crashing.
+
+The action must be available consistently across flashcards, grammar exercises, conjugation exercises, review sessions, and all other relevant exercise types.
+
+⸻
+
+PART I — ARTICLE COLOR CODING IN VOCABULARY MANAGEMENT
+
+22. Correct Article Colors in the Grouped Vocabulary Editor
+
+In the vocabulary section, including the grouped vocabulary-management or bulk-editing view, article labels are currently all blue.
+
+Correct the color coding consistently:
+
+* Masculine (der): Blue.
+* Feminine (die): Pink.
+* Neuter (das): Green.
+
+Requirements:
+
+* Apply the colors wherever German noun articles appear in the relevant vocabulary-management interface.
+* Keep masculine articles blue.
+* Make feminine articles clearly pink.
+* Make neuter articles clearly green.
+* Use consistent color values and styling across individual and grouped vocabulary views.
+* Ensure the colors remain readable in both light and dark themes.
+* Do not color every die indiscriminately if the application also displays the plural article die. Use the noun’s grammatical metadata to distinguish feminine singular from plural where needed.
+* Do not infer grammatical gender from the article’s text alone when reliable word metadata is available.
+* Preserve the underlying word data; this is a presentation change, not a grammar-data rewrite.
+
+Use accessible contrast and avoid relying on color alone where additional grammatical labels or context are needed.
+
+⸻
+
+PART J — GENERAL ENGINEERING, DESIGN, AND QUALITY REQUIREMENTS
+
+23. Consistent User Interface
+
+Maintain the existing visual identity of WörterBuch unless a specific requirement above calls for a change.
+
+Requirements:
+
+* Use a consistent spacing system, typography, buttons, icons, dialogs, form controls, and feedback messages.
+* Ensure all new features work in light and dark modes.
+* Maintain mobile responsiveness.
+* Avoid layout jumps, unintended zooming, horizontal overflow, and unnecessary screen clutter.
+* Make destructive actions clearly distinguishable from ordinary actions.
+* Provide accessible labels, keyboard support, and visible focus indicators.
+* Prefer concise labels and clear user feedback.
+* Use the project’s existing icon library and design patterns whenever possible.
+
+24. Data Integrity and State Management
+
+* Keep the existing data model compatible wherever possible.
+* Use stable identifiers for vocabulary items and related history.
+* Do not use shared UI state for behavior that must be independent per card or per exercise.
+* Persist user data and settings using the existing storage mechanism.
+* Validate data before destructive or bulk operations.
+* Prevent duplicate event listeners and stale asynchronous updates.
+* Avoid race conditions during AI extraction, imports, merges, and navigation.
+* Ensure errors do not leave the interface or stored data in a partially updated state.
+* Handle empty datasets and missing optional vocabulary fields gracefully.
+* Never silently discard user-created content.
+
+25. Implementation and Testing Workflow
+
+Work in the following order:
+
+1. Inspect the existing code and identify relevant files, components, functions, and data structures.
+2. Map every requirement in this prompt to the corresponding implementation location.
+3. Identify shared components and services that should be reused.
+4. Fix the existing bugs before adding unnecessary abstractions.
+5. Implement the complete settings module and verify that each setting affects real application behavior.
+6. Fix independent flashcard answer and example visibility.
+7. Fix search, mobile zoom, import overwrite, and extraction workflow behavior.
+8. Implement duplicate detection and safe AI-assisted merging.
+9. Update grammar exercises and verb-conjugation highlighting.
+10. Add the complete vocabulary-profile popup to all relevant exercises.
+11. Correct article colors in vocabulary-management views.
+12. Check persistence, backward compatibility, accessibility, and responsive behavior.
+13. Run the available build, type checks, linting, and automated tests.
+14. Perform targeted manual tests for the workflows listed below.
+15. Fix any regressions introduced by the changes.
+
+Minimum Acceptance Tests
+
+Settings
+
+* All settings load correctly, save correctly, and survive reloads.
+* Existing valid user settings are not overwritten.
+* Theme, daily limits, order, review intervals, difficult-word handling, audio, timers, goals, and reminders affect real behavior.
+* Clearing review history preserves vocabulary.
+* Deleting all vocabulary requires the intended confirmations.
+
+Flashcards
+
+* Revealing one card never reveals another card’s answer.
+* Examples remain hidden until the corresponding card is revealed.
+* Random direction can vary between cards.
+* Timers are canceled or reset correctly when navigating between cards.
+
+Search and Import
+
+* Search results inside collapsed groups become immediately visible.
+* Clearing search restores normal category behavior.
+* Search focus does not unexpectedly zoom the page on mobile.
+* Import overwrite works as intended.
+* Invalid imports do not corrupt existing data.
+
+AI Extraction
+
+* Extraction is measurably more responsive where avoidable overhead existed.
+* The UI remains responsive during extraction.
+* Successful extraction collapses the source-details section and focuses on the resulting word list.
+* Failed extraction preserves the source details and provides a useful error.
+
+Duplicate Management
+
+* Exact duplicates and likely similar entries are distinguishable.
+* Users can safely keep, delete, or merge entries.
+* AI-assisted merges preserve useful information from both entries.
+* Users can review and edit the merged result before saving.
+* Related history and references are handled safely.
+
+Grammar and Conjugation
+
+* The preposition exercise requires two answers.
+* Both answers are validated appropriately.
+* Regular endings appear blue.
+* Actual irregular stem changes appear red.
+* Unchanged stem characters remain normally colored.
+
+Word Profiles and Article Colors
+
+* The full vocabulary profile can be opened from all relevant exercise types.
+* Closing the popup returns to the exact same exercise state.
+* der is blue, feminine singular die is pink, and das is green in the relevant vocabulary-management views.
+* Color coding remains legible in both themes.
+
+26. Final Deliverables
+
+Implement the changes directly in the existing project.
+
+When finished:
+
+* Summarize the main changes implemented.
+* Identify any requirements that could not be completed and explain why.
+* List any relevant files or components modified.
+* Report the tests performed and their actual results.
+* Clearly disclose any remaining limitations.
+* Do not claim that a feature is fixed or tested unless the implementation and verification support that claim.
+
+Final instruction: Prioritize correctness, data safety, independent component state, consistent UX, and compatibility with the existing WörterBuch application. Fix root causes rather than hiding symptoms. Every button, setting, popup, import option, and AI workflow must perform its intended action in the real application.

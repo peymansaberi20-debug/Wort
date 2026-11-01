@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="light">
+  <head>
+    <script>
+      // Per AI Studio runtime guidelines: Ignore WebSocket errors from Vite HMR in iframe
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = (e.reason && (e.reason.message || String(e.reason))) || '';
+        if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('Load failed') !== -1) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      });
+      window.addEventListener('error', function(e) {
+        var msg = (e && (e.message || '')) || '';
+        if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('Load failed') !== -1 || (e.filename && e.filename.indexOf('@vite/client') !== -1)) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>WörterBuch: واژه‌نامه آلمانی و فلش کارت</title>
+    <meta name="description" content="سامانه هوشمند آموزش واژگان آلمانی، فلش‌کارت لایتنر و تمرین‌های تخصصی زبان آلمانی با ترجمه فارسی" />
+    <meta property="og:title" content="WörterBuch: واژه‌نامه آلمانی و فلش کارت" />
+    <meta property="og:description" content="سامانه هوشمند آموزش واژگان آلمانی، فلش‌کارت لایتنر و تمرین‌های تخصصی زبان آلمانی با ترجمه فارسی" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#f6f7fb] text-[#1d2330] font-sans antialiased min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

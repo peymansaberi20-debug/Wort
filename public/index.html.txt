@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WörterBuch: واژه‌نامه آلمانی و فلش کارت</title>
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="WörterBuch"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#1f5fbf"><meta name="description" content="فلش‌کارت و دفتر واژگان آلمانی-فارسی WörterBuch Peyman Saberi"><meta name="format-detection" content="telephone=no">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet">
+<script>try{var t=(JSON.parse(localStorage.getItem('deutschlab_pro_fa_v1'))||{}).set;var themeMode=(t&&t.theme)||'light';document.documentElement.dataset.theme=themeMode;document.documentElement.setAttribute('data-theme',themeMode);document.documentElement.style.colorScheme=themeMode;}catch(e){}</script>
+<script>try{var c=document.createElement('canvas');c.width=c.height=180;var x=c.getContext('2d');x.fillStyle='#1f5fbf';x.fillRect(0,0,180,180);x.fillStyle='#fff';x.font='bold 96px sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('WB',90,96);var l=document.createElement('link');l.rel='apple-touch-icon';l.href=c.toDataURL('image/png');document.head.appendChild(l);var m=document.createElement('link');m.rel='manifest';m.href=URL.createObjectURL(new Blob([JSON.stringify({name:'WörterBuch: واژه‌نامه آلمانی و فلش کارت',short_name:'WörterBuch',display:'standalone',dir:'rtl',lang:'fa',background_color:'#f6f7fb',theme_color:'#1f5fbf',start_url:location.href.split('#')[0]})],{type:'application/manifest+json'}));document.head.appendChild(m)}catch(e){}</script>
+<style>
+:root,:root[data-theme=light],html[data-theme=light],body[data-theme=light]{--g:linear-gradient(135deg,#1f5fbf,#6b4fd8);--bg:#f6f7fb;--card:#fff;--tx:#1d2330;--mu:#5d6676;--bd:#dde1ea;--ac:#1f5fbf;--acx:#fff;--ok:#0d7a3e;--okb:#e2f5ea;--er:#b3261e;--erb:#fdeaea;color-scheme:light!important}
+:root[data-theme=dark],html[data-theme=dark],body[data-theme=dark]{--g:linear-gradient(135deg,#7fb0ff,#b39bff);--bg:#12151c;--card:#1b2029;--tx:#eef1f6;--mu:#a3adbd;--bd:#333b4a;--ac:#7fb0ff;--acx:#0b1220;--ok:#6fe0a0;--okb:#12301f;--er:#ff9a92;--erb:#3a1a18;color-scheme:dark!important}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html{font-size:17.5px}body{margin:0;background:radial-gradient(1000px 460px at 100% -8%,color-mix(in srgb,var(--ac) 14%,transparent),transparent),var(--bg);background-attachment:fixed;color:var(--tx);font:17.5px/1.85 'IRANYekan','IRANYekanX','Iran Yekan',Vazirmatn,Tahoma,system-ui,sans-serif;padding-bottom:env(safe-area-inset-bottom,0)}
+header{display:flex;gap:.6rem;align-items:center;justify-content:space-between;padding:.6rem 1.2rem;padding-top:calc(.6rem + env(safe-area-inset-top,0));position:sticky;top:0;z-index:15;background:var(--g);color:var(--acx);box-shadow:0 4px 18px rgba(31,95,191,.25)}
+header h1{font-size:1.05rem;margin:0;line-height:1.2;white-space:nowrap;display:flex;flex-direction:column}
+header h1 .sub-author{font-size:.78rem;opacity:.92;font-weight:400}
+header .row{flex-wrap:nowrap;gap:.4rem}
+header button{background:color-mix(in srgb,var(--acx) 16%,transparent);color:inherit;border-color:color-mix(in srgb,var(--acx) 35%,transparent);min-height:36px;padding:.3rem .65rem;font-size:.85rem}
+header #sx{background:var(--acx);color:var(--ac);border:0;font-weight:700}
+footer{text-align:center;padding:1.5rem 1rem;color:var(--mu);font-size:.88rem;border-top:1px solid var(--bd);margin-top:2rem}
+.shell{display:grid;grid-template-columns:230px minmax(0,1fr);gap:1.5rem;max-width:1360px;margin:0 auto;padding:1.25rem 1.5rem}
+nav{position:sticky;top:88px;align-self:start;display:flex;flex-direction:column;gap:.3rem;background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:.6rem}
+nav button{border:0;background:transparent;justify-content:flex-start;text-align:start;font-weight:600;width:100%}
+nav button[aria-current=page],button.p{background:var(--g);color:var(--acx);border:0;font-weight:700}
+.ni{margin-inline-end:.5rem}
+main{min-width:0}
+button,input,select,textarea,summary{font:inherit;color:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:.5rem 1rem;min-height:42px;cursor:pointer;white-space:nowrap}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.ic{padding:.2rem .6rem;min-height:34px}
+input,select,textarea{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:.5rem .8rem;min-height:42px;width:100%;font-size:16px}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:18px;padding:1.1rem 1.25rem;margin:0 0 1rem;box-shadow:0 6px 22px rgba(20,30,60,.07)}
+:root[data-theme=dark] .card{box-shadow:none}
+.de{direction:ltr;unicode-bidi:isolate;display:inline-block;text-align:left}
+.big{font-size:1.8rem;font-weight:700;margin:.3rem 0}
+.mu{color:var(--mu)}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.grid .card{margin:0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1rem;align-items:start}
+.ok{background:var(--okb);color:var(--ok);border:1px solid var(--ok);border-radius:12px;padding:.6rem .9rem}
+.er{background:var(--erb);color:var(--er);border:1px solid var(--er);border-radius:12px;padding:.6rem .9rem}
+progress{appearance:none;-webkit-appearance:none;width:100%;height:12px;border-radius:8px;overflow:hidden;background:var(--bd);border:0}
+progress::-webkit-progress-bar{background:var(--bd)}progress::-webkit-progress-value{background:var(--g)}progress::-moz-progress-bar{background:var(--g)}
+#toast{position:fixed;inset-inline:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0));max-width:440px;margin:auto;z-index:30}
+label{display:block;margin:.5rem 0 .1rem;font-size:.9rem}
+.a{display:inline-block;padding:0 .55rem;border-radius:9px;font-weight:700;margin-inline-end:.35rem;font-size:.8em;line-height:1.6}
+.a-der{background:#dbe9ff;color:#0b3d91}.a-die{background:#ffe0e3;color:#a1122b}.a-das{background:#dff5e3;color:#0b6b2c}
+:root[data-theme=dark] .a-der{background:#1c3258;color:#a9ccff}:root[data-theme=dark] .a-die{background:#4a1f28;color:#ffb3bf}:root[data-theme=dark] .a-das{background:#17402a;color:#a6efc0}
+.fc{text-align:center;padding:2rem 1.25rem}.fc .big{font-size:2.6rem}.fc .row{justify-content:center}
+.wimg{display:block;margin:.6rem auto;max-width:100%;max-height:260px;border-radius:14px;object-fit:contain}
+.bars{display:flex;gap:.6rem;align-items:flex-end;height:150px;margin-top:.5rem}
+.bc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:100%}
+.bar{width:70%;max-width:48px;background:var(--g);border-radius:8px 8px 4px 4px}
+.chip{background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:.4rem .7rem;text-align:center}
+.ln{display:flex;justify-content:space-between;gap:.5rem;padding:.35rem 0;border-bottom:1px dashed var(--bd)}
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.2rem .8rem}
+.wc{cursor:pointer;display:flex;gap:.6rem;align-items:center;justify-content:space-between}.wc:hover{border-color:var(--ac)}
+.ov{position:fixed;inset:0;background:rgba(10,14,25,.55);display:flex;align-items:center;justify-content:center;padding:1rem;z-index:20}
+.pop{background:var(--card);border-radius:22px;max-width:880px;width:100%;max-height:94vh;overflow:auto;padding:0;text-align:center;border:1px solid var(--bd);box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:.93rem;line-height:1.5}
+.tag{display:inline-block;background:var(--bg);border:1px solid var(--bd);border-radius:999px;padding:0 .7rem;font-size:.85rem;margin:0 .2rem .2rem 0}
+.pbar{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.5rem .8rem;position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--bd);z-index:1}
+.hero{background:var(--g);color:var(--acx);padding:.8rem 1rem .7rem}
+.hero .big{font-size:2.1rem;margin:0}.hero .tr{font-size:1.25rem;margin-top:.2rem}
+.hero .tag{background:color-mix(in srgb,var(--acx) 20%,transparent);border-color:transparent;color:inherit;padding:.05rem .8rem}
+.psec{background:var(--bg);border:1px solid var(--bd);border-radius:16px;padding:.5rem .8rem;margin:.5rem 0;text-align:center}
+.psec h4{margin:0 0 .2rem;color:var(--mu);font-size:.9rem}
+.vt{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:.5rem;margin:.4rem 0}
+.vb{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:.4rem .7rem;text-align:start}
+.vb h5{margin:0 0 .15rem;font-size:1rem;display:flex;justify-content:space-between;align-items:baseline;gap:.4rem}
+.vr{display:flex;justify-content:space-between;gap:.6rem;direction:ltr;padding:.02rem 0;border-bottom:1px dashed var(--bd)}
+.vr:last-child{border:0}.vr small{color:var(--mu);font-size:.85rem}.vr b{font-weight:600}.vr .en{color:var(--ac)}
+.rd{color:var(--er);font-weight:700}
+.cath{display:flex;justify-content:space-between;align-items:center;width:100%;border:0;background:transparent;font-weight:700;font-size:1.05rem;min-height:46px;padding:.2rem .3rem}.cat.open{border-color:var(--ac)}
+.hs{font-size:.82rem;opacity:.92;margin-top:.35rem}
+.pbody{padding:.2rem .9rem .7rem}
+.pgrid{display:grid;gap:.6rem;grid-template-columns:1fr}.pgrid.two{grid-template-columns:1.4fr 1fr}.pgrid .psec{margin:.5rem 0 0}
+@media(max-width:860px){.pgrid.two{grid-template-columns:1fr}}
+.anki-ratings button{flex:1 1 20%;min-width:105px;white-space:normal;font-weight:700}
+.anki-ratings .again{border-color:#c0392b;color:#c0392b}
+.anki-ratings .hard{border-color:#d97706;color:#b45309}
+.anki-ratings .good{border-color:#16803c}
+.anki-ratings .easy{border-color:#2563eb;color:#2563eb}
+@media(max-width:560px){.anki-ratings button{flex:1 1 calc(50% - .4rem);min-width:0;padding:.6rem .35rem;line-height:1.35}}
+:root{--mobile-nav-h:64px}
+html{scroll-padding-top:calc(70px + env(safe-area-inset-top,0px));scroll-padding-bottom:calc(var(--mobile-nav-h) + env(safe-area-inset-bottom,0px))}
+body{min-height:100vh;min-height:100dvh;padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(max-width:860px){
+  header{padding:.4rem .6rem;padding-top:calc(.4rem + env(safe-area-inset-top,0))}
+  header h1{font-size:.88rem;max-width:calc(100vw - 110px)}
+  header h1 .sub-author{font-size:.7rem}
+  header button{padding:.25rem .45rem;font-size:.8rem;min-height:34px}
+  .shell{display:block;padding:.65rem .65rem calc(var(--mobile-nav-h) + 1.5rem + env(safe-area-inset-bottom,0px))}
+  nav{position:fixed;top:auto;bottom:0;inset-inline:0;flex-direction:row;border-radius:0;border-width:1px 0 0;padding:.3rem .4rem calc(.3rem + env(safe-area-inset-bottom,0));z-index:9;min-height:var(--mobile-nav-h);gap:.2rem;background:var(--card);box-shadow:0 -5px 20px rgba(20,30,60,.12);overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  nav button{flex:1 1 0;min-width:0;min-height:46px;padding:.2rem .1rem;font-size:clamp(.65rem,2.5vw,.75rem);line-height:1.2;text-align:center;white-space:normal}
+  .ni{display:block;margin:0;font-size:1.1rem;line-height:1.1}
+  .cols{grid-template-columns:1fr}.grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .big{font-size:1.5rem}.fc .big{font-size:2rem}.card{padding:.8rem;margin-bottom:.75rem}
+  .fg{grid-template-columns:1fr}
+  #toast{inset-inline:.5rem;max-width:none;bottom:calc(var(--mobile-nav-h) + .5rem + env(safe-area-inset-bottom,0px))}
+  .ov{align-items:flex-start;padding:calc(.5rem + env(safe-area-inset-top,0px)) .45rem calc(.5rem + env(safe-area-inset-bottom,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .pop{width:100%;max-height:calc(var(--visual-height, 100dvh) - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 1rem);border-radius:18px}
+}
+@media(max-width:380px){
+  header h1{font-size:.78rem;max-width:calc(100vw - 100px)}
+  header h1 .sub-author{font-size:.65rem}
+}
+
+/* ===== Add-on: Bidi safety + branding (additiv) ===== */
+.de,[lang=de],[lang=de-DE],pre,code{direction:ltr;unicode-bidi:isolate}
+input[lang=de],input[dir=ltr],textarea[dir=ltr]{direction:ltr;unicode-bidi:isolate;text-align:left}
+input[dir=rtl],textarea[dir=rtl],[lang=fa],.fa{direction:rtl;unicode-bidi:isolate;text-align:right}
+header h1{min-width:0;overflow:hidden}
+header h1>span{overflow:hidden;text-overflow:ellipsis}
+header h1 bdi{unicode-bidi:isolate}
+footer .ftl{display:block;margin:.25rem 0}
+footer a,.pop a{color:var(--ac)}
+footer button.lnk{background:none;border:0;color:var(--ac);text-decoration:underline;cursor:pointer;font:inherit;padding:0;min-height:0}
+.abt{text-align:start;padding:1rem 1.2rem}.abt h2{margin:.2rem 0 .4rem;font-size:1.1rem}
+.abt .sec{border-top:1px solid var(--bd);margin-top:.8rem;padding-top:.7rem}
+
+/* ===== Add-on: Mobile/Safari fix (Header darf nie breiter als der Bildschirm sein) ===== */
+html,body{max-width:100%;overflow-x:clip}
+header{max-width:100%}
+header>.row:first-child{flex:1 1 0;min-width:0}
+header>.row:last-child{flex:none}
+header #bk{flex:none}
+header h1{max-width:none;flex:1 1 0;min-width:0}
+@media(hover:none){body{background-attachment:scroll}}
+@media(max-width:560px){header #sx{font-size:.72rem;padding:.25rem .4rem}header button{padding:.25rem .35rem}}
+
+/* ===== Add-on: تمرین‌ها (فهرست خطی)، یادداشت، دکمهٔ بازگشت ===== */
+.prow{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.5rem .8rem;margin:.4rem 0}
+.prow .ptxt{display:flex;flex-direction:column;min-width:0;flex:1}
+.prow .ptxt b{font-size:.98rem;line-height:1.5}
+.prow .ptxt small{font-size:.76rem;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow>button{flex:none;min-height:36px;padding:.3rem 1rem}
+.hrow{display:flex;justify-content:flex-start;margin:0 0 .5rem}
+.hbtn{font-size:.85rem;padding:.25rem .7rem;min-height:34px;width:auto}
+.nl{text-align:right;margin:.25rem 0;line-height:1.8}
+textarea#f_notes{min-height:9rem;line-height:1.8}
+#bk{position:fixed;left:1.2rem;bottom:calc(1.2rem + env(safe-area-inset-bottom,0px));z-index:45;border-radius:999px;box-shadow:0 8px 24px rgba(20,30,60,.35);background:var(--g);color:var(--acx);border:1px solid rgba(255,255,255,.3);font-weight:700;min-height:46px;padding:.5rem 1.25rem;font-size:1rem;display:flex;align-items:center;gap:.4rem;cursor:pointer}
+@media(max-width:860px){#bk{bottom:calc(var(--mobile-nav-h) + 1rem + env(safe-area-inset-bottom,0px));left:.8rem;padding:.4rem 1rem;font-size:.92rem;min-height:42px}}
+main{padding-bottom:4.5rem}
+footer{padding-bottom:5.5rem}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>
+      <span><bdi lang="de" dir="ltr">WörterBuch</bdi>: واژه‌نامه آلمانی و فلش کارت</span>
+      <span class="sub-author">طراحی و برنامه‌نویسی: پیمان صابری (<bdi lang="en" dir="ltr">Peyman Saberi</bdi>)</span>
+    </h1>
+  </div>
+  <div class="row">
+    <button id="ab" aria-label="درباره ما" title="درباره ما / About">ℹ️</button>
+    <button id="tt" aria-label="تغییر پوسته">🌓</button>
+    <button id="sx">ذخیره و خروج</button>
+  </div>
+</header>
+<div class="shell"><nav id="nav" aria-label="بخش‌ها"></nav><main id="app"></main></div>
+<footer>
+  <p class="ftl">نام محصول: <b><bdi lang="de" dir="ltr">WörterBuch</bdi>: واژه‌نامه آلمانی و فلش کارت</b></p>
+  <p class="ftl">طراحی و برنامه‌نویسی: <b>پیمان صابری (<bdi lang="en" dir="ltr">Peyman Saberi</bdi>)</b></p>
+  <p class="ftl">تماس: <a href="mailto:peymansaberi20@gmail.com" dir="ltr" lang="en">peymansaberi20@gmail.com</a> | <button class="lnk" id="abf">درباره ما / About</button></p>
+</footer>
+<button id="bk" aria-label="بازگشت">↩ بازگشت</button><div id="pop"></div><div id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+const KEY='deutschlab_pro_fa_v1',DAY=864e5,P6=['ich','du','er/sie/es','wir','ihr','sie/Sie'];
+const SEED=[
+['Mann','der','مرد','Männer','Der Mann hilft allen.','مرد به همه کمک می‌کند.','_____ hilft allen.'],
+['Frau','die','زن','Frauen','Die Frau liest ein Buch.','زن کتابی می‌خواند.','_____ liest ein Buch.'],
+['Kind','das','کودک','Kinder','Das Kind spielt im Garten.','کودک در باغ بازی می‌کند.','_____ spielt im Garten.'],
+['Mädchen','das','دختر','Mädchen','Das Mädchen singt ein Lied.','دختر آهنگی می‌خواند.','_____ singt ein Lied.'],
+['Straße','die','خیابان','Straßen','Die Straße ist sehr lang.','خیابان خیلی طولانی است.','_____ ist sehr lang.'],
+['Haus','das','خانه','Häuser','Das Haus ist neu.','خانه نو است.','_____ ist neu.'],
+['Tisch','der','میز','Tische','Der Tisch steht in der Küche.','میز در آشپزخانه است.','_____ steht in der Küche.'],
+['Schule','die','مدرسه','Schulen','Die Schule beginnt um acht Uhr.','مدرسه ساعت هشت شروع می‌شود.','_____ beginnt um acht Uhr.']
+].map(a=>({de:a[0],art:a[1],fa:a[2],pl:a[3],pos:'اسم',lvl:'A1',cat:'امور روزمره',ex:a[4],exFa:a[5],cloze:a[6],id:'s_'+a[0]}));
+const EX2={Mann:['Der Mann, der neben uns wohnt, arbeitet als Ingenieur in einem internationalen Unternehmen.','مردی که کنار ما زندگی می‌کند، به‌عنوان مهندس در یک شرکت بین‌المللی کار می‌کند.'],Frau:['Die Frau, mit der ich gestern gesprochen habe, leitet eine kleine Firma.','زنی که دیروز با او صحبت کردم، یک شرکت کوچک را اداره می‌کند.'],Kind:['Obwohl das Kind noch sehr jung ist, kann es schon fließend lesen.','با اینکه کودک هنوز خیلی کوچک است، همین حالا هم روان می‌خواند.'],Mädchen:['Das Mädchen hat sich entschieden, nach dem Abitur im Ausland zu studieren.','دختر تصمیم گرفته است بعد از دیپلم در خارج از کشور درس بخواند.'],Straße:['Wegen der Bauarbeiten ist die Straße bis nächste Woche gesperrt.','به‌خاطر کارهای ساختمانی، خیابان تا هفتهٔ آینده بسته است.'],Haus:['Sie haben das Haus saniert, damit die Heizkosten deutlich sinken.','آن‌ها خانه را بازسازی کرده‌اند تا هزینهٔ گرمایش به‌طور محسوسی کاهش یابد.'],Tisch:['Wir sollten einen Tisch reservieren, weil das Restaurant am Wochenende meistens voll ist.','بهتر است میزی رزرو کنیم، چون رستوران آخر هفته‌ها معمولاً پر است.'],Schule:['Die Schule bietet zusätzliche Sprachkurse an, die den Schülern den Einstieg erleichtern.','مدرسه کلاس‌های زبان اضافی ارائه می‌دهد که شروع کار را برای دانش‌آموزان آسان‌تر می‌کند.']};
+SEED.forEach(w=>{const e=EX2[w.de];if(e){w.ex2=e[0];w.ex2Fa=e[1]}});
+[['gehen','gehe|gehst|geht|gehen|geht|gehen','رفتن','Ich gehe zur Arbeit.','من به سر کار می‌روم.','Ich _____ zur Arbeit.','gehe','Wenn das Wetter schön ist, gehe ich lieber zu Fuß, anstatt den Bus zu nehmen.','وقتی هوا خوب است، ترجیح می‌دهم به‌جای اتوبوس پیاده بروم.','ging','ist gegangen',''],
+['machen','mache|machst|macht|machen|macht|machen','انجام دادن','Du machst die Hausaufgaben.','تو تکالیف را انجام می‌دهی.','Du _____ die Hausaufgaben.','machst','Ich habe mir vorgenommen, nächstes Jahr eine Weiterbildung zu machen.','تصمیم گرفته‌ام سال آینده یک دورهٔ تکمیلی بگذرانم.','machte','hat gemacht',''],
+['lernen','lerne|lernst|lernt|lernen|lernt|lernen','یاد گرفتن','Ich lerne jeden Tag Deutsch.','من هر روز آلمانی یاد می‌گیرم.','Ich _____ jeden Tag Deutsch.','lerne','Um die Prüfung zu bestehen, muss man regelmäßig lernen und sich gut organisieren.','برای قبول شدن در امتحان باید مرتب درس خواند و خوب برنامه‌ریزی کرد.','lernte','hat gelernt',''],
+['haben','habe|hast|hat|haben|habt|haben','داشتن','Er hat einen Hund.','او یک سگ دارد.','Er _____ einen Hund.','hat','Obwohl wir wenig Zeit haben, wollen wir die Aufgabe gründlich erledigen.','با اینکه وقت کمی داریم، می‌خواهیم کار را دقیق انجام دهیم.','hatte','hat gehabt',''],
+['sein','bin|bist|ist|sind|seid|sind','بودن','Wir sind zu Hause.','ما خانه هستیم.','Wir _____ zu Hause.','sind','Es ist wichtig, dass wir pünktlich sind, weil der Termin sehr kurzfristig angesetzt wurde.','مهم است که سر وقت باشیم، چون قرار خیلی کوتاه‌مدت تعیین شده است.','war','ist gewesen',''],
+['arbeiten','arbeite|arbeitest|arbeitet|arbeiten|arbeitet|arbeiten','کار کردن','Ihr arbeitet in Wien.','شما در وین کار می‌کنید.','Ihr _____ in Wien.','arbeitet','Seit drei Jahren arbeitet sie in einem Team, das neue Software entwickelt.','او سه سال است در تیمی کار می‌کند که نرم‌افزار جدید توسعه می‌دهد.','arbeitete','hat gearbeitet',''],
+['aufstehen','stehe auf|stehst auf|steht auf|stehen auf|steht auf|stehen auf','بلند شدن (از خواب)','Ich stehe um sieben Uhr auf.','من ساعت هفت بیدار می‌شوم.','Ich stehe um sieben Uhr _____.','auf','Obwohl es gestern spät wurde, stehe ich heute trotzdem früh auf.','با اینکه دیشب دیر شد، امروز هم زود بیدار می‌شوم.','stand auf','ist aufgestanden','auf'],
+['anrufen','rufe an|rufst an|ruft an|rufen an|ruft an|rufen an','تلفن زدن','Ich rufe dich morgen an.','فردا به تو زنگ می‌زنم.','Ich rufe dich morgen _____.','an','Falls es Probleme gibt, rufen Sie bitte sofort die Hotline an.','اگر مشکلی پیش آمد، لطفاً فوراً با خط پشتیبانی تماس بگیرید.','rief an','hat angerufen','an'],
+['einkaufen','kaufe ein|kaufst ein|kauft ein|kaufen ein|kauft ein|kaufen ein','خرید کردن','Wir kaufen im Supermarkt ein.','ما از سوپرمارکت خرید می‌کنیم.','Wir kaufen im Supermarkt _____.','ein','Am Wochenende kaufen wir meistens auf dem Markt ein, weil die Produkte dort frischer sind.','آخر هفته‌ها معمولاً از بازار خرید می‌کنیم، چون محصولات آنجا تازه‌ترند.','kaufte ein','hat eingekauft','ein'],
+['mitkommen','komme mit|kommst mit|kommt mit|kommen mit|kommt mit|kommen mit','همراه آمدن','Kommst du mit?','با ما می‌آیی؟','Kommst du _____?','mit','Ich würde gern am Samstag mitkommen, falls ich bis dahin mit der Arbeit fertig bin.','اگر تا آن موقع کارم تمام شود، دوست دارم شنبه همراه شما بیایم.','kam mit','ist mitgekommen','mit']
+].forEach(a=>SEED.push({id:'s_'+a[0],de:a[0],art:'',fa:a[2],pl:'',pos:'فعل',lvl:'A1',cat:'امور روزمره',conj:a[1],ex:a[3],exFa:a[4],cloze:a[5],ans:a[6],ex2:a[7],ex2Fa:a[8],prat:a[9],perf:a[10],sep:a[11]}));
+const CASEQ=[
+['Ich fahre mit ____ Bus zur Arbeit.','dem','der Bus','Dativ','mit ← همیشه Dativ','من با اتوبوس به سر کار می‌روم.'],
+['Sie kommt aus ____ Schule.','der','die Schule','Dativ','aus ← همیشه Dativ','او از مدرسه می‌آید.'],
+['Wir gehen zu ____ Arzt.','dem','der Arzt','Dativ','zu ← همیشه Dativ','ما پیش دکتر می‌رویم.'],
+['Er wohnt bei ____ Eltern.','den','die Eltern (جمع)','Dativ','bei ← همیشه Dativ؛ جمع در Dativ: den','او نزد والدینش زندگی می‌کند.'],
+['Das Geschenk ist für ____ Mutter.','die','die Mutter','Akkusativ','für ← همیشه Akkusativ','این هدیه برای مادر است.'],
+['Ich gehe ohne ____ Hund spazieren.','den','der Hund','Akkusativ','ohne ← همیشه Akkusativ','من بدون سگ قدم می‌زنم.'],
+['Wir laufen durch ____ Park.','den','der Park','Akkusativ','durch ← همیشه Akkusativ','ما از میان پارک می‌دویم.'],
+['Sie sitzen um ____ Tisch.','den','der Tisch','Akkusativ','um ← همیشه Akkusativ','آن‌ها دور میز نشسته‌اند.'],
+['Das Buch liegt auf ____ Tisch.','dem','der Tisch','Dativ (کجا؟ wo)','auf: مکان (wo?) ← Dativ','کتاب روی میز است.'],
+['Ich lege das Buch auf ____ Tisch.','den','der Tisch','Akkusativ (به کجا؟ wohin)','auf: جهت حرکت (wohin?) ← Akkusativ','کتاب را روی میز می‌گذارم.'],
+['Wir sind in ____ Küche.','der','die Küche','Dativ (کجا؟ wo)','in: مکان (wo?) ← Dativ','ما در آشپزخانه‌ایم.'],
+['Sie geht in ____ Küche.','die','die Küche','Akkusativ (به کجا؟ wohin)','in: جهت حرکت (wohin?) ← Akkusativ','او به آشپزخانه می‌رود.'],
+['Ich warte ____ den Bus.','auf','warten','فعل + حرف اضافه','warten auf + Akkusativ','منتظر اتوبوس هستم.'],
+['Er interessiert sich ____ Musik.','für','sich interessieren','فعل + حرف اضافه','sich interessieren für + Akkusativ','او به موسیقی علاقه دارد.'],
+['Wir sprechen ____ dem Lehrer.','mit','sprechen','فعل + حرف اضافه','sprechen mit + Dativ','ما با معلم صحبت می‌کنیم.'],
+['Sie träumt ____ einem Haus.','von','träumen','فعل + حرف اضافه','träumen von + Dativ','او رؤیای یک خانه را می‌بیند.'],
+['Ich freue mich ____ das Wochenende.','auf','sich freuen','فعل + حرف اضافه','sich freuen auf + Akkusativ (آینده)','منتظر آخر هفته‌ام.'],
+['Er denkt oft ____ seine Familie.','an','denken','فعل + حرف اضافه','denken an + Akkusativ','او اغلب به خانواده‌اش فکر می‌کند.']
+].map((a,i)=>({id:'c'+i,cs:1,s:a[0],ans:a[1],n:a[2],c:a[3],r:a[4],fa:a[5],ex:a[0].replace('____',a[1]),exFa:a[5]}));
+const $=s=>document.querySelector(s);
+const uid=()=>'w'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function h(t,a,...k){const e=document.createElement(t);for(const x in a||{}){if(x==='class')e.className=a[x];else if(x.startsWith('on'))e.addEventListener(x.slice(2),a[x]);else if(a[x]!=null&&a[x]!==false)e.setAttribute(x,a[x])}k.flat().forEach(c=>e.append(c==null?'':c));return e}
+const D=(t,c)=>h('span',{lang:'de',dir:'ltr',class:'de '+(c||'')},t);
+const pad=n=>String(n).padStart(2,'0');
+const dstr=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const today=()=>dstr(Date.now());
+const dayStart=o=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+o);return d.getTime()};
+const ymd=o=>dstr(dayStart(o));
+const cap=s=>s?s[0].toUpperCase()+s.slice(1):s;
+const full=w=>w.art?cap(w.art)+' '+w.de:w.de;
+const W=(w,c)=>h('span',{lang:'de',dir:'ltr',class:'de '+(c||'')},w.art?h('span',{class:'a a-'+w.art},w.art):'',w.de);
+const IMGOK=/^data:image\/(jpeg|png|webp|gif);base64,/;
+function norm(w){if(!w||typeof w.de!=='string'||!w.de.trim())return null;const s=k=>typeof w[k]==='string'?w[k]:'';const a=s('art').toLowerCase();
+return{id:s('id')||uid(),de:w.de.trim(),syn:s('syn'),synFa:s('synFa'),ant:s('ant'),antFa:s('antFa'),art:['der','die','das'].includes(a)?a:'',fa:s('fa'),pl:s('pl'),pos:s('pos'),lvl:s('lvl'),ex:s('ex'),exFa:s('exFa'),ex2:s('ex2'),ex2Fa:s('ex2Fa'),conj:s('conj'),prat:s('prat'),perf:s('perf'),sep:s('sep'),cat:s('cat').trim().slice(0,40),cloze:s('cloze'),ans:s('ans'),acc:Array.isArray(w.acc)?w.acc.map(String):[],tags:s('tags'),notes:s('notes'),img:IMGOK.test(s('img'))&&s('img').length<600000?s('img'):'',added:+w.added||Date.now(),last:+w.last||0,due:+w.due||0,ivl:+w.ivl||0,ease:+w.ease||2.5,stage:Math.max(0,Math.min(2,+w.stage||0)),ok:+w.ok||0,bad:+w.bad||0,res:s('res')}}
+const FILL=['syn','synFa','ant','antFa','cat','ex2','ex2Fa','conj','prat','perf','sep','cloze','ans'];
+function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&Array.isArray(o.words)){const ws=o.words.map(norm).filter(Boolean);
+if((o.sv||0)<4)SEED.forEach(sd=>{const e=ws.find(x=>x.id===sd.id);if(!e)ws.push(norm(sd));else FILL.forEach(k=>{if(!e[k]&&sd[k])e[k]=sd[k]})});
+return{v:1,sv:4,words:ws,hist:Array.isArray(o.hist)?o.hist:[],set:Object.assign({theme:'light',nw:10,rv:20,dir:'de'},o.set),daily:o.daily||{}}}}}catch(e){console.warn(e)}
+return{v:1,sv:4,words:SEED.map(norm),hist:[],set:{theme:document.documentElement.dataset.theme||'light',nw:10,rv:20,dir:'de'},daily:{}}}
+let st=load(),view='dash',S=null,BK=[],POP=null,EDIT=null,IMP=null,LIB={q:'',a:'',s:'all',o:'de',open:null};
+// Track translation visibility per card ID
+const visFaState={};
+const STUDY=['flash','review','daily','cloze','art','dict','plural','conj','tense','case'];
+const MN={flash:'فلش‌کارت',review:'مرور',daily:'جلسهٔ روزانه',cloze:'جای‌خالی',art:'آرتیکل',dict:'دیکته',plural:'جمع اسم',conj:'صرف فعل',tense:'زمان فعل',case:'حالت و حرف اضافه'};
+const POOL={cloze:w=>w.cloze||w.ans,art:w=>w.art,dict:()=>1,plural:w=>w.pl,conj:w=>w.conj,tense:w=>w.prat||w.perf};
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st));return true}catch(e){toast('ذخیره ممکن نشد (حافظه پر است). لطفاً پشتیبان بگیرید یا تصاویر را کم کنید.',1);return false}}
+function daily(){if(st.daily.d!==today())st.daily={d:today(),n:0,r:0};return st.daily}
+function toast(m,bad){const t=$('#toast');t.replaceChildren(h('div',{class:bad?'er':'ok'},m));clearTimeout(toast.t);toast.t=setTimeout(()=>t.replaceChildren(),4000)}
+function speak(text){if(!('speechSynthesis' in window)||!text){toast('مرورگر شما از تلفظ پشتیبانی نمی‌کند.',1);return}
+speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='de-DE';u.rate=.85;const v=speechSynthesis.getVoices().find(v=>/^de/i.test(v.lang));if(v)u.voice=v;speechSynthesis.speak(u)}
+const spk=t=>h('button',{class:'ic','aria-label':'تلفظ آلمانی',onclick:e=>{e.stopPropagation();speak(t)}},'🔊');
+function setTheme(t){st.set.theme=t;document.documentElement.dataset.theme=t;document.documentElement.setAttribute('data-theme',t);if(document.body)document.body.setAttribute('data-theme',t);document.documentElement.style.colorScheme=t;save()}
+$('#tt').onclick=()=>{setTheme(st.set.theme==='dark'?'light':'dark');render()};
+$('#sx').onclick=()=>{if(save()){toast('همه اطلاعات ذخیره شد. اگر صفحه بسته نشد، می‌توانید تب را دستی ببندید.');setTimeout(()=>{try{window.close()}catch(e){}},400)}};
+$('#bk').onclick=()=>back();
+addEventListener('keydown',e=>{if(e.key==='Escape'&&POP){POP=null;renderPop()}});
+addEventListener('pagehide',save);
+if(window.visualViewport){const syncViewport=()=>document.documentElement.style.setProperty('--visual-height',window.visualViewport.height+'px');window.visualViewport.addEventListener('resize',syncViewport,{passive:true});syncViewport()}
+function go(v){if(v!==view){BK.push(view);if(BK.length>30)BK.shift()}view=v;POP=null;if(STUDY.includes(v))S=null;render();scrollTo(0,0)}
+function back(){if(POP){POP=null;renderPop();return}view=BK.pop()||'dash';render();scrollTo(0,0)}
+function goQ(ids){BK.push(view);view='flash';POP=null;S={mode:'flash',ask:1,pre:ids};render()}
+const isLeech=w=>w.bad>=4&&w.bad/(w.ok+w.bad)>=.4;
+function sched(w,g){const n=Date.now(),first=!w.last,learning=first||w.stage>0;
+const oldI=Math.max(0,+w.ivl||0),oldEase=Math.max(1.3,Math.min(3.5,+w.ease||2.5));
+if(g===0){w.bad++;w.ease=Math.max(1.3,oldEase-.2);w.ivl=0;w.stage=1;w.due=n+60000}
+else if(learning&&g===1){w.ok++;w.stage=1;w.ivl=0;w.due=n+6*60000}
+else if(learning&&g===2){w.ok++;if(first){w.stage=1;w.ivl=0;w.due=n+10*60000}else{w.stage=0;w.ivl=1;w.due=dayStart(1)}}
+else if(g===3){w.ok++;w.ease=Math.min(3.5,oldEase+.15);w.stage=0;w.ivl=learning?4:Math.max(4,Math.round(Math.max(1,oldI)*oldEase*1.3));w.due=dayStart(w.ivl)}
+else{w.ok++;w.stage=0;const factor=g===1?Math.max(1.15,oldEase*.55):oldEase;w.ivl=oldI<1?1:Math.max(1,Math.round(oldI*factor));if(g===1)w.ease=Math.max(1.3,oldEase-.15);if(isLeech(w))w.ivl=Math.min(w.ivl,3);w.due=dayStart(w.ivl)}
+w.last=n;w.res=g?'ok':'bad';return first}
+function intervalPreview(w,g){const first=!w.last,learning=first||w.stage>0;let mins=0,days=0;if(g===0)mins=1;else if(learning&&g===1)mins=6;else if(learning&&g===2){if(first)mins=10;else days=1}else if(g===3)days=learning?4:Math.max(4,Math.round(Math.max(1,w.ivl)*w.ease*1.3));else if(g===1)days=Math.max(1,Math.round(Math.max(1,w.ivl)*1.2));else days=w.ivl<1?1:Math.max(1,Math.round(w.ivl*w.ease));return mins?mins+' دقیقه':days+' روز'}
+function lev(a,b){const m=[...Array(a.length+1)].map((_,i)=>[i]);for(let j=1;j<=b.length;j++)m[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return m[a.length][b.length]}
+const nz=s=>s.trim().replace(/\s+/g,' ').toLowerCase();
+const nz2=s=>nz(s).replace(/[.,!?;:"“”]/g,'');
+function check(w,inp){const exp=w.ans||full(w);if([exp,...w.acc].some(a=>nz(a)===nz(inp)))return{ok:1,exp};
+const e=exp.split(' '),u=inp.trim().split(/\s+/);let cat='other',msg='پاسخ نادرست است.';
+if(e.length===2){if(u.length===1&&nz(u[0])===nz(e[1])){cat='missing';msg='آرتیکل را ننوشتید؛ آرتیکل درست: '+e[0].toLowerCase()}
+else if(u.length===2&&nz(u[1])===nz(e[1])){cat='article';msg='آرتیکل اشتباه است؛ آرتیکل درست: '+e[0].toLowerCase()}
+else if(u.length===2&&nz(u[0])===nz(e[0])&&lev(nz(u[1]),nz(e[1]))<=2){cat='spelling';msg='املای اسم اشتباه است؛ درست: '+e[1]}}
+else if(u.length===1&&lev(nz(inp),nz(exp))<=2){cat='spelling';msg='املا اشتباه است؛ درست: '+exp}
+return{ok:0,exp,cat,msg}}
+function gen(q,v){const ok=[q.exp,...(q.acc||[])].some(a=>nz2(a)===nz2(v));return ok?{ok:1,exp:q.exp}:{ok:0,exp:q.exp,msg:lev(nz2(v),nz2(q.exp))<=2?'نزدیک بود؛ املا را بررسی کنید.':'پاسخ نادرست است.'}}
+const hintOf=(e,l)=>e.split(' ').map(t=>t.slice(0,l)+'_'.repeat(Math.max(0,t.length-l))).join(' ');
+function rec(w,type,sub,res,g,retry){if(!w.cs){const first=sched(w,g);if(!retry){const d=daily();first?d.n++:d.r++}}
+st.hist.push({id:w.id,t:Date.now(),type,sub,exp:res.exp||full(w),ok:g?1:0,cat:res.cat||''});if(st.hist.length>5000)st.hist.splice(0,st.hist.length-5000);save()}
+const imgEl=w=>w&&w.img&&IMGOK.test(w.img)?h('img',{src:w.img,alt:w.de,class:'wimg'}):'';
+function pickImg(done){const f=h('input',{type:'file',accept:'image/*',style:'display:none'});document.body.append(f);
+f.onchange=()=>{const file=f.files[0];f.remove();if(!file)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,480/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);done(c.toDataURL('image/jpeg',.78))};im.onerror=()=>toast('تصویر نامعتبر است.',1);im.src=r.result};r.readAsDataURL(file)};f.click()}
+function imgBtn(w,after,c){if(w.cs)return '';return h('div',{class:'row',style:'justify-content:center;margin:'+(c?'0':'.4rem 0')},h('button',{onclick:()=>pickImg(d=>{const o=w.img;w.img=d;if(!save())w.img=o;else toast('تصویر ذخیره شد.');after()})},w.img?'🖼 تغییر تصویر':'📷 افزودن تصویر'),w.img?h('button',{onclick:()=>{w.img='';save();after()}},'حذف تصویر'):'')}
+function dueText(w){if(!w.last)return 'جدید (هنوز مرور نشده)';const n=Date.now(),d=new Date(w.due),dt=d.toLocaleDateString('fa-IR')+' • \u2066'+d.getFullYear()+'/'+pad(d.getMonth()+1)+'/'+pad(d.getDate())+'\u2069';
+if(w.due<=n)return 'همین حالا';if(w.due<dayStart(1))return 'امروز ('+dt+')';if(w.due<dayStart(2))return 'فردا ('+dt+')';return Math.round((w.due-dayStart(0))/DAY)+' روز دیگر ('+dt+')'}
+function streak(){const s=new Set(st.hist.map(x=>dstr(x.t)));let o=s.has(ymd(0))?0:-1,n=0;while(s.has(ymd(o))){n++;o--}return n}
+const trBtn=t=>{if(!t)return '';const sp=h('div',{class:'mu fa',dir:'rtl',style:'text-align:right;margin-top:.2rem'},t),b=h('button',{class:'ic',onclick:(e)=>{e.stopPropagation();b.replaceWith(sp)}},'👁 نمایش ترجمه');return b};
+function exs(w){const o=[];if(w.ex)o.push(h('p',null,D(w.ex),' ',spk(w.ex),h('br'),trBtn(w.exFa)));if(w.ex2)o.push(h('p',null,D(w.ex2),' ',spk(w.ex2),h('br'),trBtn(w.ex2Fa)));return o}
+function vForms(w){const o={};if(w.conj){const f=w.conj.split('|');if(f.length>=6)o.pres=f.slice(0,6)}
+let b=w.prat||'',sp='';if(b&&w.sep&&b.endsWith(' '+w.sep)){sp=' '+w.sep;b=b.slice(0,-sp.length)}
+if(b){let f;if(b==='war')f=['war','warst','war','waren','wart','waren'];else if(/te$/.test(b))f=[b,b+'st',b,b+'n',b+'t',b+'n'];else f=[b,b+(/[sßxztd]$/.test(b)?'est':'st'),b,b+(/e$/.test(b)?'n':'en'),b+(/[td]$/.test(b)?'et':'t'),b+(/e$/.test(b)?'n':'en')];o.prat=f.map(x=>x+sp);o.rb=b}
+const m=/^(hat|ist)\s+(.+)$/.exec(w.perf||'');if(m){const aux=m[1]==='ist'?'sein':'haben',A={haben:['habe','hast','hat','haben','habt','haben'],sein:['bin','bist','ist','sind','seid','sind']}[aux];o.aux=aux;o.pp=m[2];o.perf=A.map(x=>x+' '+m[2])}
+return o}
+function regPres(w){const inf=w.sep&&w.de.startsWith(w.sep)?w.de.slice(w.sep.length):w.de,st=inf.replace(/e?n$/,''),en=inf.slice(st.length);
+const e=/[td]$/.test(st)||/(?:[bdfgkpt]|ch)[mn]$/.test(st)?'e':'',du=/[sßxz]$/.test(st)?'t':e+'st';
+return{st,en,e,r:[[st+'e','e'],[st+du,du],[st+e+'t',e+'t'],[inf,en],[st+e+'t',e+'t'],[inf,en]]}}
+function colorize(f,ref,end){const L=f.length;let p=0;while(p<L&&p<ref.length&&f[p]===ref[p])p++;let x=0;while(x<L-p&&x<ref.length-p&&f[L-1-x]===ref[ref.length-1-x])x++;
+const same=f===ref,bl=end&&f.endsWith(end)?L-end.length:L+1,g=[];
+for(let i=0;i<L;i++){const red=!same&&(L-x-p<=0||(i>=p&&i<L-x)),k=red?'rd':i>=bl?'en':'',l=g[g.length-1];if(l&&l[1]===k)l[0]+=f[i];else g.push([f[i],k])}
+return g.map(([t,k])=>k?h('span',{class:k},t):t)}
+function verbBox(w){const o=vForms(w);if(!o.pres&&!o.prat&&!o.perf)return '';
+const sp=w.sep?' '+w.sep:'',R=regPres(w),split=f=>sp&&f.endsWith(sp)?[f.slice(0,-sp.length),sp]:[f,''];
+const cell=(f,ref,end)=>{const[c,t]=split(f);return h('b',{class:'de'},...colorize(c,ref,end),t)};
+const mkb=(t,fa,rows)=>h('div',{class:'vb'},h('h5',null,h('span',{class:'de'},t),h('small',{class:'mu'},fa)),...rows.map((x,i)=>h('div',{class:'vr'},h('small',null,P6[i]),x)));
+const bx=[],strong=o.prat?!/te$/.test(o.rb):/en$/.test(o.pp||'');
+if(o.pres)bx.push(mkb('Präsens','حال',o.pres.map((f,i)=>cell(f,R.r[i][0],R.r[i][1]))));
+if(o.prat){const b=o.rb,du=/[sßxztd]$/.test(b)?'est':'st',ihr=/[td]$/.test(b)?'et':'t',pl=/e$/.test(b)?'n':'en',e=R.e,E=strong?['',du,'',pl,ihr,pl]:[e+'te',e+'test',e+'te',e+'ten',e+'tet',e+'ten'];
+bx.push(mkb('Präteritum','گذشتهٔ ساده',o.prat.map((f,i)=>cell(f,R.st+E[i],E[i]))))}
+if(o.perf){const A=regPres({de:o.aux==='sein'?'sein':'haben'});bx.push(mkb('Perfekt','گذشتهٔ نقلی',o.perf.map((f,i)=>{const a=f.split(' ');return h('b',{class:'de'},h('span',null,a[0]),' ',h('span',strong?{class:'rd'}:null,a.slice(1).join(' ')))})))}
+const ch=[['Infinitiv',w.de],o.aux&&['Hilfsverb',o.aux],o.pp&&['Partizip II',o.pp],w.sep&&['trennbar',w.sep]].filter(Boolean).map(x=>h('span',{class:'tag de'},x[0]+': '+x[1]));
+return h('div',{class:'psec'},h('div',null,...ch),h('div',{class:'vt'},...bx),h('p',{class:'mu',style:'font-size:.78rem;margin:0'},h('span',{class:'en',style:'color:var(--ac);font-weight:700'},'آبی'),': پایانهٔ با قاعده • ',h('span',{class:'rd'},'قرمز'),': بخش بی‌قاعده • Präteritum و Perfekt برای همهٔ ضمیرها از شکل er/sie/es ساخته شده‌اند.'))}
+function synAnt(w){const row=(l,d,f)=>h('div',{style:'display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;align-items:baseline'},h('b',null,l+':'),d?[D(d),f?h('span',{class:'mu'},' — '+f):'']:h('span',{class:'mu'},'ثبت نشده'));return h('div',{class:'psec',style:'color:var(--tx);max-width:520px;margin:.5rem auto'},row('مترادف',w.syn,w.synFa),row('متضاد',w.ant,w.antFa))}
+const LATN=/[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß'’\-]*(?:(?:\s+|\s*[+\/]\s*)[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß'’\-]*)*/g;
+function noteEls(txt){return String(txt||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map(line=>{const m=/^([^:：]{2,24}[:：])\s*([\s\S]*)$/.exec(line),lab=m&&!/[A-Za-z]/.test(m[1])?m[1]:'',rest=lab?m[2]:line,parts=[];let last=0,r;LATN.lastIndex=0;while((r=LATN.exec(rest))){if(r.index>last)parts.push(rest.slice(last,r.index));parts.push(h('bdi',{lang:'de',dir:'ltr'},r[0]));last=r.index+r[0].length}if(last<rest.length)parts.push(rest.slice(last));return h('p',{class:'mu nl',dir:'rtl'},lab?h('b',null,lab+' '):'',...parts)})}
+function extras(w){const o=exs(w),v=verbBox(w);if(v)o.push(v);if(w.notes)o.push(...noteEls(w.notes));return o}
+const metaOf=w=>[w.pos,w.lvl,w.pl&&'جمع: '+w.pl,w.sep&&'جداشدنی ('+w.sep+')',isLeech(w)&&'🩸 واژهٔ سخت'].filter(Boolean).join(' • ');
+function effMode(w,m){if(m!=='daily')return m;if(!w.last)return 'flash';const a=['flash',...Object.keys(POOL).filter(k=>POOL[k](w))];return a[Math.floor(Math.random()*a.length)]}
+function shuffleCards(items){const a=items.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function build(mode,extra,dir,pre,catFilter){const n=Date.now();let Ws=st.words;if(catFilter)Ws=Ws.filter(w=>w.cat===catFilter);const d=daily();let q;
+if(pre)q=pre.map(id=>Ws.find(x=>x.id===id)).filter(Boolean);
+else if(mode==='case')q=CASEQ.slice().sort(()=>Math.random()-.5).slice(0,10);
+else{const due=Ws.filter(w=>w.last&&w.due<=n).sort((a,b)=>a.due-b.due),nw=shuffleCards(Ws.filter(w=>!w.last));
+if(mode==='review')q=due;
+else if(POOL[mode]){const c=Ws.filter(POOL[mode]);q=[...c.filter(x=>x.last&&x.due<=n).sort((a,b)=>a.due-b.due),...shuffleCards(c.filter(x=>!x.last)),...c.filter(x=>x.last&&x.due>n).sort((a,b)=>a.due-b.due)].slice(0,10)}
+else q=[...due.slice(0,Math.max(0,st.set.rv-d.r)),...nw.slice(0,Math.max(0,st.set.nw-d.n))];
+if(extra){q=Ws.filter(POOL[mode]||(()=>1)).sort(()=>Math.random()-.5).slice(0,10)}}
+S={mode,q:q.map(x=>x.id),mq:q.map(x=>effMode(x,mode)),i:0,shown:0,rt:{},res:null,dir:dir||st.set.dir||'de',cur:null,val:'',hint:0}}
+function startS(m){if(m==='flash'||m==='review')S={mode:m,ask:1};else build(m)}
+function advance(){S.i++;S.shown=0;S.res=null;S.cur=null;S.val='';S.hint=0;render()}
+function gradeCard(w,g){if(S.busy)return;S.busy=1;const rt=!!S.rt[w.id];rec(w,S.em,'flash',{},g,rt);toast('مرور بعدی: '+dueText(w));
+if(g===0&&(S.rt[w.id]||0)<2){S.rt[w.id]=(S.rt[w.id]||0)+1;S.q.push(w.id);S.mq.push(S.mq[S.i])}S.busy=0;advance()}
+function mk(w){const m=S.em;
+if(m==='art')return{k:'art',exp:w.art,p:[h('p',{class:'mu'},'آرتیکل این اسم چیست؟'),h('p',{class:'big'},D(w.de),' ',spk(w.de)),h('p',null,w.fa)]};
+if(m==='dict'){const t=!!w.ex&&Math.random()<.5,x=t?w.ex:full(w);return{say:x,exp:x,auto:1,p:[h('p',{class:'mu'},t?'جمله را بشنوید و بنویسید':'واژه را بشنوید و با آرتیکل بنویسید'),h('button',{class:'p',onclick:()=>speak(x)},'🔊 پخش'),h('p',{class:'mu'},w.fa)]}}
+if(m==='plural')return{exp:w.pl,acc:['die '+w.pl],p:[h('p',{class:'mu'},'شکل جمع این اسم چیست؟'),h('p',{class:'big'},W(w),' ',spk(full(w))),h('p',null,w.fa)]};
+if(m==='conj'){const f=w.conj.split('|'),i=Math.floor(Math.random()*Math.min(6,f.length));return{exp:f[i],acc:[P6[i]+' '+f[i]],p:[h('p',{class:'mu'},'صرف فعل (زمان حال):'),h('p',{class:'big'},D(P6[i]+' ____'),' ',h('span',{class:'mu'},'('+w.de+' — '+w.fa+')'))]}}
+if(m==='tense'){const o=[];if(w.prat)o.push(['Präteritum',w.prat]);if(w.perf)o.push(['Perfekt',w.perf]);const [t,f]=o[Math.floor(Math.random()*o.length)];return{exp:f,acc:['er '+f,'sie '+f,'es '+f,'er/sie/es '+f],p:[h('p',{class:'mu'},t+' (er/sie/es) — فعل را به این زمان ببرید:'),h('p',{class:'big'},D(w.de),' ',spk(w.de)),h('p',null,w.fa)]}}
+if(m==='case')return{exp:w.ans,p:[h('p',{class:'mu'},'جای خالی را کامل کنید ('+w.c+')'),h('p',{class:'big'},D(w.s)),h('p',{class:'mu'},'('+w.n+')')]};
+const t=(w.cloze||'_____').trim();return{chk:1,exp:w.ans||full(w),say:t.replace(/_+/g,' '),p:[h('p',{class:'big'},D(t),' ',h('span',{class:'mu'},'('+w.fa+')'))]}}
+function study(){const root=h('div');
+if(S.ask){let chosenDir=st.set.dir||'de',chosenCat='';
+const pick=d=>()=>{st.set.dir=d;save();build(S.mode,0,d,S.pre,chosenCat);render()};
+const catSelect=h('select',{onchange:e=>{chosenCat=e.target.value}},h('option',{value:''},'همهٔ دسته‌ها (کلیت واژگان)'),...cats().map(([c,n])=>h('option',{value:c},c+' ('+n+' واژه)')));
+root.append(h('div',{class:'card'},h('h2',{style:'margin-top:0'},MN[S.mode]+' — تنظیمات شروع تمرین'),
+h('label',null,'تمرین مخصوص یک دستهٔ خاص (اختیاری):'),catSelect,
+h('p',{class:'mu'},'کدام جهت را می‌خواهید تمرین کنید؟'),
+h('div',{class:'grid'},h('button',{class:'p',style:'padding:1.2rem',onclick:pick('de')},'🇩🇪 آلمانی ← فارسی'),h('button',{class:'p',style:'padding:1.2rem',onclick:pick('fa')},'🇮🇷 فارسی ← آلمانی'))));
+return root}
+const w=S.mode==='case'?CASEQ.find(x=>x.id===S.q[S.i]):st.words.find(x=>x.id===S.q[S.i]);
+if(!w){root.append(h('div',{class:'card'},h('p',null,S.q.length?'تمرین تمام شد. آفرین!':'در حال حاضر کارت یا تمرینی برای نمایش وجود ندارد (مروری سررسید نیست، سهمیهٔ امروز تکمیل شده، یا واژه‌ای مناسب این تمرین نیست).'),
+h('p',{class:'mu'},'امروز: '+daily().n+' کلمهٔ جدید، '+daily().r+' مرور'),h('div',{class:'row'},h('button',{class:'p',onclick:()=>go('prac')},'بازگشت به تمرین‌ها'),h('button',{onclick:()=>{build(S.mode,1,S.dir,null,S.catFilter);render()}},'تمرین اضافی (فراتر از سهمیه)'))));return root}
+S.em=S.mode==='daily'?S.mq[S.i]:S.mode;
+root.append(h('progress',{max:S.q.length,value:S.i}),h('p',{class:'mu'},MN[S.mode]+(S.mode==='daily'?' • '+MN[S.em]:'')+' • '+(S.i+1)+' از '+S.q.length));
+if(S.em!=='flash'&&S.em!=='review'){const c=h('div',{class:'card'}),q=S.cur||(S.cur=mk(w));
+c.append(...q.p);if(q.say&&!q.auto)c.append(spk(q.say));
+if(q.auto&&S.sp!==S.i){S.sp=S.i;speak(q.say)}
+const fin=r=>{if(S.res)return;S.res=r;const rt=!!S.rt[w.id];rec(w,S.em,r.sub,{exp:r.exp,cat:r.cat},r.ok?(S.hint?1:2):0,rt);if(!r.ok&&(S.rt[w.id]||0)<2){S.rt[w.id]=(S.rt[w.id]||0)+1;S.q.push(w.id);S.mq.push(S.mq[S.i])}render()};
+const nx=h('button',{class:'p',id:'nx',onclick:advance},'سؤال بعدی');
+if(q.k==='art'){c.append(h('div',{class:'row'},...['der','die','das'].map(x=>h('button',{class:'a a-'+x,style:'font-size:1.2rem;padding:.6rem 1.3rem;min-height:48px;border:0',disabled:S.res?'':null,onclick:()=>fin({ok:w.art===x,exp:cap(w.art)+' '+w.de,msg:'آرتیکل درست: '+w.art,sub:x})},x))));if(S.res)c.append(h('div',{class:'row',style:'margin-top:.6rem'},nx))}
+else{const inp=h('input',{id:'ans',dir:'ltr',lang:'de',autocomplete:'off',autocapitalize:'off',autocorrect:'off',spellcheck:'false','aria-label':'پاسخ آلمانی'});
+inp.value=S.val||'';inp.oninput=()=>{S.val=inp.value};if(S.res)inp.disabled=true;
+const gob=()=>{if(S.res)return;const v=inp.value.trim();if(!v){toast('لطفاً پاسخ را بنویسید.',1);return}const r=q.chk?check(w,v):gen(q,v);r.sub=v;fin(r)};
+inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();S.res?advance():gob()}});
+c.append(inp,h('div',{class:'row',style:'margin-top:.6rem'},S.res?nx:[h('button',{class:'p',onclick:gob},'بررسی پاسخ'),h('button',{disabled:(S.hint||0)>=2?'':null,onclick:()=>{S.hint=Math.min(2,(S.hint||0)+1);render()}},'💡 راهنمایی ('+(2-(S.hint||0))+')')]));
+if(S.hint&&!S.res)c.append(h('p',{class:'mu',dir:'ltr'},hintOf(q.exp,S.hint)))}
+if(S.res){const r=S.res;c.append(h('div',{class:r.ok?'ok':'er',style:'margin-top:.6rem'},r.ok?'✔ درست!'+(S.hint?' (با راهنمایی؛ مرور زودتر برمی‌گردد)':''):'✘ '+(r.msg||'پاسخ نادرست است.'),h('br'),'پاسخ درست: ',D(r.exp)),w.cs?'':h('p',{class:'mu'},'مرور بعدی: '+dueText(w)));
+if(w.r)c.append(h('p',{class:'mu'},'📌 '+w.r));c.append(synAnt(w),imgEl(w),imgBtn(w,render),...extras(w))}
+root.append(c);setTimeout(()=>{const e=S.res?$('#nx'):$('#ans');if(e&&window.matchMedia('(min-width:861px)').matches)e.focus()});return root}
+const c=h('div',{class:'card fc'}),FA=S.dir==='fa',deEl=()=>h('p',{class:'big'},W(w),' ',spk(full(w))),faEl=()=>h('p',{class:'big',dir:'rtl'},w.fa);
+c.append(FA?faEl():deEl());
+if(FA&&!S.shown&&w.pos)c.append(h('p',{class:'mu'},w.pos));
+if(st.set.auto&&(FA?S.shown:!S.shown)&&S.sp!==S.i){S.sp=S.i;speak(full(w))}
+if(!S.shown)c.append(h('button',{class:'p',onclick:()=>{S.shown=1;render()}},FA?'👁 نمایش آلمانی':'👁 نمایش ترجمه'));
+else{c.append(FA?deEl():faEl(),synAnt(w),h('p',{class:'mu'},metaOf(w)),imgEl(w),...extras(w),imgBtn(w,render),
+h('div',{class:'row anki-ratings'},h('button',{class:'again',onclick:()=>gradeCard(w,0)},'دوباره · '+intervalPreview(w,0)),h('button',{class:'hard',onclick:()=>gradeCard(w,1)},'سخت · '+intervalPreview(w,1)),h('button',{class:'p good',onclick:()=>gradeCard(w,2)},'خوب · '+intervalPreview(w,2)),h('button',{class:'easy',onclick:()=>gradeCard(w,3)},'آسان · '+intervalPreview(w,3))))}
+root.append(c);return root}
+function parseCSV(t){const rows=[];let r=[],f='',q=0;t=t.replace(/^\uFEFF/,'');for(let i=0;i<t.length;i++){const c=t[i];
+if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=0}else f+=c}
+else if(c==='"')q=1;else if(c===','){r.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;r.push(f);f='';rows.push(r);r=[]}else f+=c}
+if(f||r.length){r.push(f);rows.push(r)}return rows.filter(r=>r.some(x=>x.trim()))}
+const AL={syn:['synonym','syn','synonymgerman'],synFa:['synonymtranslation','synonymfa','synfa'],ant:['antonym','ant','antonymgerman'],antFa:['antonymtranslation','antonymfa','antfa'],de:['german','de','word','wort','deutsch'],art:['article','art','artikel'],fa:['persian','fa','translation','farsi'],pl:['plural'],pos:['partofspeech','pos'],lvl:['level','cefr'],ex:['example','beispiel'],cat:['category','cat','دسته'],exFa:['exampletranslation','examplefa'],ex2:['example2'],ex2Fa:['example2translation'],conj:['conjugation','conj'],prat:['preteritum','prateritum','past'],perf:['perfect','perfekt'],sep:['separableprefix','sep'],cloze:['clozesentence','cloze'],ans:['clozeanswer','answer'],acc:['acceptedanswers','accepted'],tags:['tags'],notes:['notes','note'],id:['id']};
+function csvToWords(text){const rows=parseCSV(text),errs=[],ok=[];if(rows.length<2)return{ok,errs:['فایل خالی است یا فقط سطر عنوان دارد.']};
+const hd=rows[0].map(x=>x.trim().toLowerCase().replace(/[\s_-]/g,'')),ix={};for(const k in AL){const j=hd.findIndex(x=>AL[k].includes(x));if(j>=0)ix[k]=j}
+if(ix.de==null)return{ok,errs:['ستون german پیدا نشد.']};
+const seenC=[];rows.slice(1).forEach((r,n)=>{const o={};for(const k in ix)o[k]=(r[ix[k]]||'').trim();if(o.cat){const m=matchCat(o.cat,seenC);o.cat=m||o.cat;if(!m)seenC.push(o.cat)}
+const m=/^(der|die|das)\s+(.+)$/i.exec(o.de);if(m&&!o.art){o.art=m[1];o.de=m[2]}
+o.acc=o.acc?o.acc.split('|').map(s=>s.trim()).filter(Boolean):[];
+if(!o.de)errs.push('سطر '+(n+2)+': کلمهٔ آلمانی خالی است');else if(!o.fa)errs.push('سطر '+(n+2)+': ترجمهٔ فارسی خالی است');else{const w=norm(o);if(w)ok.push(w)}});return{ok,errs}}
+const esc=v=>{v=String(v==null?'':v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function toCSV(ws){const c=['id','german','article','persian','synonym','synonymTranslation','antonym','antonymTranslation','plural','partOfSpeech','level','example','exampleTranslation','example2','example2Translation','conjugation','preteritum','perfekt','separablePrefix','clozeSentence','clozeAnswer','acceptedAnswers','tags','notes','category'];
+return '\uFEFF'+c.join(',')+'\n'+ws.map(w=>[w.id,w.de,w.art,w.fa,w.syn,w.synFa,w.ant,w.antFa,w.pl,w.pos,w.lvl,w.ex,w.exFa,w.ex2,w.ex2Fa,w.conj,w.prat,w.perf,w.sep,w.cloze,w.ans,w.acc.join('|'),w.tags,w.notes,w.cat].map(esc).join(',')).join('\n')}
+function dl(name,txt,type){try{if(window.claude&&window.claude.use){window.claude.use('downloads').then(d=>{if(d)d.save({filename:name,data:txt}).catch(e=>{if(e&&e.code!=='declined')toast('ذخیرهٔ فایل ممکن نشد.',1)});else dl0(name,txt,type)});return}}catch(e){}dl0(name,txt,type)}
+function dl0(name,txt,type){const url=URL.createObjectURL(new Blob([txt],{type})),a=h('a',{href:url,download:name});a.style.cssText='position:fixed;left:-9999px;top:0';document.body.append(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},1500)}
+function addWords(ws,over){let a=0,u=0,s=0;const key=w=>(w.art+' '+w.de).toLowerCase();
+ws.forEach(w=>{let i=st.words.findIndex(x=>x.id===w.id);if(i<0)i=st.words.findIndex(x=>key(x)===key(w));
+if(i<0){st.words.push(w);a++}else if(over){const o=st.words[i];st.words[i]=Object.assign(w,{id:o.id,img:w.img||o.img,cat:w.cat||o.cat,last:o.last,due:o.due,ivl:o.ivl,ease:o.ease,ok:o.ok,bad:o.bad,res:o.res});u++}else s++});save();return 'افزوده: '+a+' • به‌روزرسانی: '+u+' • ردشده (تکراری): '+s}
+const MASTER="German Vocabulary Master Prompt — Final Comprehensive Version\n\n1. Role and Objective\n\nYou are an expert German vocabulary extraction, classification, and JSON-generation assistant for a Persian-speaking German learner.\n\nYour responsibilities are to:\n\n* Process German words and expressions supplied directly by the user.\n* Extract useful German vocabulary from images, screenshots, handwritten notes, documents, books, magazines, articles, and longer texts.\n* Prioritize valuable vocabulary instead of obvious beginner words.\n* Identify the correct meaning, part of speech, and CEFR level.\n* Provide accurate Persian translations and natural German example sentences.\n* Identify genuine word-family relationships, including related nouns, verbs, adjectives, and adverbs.\n* Explain relevant prepositions, grammatical complements, and grammatical cases.\n* Write concise, practical Persian learning notes using a strict multiline format.\n* Generate valid JSON compatible with the user’s existing web application’s importer.\n* Create a downloadable UTF-8 .json file whenever file creation is available.\n\nPriority Order\n\n1. Exact JSON schema and import compatibility.\n2. Linguistic accuracy.\n3. Educational usefulness.\n4. Consistent formatting.\n5. Conciseness.\n\nNever sacrifice JSON compatibility or factual accuracy to add more information.\n\n⸻\n\n2. Input Workflows\n\nA. When the User Sends German Words Directly\n\nWhen the user sends one German word, multiple words, or a vocabulary list:\n\n1. Process every submitted item immediately.\n2. Determine the correct dictionary form and meaning.\n3. Identify the part of speech and other applicable grammatical information.\n4. Provide accurate translations, synonyms, antonyms, examples, and verb forms where applicable.\n5. Identify useful related words from the same word family.\n6. Explain relevant prepositions, grammatical structures, and cases in notes.\n7. Generate one JSON object for each submitted vocabulary item.\n8. Return exactly one valid JSON array.\n9. If file creation is available, provide a downloadable UTF-8 .json file containing exactly the same array.\n\nDo not ask the user to select items before generating JSON.\n\nIf the same item appears multiple times, avoid unnecessary duplicate objects unless the user explicitly requests duplicates or the items represent genuinely different meanings.\n\nFor expressions and idioms, preserve the complete expression when it has independent learning value.\n\nB. When the User Sends an Image, Text, or Document\n\nWhen the user sends a photo, screenshot, handwritten note, scanned page, document, book, magazine, article, or longer German text:\n\n1. Read the source as accurately as possible.\n2. Extract useful German vocabulary directly.\n3. Apply the vocabulary selection and difficulty filter in Section 3.\n4. Identify the relevant dictionary forms and context-specific meanings.\n5. Generate JSON objects directly for the selected vocabulary.\n6. Return exactly one valid JSON array.\n7. If file creation is available, provide a downloadable UTF-8 .json file containing exactly the same array.\n\nDo not create a numbered selection list, do not wait for the user to select numbers, and do not ask for selection confirmation. Extract and process suitable vocabulary directly.\n\nAdditional rules:\n\n* Recognize German spelling, capitalization, umlauts, and ß correctly.\n* Do not invent words that are absent from the source.\n* Do not silently guess unreadable or ambiguous words.\n* Omit uncertain words when their intended form cannot be established reliably.\n* Avoid unnecessary duplicates.\n* Preserve complete expressions when isolated words would not convey their meaning adequately.\n* Use the meaning that best matches the source context.\n\n⸻\n\n3. Vocabulary Selection and Difficulty Filter\n\nDo not automatically extract every word that appears in the source. Select vocabulary according to usefulness, difficulty, context, and learning value.\n\nA. Exclude Obvious Beginner Vocabulary\n\nGenerally exclude very common A1 words that most learners are expected to know already, such as:\n\n* Schule\n* Haus\n* Mann\n* Frau\n* Kind\n* machen\n* gehen\n* kommen\n* sein\n* haben\n* gut\n* schön\n\nThese examples are guidelines, not an absolute blacklist.\n\nInclude a basic word when it has a noteworthy advanced meaning, an important less-obvious usage, a useful idiom, a valuable grammatical pattern, or another clear learning benefit.\n\nDo not include a basic word merely because it appears in the source.\n\nB. Prioritize Valuable Vocabulary\n\nGive priority to:\n\n* B1–C2 vocabulary.\n* Useful A2 vocabulary that is less obvious or easily misunderstood.\n* Words with multiple meanings or subtle distinctions.\n* Important verbs, including separable and inseparable verbs.\n* Meaningful noun–verb combinations and collocations.\n* Idioms, fixed expressions, and common constructions.\n* Formal, academic, professional, administrative, and specialized vocabulary when relevant.\n* Words that are difficult to infer from context.\n* Vocabulary that Persian-speaking learners commonly confuse.\n* Vocabulary that improves reading comprehension, speaking, writing, or listening.\n* Useful word-family relationships that connect nouns, verbs, adjectives, and adverbs.\n\nC. Evaluate Expressions in Context\n\nDo not discard a valuable expression simply because its individual components are basic.\n\nExamples:\n\n* eine Entscheidung treffen\n* zur Verfügung stehen\n* sich mit etwas auseinandersetzen\n* in Betracht ziehen\n\nPrioritize the complete expression when it has meaningful learning value. Include individual components separately only if they also have independent learning value.\n\nD. Exclude Low-Value Entries\n\nAvoid including:\n\n* Obvious beginner vocabulary with little additional learning value.\n* Repetitive items already represented by a more useful expression.\n* Ordinary articles, pronouns, and basic grammatical words unless their specific usage is noteworthy.\n* Proper names and incidental words that are not useful vocabulary-learning targets.\n* Words included merely to increase the number of entries.\n\nE. Apply a Relevance Test\n\nBefore including an item, ask:\n\n“Would this item meaningfully expand the vocabulary or improve the German comprehension of a learner who already knows common A1 vocabulary?”\n\nIf the answer is no, exclude it. If the answer is yes, include it and assign the most defensible CEFR level.\n\nF. Prefer Quality over Quantity\n\nWhen the source supports it, aim for approximately 70–80% B1–C2 vocabulary, with the remaining entries reserved for particularly useful A2 vocabulary and valuable expressions.\n\nThis is a guideline only.\n\n* Do not force the ratio.\n* Do not invent advanced vocabulary.\n* Do not artificially increase CEFR levels.\n* If the source contains only a few valuable items, return a shorter, higher-quality list.\n\n⸻\n\n4. Mandatory JSON Schema and Import Compatibility\n\nEvery vocabulary object must contain exactly these 22 keys in the exact order shown:\n\n1. de\n2. art\n3. fa\n4. syn\n5. synFa\n6. ant\n7. antFa\n8. pl\n9. pos\n10. lvl\n11. ex\n12. exFa\n13. ex2\n14. ex2Fa\n15. cloze\n16. ans\n17. conj\n18. prat\n19. perf\n20. sep\n21. notes\n22. cat\n\nNever add, remove, rename, or reorder these keys.\n\nMandatory rules:\n\n* Every object must contain all 22 keys, even when some fields are not applicable.\n* Every value must be a string.\n* Use \"\" for empty or non-applicable fields.\n* Never use null, numbers, arrays, or nested objects as field values.\n* Do not add IDs, extraction numbers, metadata, comments, or extra keys.\n* Use valid JSON syntax with double quotes.\n* Escape quotation marks and special characters correctly.\n* Do not include trailing commas.\n* Do not wrap the array in another object.\n\nFinal JSON Output\n\nThe final data must be exactly one JSON array containing the vocabulary objects.\n\n* Do not include explanatory text inside the JSON.\n* Do not use Markdown code fences around the final JSON output.\n* Do not include comments or annotations.\n* Do not add headings or introductions inside the JSON data.\n* Ensure the array can be parsed by a standard JSON parser.\n\nIf a brief sentence is needed to introduce a downloadable file, keep that sentence outside the file. The file itself must contain only the JSON array.\n\nBefore returning the result, silently validate the syntax, key count, key order, data types, and permitted category values.\n\n⸻\n\n5. Field-by-Field Rules\n\nde\nThe German vocabulary item in its dictionary form.\n* Nouns: singular form without the article.\n* Verbs: infinitive.\n* Adjectives and adverbs: base form when appropriate.\n* Expressions: complete expression.\n\nart\nThe definite article for German nouns: der, die, or das. For non-nouns, use \"\".\n\nfa\nA clear, natural Persian translation appropriate to the source context.\n* Include important meanings concisely when necessary.\n* For expressions, translate the complete expression rather than translating each word mechanically.\n* Avoid unnecessary repetition.\n\nsyn\nGerman synonyms separated by , . Use \"\" if no suitable synonym exists.\n\nsynFa\nPersian translations of the synonyms in syn, in the same order and separated by , . Use \"\" if syn is empty.\n\nant\nGerman antonyms separated by , . Use \"\" if no suitable antonym exists.\n\nantFa\nPersian translations of the antonyms in ant, in the same order and separated by , . Use \"\" if ant is empty.\n\npl\nThe plural form of a German noun. For non-nouns, use \"\". Never guess an uncertain plural form.\n\npos\nUse a short, consistent part-of-speech label, such as: Nomen, Verb, Adjektiv, Adverb, Präposition, Konjunktion, Redewendung, Ausdruck.\n\nlvl\nThe CEFR level: A1, A2, B1, B2, C1, or C2.\n\nex\nA natural German example sentence illustrating the intended meaning.\n\nexFa\nA natural Persian translation of ex.\n\nex2\nA second German example sentence differing meaningfully from ex.\n\nex2Fa\nA natural Persian translation of ex2.\n\ncloze\nA fill-in-the-blank version of the first German example sentence.\n* Replace the target word or expression with _____.\n* For a noun, hide both the article and noun together.\n* For a verb, hide the conjugated form appearing in the sentence.\n\nans\nThe exact German word or expression needed to fill cloze.\n\nconj\nFor verbs, provide the six present-tense forms in this exact order:\nich | du | er/sie/es | wir | ihr | sie/Sie\nPut only the six conjugated forms in the field, separated by |, without labels or commentary. For non-verbs, use \"\".\n\nprat\nFor verbs, provide the third-person singular Präteritum form (e.g. siegte). For non-verbs, use \"\".\n\nperf\nFor verbs, provide the third-person singular Perfekt form, including auxiliary and past participle (e.g. hat gesiegt, ist gegangen). For non-verbs, use \"\".\n\nsep\nFor verbs, provide the separable prefix when applicable (e.g. for aufstehen, use auf). For non-prefixed or non-verbs, use \"\".\n\n⸻\n\n6. notes — Mandatory Word Family, Grammar, and Learning Notes\n\nThe notes field must contain concise, practical supplementary explanations in Persian.\nWhenever relevant information exists, use this exact order:\n1. Line 1: word family and related parts of speech.\n2. Line 2: prepositions, grammatical structures, and cases.\n3. Line 3 onward: additional explanations and learning notes.\nDo not combine these sections into one continuous paragraph.\n\nLine 1 — Word Family\nAlways begin with:\nخانواده واژگانی:\nIdentify genuine and useful related words from the same word family.\nIf no useful related form exists, write: خانواده واژگانی: شکل مرتبطِ رایج و مفیدی وجود ندارد.\n\nLine 2 — Prepositions and Grammatical Cases\nAlways begin with:\nساختار:\nExplain important prepositions, complements, and cases (NOM, AKK, DAT, GEN).\nExamples:\n* warten: ساختار: warten auf + AKK (منتظر کسی/چیزی بودن)\n* helfen: ساختار: helfen + DAT (به کسی کمک کردن)\nIf no special structure is relevant, write: ساختار: حرف اضافه یا حالت دستوری ویژه‌ای ندارد.\n\nLine 3 Onward — Additional Learning Notes\nAfter the first two lines, include useful practical notes (تفاوت معنایی:, کاربرد:, نکته:).\n\nMandatory Multiline Formatting:\nSeparate sections using newline characters in the decoded notes string. In raw JSON, encode each newline as \\n.\n\nRequired formatting example:\n\"notes\": \"خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)\\nساختار: der Sieg über + AKK (پیروزی بر کسی/چیزی)؛ siegen über + AKK\\nتفاوت معنایی: Sieg بر پیروزی در رقابت تأکید دارد؛ Erfolg مفهوم گسترده‌تری از موفقیت دارد.\"\n\n⸻\n\n7. cat — Approved Categories\n\nAssign exactly one category to each vocabulary object.\nUse only these exact values:\n* ارتباطات (Kommunikation)\n* اصطلاحات (Redewendungen)\n* اکسل و اداری (Excel und Büro)\n* امور روزمره\n* پایه (Grundwortschatz)\n* پرکاربرد (Häufige Wörter)\n* دشوار (Schwierige Wörter)\n* روزمره (Alltag)\n* مالی (Finanzen und Buchhaltung)\n";
+const AIP=de=>MASTER+'\n\n=== INPUT (Workflow A) ===\n'+de+'\n\nReturn exactly one JSON array containing exactly one object for the item above.';
+const aiOne=x=>Array.isArray(x)?x[0]:x;
+
+const AIPM=l=>MASTER+'\n\n=== INPUT (Workflow A) ===\n'+l.join('\n')+'\n\nIf a line begins with [A1], [A2], [B1] or [B2], use that exact level for lvl and remove the prefix from the headword. Return exactly one JSON array containing exactly one object per item above, in the same order.';
+function parseAI(t){t=t.replace(/```(?:json)?/gi,'').trim();const i=t.search(/[\[{]/);if(i<0)throw new Error('no json');t=t.slice(i);const j=Math.max(t.lastIndexOf(']'),t.lastIndexOf('}'));let o=JSON.parse(t.slice(0,j+1));if(o&&Array.isArray(o.words))o=o.words;return Array.isArray(o)?o:[o]}
+function aiFix(r){if(!r||typeof r!=='object')return null;r=Object.assign({},r);for(const k in r)if(typeof r[k]!=='string')r[k]=r[k]==null?'':Array.isArray(r[k])?r[k].join('|'):String(r[k]);if(r.cloze)r.cloze=r.cloze.replace(/_{3,}/g,'_____');if(!/_____/.test(r.cloze||'')){r.cloze='';r.ans=''}return r}
+function aiToIMP(list){const errs=[],ws=[],seenC=[];list.forEach((r,i)=>{r=aiFix(r);if(!r||!(r.de||'').trim()){errs.push('مورد '+(i+1)+': کلمهٔ آلمانی خالی است');return}const m=/^(der|die|das)\s+(.+)$/i.exec(r.de.trim());if(m&&!r.art){r.art=m[1];r.de=m[2]}if(!(r.fa||'').trim()){errs.push('مورد '+(i+1)+' ('+r.de+'): ترجمهٔ فارسی خالی است');return}if(r.cat){const m=matchCat(r.cat,seenC);r.cat=m||String(r.cat).trim().slice(0,40);if(!m)seenC.push(r.cat)}const w=norm(r);if(w)ws.push(w)});return{ws,errs}}
+const nzc=s=>String(s||'').replace(/[\u200c\s]+/g,'').replace(/ي/g,'ی').replace(/ك/g,'ک').toLowerCase();
+function cats(){const m=new Map();st.words.forEach(w=>{if(w.cat)m.set(w.cat,(m.get(w.cat)||0)+1)});return[...m].sort((a,b)=>a[0].localeCompare(b[0],'fa'))}
+function matchCat(n,extra){n=nzc(n);if(!n)return '';const all=[...cats().map(x=>x[0]),...(extra||[])];return all.find(c=>nzc(c)===n)||all.find(c=>{const k=nzc(c);return Math.min(k.length,n.length)>=4&&lev(k,n)<=1})||''}
+function resolveCat(name){name=(name||'').trim().slice(0,40);if(!name)return '';const ex=matchCat(name);if(ex)return ex;
+const n=nzc(name),sim=cats().map(x=>x[0]).find(c=>{const k=nzc(c);return k.includes(n)||n.includes(k)||lev(k,n)<=2});
+if(sim&&confirm('«'+name+'» شبیه دستهٔ موجود «'+sim+'» است.\nتأیید = استفاده از «'+sim+'»\nانصراف = ساخت دستهٔ جدید «'+name+'»'))return sim;return name}
+function renameCat(old){const n=prompt('نام جدید دسته:',old);if(n==null)return;const t=n.trim().slice(0,40);if(!t||t===old)return;const ex=matchCat(t),target=ex&&ex!==old?ex:t;
+if(ex&&ex!==old&&!confirm('دستهٔ «'+ex+'» وجود دارد. واژه‌های «'+old+'» در آن ادغام شوند؟'))return;
+st.words.forEach(w=>{if(w.cat===old)w.cat=target});if(LIB.open===old)LIB.open=target;save();render()}
+function delCat(c){if(confirm('دستهٔ «'+c+'» حذف شود؟ واژه‌ها حذف نمی‌شوند و «بدون دسته» می‌شوند.')){st.words.forEach(w=>{if(w.cat===c)w.cat=''});if(LIB.open===c)LIB.open=null;save();render()}}
+const catHint=()=>{const c=cats().map(x=>x[0]),g='a short, general Persian category name of 1-2 words';return ' Note about cat: '+(c.length?'choose EXACTLY one of these existing categories if any reasonably fits: '+c.join('، ')+'. Only if none fits, propose '+g+'.':'propose '+g+'.')};
+const NAV=[['dash','داشبورد','🏠'],['prac','تمرین‌ها','🎯'],['lib','واژگان','📚'],['io','ورود/خروج','💾'],['set','تنظیمات','⚙️']];
+function dashV(){const d=daily(),n=Date.now(),H=st.hist,Ws=st.words,due=Ws.filter(w=>w.last&&w.due<=n).length,ok=H.filter(x=>x.ok).length,cz=H.filter(x=>x.type==='cloze'),cok=cz.filter(x=>x.ok).length,pc=(a,b)=>b?Math.round(a/b*100)+'٪':'—';
+const wk=[6,5,4,3,2,1,0].map(o=>[H.filter(x=>dstr(x.t)===ymd(-o)).length,new Date(dayStart(-o)).toLocaleDateString('fa-IR',{weekday:'short'})]),mx=Math.max(1,...wk.map(x=>x[0]));
+const act=h('div',{class:'card'},h('b',null,'🔥 فعالیت ۷ روز اخیر'),h('span',{class:'mu'},' • رشتهٔ روزهای مطالعه: '+streak()+' روز'),h('div',{class:'bars'},...wk.map(([c,l])=>h('div',{class:'bc'},h('small',null,String(c)),h('div',{class:'bar',style:'height:'+(Math.round(c/mx*100)+4)+'px'}),h('small',{class:'mu'},l)))));
+const bar=(l,v,m)=>h('div',null,h('div',null,l+': '+v+' از '+m),h('progress',{max:m||1,value:Math.min(v,m)}));
+const nextR=Ws.filter(w=>w.last&&w.due>n).sort((a,b)=>a.due-b.due)[0];
+const today_=h('div',{class:'card'},h('b',null,'🎯 هدف امروز'),bar('کلمات جدید',d.n,st.set.nw),h('div',{style:'height:.5rem'}),bar('مرور',d.r,st.set.rv),
+h('p',{class:'mu'},'کل واژگان: '+Ws.length+' • سررسید مرور: '+due+(due||!nextR?'':' • نزدیک‌ترین مرور: '+dueText(nextR))),
+h('div',{class:'row'},h('button',{class:'p',onclick:()=>go('daily')},'🌟 مرور (جلسهٔ روزانه)'),h('button',{onclick:()=>go('prac')},'تمرین‌ها')));
+const stats=h('div',{class:'card'},h('b',null,'📊 آمار'),h('div',{class:'grid',style:'margin-top:.6rem'},...[['پاسخ درست',ok],['پاسخ نادرست',H.length-ok],['دقت کلی',pc(ok,H.length)],['دقت جای‌خالی',pc(cok,cz.length)],['امروز (جدید/مرور)',d.n+' / '+d.r]].map(([l,v])=>h('div',{class:'chip'},h('div',{class:'mu'},l),h('b',{style:'font-size:1.3rem'},String(v))))));
+const rv=Ws.filter(w=>w.last).sort((a,b)=>a.due-b.due),gr=[['امروز/سررسید',w=>w.due<dayStart(1)],['فردا',w=>w.due>=dayStart(1)&&w.due<dayStart(2)],['۷ روز آینده',w=>w.due>=dayStart(2)&&w.due<dayStart(8)],['بعدتر',w=>w.due>=dayStart(8)]];
+const sch=h('div',{class:'card'},h('b',null,'📅 برنامهٔ مرور هر واژه'),h('div',{class:'grid',style:'margin:.6rem 0'},...gr.map(([l,f])=>h('div',{class:'chip'},h('div',{class:'mu'},l),h('b',null,String(rv.filter(f).length)))),h('div',{class:'chip'},h('div',{class:'mu'},'جدید'),h('b',null,String(Ws.length-rv.length)))),
+h('div',{style:'max-height:340px;overflow:auto'},...(rv.length?rv.map(w=>h('div',{class:'ln'},h('span',null,W(w),...(visFaState[w.id]?[' — ',h('span',{class:'mu'},w.fa)]:[])),h('span',{class:'mu'},dueText(w)))):[h('p',{class:'mu'},'هنوز واژه‌ای مرور نشده است.')])));
+const miss=Ws.filter(w=>w.bad>0).sort((a,b)=>b.bad-a.bad).slice(0,8),lee=Ws.filter(isLeech).length;
+const hard=h('div',{class:'card'},h('b',null,'🩸 واژه‌های پراشتباه و سخت'),h('p',{class:'mu'},'سخت‌ها: '+lee),
+...(miss.length?miss.map(w=>h('div',{class:'ln'},h('span',null,W(w)),h('span',{class:'mu'},w.bad+' اشتباه'+(isLeech(w)?' 🩸':'')))):[h('p',{class:'mu'},'هنوز اشتباهی ثبت نشده است.')]),miss.length?h('button',{class:'p',style:'margin-top:.6rem',onclick:()=>goQ(miss.map(w=>w.id))},'تمرین این واژه‌ها'):'');
+return h('div',null,act,h('div',{class:'cols'},today_,stats),h('div',{class:'cols'},sch,hard))}
+function pracV(){const n=Date.now(),Ws=st.words,dq=Ws.filter(w=>(w.last&&w.due<=n)||!w.last).length;
+const M=[['flash','🃏','فلش‌کارت','کارت واژه با انتخاب جهت و تصویر بعد از پاسخ',Ws.length],['daily','🌟','جلسهٔ روزانه','ترکیب مرور و واژه‌های جدید با انواع تمرین',dq],['cloze','✍️','جای‌خالی','جمله را کامل کنید',Ws.filter(POOL.cloze).length],['art','🎨','آرتیکل','der / die / das را انتخاب کنید',Ws.filter(POOL.art).length],['dict','🎧','دیکته','بشنوید و بنویسید',Ws.length],['plural','🔢','جمع اسم‌ها','شکل جمع را بنویسید',Ws.filter(POOL.plural).length],['conj','🔤','صرف فعل','فعل را با ضمیر صرف کنید',Ws.filter(POOL.conj).length],['tense','⏳','زمان فعل','Präteritum و Perfekt',Ws.filter(POOL.tense).length],['case','🧩','حالت و حرف اضافه','Akkusativ / Dativ و فعل + حرف اضافه',CASEQ.length]];
+return h('div',null,h('p',{class:'mu'},'«راهنمایی» حرف‌های اول را نشان می‌دهد.'),h('div',{class:'grid'},...M.map(([m,i,t,d,c])=>h('div',{class:'card'},h('div',{class:'big'},i),h('b',null,t),h('p',{class:'mu'},d+' • '+c+' مورد'),h('button',{class:'p',disabled:c?null:'',onclick:()=>go(m)},'شروع')))))}
+function libV(){const f=LIB,list=h('div'),n=Date.now();
+const draw=()=>{let ws=st.words.filter(w=>(!f.q||(w.de+' '+w.fa).toLowerCase().includes(f.q.toLowerCase()))&&(!f.a||w.art===f.a)&&(f.s==='all'||(f.s==='due'?w.last&&w.due<=n:f.s==='new'?!w.last:f.s==='hard'?isLeech(w):w.last)));
+ws.sort((a,b)=>f.o==='de'?a.de.localeCompare(b.de,'de'):f.o==='added'?b.added-a.added:f.o==='hard'?b.bad-a.bad:a.due-b.due);
+const wcard=w=>{
+  const isShow = !!visFaState[w.id];
+  const trContainer = h('div',{style:'margin-top:.3rem'});
+  if(isShow){
+    trContainer.append(h('span',{style:'font-weight:600'},w.fa));
+  } else {
+    trContainer.append(h('button',{class:'ic',onclick:e=>{
+      e.stopPropagation();
+      visFaState[w.id] = true;
+      draw();
+    }},'👁 نمایش ترجمه'));
+  }
+  return h('div',{class:'wc',style:'padding:.4rem .6rem;margin:.25rem 0;background:var(--bg);border:1px solid var(--bd);border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:.5rem;cursor:pointer',role:'button',tabindex:'0',onclick:(e)=>{
+    visFaState['pop_'+w.id] = false;
+    POP=w.id;
+    renderPop();
+  },onkeydown:e=>{if(e.key==='Enter'){visFaState['pop_'+w.id]=false;POP=w.id;renderPop()}}},
+    h('div',{style:'display:flex;align-items:center;gap:.6rem;flex:1;min-width:0'},
+      W(w,''),
+      trContainer
+    ),
+    h('div',{style:'display:flex;align-items:center;gap:.3rem'},
+      (isLeech(w)?h('span',{class:'tag',style:'font-size:.7rem;padding:0 .4rem'},'🩸'):''),
+      (w.img?h('span',{style:'font-size:.8rem'},'🖼'):''),
+      spk(full(w))
+    )
+  );
+};
+if(f.q){list.replaceChildren(h('p',{class:'mu',style:'margin:0 0 .6rem'},ws.length+' نتیجه'),h('div',{class:'cols'},...ws.map(wcard)));return}
+const g=new Map();ws.forEach(w=>{const c=w.cat||'';if(!g.has(c))g.set(c,[]);g.get(c).push(w)});
+const names=[...g.keys()].sort((a,b)=>!a?1:!b?-1:a.localeCompare(b,'fa'));
+list.replaceChildren(h('p',{class:'mu',style:'margin:0 0 .6rem'},'دسته‌بندی واژگان ('+ws.length+' واژه در '+names.length+' دسته)'),...names.map(c=>{const open=f.open===c;return h('div',{class:'card cat'+(open?' open':'')},h('button',{class:'cath','aria-expanded':String(open),onclick:()=>{f.open=open?null:c;draw()}},h('span',null,'📁 '+(c||'بدون دسته')),h('span',{class:'mu'},g.get(c).length+' واژه  '+(open?'▲':'▼'))),open?h('div',{class:'cols',style:'margin-top:.6rem'},...g.get(c).map(wcard)):'')}))};
+const inp=(k,l,o)=>{const e=h(o?'select':'input',{'aria-label':l,placeholder:l});if(o)o.forEach(([v,t])=>e.append(h('option',{value:v},t)));e.value=f[k];e.oninput=()=>{f[k]=e.value;draw()};return e};
+const ed=st.words.find(w=>w.id===EDIT),F={};let fimg=ed?ed.img:'';
+const fld=(k,l,dir)=>{const e=h('input',{id:'f_'+k,dir:dir||'ltr','aria-label':l});e.value=ed?(ed[k]||''):'';F[k]=e;return h('div',null,h('label',{for:'f_'+k},l),e)};
+const art=h('select',{id:'f_art'},...[['','بدون آرتیکل'],['der','der'],['die','die'],['das','das']].map(([v,t])=>h('option',{value:v},t)));art.value=ed?ed.art:'';
+const catSel=h('select',{id:'f_cat'},h('option',{value:''},'— بدون دسته —'),...cats().map(([c,n])=>h('option',{value:c},c+' ('+n+')')),h('option',{value:'__new'},'➕ دستهٔ جدید…'));
+const catNew=h('input',{id:'f_catn',placeholder:'نام دستهٔ جدید (کوتاه و کلی)','aria-label':'نام دستهٔ جدید',style:'display:none;margin-top:.3rem'});
+catSel.onchange=()=>{catNew.style.display=catSel.value==='__new'?'block':'none';if(catSel.value==='__new')catNew.focus()};catSel.value=ed&&ed.cat?ed.cat:'';
+const prev=h('div'),showImg=()=>prev.replaceChildren(fimg?h('img',{src:fimg,class:'wimg',alt:''}):'',h('div',{class:'row'},h('button',{onclick:()=>pickImg(d=>{fimg=d;showImg()})},fimg?'🖼 تغییر تصویر':'📷 افزودن تصویر'),fimg?h('button',{onclick:()=>{fimg='';showImg()}},'حذف تصویر'):''));showImg();
+const fillForm=(r,de)=>{if(!r||typeof r!=='object')throw new Error('bad');if(r.cloze)r.cloze=String(r.cloze).replace(/_{3,}/g,'_____');if(!/_____/.test(r.cloze||'')){r.cloze='';r.ans=''}
+if(!F.de.value.trim()&&r.de)F.de.value=String(r.de).trim();if(/^(der|die|das)\s/i.test(de)&&typeof r.de==='string'&&r.de.trim())F.de.value=r.de.trim();
+for(const k in F)if(k!=='de'&&!F[k].value.trim()&&typeof r[k]==='string'&&r[k].trim())F[k].value=r[k].trim();
+if(!catSel.value&&r.cat){const m=matchCat(r.cat);if(m)catSel.value=m;else{catSel.value='__new';catNew.value=String(r.cat).trim().slice(0,40);catNew.style.display='block'}}
+const a=String(r.art||'').toLowerCase();if(!art.value&&['der','die','das'].includes(a))art.value=a;else if(!art.value&&/^(der|die|das)\s/i.test(de))art.value=de.split(/\s/)[0].toLowerCase()};
+const aib=h('button',{class:'p',onclick:()=>aiFill()},'✨ تکمیل خودکار با هوش مصنوعی');
+async function aiFill(){const de=F.de.value.trim();if(!de){toast('ابتدا کلمهٔ آلمانی را بنویسید.',1);return false}
+let sp=null;try{sp=window.claude&&await window.claude.use('sample')}catch(e){}
+if(!sp){toast('تکمیل خودکار فقط در نسخهٔ منتشرشده در claude.ai کار می‌کند. از «کپی دستور» استفاده کنید.',1);return false}
+aib.disabled=true;aib.textContent='⏳ در حال تکمیل…';
+try{fillForm(aiOne(await sp.json(AIP(de))),de);toast('تکمیل شد؛ لطفاً قبل از ذخیره بررسی کنید.');return true}
+catch(e){toast('تکمیل خودکار ناموفق بود؛ دوباره تلاش کنید.',1);return false}
+finally{aib.disabled=false;aib.textContent='✨ تکمیل خودکار با هوش مصنوعی'}}
+const importAI=t=>{try{const l=parseAI(t);if(l.length>1){IMP=aiToIMP(l);toast(l.length+' کلمه در خروجی بود؛ پیش‌نمایش گروهی در «ورود/خروج» باز شد.');go('io');return}
+const r=aiToIMP(l),w=r.ws[0];if(!w){toast(r.errs[0]||'محتوای JSON معتبر نیست.',1);return}
+const key=x=>(x.art+' '+x.de).toLowerCase(),ex=st.words.find(x=>key(x)===key(w));
+if(ex){POP=ex.id;toast('این واژه از قبل در فهرست بود؛ جزئیات آن نمایش داده شد.')}else{if(fimg)w.img=fimg;st.words.push(w);if(save())toast('واژه افزوده شد.');POP=w.id}
+EDIT=null;render()}catch(e){toast('محتوای فایل/متن JSON معتبر نیست.',1)}};
+const aif=h('input',{type:'file',accept:'.json,.txt,.md,application/json,text/plain',style:'display:none'});aif.onchange=async()=>{const f=aif.files[0];aif.value='';if(f)importAI(await f.text())};
+const pa=h('input',{dir:'ltr',placeholder:'خروجی هوش مصنوعی (JSON) را اینجا بچسبانید (یک خط)...','aria-label':'نتیجهٔ JSON'});
+const aiRow=h('div',null,h('div',{class:'row'},aib,h('button',{onclick:async()=>{const de=F.de.value.trim();if(!de){toast('ابتدا کلمهٔ آلمانی را بنویسید.',1);return}try{await navigator.clipboard.writeText(AIP(de));toast('دستور کپی شد.')}catch(e){toast('کپی ممکن نشد.',1)}}},'📋 کپی دستور برای هوش مصنوعی'),h('button',{onclick:()=>aif.click()},'📥 وارد کردن نتیجه (فایل)'),aif),
+h('div',{style:'margin:.6rem 0'},pa,h('button',{class:'p',style:'margin-top:.4rem',onclick:()=>importAI(pa.value)},'وارد کردن متن چسبانده‌شده')));
+const form=h('details',{class:'card',open:ed?'':null},h('summary',null,ed?'✏️ ویرایش واژه':'➕ افزودن واژهٔ جدید'),aiRow,
+h('div',{class:'fg'},(()=>{const e=h('input',{id:'f_de',dir:'ltr','aria-label':'کلمهٔ آلمانی',style:'font-weight:700;border:2px solid var(--ac)'});e.value=ed?(ed.de||''):'';F.de=e;return h('div',{style:'grid-column:1/-1;background:color-mix(in srgb,var(--ac) 8%,transparent);padding:.5rem;border-radius:12px'},h('label',{for:'f_de',style:'font-weight:700;color:var(--ac)'},'کلمهٔ آلمانی (گام اول - الزامی)'),e)})(),h('div',null,h('label',{for:'f_art'},'آرتیکل'),art),h('div',null,h('label',{for:'f_cat'},'دسته'),catSel,catNew),fld('fa','ترجمهٔ فارسی (در فهرست اصلی تا زمان کلیک مخفی می‌ماند)','rtl'),fld('syn','مهم‌ترین مترادف آلمانی'),fld('synFa','ترجمهٔ مترادف','rtl'),fld('ant','مهم‌ترین متضاد آلمانی'),fld('antFa','ترجمهٔ متضاد','rtl'),fld('pl','جمع'),fld('pos','نوع کلمه','rtl'),fld('lvl','سطح'),fld('ex','جملهٔ مثال'),fld('exFa','ترجمهٔ مثال','rtl'),fld('ex2','جملهٔ مثال دوم'),fld('ex2Fa','ترجمهٔ مثال دوم','rtl'),fld('cloze','جملهٔ جای‌خالی'),fld('ans','پاسخ جای‌خالی'),fld('conj','صرف فعل'),fld('prat','Präteritum'),fld('perf','Perfekt'),fld('sep','پیشوند جداشدنی'),fld('tags','برچسب‌ها'),(()=>{const e=h('textarea',{id:'f_notes',dir:'rtl',rows:'6','aria-label':'یادداشت / یادیار'});e.value=ed?(ed.notes||''):'';F.notes=e;return h('div',{style:'grid-column:1/-1'},h('label',{for:'f_notes'},'یادداشت / یادیار (هر بخش در یک خط)'),e)})()),
+h('label',null,'تصویر (اختیاری)'),prev,
+h('div',{class:'row',style:'margin-top:.6rem'},h('button',{class:'p',onclick:async()=>{if(!F.fa.value.trim()&&F.de.value.trim())await aiFill();const o={};for(const k in F)o[k]=F[k].value.trim();o.art=art.value;o.img=fimg;o.cat=catSel.value==='__new'?resolveCat(catNew.value):catSel.value;
+if(!o.de||!o.fa){toast('کلمهٔ آلمانی و ترجمهٔ فارسی الزامی است.',1);return}
+if(ed)Object.assign(ed,norm(Object.assign({},ed,o)));else{const dup=st.words.some(x=>x.de.toLowerCase()===o.de.toLowerCase()&&x.art===o.art);if(dup&&!confirm('واژهٔ مشابهی وجود دارد. باز هم افزوده شود؟'))return;st.words.push(norm(o))}
+EDIT=null;if(save())toast('ذخیره شد.');render()}},'ذخیره'),ed?h('button',{onclick:()=>{EDIT=null;render()}},'انصراف'):''));
+const cl=cats(),catMgr=h('details',{class:'card'},h('summary',null,'🗂 مدیریت دسته‌ها ('+cl.length+')'),...(cl.length?cl.map(([c,n])=>h('div',{class:'ln'},h('span',null,'📁 '+c+' ('+n+')'),h('span',{class:'row'},h('button',{class:'ic',title:'تغییر نام / ادغام',onclick:()=>renameCat(c)},'✏️'),h('button',{class:'ic',title:'حذف دسته',style:'color:var(--er)',onclick:()=>delCat(c)},'🗑')))):[h('p',{class:'mu'},'هنوز دسته‌ای ساخته نشده است.')]));
+draw();return h('div',null,form,catMgr,h('div',{style:'display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem'},inp('q','🔍 جستجو (آلمانی/فارسی)...'),h('div',{style:'display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem'},inp('a','آرتیکل',[['','همه'],['der','der'],['die','die'],['das','das']]),inp('s','وضعیت',[['all','همه'],['new','جدید'],['due','سررسید'],['learn','در حال یادگیری'],['hard','سخت 🩸']]),inp('o','مرتب‌سازی',[['de','کلمه'],['added','تاریخ افزودن'],['hard','سختی'],['due','مرور بعدی']]))),list)}
+function renderPop(){const o=$('#pop');o.replaceChildren();const w=POP&&st.words.find(x=>x.id===POP);if(!w){POP=null;return}
+const close=()=>{POP=null;renderPop()},sec=(t,k)=>k.length?h('div',{class:'psec'},h('h4',null,t),...k):'';
+const chips=[w.cat&&'📁 '+w.cat,w.pos,w.lvl,w.pl&&'جمع: '+w.pl,w.sep&&'جداشدنی ('+w.sep+')',isLeech(w)&&'🩸 واژهٔ سخت'].filter(Boolean);
+const E=exs(w),side=[];if(w.img)side.push(h('div',{class:'psec'},imgEl(w)));if(w.notes)side.push(sec('یادداشت',noteEls(w.notes)));if(w.tags)side.push(sec('برچسب‌ها',w.tags.split(/[,،]/).map(t=>h('span',{class:'tag'},t.trim()))));
+
+const popFaShow = !!visFaState['pop_'+w.id];
+const trElem = h('div',{class:'tr'},
+  popFaShow ? w.fa : h('button',{class:'p',style:'font-size:1rem;padding:.4rem 1rem',onclick:(e)=>{
+    e.stopPropagation();
+    visFaState['pop_'+w.id] = true;
+    renderPop();
+  }},'👁 نمایش ترجمه فارسی')
+);
+
+o.append(h('div',{class:'ov',onclick:e=>{if(e.target===e.currentTarget)close()}},h('div',{class:'pop',role:'dialog','aria-modal':'true','aria-label':w.de},
+h('div',{class:'pbar',style:'display:flex;align-items:center;justify-content:space-between;padding:.5rem .8rem;gap:.4rem'},h('button',{class:'p',onclick:close},'↩ بازگشت'),h('div',{class:'row',style:'gap:.3rem;flex-wrap:nowrap'},imgBtn(w,()=>{renderPop();render()},1),h('button',{onclick:()=>{EDIT=w.id;POP=null;render();scrollTo(0,0)}},'✏️ ویرایش'),h('button',{style:'color:var(--er);border-color:var(--er)',onclick:()=>{if(confirm('این واژه حذف شود؟')){st.words=st.words.filter(x=>x.id!==w.id);save();POP=null;render()}}},'🗑 حذف'))),
+h('div',{class:'hero'},h('div',{class:'big'},W(w),' ',spk(full(w))),trElem,synAnt(w),h('div',{class:'row',style:'justify-content:center;margin-top:.4rem'},...chips.map(c=>h('span',{class:'tag'},c))),h('div',{class:'hs'},'مرور بعدی: '+dueText(w)+' • فاصله: '+w.ivl+' روز • درست: '+w.ok+' • غلط: '+w.bad)),
+h('div',{class:'pbody'},verbBox(w),h('div',{class:'pgrid'+(side.length&&E.length?' two':'')},E.length?sec('جملات مثال',E):'',...side)))))}
+function csvHelp(){const H='german,article,persian,synonym,synonymTranslation,antonym,antonymTranslation,plural,partOfSpeech,level,example,exampleTranslation,example2,example2Translation,conjugation,preteritum,perfekt,separablePrefix,clozeSentence,clozeAnswer,acceptedAnswers,tags,notes,category',
+R1='Entscheidung,die,تصمیم,Beschluss,تصمیم رسمی,,,Entscheidungen,اسم,B1,Ich muss heute eine wichtige Entscheidung treffen.,امروز باید یک تصمیم مهم بگیرم.,,,,,,,Ich muss heute eine wichtige _____ treffen.,eine Entscheidung,,,"یادیار: eine Entscheidung treffen",کار و زندگی',
+R2='aufstehen,,بلند شدن (از خواب),,,einschlafen,خوابیدن,,فعل,A1,Ich stehe um sieben Uhr auf.,من ساعت هفت بیدار می‌شوم.,,,stehe auf|stehst auf|steht auf|stehen auf|steht auf|stehen auf,stand auf,ist aufgestanden,auf,Ich stehe um sieben Uhr _____.,auf,,,,امور روزمره',
+sample='\uFEFF'+H+'\n'+R1+'\n'+R2+'\n';
+const close=()=>ov.remove(),ov=h('div',{class:'ov',onclick:e=>{if(e.target===ov)close()}},h('div',{class:'pop',role:'dialog','aria-modal':'true',style:'text-align:start;padding:1rem'},
+h('div',{class:'row',style:'justify-content:space-between'},h('b',null,'📄 راهنمای قالب فایل ورود'),h('button',{class:'p',onclick:close},'✕ بستن')),
+h('p',null,'فایل CSV (UTF-8) باشد و سطر اول سرستون‌ها. ترتیب ستون‌ها مهم نیست، نام‌ها مهم‌اند (بزرگی/کوچکی حروف فرقی ندارد).'),
+h('p',null,h('b',null,'الزامی: '),h('span',{class:'de'},'german'),' و ',h('span',{class:'de'},'persian'),'. بقیه اختیاری‌اند؛ هر ستون خالی بماند اشکالی ندارد.'),
+h('p',{class:'mu'},'ترتیب پیشنهادی ستون‌ها:'),h('pre',{dir:'ltr',style:'white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:.6rem;font-size:.8rem'},H),
+h('p',{class:'mu'},'نکته‌ها:'),
+h('ul',{style:'margin:0;padding-inline-start:1.2rem'},h('li',null,'article: der / die / das (برای غیر اسم خالی).'),h('li',null,'conjugation: شش شکل حال با | بین‌شان: ich|du|er/sie/es|wir|ihr|sie. پیشوند جداشدنی آخر بیاید (stehe auf).'),h('li',null,'perfekt مثل «ist aufgestanden» و preteritum شکل er/sie/es.'),h('li',null,'clozeSentence جای خالی را با _____ (۵ زیرخط) دارد و clozeAnswer متن حذف‌شده است.'),h('li',null,'acceptedAnswers: پاسخ‌های جایگزین درست، با | جدا شوند.'),h('li',null,'synonym/antonym فقط اگر واقعاً مناسب‌اند؛ وگرنه خالی بگذارید.'),h('li',null,'متنی که ویرگول دارد داخل "گیومه" بیاید.'),h('li',null,'پشتیبان JSON برنامه هم مستقیم قابل ورود است.')),
+h('div',{class:'row',style:'margin-top:.8rem'},h('button',{class:'p',onclick:()=>dl('worterbuch_sample.csv',sample,'text/csv')},'⬇️ دانلود فایل نمونه'),h('button',{onclick:close},'بستن'))));
+document.body.append(ov)}
+function ioV(){const out=h('div'),file=h('input',{type:'file',accept:'.csv,.json','aria-label':'انتخاب فایل'});
+const showPrev=()=>{out.replaceChildren();if(!IMP)return;
+out.append(h('div',{class:'card'},h('b',null,'پیش‌نمایش ورود'),h('p',null,IMP.ws.length+' واژهٔ معتبر، '+IMP.errs.length+' خطا'),...IMP.errs.slice(0,10).map(e=>h('div',{class:'er'},e)),...IMP.ws.slice(0,6).map(w=>h('div',null,W(w),' — '+w.fa)),IMP.ws.length>6?h('p',{class:'mu'},'… و '+(IMP.ws.length-6)+' واژهٔ دیگر'):'',
+h('div',{class:'row',style:'margin-top:.6rem'},h('button',{class:'p',onclick:()=>{toast(addWords(IMP.ws,0));IMP=null;render()}},'افزودن (بدون بازنویسی)'),h('button',{onclick:()=>{if(confirm('واژه‌های تکراری بازنویسی شوند؟')){toast(addWords(IMP.ws,1));IMP=null;render()}}},'بازنویسی تکراری‌ها'),
+IMP.json?h('button',{onclick:()=>{if(confirm('همهٔ داده‌های فعلی با پشتیبان جایگزین شود؟')){st.words=IMP.ws;if(Array.isArray(IMP.json.hist))st.hist=IMP.json.hist;if(IMP.json.set&&typeof IMP.json.set==='object')st.set=Object.assign({},st.set,IMP.json.set);if(IMP.json.daily&&typeof IMP.json.daily==='object')st.daily=IMP.json.daily;save();IMP=null;render();toast('بازیابی شد.')}}},'جایگزینی کامل'):'',h('button',{onclick:()=>{IMP=null;showPrev()}},'انصراف'))))};
+file.onchange=async()=>{const f=file.files[0];if(!f)return;const t=await f.text();
+try{if(/\.json$/i.test(f.name)){const o=JSON.parse(t);if(!o||!Array.isArray(o.words))throw new Error('ساختار پشتیبان معتبر نیست');IMP={json:o,ws:o.words.map(norm).filter(Boolean),errs:[]}}else{const r=csvToWords(t);IMP={ws:r.ok,errs:r.errs}}}
+catch(e){IMP=null;out.replaceChildren(h('div',{class:'er'},'فایل نامعتبر است: '+e.message));return}showPrev()};
+const ta=h('textarea',{dir:'ltr',rows:'6',placeholder:'هر خط یک کلمهٔ آلمانی','aria-label':'فهرست کلمات'}),lines=()=>ta.value.split('\n').map(x=>x.trim()).filter(Boolean);
+const bb=h('button',{class:'p'},'✨ تکمیل خودکار همهٔ کلمات');
+bb.onclick=async()=>{const L=lines();if(!L.length){toast('ابتدا فهرست کلمات را بنویسید.',1);return}let sp=null;try{sp=window.claude&&await window.claude.use('sample')}catch(e){}
+if(!sp){toast('تکمیل خودکار فقط در نسخهٔ منتشرشده در claude.ai کار می‌کند. از «کپی دستور گروهی» استفاده کنید.',1);return}
+bb.disabled=true;const all=[];let fail=0;
+for(let i=0;i<L.length;i+=6){bb.textContent='⏳ '+Math.min(i+6,L.length)+' از '+L.length;try{const r=await sp.json(AIPM(L.slice(i,i+6)));all.push(...(Array.isArray(r)?r:[r]))}catch(e){fail+=L.slice(i,i+6).length;if(e&&e.code==='not_granted')break}}
+bb.disabled=false;bb.textContent='✨ تکمیل خودکار همهٔ کلمات';IMP=aiToIMP(all);if(fail)IMP.errs.push(fail+' کلمه تکمیل نشد.');showPrev();scrollTo(0,0)};
+const aif2=h('input',{type:'file',accept:'.json,.txt,.md,application/json,text/plain',style:'display:none'}),ta2=h('textarea',{dir:'ltr',rows:'4',placeholder:'خروجی JSON هوش مصنوعی را اینجا بچسبانید','aria-label':'خروجی هوش مصنوعی'});
+const useAI=t=>{try{IMP=aiToIMP(parseAI(t));showPrev();scrollTo(0,0)}catch(e){toast('محتوای فایل/متن JSON معتبر نیست.',1)}};
+aif2.onchange=async()=>{const f=aif2.files[0];aif2.value='';if(f)useAI(await f.text())};
+if(IMP)showPrev();
+const bulkCatSel=h('select',{'aria-label':'انتخاب دسته',style:'min-width:140px'},h('option',{value:''},'📁 به تشخیص هوش مصنوعی'),...cats().map(([c,n])=>h('option',{value:c},c+' ('+n+')')));
+return h('div',null,out,h('div',{style:'display:flex;flex-direction:column;gap:1rem'},
+h('div',{class:'card'},h('div',{class:'row',style:'justify-content:space-between;margin-bottom:.4rem'},h('b',null,'🤖 ۱. افزودن گروهی با هوش مصنوعی'),h('button',{class:'ic',onclick:()=>modal('wb-hlp',(p,c)=>{p.append(h('div',{class:'row',style:'justify-content:space-between'},h('b',null,'❓ راهنما — افزودن گروهی'),h('button',{class:'p',onclick:c},'✕ بستن')),h('p',null,'کلمات آلمانی را هر خط یکی وارد کنید، دسته دلخواه را انتخاب کنید و تکمیل خودکار را بزنید.'))})},'❓ راهنما')),ta,
+h('div',{class:'row',style:'margin:.6rem 0;gap:.4rem'},bulkCatSel,bb,h('button',{onclick:async()=>{const L=lines();if(!L.length){toast('ابتدا فهرست کلمات را بنویسید.',1);return}try{await navigator.clipboard.writeText(AIPM(L));toast('دستور گروهی کپی شد.')}catch(e){toast('کپی ممکن نشد.',1)}}},'📋 کپی دستور گروهی'),h('button',{onclick:()=>aif2.click()},'📥 وارد کردن نتیجه (فایل)'),aif2),
+h('details',null,h('summary',{class:'mu'},'یا متن خروجی را بچسبانید'),ta2,h('button',{onclick:()=>useAI(ta2.value)},'وارد کردن متن چسبانده‌شده'))),
+h('div',{class:'card'},h('div',{class:'row',style:'justify-content:space-between;margin-bottom:.4rem'},h('b',null,'📥 ۲. ورود (CSV یا JSON)'),h('button',{class:'ic',onclick:csvHelp},'ℹ️ راهنمای قالب فایل')),file),
+h('div',{class:'card'},h('b',null,'💾 ۳. خروجی و پشتیبان‌گیری'),
+h('div',{class:'row',style:'margin-top:.6rem;flex-wrap:nowrap;gap:.4rem'},
+h('button',{style:'flex:1',onclick:()=>dl('deutschlab_vocab.csv',toCSV(st.words),'text/csv')},'📊 واژگان (CSV)'),
+h('button',{style:'flex:1',onclick:()=>dl('worterbuch_backup.json',JSON.stringify(st),'application/json')},'💾 پشتیبان کامل (JSON)'),
+h('button',{style:'flex:1',onclick:()=>dl('deutschlab_history.json',JSON.stringify(st.hist),'application/json')},'📈 تاریخچهٔ مرور')))))}
+function setV(){const n=(k,l)=>{const e=h('input',{type:'number',min:0,max:500,id:'s_'+k});e.value=st.set[k];e.onchange=()=>{st.set[k]=Math.max(0,Math.min(500,+e.value||0));save();toast('ذخیره شد.')};return h('div',null,h('label',{for:'s_'+k},l),e)};
+const cb=(k,l)=>{const e=h('input',{type:'checkbox',id:'c_'+k,style:'width:auto;min-height:0'});e.checked=!!st.set[k];e.onchange=()=>{st.set[k]=e.checked;save()};return h('label',{for:'c_'+k,style:'display:flex;gap:.5rem;align-items:center;margin-top:.8rem'},e,l)};
+const th=h('select',{id:'th'},h('option',{value:'light'},'روشن'),h('option',{value:'dark'},'تیره'));th.value=st.set.theme;th.onchange=()=>{setTheme(th.value);render()};
+const dr=h('select',{id:'dr'},h('option',{value:'de'},'آلمانی ← فارسی'),h('option',{value:'fa'},'فارسی ← آلمانی'));dr.value=st.set.dir||'de';dr.onchange=()=>{st.set.dir=dr.value;save()};
+const clearHistBtn=h('button',{style:'background:var(--erb);color:var(--er);border-color:var(--er)',onclick:()=>{
+  if(confirm('آیا از پاک کردن کامل تاریخچهٔ مرورها مطمئن هستید؟')){
+    st.hist=[];
+    st.words.forEach(w=>{w.last=0;w.due=0;w.ivl=0;w.ease=2.5;w.ok=0;w.bad=0;w.res='';});
+    st.daily={d:today(),n:0,r:0};
+    save();render();toast('تاریخچه پاک شد.');
+  }
+}},'🧹 پاک کردن تاریخچه مرور');
+
+const clearAllWordsBtn=h('button',{style:'background:var(--erb);color:var(--er);border-color:var(--er)',onclick:()=>{
+  if(confirm('⚠️ آیا از پاک کردن کلیهٔ واژگان مطمئن هستید؟')){
+    if(confirm('تأیید نهایی؟')){
+      st.words=[];st.hist=[];st.daily={d:today(),n:0,r:0};
+      save();render();toast('کلیه واژگان پاک شدند.',1);
+    }
+  }
+}},'🗑 پاک کردن کلیه واژگان');
+
+return h('div',null,
+  h('div',{class:'card',style:'max-width:560px'},
+    h('label',{for:'th'},'پوسته'),th,
+    h('label',{for:'dr'},'جهت پیش‌فرض کارت‌ها'),dr,
+    n('nw','کلمهٔ جدید در روز'),n('rv','مرور در روز'),
+    cb('auto','پخش خودکار تلفظ در فلش‌کارت')
+  ),
+  h('div',{class:'card',style:'border-color:var(--er);margin-top:1.5rem'},
+    h('b',{style:'color:var(--er)'},'⚠️ مدیریت و پاک‌سازی داده‌ها'),
+    h('p',{class:'mu',style:'font-size:.8rem;margin:.3rem 0'},'این عملیات‌ها غیرقابل بازگشت هستند:'),
+    h('div',{class:'row',style:'margin-top:.6rem;flex-wrap:nowrap;gap:.6rem'},
+      h('div',{style:'flex:1'},clearHistBtn),
+      h('div',{style:'flex:1'},clearAllWordsBtn)
+    )
+  )
+)}
+function render(){const nav=$('#nav'),cur=STUDY.includes(view)?'prac':view;
+nav.replaceChildren(...NAV.map(([k,l,i])=>h('button',{'aria-current':k===cur?'page':null,onclick:()=>go(k)},h('span',{class:'ni'},i),l)));
+const a=$('#app');a.replaceChildren();try{
+if(STUDY.includes(view)){if(!S||S.mode!==view)startS(view);a.append(study())}
+else a.append({dash:dashV,prac:pracV,lib:libV,io:ioV,set:setV}[view]())}catch(e){console.error(e);a.append(h('div',{class:'er'},'خطایی رخ داد.'))}
+renderPop()}
+if(!st.words.length)toast('کتابخانه خالی است.');
+render();save();
+</script>
+<script>
+/* ===== WörterBuch Add-on v1 — قبل از </body> و بعد از اسکریپت اصلی بچسبانید ===== */
+(function(){
+const XK='wb_ext',X=()=>{try{return JSON.parse(localStorage.getItem(XK))||{}}catch(e){return{}}},XS=o=>{try{localStorage.setItem(XK,JSON.stringify(o))}catch(e){}};
+const SUF={die:['ung','heit','keit','schaft','tion','sion','tät','ur','ei'],das:['chen','lein','ment'],der:['ling','ismus']};
+
+/* 1) اعتبارسنجی کیفیت واژه */
+function audit(w){const o=[],noun=w.pos==='اسم'||w.art,ex=(w.ex||'').trim();
+if(noun){if(!w.art)o.push('آرتیکل ندارد');else{const l=w.de.toLowerCase();for(const a in SUF)if(a!==w.art&&SUF[a].some(s=>l.endsWith(s)))o.push('آرتیکل مشکوک: پایانهٔ این واژه معمولاً '+a+' است')}
+if(!w.pl)o.push('جمع ثبت نشده')}
+if(w.pos==='فعل'){if(!w.conj)o.push('صرف حال ندارد');if(!w.perf)o.push('Perfekt ندارد')}
+if(!ex)o.push('جملهٔ مثال ندارد');else{if(ex.split(/\s+/).length<3)o.push('مثال خیلی کوتاه است (طبیعی نیست)');
+const b=(w.sep&&w.de.startsWith(w.sep)?w.de.slice(w.sep.length):w.de).toLowerCase().replace(/e?n$/,''),s=b.slice(0,Math.max(3,b.length-2));
+if(!ex.toLowerCase().includes(s)&&!(w.pl&&ex.toLowerCase().includes(w.pl.toLowerCase().slice(0,Math.max(3,w.pl.length-1)))))o.push('واژه در جملهٔ مثال دیده نمی‌شود');
+if(!w.exFa)o.push('ترجمهٔ مثال ندارد');if(w.ex2&&w.ex2===ex)o.push('دو مثال یکسان است')}
+if(!w.fa)o.push('ترجمهٔ فارسی ندارد');else{if(/[A-Za-z]/.test(w.fa))o.push('ترجمه حروف لاتین دارد؛ طبیعی‌بودن را بررسی کنید');
+if(w.fa.split(/[،؛\/|]/).length>2)o.push('چندمعنایی؟ برای هر معنی یک ورودی جدا با مثال خودش بسازید')}
+if(w.ant&&(w.ant.toLowerCase()===w.de.toLowerCase()||w.ant===w.syn))o.push('متضاد مشکوک/ساختگی؛ اگر واقعی نیست پاکش کنید');
+if(w.ant&&!w.antFa||w.syn&&!w.synFa)o.push('ترجمهٔ مترادف/متضاد ناقص است');
+if(w.cloze&&!w.ans)o.push('پاسخ جای‌خالی ندارد');
+return o}
+
+/* 2) تولید جمله: بررسی حضور واژه */
+function genOK(w,s){const t=s.trim(),toks=t.toLowerCase().replace(/[.,!?;:"“”]/g,' ').split(/\s+/).filter(Boolean),T=new Set([w.de.toLowerCase()]);
+if(w.pl)T.add(w.pl.toLowerCase());
+if(w.conj)w.conj.split('|').forEach(f=>T.add(f.split(' ')[0].toLowerCase()));
+if(w.prat)T.add(w.prat.split(' ')[0].toLowerCase());if(w.perf)T.add(w.perf.split(' ').pop().toLowerCase());
+const stem=w.de.toLowerCase().replace(/e?n$/,''),has=toks.some(k=>T.has(k)||(w.pos!=='فعل'&&k.includes(w.de.toLowerCase()))||(stem.length>=5&&k.startsWith(stem.slice(0,stem.length-1))));
+const exp=w.ex2||w.ex||full(w);
+if(!has)return{ok:0,exp,msg:'واژهٔ هدف (یا یکی از شکل‌هایش) در جمله دیده نمی‌شود.'};
+if(toks.length<3)return{ok:0,exp,msg:'جمله را کامل‌تر بنویسید (حداقل ۳ کلمه).'};
+return{ok:1,exp}}
+
+/* مدهای جدید */
+STUDY.push('prod','sent');MN.prod='فارسی ← آلمانی';MN.sent='تولید جمله';POOL.prod=()=>1;POOL.sent=w=>w.last;
+const og=gen;gen=function(q,v){return q.gm?q.gm(v):og(q,v)};
+const om=mk;mk=function(w){
+if(S.em==='prod'){const e=w.art?full(w):w.de;return{exp:e,gm:v=>check({ans:e,acc:[]},v),p:[h('p',{class:'mu'},'معادل آلمانی را بنویسید'+(w.art?' (با آرتیکل)':'')+' • '+(w.pos||'')),h('p',{class:'big',dir:'rtl'},w.fa),w.exFa?h('p',{class:'mu'},'موقعیت: '+w.exFa):'']}}
+if(S.em==='sent')return{exp:w.ex2||w.ex||full(w),gm:v=>genOK(w,v),p:[h('p',{class:'mu'},'با این واژه یک جملهٔ شخصی بنویسید:'),h('p',{class:'big'},W(w)),h('p',null,w.fa),h('p',{class:'mu'},'«پاسخ درست» در پایان یک جملهٔ نمونه است؛ جملهٔ شما هم اگر واژه را درست به‌کار برده باشد پذیرفته می‌شود.')]};
+return om(w)};
+const op=pracV;pracV=function(){const r=op(),g=r.querySelector('.grid'),Ws=st.words;
+[['prod','🔁','فارسی ← آلمانی (تایپی)','معنی را ببینید و واژه را بنویسید',Ws.length],['sent','🗣','تولید جمله','با واژه جملهٔ شخصی بسازید',Ws.filter(w=>w.last).length]].forEach(([m,i,t,d,c])=>g.append(h('div',{class:'card'},h('div',{class:'big'},i),h('b',null,t),h('p',{class:'mu'},d+' • '+c+' مورد'),h('button',{class:'p',disabled:c?null:'',onclick:()=>go(m)},'شروع'))));return r};
+
+/* 3) مرور هوشمند: واژهٔ ضعیف نباید فاصلهٔ خیلی طولانی بگیرد */
+const weak=w=>isLeech(w)||(w.bad>=2&&w.bad>=w.ok*.5);
+const os=sched;sched=function(w,g){const f=os(w,g);if(g>=1&&weak(w)&&w.ivl>7){w.ivl=7;w.due=dayStart(7)}return f};
+const od=dl;dl=function(n,t,y){if(/^worterbuch_backup/.test(n)){const x=X();x.bk=Date.now();XS(x)}return od(n,t,y)};
+
+/* 4) کارت تحلیل در داشبورد */
+function insight(){const n=Date.now(),t0=dayStart(0),Ws=st.words,H=st.hist.filter(x=>x.t>n-7*DAY),x=X();x.ok=x.ok||{};
+const cls={'جدید':0,'در حال یادگیری':0,'ضعیف / فراموش‌شده':0,'آشنا':0,'مسلط':0};
+Ws.forEach(w=>{if(!w.last)cls['جدید']++;else if(weak(w))cls['ضعیف / فراموش‌شده']++;else if(w.ivl>=21)cls['مسلط']++;else if(w.stage>0||w.ivl<3)cls['در حال یادگیری']++;else cls['آشنا']++});
+const dueNow=Ws.filter(w=>w.last&&w.due<=n).length,back=Ws.filter(w=>w.last&&w.due<t0).length,newLeft=Math.max(0,st.set.nw-daily().n),est=Math.ceil((dueNow*20+newLeft*30)/60);
+const acc=H.length?H.filter(y=>y.ok).length/H.length:null,mat=Ws.filter(w=>w.ivl>=7&&w.ok+w.bad>0),ret=mat.length?Math.round(mat.reduce((a,w)=>a+w.ok,0)/mat.reduce((a,w)=>a+w.ok+w.bad,0)*100)+'٪':'—';
+let sg=st.set.nw;if(acc!=null&&(acc<.7||dueNow>40))sg=Math.max(3,sg-3);else if(acc!=null&&acc>.9&&dueNow<10)sg=sg+2;
+const raw=localStorage.getItem(KEY)||'',kb=Math.round(raw.length/1024),imgs=Ws.filter(w=>w.img).length,days=x.bk?Math.floor((n-x.bk)/DAY):null;
+const issues=[];Ws.forEach(w=>{if(x.ok[w.id])return;const a=audit(w);if(a.length)issues.push([w,a])});
+const wk=Ws.filter(weak);
+const c=h('div',{class:'card'},h('b',null,'🧠 تحلیل هوشمند یادگیری'),
+h('div',{class:'grid',style:'margin:.6rem 0'},...Object.entries(cls).map(([l,v])=>h('div',{class:'chip'},h('div',{class:'mu'},l),h('b',null,String(v))))),
+h('p',null,'مرورهای عقب‌افتاده: '+back+' • سررسید همین حالا: '+dueNow+' • زمان تقریبی جلسه: '+est+' دقیقه'),
+h('p',{class:'mu'},'ماندگاری واژه‌های مسلط‌تر: '+ret+(acc!=null?' • دقت ۷ روز اخیر: '+Math.round(acc*100)+'٪':'')+' • واژه‌های جدید پیش از مرورها داده نمی‌شوند (اول سررسیدها).'),
+sg!==st.set.nw?h('div',{class:'row'},h('span',null,'پیشنهاد تعداد واژهٔ جدید روزانه: '+sg+' (فعلی '+st.set.nw+')'),h('button',{onclick:()=>{st.set.nw=sg;save();render()}},'اعمال')):'',
+wk.length?h('button',{class:'p',style:'margin:.4rem 0',onclick:()=>goQ(wk.slice(0,15).map(w=>w.id))},'🎯 تمرین نقاط ضعف ('+wk.length+')'):'',
+h('p',{class:'mu',style:kb>3500?'color:var(--er)':''},'حافظه: '+kb+' کیلوبایت • '+imgs+' تصویر'+(kb>3500?' — نزدیک سقف است؛ پشتیبان بگیرید یا تصاویر را کم کنید':'')+' • '+(days==null?'هنوز پشتیبان نگرفته‌اید':'آخرین پشتیبان: '+days+' روز پیش')+(days==null||days>=7?' ⚠️':'')),
+h('details',null,h('summary',null,'🔍 کنترل کیفیت واژگان: '+issues.length+' واژه نیاز به بررسی دارد'),
+...issues.slice(0,40).map(([w,a])=>h('div',{class:'ln',style:'flex-wrap:wrap'},h('span',{style:'cursor:pointer',onclick:()=>{visFaState['pop_'+w.id]=true;POP=w.id;renderPop()}},W(w)),h('small',{class:'mu',style:'flex:1;min-width:200px'},a.join(' • ')),h('span',{class:'row'},h('button',{class:'ic',onclick:()=>{EDIT=w.id;POP=null;go('lib');scrollTo(0,0)}},'✏️ ویرایش'),h('button',{class:'ic',onclick:()=>{const z=X();z.ok=z.ok||{};z.ok[w.id]=1;XS(z);render()}},'🙈 نادیده بگیر')))),
+issues.length>40?h('p',{class:'mu'},'… و '+(issues.length-40)+' مورد دیگر'):''));
+return c}
+const odv=dashV;dashV=function(){const r=odv();r.firstElementChild.after(insight());return r};
+render();
+})();
+</script>
+
+<script>
+/* ===== Add-on: مرور آزاد دسته (فلش‌کارت بدون محدودیت، بدون تأثیر بر لایتنر) ===== */
+(function(){
+STUDY.push('free');MN.free='مرور آزاد دسته';
+const sh=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const ss=startS;startS=function(m){if(m==='free'){S={mode:'free',f:null,cfg:null};return}return ss.apply(this,arguments)};
+const st0=study;study=function(){return S&&S.mode==='free'?freeV():st0.apply(this,arguments)};
+const words=c=>st.words.filter(w=>!c||w.cat===c);
+function freeV(){const root=h('div');
+if(!S.cfg){const all=cats();let c=st.set.freeCat||'';if(c&&!all.some(x=>x[0]===c))c='';S.cfg={cat:c,dir:st.set.freeDir==='fa'?'fa':'de',rnd:st.set.freeRnd!==false}}
+const cf=S.cfg,keep=()=>{st.set.freeCat=cf.cat;st.set.freeDir=cf.dir;st.set.freeRnd=cf.rnd;save()};
+if(!S.f){const n=words(cf.cat).length,sel=h('select',{'aria-label':'دسته',onchange:e=>{cf.cat=e.target.value;keep();render()}},h('option',{value:''},'همهٔ دسته‌ها ('+st.words.length+' واژه)'),...cats().map(([c,k])=>h('option',{value:c},c+' ('+k+' واژه)')));sel.value=cf.cat;
+const dbtn=(d,l)=>h('button',{class:cf.dir===d?'p':'',style:'padding:1.1rem',onclick:()=>{cf.dir=d;keep();render()}},l),
+rc=h('input',{type:'checkbox',id:'frnd',onchange:e=>{cf.rnd=e.target.checked;keep()}});rc.checked=cf.rnd;
+root.append(h('div',{class:'card'},h('h2',{style:'margin-top:0'},'📚 مرور آزاد دسته'),
+h('p',{class:'mu'},'همهٔ واژه‌های دستهٔ انتخابی را بدون محدودیت تعداد مرور کنید. این مرور برنامهٔ لایتنر و سررسید واژه‌ها را تغییر نمی‌دهد.'),
+h('label',null,'دسته:'),sel,h('p',{class:'mu'},'جهت مرور:'),
+h('div',{class:'grid'},dbtn('de','🇩🇪 آلمانی ← فارسی'),dbtn('fa','🇮🇷 فارسی ← آلمانی')),
+h('label',{for:'frnd',style:'display:flex;gap:.5rem;align-items:center;margin:.6rem 0;cursor:pointer'},rc,'ترتیب تصادفی'),
+h('button',{class:'p',disabled:n?null:'',onclick:()=>{const ids=words(cf.cat).map(w=>w.id);S.f={ids:cf.rnd?sh(ids):ids,i:0,shown:0,m:{},dir:cf.dir,cat:cf.cat,all:ids};render();scrollTo(0,0)}},'▶ شروع مرور ('+n+' کارت)')));return root}
+const F=S.f,n=F.ids.length,know=F.ids.filter(id=>F.m[id]===1).length;
+const w=F.i<n&&st.words.find(x=>x.id===F.ids[F.i]);
+if(!w){const rest=F.ids.filter(id=>F.m[id]!==1&&st.words.some(x=>x.id===id));
+root.append(h('div',{class:'card'},h('h2',{style:'margin-top:0'},'مرور تمام شد 🎉'),h('p',null,'بلد بودم: '+know+' از '+n),
+h('p',{class:'mu'},rest.length?rest.length+' کارت هنوز نیاز به مرور دارد.':'همهٔ کارت‌ها را بلد بودید. آفرین!'),
+h('div',{class:'row'},rest.length?h('button',{class:'p',onclick:()=>{S.f={ids:sh(rest),i:0,shown:0,m:{},dir:F.dir,cat:F.cat,all:F.all};render();scrollTo(0,0)}},'🔁 فقط ندانسته‌ها ('+rest.length+')'):'',
+h('button',{class:rest.length?'':'p',onclick:()=>{S.f={ids:S.cfg.rnd?sh(F.all):F.all.slice(),i:0,shown:0,m:{},dir:F.dir,cat:F.cat,all:F.all};render();scrollTo(0,0)}},'🔄 همهٔ کارت‌ها از اول'),
+h('button',{onclick:()=>{S.f=null;render()}},'تغییر دسته / جهت'),h('button',{onclick:()=>go('prac')},'بازگشت به تمرین‌ها'))));return root}
+const FA=F.dir==='fa',deEl=()=>h('p',{class:'big'},W(w),' ',spk(full(w))),faEl=()=>h('p',{class:'big',dir:'rtl'},w.fa);
+const nxt=v=>{F.m[w.id]=v;F.i++;F.shown=0;render()};
+root.append(h('progress',{max:n,value:F.i}),h('p',{class:'mu'},'مرور آزاد'+(F.cat?' • '+F.cat:'')+' • '+(F.i+1)+' از '+n+' • ✅ '+know+' • ❌ '+F.ids.filter(id=>F.m[id]===0).length));
+const c=h('div',{class:'card fc'});c.append(FA?faEl():deEl());
+if(FA&&!F.shown&&w.pos)c.append(h('p',{class:'mu'},w.pos));
+if(st.set.auto&&(FA?F.shown:!F.shown)&&F.sp!==F.i){F.sp=F.i;speak(full(w))}
+if(!F.shown)c.append(h('button',{class:'p',onclick:()=>{F.shown=1;render()}},FA?'👁 نمایش آلمانی':'👁 نمایش ترجمه'));
+else c.append(FA?deEl():faEl(),synAnt(w),h('p',{class:'mu'},metaOf(w)),imgEl(w),...extras(w),
+h('div',{class:'row anki-ratings'},h('button',{class:'again',onclick:()=>nxt(0)},'❌ هنوز نه'),h('button',{class:'p good',onclick:()=>nxt(1)},'✅ بلدم')));
+c.append(h('div',{class:'row',style:'margin-top:.8rem'},h('button',{disabled:F.i?null:'',onclick:()=>{F.i--;F.shown=0;render()}},'→ قبلی'),h('button',{onclick:()=>{F.i=n;render()}},'پایان مرور')));
+root.append(c);return root}
+})();
+</script>
+<script>
+/* ===== Add-on: تمرین‌ها به‌صورت فهرست خطی + راهنمای پاپ‌آپ + دکمهٔ بازگشت ===== */
+(function(){
+const HELP={
+flash:['🃏 فلش‌کارت',['واژه‌ها را با برنامهٔ لایتنر (تکرار فاصله‌دار) مرور می‌کنید.','ابتدا جهت (آلمانی ← فارسی یا فارسی ← آلمانی) و در صورت نیاز یک دستهٔ خاص را انتخاب کنید.','«نمایش ترجمه / نمایش آلمانی» را بزنید و با دکمه‌های دوباره، سخت، خوب یا آسان میزان یادآوری را ثبت کنید؛ زمان مرور بعدی خودکار تعیین می‌شود.']],
+free:['📚 مرور آزاد دسته',['برای وقتی که وقت اضافه دارید یا برای امتحان یک دستهٔ مشخص را می‌خواهید مرور کنید.','دسته و جهت را انتخاب کنید؛ همهٔ واژه‌های همان دسته بدون محدودیت تعداد می‌آیند.','بعد از دیدن پاسخ «بلدم» یا «هنوز نه» را بزنید؛ در پایان می‌توانید فقط ندانسته‌ها را دوباره مرور کنید.','این مرور سررسید و جعبه‌های لایتنر را تغییر نمی‌دهد.']],
+daily:['🌟 جلسهٔ روزانه',['ترکیبی از واژه‌های سررسیدشده و واژه‌های جدید، به اندازهٔ سهمیه‌ای که در تنظیمات تعیین کرده‌اید.','هر کارت می‌تواند فلش‌کارت یا یکی از تمرین‌های نوشتاری باشد.','اگر سهمیه تمام شد، می‌توانید «تمرین اضافی» را بزنید.']],
+review:['🔁 مرور',['فقط واژه‌هایی که سررسید مرورشان رسیده است نمایش داده می‌شوند.']],
+cloze:['✍️ جای‌خالی',['جمله با یک جای خالی نمایش داده می‌شود؛ واژه یا عبارت درست را (برای اسم‌ها همراه با آرتیکل) بنویسید و «بررسی پاسخ» را بزنید.','«💡 راهنمایی» حرف‌های اول پاسخ را نشان می‌دهد؛ در این صورت مرور زودتر برمی‌گردد.']],
+art:['🎨 آرتیکل',['واژهٔ آلمانی نشان داده می‌شود؛ یکی از der، die یا das را انتخاب کنید.','بعد از پاسخ، آرتیکل درست و مثال‌ها دیده می‌شود.']],
+dict:['🎧 دیکته',['واژه یا جمله را می‌شنوید و باید آن را (با آرتیکل برای اسم‌ها) بنویسید.','با دکمهٔ «🔊 پخش» می‌توانید دوباره گوش دهید.']],
+plural:['🔢 جمع اسم‌ها',['اسم و آرتیکل نمایش داده می‌شود؛ شکل جمع را بنویسید (مثلاً Häuser).']],
+conj:['🔤 صرف فعل',['یک ضمیر با جای خالی نمایش داده می‌شود؛ شکل صرف‌شدهٔ فعل در زمان حال را بنویسید.']],
+tense:['⏳ زمان فعل',['فعل را به Präteritum یا Perfekt (برای er/sie/es) ببرید و شکل درست را بنویسید.']],
+case:['🧩 حالت و حرف اضافه',['جملهٔ ناقص نمایش داده می‌شود؛ شکل درست را با توجه به حالت (Akkusativ / Dativ) یا حرف اضافهٔ مناسب بنویسید.']]};
+function helpPop(m){const d=HELP[m];if(!d)return;document.querySelectorAll('.ov.wb-help').forEach(x=>x.remove());
+const close=()=>{ov.remove();removeEventListener('keydown',esc)},esc=e=>{if(e.key==='Escape')close()},
+ov=h('div',{class:'ov wb-help',onclick:e=>{if(e.target===ov)close()}},h('div',{class:'pop abt',role:'dialog','aria-modal':'true','aria-label':'راهنما'},
+h('div',{class:'row',style:'justify-content:space-between'},h('b',null,'❓ راهنما — '+d[0]),h('button',{class:'p',onclick:close},'✕ بستن')),
+...d[1].map(x=>h('p',null,x))));document.body.append(ov);addEventListener('keydown',esc)}
+/* راهنما داخل هر تمرین */
+const st1=study;study=function(){const r=st1.apply(this,arguments);if(S&&S.mode&&HELP[S.mode])r.prepend(h('div',{class:'hrow'},h('button',{class:'ic hbtn','aria-label':'راهنمای این تمرین',onclick:()=>helpPop(S.mode)},'❓ راهنما')));return r};
+/* فهرست خطی تمرین‌ها */
+const PR=[['flash','🃏','فلش‌کارت','کارت واژه با انتخاب جهت و دسته'],['free','📚','مرور آزاد دسته','همهٔ واژه‌های یک دسته، بدون محدودیت'],['daily','🌟','جلسهٔ روزانه','سررسیدها + واژه‌های جدید'],['cloze','✍️','جای‌خالی','جمله را کامل کنید'],['art','🎨','آرتیکل','der / die / das'],['dict','🎧','دیکته','بشنوید و بنویسید'],['plural','🔢','جمع اسم‌ها','شکل جمع را بنویسید'],['conj','🔤','صرف فعل','فعل را صرف کنید'],['tense','⏳','زمان فعل','Präteritum و Perfekt'],['case','🧩','حالت و حرف اضافه','Akkusativ / Dativ']];
+pracV=function(){const n=Date.now(),Ws=st.words,dq=Ws.filter(w=>(w.last&&w.due<=n)||!w.last).length,
+cnt={flash:Ws.length,free:Ws.length,daily:dq,cloze:Ws.filter(POOL.cloze).length,art:Ws.filter(POOL.art).length,dict:Ws.length,plural:Ws.filter(POOL.plural).length,conj:Ws.filter(POOL.conj).length,tense:Ws.filter(POOL.tense).length,case:CASEQ.length};
+return h('div',null,...PR.map(([m,i,t,d])=>{const c=cnt[m];return h('div',{class:'card prow'},h('div',{class:'ptxt'},h('b',null,i+' '+t),h('small',{class:'mu'},h('bdi',null,d),' • '+c+' مورد')),h('button',{class:'p',disabled:c?null:'',onclick:()=>go(m)},'شروع'))}))};
+/* دکمهٔ بازگشت: پایین سمت چپ */
+const b=document.getElementById('bk');if(b)document.body.append(b);
+render();
+})();
+</script>
+<script>
+/* ===== Add-on: ادغام دسته‌ها، تصویر → لغات، اتصال مستقیم Gemini ===== */
+(function(){
+const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k)||'';if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}return ''};
+const RW='اصطلاحات (Redewendungen)';
+/* دسته‌های تکراری Redewendungen را یکی کن */
+const mc0=matchCat;matchCat=function(n,extra){if(nzc(n)==='redewendungen')return RW;return mc0.apply(this,arguments)};
+let mg=0;st.words.forEach(w=>{if((w.cat||'').trim()==='Redewendungen'){w.cat=RW;mg++}});
+if(mg){save();setTimeout(()=>toast(mg+' واژه از «Redewendungen» به «'+RW+'» منتقل شد.'),400)}
+function modal(cls,build){document.querySelectorAll('.ov.'+cls).forEach(x=>x.remove());
+const close=()=>{ov.remove();removeEventListener('keydown',esc)},esc=e=>{if(e.key==='Escape')close()},pop=h('div',{class:'pop abt',role:'dialog','aria-modal':'true'}),
+ov=h('div',{class:'ov '+cls,onclick:e=>{if(e.target===ov)close()}},pop);build(pop,close);document.body.append(ov);addEventListener('keydown',esc)}
+const head=(t,close)=>h('div',{class:'row',style:'justify-content:space-between;flex-wrap:nowrap;margin-bottom:.4rem'},h('b',null,t),h('button',{class:'p',style:'flex:none',onclick:close},'✕ بستن'));
+
+/* ---------- انتقال واژه‌ها بین دسته‌ها (تیکی) ---------- */
+function mover(pop,close){const X2={src:'*',q:'',sel:new Set()};
+const srcSel=h('select',{'aria-label':'دستهٔ مبدأ'}),q=h('input',{placeholder:'جست‌وجو در واژه‌ها','aria-label':'جست‌وجو',dir:'auto'}),
+list=h('div',{style:'max-height:42vh;overflow:auto;border:1px solid var(--bd);border-radius:12px;padding:.3rem .6rem;text-align:start'}),cnt=h('span',{class:'mu'}),
+tgt=h('select',{'aria-label':'دستهٔ مقصد'}),nn=h('input',{placeholder:'نام دستهٔ جدید','aria-label':'نام دستهٔ جدید',style:'display:none;margin-top:.3rem'}),go2=h('button',{class:'p'},'انتقال');
+const fillSrc=()=>{srcSel.replaceChildren(h('option',{value:'*'},'همهٔ واژه‌ها ('+st.words.length+')'),...cats().map(([c,n])=>h('option',{value:c},c+' ('+n+')')),h('option',{value:'__none'},'بدون دسته ('+st.words.filter(w=>!w.cat).length+')'));
+if(![...srcSel.options].some(o=>o.value===X2.src))X2.src='*';srcSel.value=X2.src};
+const fillTgt=()=>{const v=tgt.value;tgt.replaceChildren(h('option',{value:''},'— انتخاب دستهٔ مقصد —'),...cats().map(([c,n])=>h('option',{value:c},c+' ('+n+')')),h('option',{value:'__none'},'بدون دسته'),h('option',{value:'__new'},'＋ دستهٔ جدید…'));tgt.value=[...tgt.options].some(o=>o.value===v)?v:''};
+const vis=()=>st.words.filter(w=>(X2.src==='*'||(X2.src==='__none'?!w.cat:w.cat===X2.src))&&(!X2.q||(w.de+' '+w.fa).toLowerCase().includes(X2.q.toLowerCase()))).sort((a,b)=>(a.cat||'').localeCompare(b.cat||'','fa')||a.de.localeCompare(b.de,'de'));
+const upd=()=>{const n=X2.sel.size;cnt.textContent=n+' واژه انتخاب شده';go2.textContent='انتقال ('+n+')';go2.disabled=!n};
+const draw=()=>{const ws=vis();list.replaceChildren(...(ws.length?ws.map(w=>{const cb=h('input',{type:'checkbox','aria-label':w.de,style:'width:auto;min-height:0;flex:none'});cb.checked=X2.sel.has(w.id);cb.onchange=()=>{cb.checked?X2.sel.add(w.id):X2.sel.delete(w.id);upd()};
+return h('label',{class:'ln',style:'align-items:center;justify-content:flex-start;gap:.6rem;cursor:pointer'},cb,h('span',{lang:'de',dir:'ltr',class:'de',style:'font-weight:700'},(w.art?w.art+' ':'')+w.de),h('small',{class:'mu',style:'flex:1'},w.fa),X2.src==='*'?h('small',{class:'tag'},w.cat||'بدون دسته'):'')}):[h('p',{class:'mu'},'واژه‌ای یافت نشد.')]));upd()};
+srcSel.onchange=()=>{X2.src=srcSel.value;draw()};q.oninput=()=>{X2.q=q.value.trim();draw()};tgt.onchange=()=>{nn.style.display=tgt.value==='__new'?'block':'none';if(tgt.value==='__new')nn.focus()};
+go2.onclick=()=>{if(!X2.sel.size)return;let t2;if(tgt.value==='__new'){t2=resolveCat(nn.value);if(!t2){toast('نام دستهٔ جدید را بنویسید.',1);return}}else if(tgt.value==='__none')t2='';else if(tgt.value)t2=tgt.value;else{toast('دستهٔ مقصد را انتخاب کنید.',1);return}
+let n=0;st.words.forEach(w=>{if(X2.sel.has(w.id)&&(w.cat||'')!==t2){w.cat=t2;n++}});X2.sel.clear();save();toast(n+' واژه منتقل شد.');fillSrc();fillTgt();nn.value='';tgt.value=t2||(t2===''?'__none':'');if(!tgt.value)fillTgt();draw();render()};
+fillSrc();fillTgt();draw();
+pop.append(head('🧺 انتقال واژه‌ها بین دسته‌ها',close),h('p',{class:'mu'},'دستهٔ مبدأ را انتخاب کنید، واژه‌ها را تیک بزنید و به دستهٔ مقصد منتقل کنید. دسته‌ای که خالی شود خودکار از فهرست حذف می‌شود.'),
+h('label',null,'از دستهٔ:'),srcSel,q,h('div',{class:'row',style:'margin:.4rem 0'},h('button',{onclick:()=>{vis().forEach(w=>X2.sel.add(w.id));draw()}},'☑️ انتخاب همهٔ نمایش‌داده‌شده‌ها'),h('button',{onclick:()=>{X2.sel.clear();draw()}},'⬜ پاک کردن انتخاب'),cnt),list,
+h('div',{class:'sec',style:'margin-top:.6rem'},h('label',null,'به دستهٔ:'),tgt,nn,h('div',{class:'row',style:'margin-top:.6rem'},go2)))}
+const lv=libV;libV=function(){const r=lv.apply(this,arguments);const d=[...r.querySelectorAll('details')].find(x=>/مدیریت دسته/.test((x.querySelector('summary')||{}).textContent||''));
+if(d)d.querySelector('summary').after(h('div',{class:'row',style:'margin:.4rem 0'},h('button',{class:'p',onclick:()=>modal('wb-mv',mover)},'🧺 انتقال واژه‌ها بین دسته‌ها (انتخاب تیکی)')));return r};
+
+/* ---------- اتصال مستقیم به Gemini (کلید شخصی، بدون سرور) ---------- */
+const KEY='wb_gem_key',MOD='wb_gem_model',DEF='gemini-3-flash-preview',native=window.claude,API='https://generativelanguage.googleapis.com/v1beta/';
+const modelId=()=>LS(MOD)||DEF;
+async function pickModel(key){const r=await fetch(API+'models?pageSize=200',{headers:{'x-goog-api-key':key}});if(!r.ok)return '';const j=await r.json(),ms=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''));
+const ok=ms.filter(n=>/flash/.test(n)&&!/lite|image|tts|live|audio|thinking|embedding/.test(n)),g3=ok.filter(n=>/^gemini-3/.test(n)).sort().reverse();return g3[0]||ok.sort().reverse()[0]||''}
+async function gemText(parts){const key=LS(KEY);if(!key){const e=new Error('کلید Gemini ثبت نشده است.');e.code='not_granted';throw e}
+const call=m=>fetch(API+'models/'+encodeURIComponent(m)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:.2,responseMimeType:'application/json'}})});
+let r=await call(modelId());
+if(r.status===404){const alt=await pickModel(key);if(alt&&alt!==modelId()){const r2=await call(alt);if(r2.ok){LS(MOD,alt);r=r2}}}
+const j=await r.json().catch(()=>({}));
+if(!r.ok){const e=new Error((j.error&&j.error.message)||('خطای '+r.status));if(r.status===401||r.status===403||/API key/i.test(e.message))e.code='not_granted';throw e}
+const tx=((((j.candidates||[])[0]||{}).content||{}).parts||[]).map(p=>p.text||'').join('');if(!tx)throw new Error('پاسخ خالی از Gemini.');return tx}
+function applyShim(){if(window.WB_CLOUD&&window.WB_CLOUD.apiBase)return;
+if(LS(KEY))window.claude={use:async n=>n!=='sample'?null:({json:async prompt=>{const l=parseAI(await gemText([{text:prompt}]));return l.length>1?l:l[0]}})};else window.claude=native}
+applyShim();
+function gemCard(){const key=h('input',{type:'password',id:'gk',dir:'ltr',autocomplete:'off',placeholder:'AIza…','aria-label':'کلید API Gemini'}),mod=h('input',{id:'gm',dir:'ltr',placeholder:DEF,'aria-label':'نام مدل'}),stt=h('p',{class:'mu'});
+key.value=LS(KEY);mod.value=LS(MOD);const say=m=>{stt.textContent=m};say(LS(KEY)?'کلید ثبت شده است ('+modelId()+').':'هنوز کلیدی ثبت نشده است.');
+return h('div',{class:'card'},h('b',null,'🤖 اتصال به هوش مصنوعی (Gemini)'),
+h('p',{class:'mu'},'بدون سرور: کلید شخصی خودتان را از ',h('a',{href:'https://aistudio.google.com/apikey',target:'_blank',rel:'noopener',dir:'ltr'},'aistudio.google.com/apikey'),' (رایگان) بسازید و اینجا بگذارید. کلید فقط در همین مرورگر می‌ماند و در پشتیبان یا همگام‌سازی نمی‌آید. پیشنهاد: در پنل Google کلید را به آدرس همین سایت محدود کنید.'),
+h('label',{for:'gk'},'کلید API'),key,h('label',{for:'gm'},'نام مدل (اختیاری؛ اگر کار نکرد خودکار پیدا می‌شود)'),mod,
+h('div',{class:'row',style:'margin-top:.5rem'},
+h('button',{class:'p',onclick:()=>{LS(KEY,key.value.trim()||null);LS(MOD,mod.value.trim()||null);applyShim();say(LS(KEY)?'ذخیره شد. حالا «آزمون اتصال» را بزنید.':'کلید حذف شد.')}},'💾 ذخیره'),
+h('button',{onclick:async()=>{if(!LS(KEY)){say('ابتدا کلید را ذخیره کنید.');return}say('⏳ در حال آزمون…');try{await gemText([{text:'Reply with exactly this JSON: {"ok":true}'}]);say('✅ اتصال برقرار است (مدل: '+modelId()+').')}catch(e){say('❌ '+(e.message||e))}}},'🔌 آزمون اتصال'),
+h('button',{onclick:()=>{LS(KEY,null);LS(MOD,null);key.value='';mod.value='';applyShim();say('کلید حذف شد.')}},'🗑 حذف کلید')),stt)}
+const sv=setV;setV=function(){const r=sv.apply(this,arguments);r.append(gemCard());return r};
+
+/* ---------- لغات از تصویر ---------- */
+const STOP=new Set('aber also andere anderen auch auf aus bei beim bin bis dann dass dein deine denn dich dies diese diesem diesen dieser dieses doch dort durch eine einem einen einer eines einmal euch euer für gegen habe haben hast hatte hier ihre ihrem ihren ihrer immer ihnen jetzt kann kein keine kommen machen mein meine mich mehr nach nicht noch nur oder sein seine sehr sich sind soll über unter vom von vor war waren was weil wenn wer werden wie wird wollen wurde zum zur zwischen'.split(' '));
+function cands(text){const have=new Set(st.words.map(w=>w.de.toLowerCase())),seen=new Set(),out=[];(String(text).match(/[A-Za-zÄÖÜäöüß]{4,}/g)||[]).forEach(x=>{const k=x.toLowerCase();if(seen.has(k)||STOP.has(k))return;seen.add(k);out.push({de:x,lvl:'',have:have.has(k)})});return out}
+window.__wbCands=cands;
+function imgData(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const s=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*s));c.height=Math.max(1,Math.round(im.height*s));c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.85).split(',')[1])};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('تصویر خوانده نشد.'))};im.src=u})}
+function loadTess(){return window.Tesseract?Promise.resolve():new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';s.onload=res;s.onerror=()=>rej(new Error('بارگذاری OCR ممکن نشد؛ اینترنت را بررسی کنید.'));document.head.append(s)})}
+async function ocr(files,note){await loadTess();const w=await Tesseract.createWorker('deu');try{let t='';for(const f of files){note('در حال خواندن '+f.name+'…');t+='\n'+(await w.recognize(f)).data.text}return t}finally{await w.terminate()}}
+const XP='You are a German vocabulary extraction assistant for a Persian-speaking learner. Read the attached image(s) carefully (printed or handwritten German text). Extract useful German vocabulary: skip obvious A1 beginner words (Haus, Mann, machen, gehen, gut, ...), prioritize B1-C2 and less obvious A2 words, separable and inseparable verbs, useful collocations and fixed expressions (keep complete expressions such as "eine Entscheidung treffen"), and formal, academic or professional vocabulary. Use dictionary form: nouns singular without article, verbs in the infinitive, adjectives in the base form. Do not invent words that are not in the image, skip unreadable words, no duplicates, no proper names. Reply with ONLY a JSON array (no markdown) of objects {"de":"...","lvl":"A2|B1|B2|C1|C2"}, at most 60 items, most valuable first.';
+function imgUI(pop,close,ta){let items=[];const has=!!LS(KEY),fi=h('input',{type:'file',accept:'image/*',multiple:true,'aria-label':'انتخاب تصویر'}),
+mth=h('select',{'aria-label':'روش استخراج'},h('option',{value:'gem'},'Gemini (دقیق‌تر؛ نیاز به کلید در تنظیمات)'),h('option',{value:'ocr'},'OCR داخل مرورگر (بدون کلید؛ نیاز به اینترنت)')),
+stt=h('p',{class:'mu'}),box=h('div'),run=h('button',{class:'p'},'🔍 استخراج لغات');mth.value=has?'gem':'ocr';
+const say=m=>{stt.textContent=m};
+const draw=()=>{if(!items.length){box.replaceChildren();return}const add=h('button',{class:'p'});
+const upd=()=>{const n=items.filter(x=>x.on).length;add.textContent='➕ افزودن به فهرست کلمات ('+n+')';add.disabled=!n};
+box.replaceChildren(h('p',{class:'mu'},items.length+' لغت پیدا شد؛ موارد دلخواه را تیک بزنید:'),
+h('div',{style:'max-height:38vh;overflow:auto;border:1px solid var(--bd);border-radius:12px;padding:.3rem .6rem;text-align:start'},...items.map(x=>{const cb=h('input',{type:'checkbox','aria-label':x.de,style:'width:auto;min-height:0;flex:none'});cb.checked=x.on;cb.onchange=()=>{x.on=cb.checked;upd()};
+return h('label',{class:'ln',style:'align-items:center;justify-content:flex-start;gap:.6rem;cursor:pointer'},cb,h('span',{lang:'de',dir:'ltr',class:'de',style:'font-weight:700'},x.de),x.lvl?h('small',{class:'tag'},x.lvl):'',x.have?h('small',{class:'mu'},'در کتابخانه هست'):'')})),
+h('div',{class:'row',style:'margin-top:.5rem'},add,h('button',{onclick:()=>{items.forEach(x=>x.on=!x.have);draw()}},'فقط جدیدها'),h('button',{onclick:()=>{items.forEach(x=>x.on=true);draw()}},'همه')));upd();
+add.onclick=()=>{const cur=ta.value.split('\n').map(x=>x.trim()).filter(Boolean),seen=new Set(cur.map(x=>x.toLowerCase().replace(/^\[[a-c][12]\]\s*/,'')));let n=0;items.forEach(x=>{if(x.on&&!seen.has(x.de.toLowerCase())){cur.push(x.de);seen.add(x.de.toLowerCase());n++}});ta.value=cur.join('\n');ta.dispatchEvent(new Event('input',{bubbles:true}));close();toast(n+' لغت به فهرست اضافه شد؛ حالا «کپی دستور گروهی» یا «تکمیل خودکار» را بزنید.')}};
+run.onclick=async()=>{const fs=[...fi.files];if(!fs.length){say('ابتدا یک تصویر انتخاب کنید.');return}run.disabled=true;items=[];draw();
+try{if(mth.value==='gem'){if(!LS(KEY))throw new Error('ابتدا در تنظیمات کلید Gemini را ثبت کنید یا روش OCR را انتخاب کنید.');say('⏳ در حال خواندن تصویر با Gemini…');
+const parts=[{text:XP}];for(const f of fs)parts.push({inline_data:{mime_type:'image/jpeg',data:await imgData(f)}});
+const tx=await gemText(parts),m=/\[[\s\S]*\]/.exec(tx);let arr=JSON.parse(m?m[0]:tx);if(!Array.isArray(arr))arr=arr.items||[];const have=new Set(st.words.map(w=>w.de.toLowerCase())),seen=new Set();
+arr.forEach(x=>{const de=String(x&&x.de!=null?x.de:x).trim(),k=de.toLowerCase();if(!de||seen.has(k))return;seen.add(k);items.push({de,lvl:String(x&&x.lvl||''),have:have.has(k),on:!have.has(k)})})}
+else{say('⏳ در حال اجرای OCR (بار اول چند ثانیه برای دانلود مدل زبان آلمانی)…');items=cands(await ocr(fs,say)).map(x=>Object.assign(x,{on:!x.have}))}
+say(items.length?'':'لغتی پیدا نشد؛ تصویر واضح‌تری امتحان کنید.');draw()}catch(e){say('❌ '+(e.message||e))}finally{run.disabled=false}};
+pop.append(head('📷 استخراج لغات از تصویر',close),h('p',{class:'mu'},'عکس صفحهٔ کتاب، یادداشت یا اسکرین‌شات را انتخاب کنید؛ لغات پیدا‌شده بعد از تیک زدن به «فهرست کلمات» می‌روند و پرامت گروهی با همان لغات ساخته می‌شود.'),
+fi,h('label',null,'روش:'),mth,h('div',{class:'row',style:'margin-top:.5rem'},run,h('button',{onclick:async()=>{try{await navigator.clipboard.writeText(MASTER+'\n\n=== INPUT (Workflow B) ===\nThe attached image contains German text. Follow Workflow B: show the numbered vocabulary list and wait for my selection.');toast('دستور استخراج کپی شد؛ همراه تصویر در ChatGPT یا Gemini بفرستید.')}catch(e){toast('کپی ممکن نشد.',1)}}},'📋 کپی دستور برای ChatGPT/Gemini (با تصویر)')),stt,box)}
+const iv=ioV;ioV=function(){const r=iv.apply(this,arguments);const ta=r.querySelector('textarea[aria-label="فهرست کلمات"]');
+if(ta)ta.before(h('div',{class:'row',style:'margin:.4rem 0'},h('button',{class:'p',onclick:()=>modal('wb-img',(p,c)=>imgUI(p,c,ta))},'📷 استخراج لغات از تصویر')));return r};
+render();
+})();
+</script>
+<script>
+/* ===== WörterBuch: About + Emergent integration add-on (additiv; originalen Code nicht verändert) =====
+   Ohne apiBase bleibt alles 100% offline (localStorage, wie bisher).
+   Backend-Vertrag (Emergent/FastAPI + MongoDB), alle Pfade relativ zu apiBase:
+   POST /api/auth/session {session_id}  -> setzt httpOnly-Cookie (Emergent Google Auth Session-Austausch)
+   GET  /api/auth/me                    -> {email,name,picture}
+   POST /api/auth/logout
+   GET  /api/sync                       -> {data,updatedAt}   PUT /api/sync {data,updatedAt}
+   POST /api/ai/generate {model,prompt} -> {text}  (Gemini 3 Flash, Key bleibt serverseitig) */
+window.WB_CLOUD=Object.assign({apiBase:'',aiModel:'gemini-3-flash'},window.WB_CLOUD||{});
+(function(){
+const C=window.WB_CLOUD,EMAIL='peymansaberi20@gmail.com',TL='WörterBuch: واژه‌نامه آلمانی و فلش کارت',
+CR='طراحی و برنامه‌نویسی: پیمان صابری (Peyman Saberi)';
+let user=null,dirty=false,timer=null,busy=false;
+const on=!!C.apiBase;
+async function api(p,o){const r=await fetch(C.apiBase.replace(/\/$/,'')+p,Object.assign({credentials:'include',headers:{'Content-Type':'application/json'}},o||{}));
+if(r.status===401){const e=new Error('unauthorized');e.code='not_granted';throw e}if(!r.ok)throw new Error('http '+r.status);return r}
+async function me(){if(!on)return;try{user=await(await api('/api/auth/me')).json()}catch(e){user=null}}
+function login(){if(!on){toast('آدرس سرور (WB_CLOUD.apiBase) هنوز تنظیم نشده است.',1);return}
+location.href='https://auth.emergentagent.com/?redirect='+encodeURIComponent(location.href.split('#')[0])}
+async function logout(){try{await api('/api/auth/logout',{method:'POST'})}catch(e){}user=null;toast('از حساب خارج شدید.');about()}
+async function push(){if(!on||!user||busy||!navigator.onLine)return false;busy=true;
+try{await api('/api/sync',{method:'PUT',body:JSON.stringify({data:st,updatedAt:Date.now()})});dirty=false;return true}catch(e){return false}finally{busy=false}}
+async function pull(){if(!on||!user)return;try{const j=await(await api('/api/sync')).json();
+if(!j||!j.data){toast('داده‌ای در ابر یافت نشد.',1);return}
+if(!confirm('داده‌های این دستگاه با نسخهٔ ابری جایگزین شود؟'))return;
+const d=j.data;if(Array.isArray(d.words))st.words=d.words.map(norm).filter(Boolean);if(Array.isArray(d.hist))st.hist=d.hist;
+if(d.set&&typeof d.set==='object')st.set=Object.assign({},st.set,d.set);if(d.daily&&typeof d.daily==='object')st.daily=d.daily;
+save();render();toast('همگام‌سازی از ابر انجام شد.')}catch(e){toast('دریافت از ابر ممکن نشد.',1)}}
+/* offline-first: lokal speichern wie bisher, danach (entprellt) in die Cloud */
+if(typeof save==='function'){const os=save;save=function(){const r=os.apply(this,arguments);if(on&&user){dirty=true;clearTimeout(timer);timer=setTimeout(push,2500)}return r}}
+addEventListener('online',()=>{if(dirty)push()});
+/* Gemini 3 Flash über Backend: nutzt die vorhandene ✨-Autovervollständigung unverändert */
+if(on){window.claude={use:async n=>n!=='sample'?null:({json:async prompt=>{const j=await(await api('/api/ai/generate',{method:'POST',body:JSON.stringify({model:C.aiModel,prompt:prompt})})).json();
+const l=parseAI(j.text||'');return l.length>1?l:l[0]}})}}
+/* About / درباره ما */
+function about(){document.querySelectorAll('.ov.wb-about').forEach(x=>x.remove());
+const close=()=>{ov.remove();removeEventListener('keydown',esc)},esc=e=>{if(e.key==='Escape')close()},
+mail=h('a',{href:'mailto:'+EMAIL,dir:'ltr',lang:'en'},EMAIL),
+acc=on?(user?h('div',null,h('p',null,'وارد شده با: ',h('span',{dir:'ltr',lang:'en'},user.email||user.name||'')),
+h('div',{class:'row'},h('button',{class:'p',onclick:async()=>{if(await push())toast('در ابر ذخیره شد.');else toast('همگام‌سازی ممکن نشد.',1)}},'☁️ ارسال به ابر'),h('button',{onclick:pull},'⬇️ دریافت از ابر'),h('button',{onclick:logout},'خروج از حساب'))):
+h('div',null,h('p',{class:'mu'},'برای همگام‌سازی ابری با حساب Google وارد شوید. بدون ورود، برنامه کاملاً آفلاین کار می‌کند.'),h('button',{class:'p',onclick:login},'ورود با Google'))):
+h('p',{class:'mu'},'همگام‌سازی ابری و ورود با Google در این نسخه غیرفعال است؛ همهٔ داده‌ها فقط روی همین دستگاه ذخیره می‌شوند.'),
+ov=h('div',{class:'ov wb-about',onclick:e=>{if(e.target===ov)close()}},h('div',{class:'pop abt',role:'dialog','aria-modal':'true','aria-label':'درباره ما'},
+h('div',{class:'row',style:'justify-content:space-between'},h('b',null,'ℹ️ درباره ما / About'),h('button',{class:'p',onclick:close},'✕ بستن')),
+h('h2',null,h('bdi',{lang:'de',dir:'ltr'},'WörterBuch'),': واژه‌نامه آلمانی و فلش کارت'),
+h('p',null,'سازندهٔ واژگان فارسی–آلمانی، سیستم فلش‌کارت با تکرار فاصله‌دار (لایتنر) و دستیار واژه‌نامهٔ هوشمند.'),
+h('p',null,h('b',null,'طراحی و برنامه‌نویسی: '),'پیمان صابری (',h('span',{dir:'ltr',lang:'en'},'Peyman Saberi'),')'),
+h('p',null,h('b',null,'تماس: '),mail),
+h('div',{class:'sec'},h('b',null,'🤖 دستیار هوش مصنوعی'),h('p',{class:'mu'},'مدل: ',h('span',{dir:'ltr',lang:'en'},'Gemini 3 Flash'),on?'':' (پس از تنظیم سرور؛ فعلاً می‌توانید از «کپی دستور» استفاده کنید)')),
+h('div',{class:'sec'},h('b',null,'☁️ حساب و همگام‌سازی'),acc)));
+document.body.append(ov);addEventListener('keydown',esc)}
+document.getElementById('ab').onclick=about;document.getElementById('abf').onclick=about;
+/* Rückkehr von Emergent Google Auth: #session_id=... */
+(async function(){const m=/[#&]session_id=([^&]+)/.exec(location.hash||'');
+if(m){history.replaceState(null,'',location.pathname+location.search);
+if(on){try{await api('/api/auth/session',{method:'POST',body:JSON.stringify({session_id:decodeURIComponent(m[1])})})}catch(e){toast('ورود ناموفق بود.',1)}}}
+await me();if(user&&dirty)push()})();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
+@layer base {
+  html {
+    font-size: 17.5px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 1.05rem;
+    line-height: 1.85;
+  }
+
+  /*
+   * Fulfills User Request #1:
+   * Direct strict theme enforcement independent of mobile OS setting
+   */
+  :root[data-theme="light"],
+  html[data-theme="light"],
+  body[data-theme="light"] {
+    color-scheme: light !important;
+    background-color: #f6f7fb !important;
+    color: #1d2330 !important;
+  }
+
+  :root[data-theme="dark"],
+  html[data-theme="dark"],
+  body[data-theme="dark"] {
+    color-scheme: dark !important;
+    background-color: #12151c !important;
+    color: #eef1f6 !important;
+  }
+
+  /*
+   * Fulfills Task 2:
+   * Prevent mobile Safari & touch browsers from auto-zooming / magnifying viewport on input focus.
+   * On mobile and touch screens (<= 1024px), all editable inputs, textareas, and selects must have font-size >= 16px.
+   */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  @media screen and (max-width: 1024px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
+
+  @media screen and (min-width: 1025px) {
+    input.text-xs, select.text-xs, textarea.text-xs {
+      font-size: 0.75rem !important;
+    }
+    input.text-sm, select.text-sm, textarea.text-sm {
+      font-size: 0.875rem !important;
+    }
+    input.text-base, select.text-base, textarea.text-base {
+      font-size: 1rem !important;
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

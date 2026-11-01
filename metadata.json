@@ -1,0 +1,6 @@
+{
+  "name": "WörterBuch: واژه‌نامه آلمانی و فلش کارت",
+  "description": "سامانه هوشمند آموزش واژگان آلمانی، فلش‌کارت لایتنر و تمرین‌های تخصصی زبان آلمانی با ترجمه فارسی",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
