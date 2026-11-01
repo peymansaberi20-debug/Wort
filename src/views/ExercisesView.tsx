@@ -804,7 +804,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   }
 
   return (
-    <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+    <div className="space-y-4 text-right max-w-2xl mx-auto pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-10">
       {/* Exercise Top Bar */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         {/* Help + Title */}
@@ -862,7 +862,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       </div>
 
       {/* Active Card Body */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-4 md:p-6 shadow-sm space-y-4 min-w-0">
         {/* ========================================================= */}
         {/* FLASHCARD / REVIEW CARD (Sections 10 & 11) */}
         {/* ========================================================= */}
@@ -871,7 +871,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const isFaDir = currentCardDir === 'fa';
 
           return (
-            <div className="space-y-4 text-center">
+            <div className="space-y-4 text-center pb-2">
               {/* Question Face */}
               {!isFaDir ? (
                 <div className="py-4 space-y-2">
@@ -922,7 +922,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                   {/* Rating / Decision Buttons */}
                   {activeMode === 'free' ? (
-                    <div className="flex items-center justify-center gap-3 pt-3">
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-3 pb-3">
                       <button
                         onClick={() => handleFreeKnow(0)}
                         className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 px-5 py-2.5 rounded-xl font-bold text-xs md:text-sm transition flex-1 max-w-xs"
@@ -937,7 +937,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 pb-3">
                       <button
                         onClick={() => handleFlashGrade(0)}
                         className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-900 py-2.5 px-2 rounded-xl text-xs font-bold"
