@@ -658,9 +658,9 @@ export default function App() {
         <button
           onClick={handleBack}
           aria-label="بازگشت"
-          className="fixed left-4 bottom-20 md:bottom-6 z-40 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2.5 rounded-full font-bold text-sm md:text-base shadow-2xl flex items-center gap-1.5 hover:scale-105 active:scale-95 transition-all border border-white/20"
+          className="fixed left-4 bottom-20 md:bottom-6 z-40 min-h-11 px-3 py-2 rounded-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-xs shadow-lg flex items-center gap-1 hover:scale-105 active:scale-95 transition-all border border-white/20"
         >
-          <span>↩</span>
+          <span className="text-sm leading-none" aria-hidden="true">↩</span>
           <span>بازگشت</span>
         </button>
       )}
