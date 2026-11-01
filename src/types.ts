@@ -17,6 +17,11 @@ export interface Word {
   conj: string; // ich|du|er|wir|ihr|sie
   prat: string;
   perf: string;
+  komparativ?: string;
+  superlativ?: string;
+  imperativDu?: string;
+  imperativIhr?: string;
+  imperativSie?: string;
   sep: string;
   cat: string;
   cloze: string;
