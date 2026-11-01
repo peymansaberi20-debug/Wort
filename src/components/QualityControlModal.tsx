@@ -67,7 +67,7 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
             onClick={onClose}
             className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
           >
-            ✕ بستن
+            ×
           </button>
         </div>
 
@@ -161,10 +161,14 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
                               onClick={() => onIgnoreWord(word.id)}
                               className="bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1"
                             >
-                               نادیده بگیر
+                              🙈 نادیده بگیر
                             </button>
                             <button
-                              onClick={() => onDeleteWord(word)}
+                              onClick={() => {
+                                if (confirm(`آیا از حذف کامل واژهٔ «${word.de}» اطمینان دارید؟`)) {
+                                  onDeleteWord(word);
+                                }
+                              }}
                               className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-300 px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1"
                             >
                               🗑 حذف کامل
