@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
+import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, normalizeAIHeadword } from '../utils/ai';
 import { speak } from '../utils/audio';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
@@ -97,6 +97,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [formConj, setFormConj] = useState(editingWord?.conj || '');
   const [formPrat, setFormPrat] = useState(editingWord?.prat || '');
   const [formPerf, setFormPerf] = useState(editingWord?.perf || '');
+  const [formKomparativ, setFormKomparativ] = useState(editingWord?.komparativ || '');
+  const [formSuperlativ, setFormSuperlativ] = useState(editingWord?.superlativ || '');
+  const [formImperativDu, setFormImperativDu] = useState(editingWord?.imperativDu || '');
+  const [formImperativIhr, setFormImperativIhr] = useState(editingWord?.imperativIhr || '');
+  const [formImperativSie, setFormImperativSie] = useState(editingWord?.imperativSie || '');
   const [formSep, setFormSep] = useState(editingWord?.sep || '');
   const [formTags, setFormTags] = useState(editingWord?.tags || '');
   const [formNotes, setFormNotes] = useState(editingWord?.notes || '');
@@ -152,6 +157,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       setFormConj(editingWord.conj || '');
       setFormPrat(editingWord.prat || '');
       setFormPerf(editingWord.perf || '');
+      setFormKomparativ(editingWord.komparativ || '');
+      setFormSuperlativ(editingWord.superlativ || '');
+      setFormImperativDu(editingWord.imperativDu || '');
+      setFormImperativIhr(editingWord.imperativIhr || '');
+      setFormImperativSie(editingWord.imperativSie || '');
       setFormSep(editingWord.sep || '');
       setFormTags(editingWord.tags || '');
       setFormNotes(editingWord.notes || '');
@@ -232,6 +242,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     setFormConj('');
     setFormPrat('');
     setFormPerf('');
+    setFormKomparativ('');
+    setFormSuperlativ('');
+    setFormImperativDu('');
+    setFormImperativIhr('');
+    setFormImperativSie('');
     setFormSep('');
     setFormTags('');
     setFormNotes('');
@@ -263,6 +278,13 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       const { ws, errs } = aiToIMP(parsed, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
       if (ws.length > 0) {
         const item = ws[0];
+        const normalizedHeadword = normalizeAIHeadword(item.de || formDe, item.pos || formPos, item.art || formArt);
+        const normalizedDuplicate = findExistingDuplicate(normalizedHeadword, item.art || formArt, wordsRef.current, editingWordId);
+        if (normalizedDuplicate) {
+          onShowToast(`واژهٔ نرمال‌شده با «${normalizedDuplicate.de}» تکراری است؛ اطلاعات اعمال نشد.`, true);
+          return;
+        }
+        if (normalizedHeadword) setFormDe(normalizedHeadword);
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
         if (item.syn) setFormSyn(item.syn);
@@ -281,6 +303,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (item.conj) setFormConj(item.conj);
         if (item.prat) setFormPrat(item.prat);
         if (item.perf) setFormPerf(item.perf);
+        if (item.komparativ) setFormKomparativ(item.komparativ);
+        if (item.superlativ) setFormSuperlativ(item.superlativ);
+        if (item.imperativDu) setFormImperativDu(item.imperativDu);
+        if (item.imperativIhr) setFormImperativIhr(item.imperativIhr);
+        if (item.imperativSie) setFormImperativSie(item.imperativSie);
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         if (item.cat && !formCat) setFormCat(item.cat);
@@ -343,7 +370,13 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       }
       if (ws.length > 0) {
         const item = ws[0];
-        if (item.de) setFormDe(item.de);
+        const normalizedHeadword = normalizeAIHeadword(item.de || formDe, item.pos || formPos, item.art || formArt);
+        const normalizedDuplicate = findExistingDuplicate(normalizedHeadword, item.art || formArt, wordsRef.current, editingWordId);
+        if (normalizedDuplicate) {
+          onShowToast(`واژهٔ نرمال‌شده با «${normalizedDuplicate.de}» تکراری است؛ اطلاعات اعمال نشد.`, true);
+          return;
+        }
+        if (normalizedHeadword) setFormDe(normalizedHeadword);
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
         if (item.cat) setFormCat(item.cat);
@@ -363,6 +396,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (item.conj) setFormConj(item.conj);
         if (item.prat) setFormPrat(item.prat);
         if (item.perf) setFormPerf(item.perf);
+        if (item.komparativ) setFormKomparativ(item.komparativ);
+        if (item.superlativ) setFormSuperlativ(item.superlativ);
+        if (item.imperativDu) setFormImperativDu(item.imperativDu);
+        if (item.imperativIhr) setFormImperativIhr(item.imperativIhr);
+        if (item.imperativSie) setFormImperativSie(item.imperativSie);
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         setPasteAiJson('');
@@ -424,6 +462,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         conj: formConj.trim(),
         prat: formPrat.trim(),
         perf: formPerf.trim(),
+        komparativ: formKomparativ.trim(),
+        superlativ: formSuperlativ.trim(),
+        imperativDu: formImperativDu.trim(),
+        imperativIhr: formImperativIhr.trim(),
+        imperativSie: formImperativSie.trim(),
         sep: formSep.trim(),
         tags: formTags.trim(),
         notes: formNotes.trim(),
@@ -879,6 +922,19 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
             </div>
           </div>
 
+          {/(صفت|adjektiv|adjective)/i.test(formPos) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+              <div>
+                <label className="block font-bold mb-1">Komparativ (صفت تفضیلی):</label>
+                <input type="text" dir="ltr" value={formKomparativ} onChange={e => setFormKomparativ(e.target.value)} placeholder="z. B. größer" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Superlativ (عالی‌ترین):</label>
+                <input type="text" dir="ltr" value={formSuperlativ} onChange={e => setFormSuperlativ(e.target.value)} placeholder="z. B. am größten / der größte" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+            </div>
+          )}
+
           {/* Example sentences */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
             <div>
@@ -997,6 +1053,23 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
               />
             </div>
           </div>
+
+          {/(فعل|verb)/i.test(formPos) && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+              <div>
+                <label className="block font-bold mb-1">Imperativ du (تو):</label>
+                <input type="text" dir="ltr" value={formImperativDu} onChange={e => setFormImperativDu(e.target.value)} placeholder="z. B. mach! / fahr!" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Imperativ ihr (شما، جمع غیررسمی):</label>
+                <input type="text" dir="ltr" value={formImperativIhr} onChange={e => setFormImperativIhr(e.target.value)} placeholder="z. B. macht! / fahrt!" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Imperativ Sie (شما، رسمی):</label>
+                <input type="text" dir="ltr" value={formImperativSie} onChange={e => setFormImperativSie(e.target.value)} placeholder="z. B. machen Sie! / fahren Sie!" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="text-xs">
