@@ -40,6 +40,11 @@ export function norm(w: any): Word | null {
     conj: s('conj'),
     prat: s('prat'),
     perf: s('perf'),
+    komparativ: s('komparativ'),
+    superlativ: s('superlativ'),
+    imperativDu: s('imperativDu'),
+    imperativIhr: s('imperativIhr'),
+    imperativSie: s('imperativSie'),
     sep: s('sep'),
     cat: s('cat').trim().slice(0, 40),
     cloze: s('cloze'),
@@ -413,6 +418,11 @@ export function auditWord(w: Word): string[] {
     o.push('جملهٔ مثال ندارد');
   } else {
     if (ex.split(/\s+/).length < 3) o.push('مثال خیلی کوتاه است (طبیعی نیست)');
+    const b = (w.sep && w.de.startsWith(w.sep) ? w.de.slice(w.sep.length) : w.de).toLowerCase().replace(/e?n$/, '');
+    const s = b.slice(0, Math.max(3, b.length - 2));
+    if (!ex.toLowerCase().includes(s) && !(w.pl && ex.toLowerCase().includes(w.pl.toLowerCase().slice(0, Math.max(3, w.pl.length - 1))))) {
+      o.push('واژه در جملهٔ مثال دیده نمی‌شود');
+    }
     if (!w.exFa) o.push('ترجمهٔ مثال ندارد');
     if (w.ex2 && w.ex2 === ex) o.push('دو مثال یکسان است');
   }
@@ -421,6 +431,7 @@ export function auditWord(w: Word): string[] {
     o.push('ترجمهٔ فارسی ندارد');
   } else {
     if (/[A-Za-z]/.test(w.fa)) o.push('ترجمه حروف لاتین دارد؛ بررسی شود');
+    if (w.fa.split(/[،؛\/|]/).length > 2) o.push('چندمعنایی؟ برای هر معنی ورودی جدا بسازید');
   }
 
   if (w.ant && (w.ant.toLowerCase() === w.de.toLowerCase() || w.ant === w.syn)) {
