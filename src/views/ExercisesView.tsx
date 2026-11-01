@@ -574,17 +574,28 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
-        {/* Verb table with regular endings (blue) and irregular stem changes (red) - shared logic */}
-        {w.conj && (
-          <div className="text-xs bg-white dark:bg-[#1b2029] p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800 flex flex-wrap gap-2 justify-between">
-            {splitConj(w.conj).map((f, i) => (
-              <span key={i} dir="ltr" className="text-slate-600 dark:text-slate-300">
-                <b className="text-slate-400">{P6[i]}:</b>{' '}
-                <HighlightedVerbForm verb={w.de} form={f} pronounIndex={i} sep={w.sep} />
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Compact two-column present-tense table. Keep the profile's shared form segmentation/colors. */}
+        {w.conj && (() => {
+          const forms = splitConj(w.conj);
+          const renderPerson = (i: number) => {
+            const form = forms[i];
+            if (!form) return null;
+            return (
+              <div key={i} dir="ltr" className="flex min-w-0 items-baseline justify-start gap-1.5 leading-5">
+                <span className="w-[3.5rem] shrink-0 text-left text-slate-500 dark:text-slate-400">{P6[i]}</span>
+                <span className="min-w-0 text-left break-words">
+                  <HighlightedVerbForm verb={w.de} form={form} pronounIndex={i} sep={w.sep} />
+                </span>
+              </div>
+            );
+          };
+          return (
+            <div className="grid grid-cols-2 gap-x-3 text-[11px] sm:text-xs bg-white dark:bg-[#1b2029] p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+              <div className="min-w-0 space-y-1">{[0, 1, 2].map(renderPerson)}</div>
+              <div className="min-w-0 space-y-1">{[3, 4, 5].map(renderPerson)}</div>
+            </div>
+          );
+        })()}
 
         {/* Image if available */}
         {w.img && (
