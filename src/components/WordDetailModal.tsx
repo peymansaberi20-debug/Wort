@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Word } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
@@ -23,6 +23,12 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   onImageChange
 }) => {
   const [showFa, setShowFa] = useState(false);
+
+  // A profile's reveal state belongs only to the currently displayed word.
+  // Reset it whenever the selected word changes so translations start hidden.
+  useEffect(() => {
+    setShowFa(false);
+  }, [word?.id]);
 
   if (!word) return null;
 
@@ -326,7 +332,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                         🔊
                       </button>
                     </div>
-                    {word.exFa && (
+                    {showFa && word.exFa && (
                       <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5 text-right" dir="rtl">
                         {word.exFa}
                       </p>
@@ -347,7 +353,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                         🔊
                       </button>
                     </div>
-                    {word.ex2Fa && (
+                    {showFa && word.ex2Fa && (
                       <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5 text-right" dir="rtl">
                         {word.ex2Fa}
                       </p>
