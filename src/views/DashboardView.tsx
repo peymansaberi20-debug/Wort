@@ -9,7 +9,8 @@ import {
   formatShamsiFullNumeric,
   ymd,
   dueText,
-  DAY
+  DAY,
+  today
 } from '../utils/dates';
 import { isLeech, isWeak, streakCount, auditWord, fullWord } from '../utils/storage';
 
@@ -18,7 +19,7 @@ interface DashboardViewProps {
   ignoredQualityIds: Record<string, number>;
   onNavigate: (view: string) => void;
   onOpenQualityModal: () => void;
-  onPracticeWords: (wordIds: string[]) => void;
+  onPracticeWords: (wordIds: string[], intent?: 'review' | 'targeted') => void;
   onUpdateDailyNewTarget: (target: number) => void;
   onSelectWord: (word: Word) => void;
 }
@@ -35,7 +36,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const n = Date.now();
   const words = state.words;
   const hist = state.hist;
-  const dueCount = words.filter(w => w.last && w.due <= n).length;
+  const dueWords = words.filter(w => w.last && w.due <= n);
+  const dueCount = dueWords.length;
+  const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 };
+  const dailyNewDone = Math.max(0, dailyToday.n || 0);
+  const dailyReviewDone = Math.max(0, dailyToday.r || 0);
+  const activeCategorySet = new Set(state.set.activeCats || []);
+  const dailyPool = words.filter(w =>
+    (!activeCategorySet.size || activeCategorySet.has(w.cat)) &&
+    (state.set.leechAct !== 'suspend' || !isLeech(w, state.set.leechN || 4))
+  );
+  const dailyDueAvailable = dailyPool.filter(w => w.last && w.due <= n).length;
+  const dailyNewAvailable = dailyPool.filter(w => !w.last).length;
+  const dailyReviewRemaining = state.set.rv > 0 ? Math.max(0, state.set.rv - dailyReviewDone) : 0;
+  const dailyNewRemaining = state.set.nw > 0 ? Math.max(0, state.set.nw - dailyNewDone) : 0;
+  const dailyReviewTasksLeft = Math.min(dailyReviewRemaining, dailyDueAvailable);
+  const dailyNewTasksLeft = Math.min(dailyNewRemaining, dailyNewAvailable);
+  const dailyTasksLeft = dailyReviewTasksLeft + dailyNewTasksLeft;
+  const dailyComplete = dailyTasksLeft === 0;
   const okTotal = hist.filter(x => x.ok).length;
   const clozeHist = hist.filter(x => x.type === 'cloze');
   const clozeOk = clozeHist.filter(x => x.ok).length;
@@ -74,7 +92,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const t0 = dayStart(0);
   const histLast7 = hist.filter(x => x.t > n - 7 * DAY);
   const overdueBacklog = words.filter(w => w.last && w.due < t0).length;
-  const newWordsLeftToday = Math.max(0, state.set.nw - (state.daily.n || 0));
+  const newWordsLeftToday = dailyNewTasksLeft;
   const estimatedMins = Math.ceil((dueCount * 20 + newWordsLeftToday * 30) / 60);
 
   const acc7 = histLast7.length ? histLast7.filter(y => y.ok).length / histLast7.length : null;
@@ -112,9 +130,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const nextReviewWord = words.filter(w => w.last && w.due > n).sort((a, b) => a.due - b.due)[0];
 
   // Words due for study and review today (Fulfills Request #4)
-  const dueReviewWords = words
-    .filter(w => !w.last || w.due <= n)
-    .sort((a, b) => (a.due || 0) - (b.due || 0));
+  const dueReviewWords = dailyPool
+    .filter(w => w.last && w.due <= n)
+    .sort((a, b) => a.due - b.due);
 
   // Frequently mistaken hard words with > 3 errors sorted descending (Fulfills Request #5)
   const hardMistakenWords = words
@@ -236,6 +254,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
+        {weakList.length > 0 && (
+          <button
+            onClick={() => onPracticeWords(weakList.map(w => w.id), 'targeted')}
+            className="w-full bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+          >
+            🎯 تمرین نقاط ضعف ({weakList.length})
+          </button>
+        )}
+
         {/* Key Coaching Insights in compact banner */}
         <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -269,7 +296,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             {dueReviewWords.length > 0 && (
               <button
-                onClick={() => onPracticeWords(dueReviewWords.map(w => w.id))}
+                onClick={() => onPracticeWords(dueReviewWords.map(w => w.id), 'review')}
                 className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5"
               >
                 <span>⚡ همین حالا مرور کن ({dueReviewWords.length} واژه)</span>
@@ -279,7 +306,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {dueReviewWords.length === 0 ? (
             <div className="text-xs text-emerald-600 dark:text-emerald-400 py-3 text-center bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl">
-              ✅ تمامی واژه‌های سررسیدشده امروز مطالعه شده‌اند! هیچ واژه معوقه‌ای وجود ندارد.
+              ✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.
             </div>
           ) : (
             <div className="max-h-44 overflow-y-auto divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a] px-3 py-1">
@@ -337,14 +364,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
           )}
 
-          {weakList.length > 0 && (
-            <button
-              onClick={() => onPracticeWords(weakList.map(w => w.id))}
-              className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-            >
-              🎯 تمرین نقاط ضعف ({weakList.length})
-            </button>
-          )}
         </div>
 
         {/*
@@ -379,13 +398,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex justify-between text-xs mb-1">
               <span>کلمات جدید:</span>
               <span>
-                {state.daily.n} از {state.set.nw}
+                {dailyNewDone} از {state.set.nw}
               </span>
             </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
               <div
                 className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] h-full transition-all"
-                style={{ width: `${Math.min(100, (state.daily.n / (state.set.nw || 1)) * 100)}%` }}
+                style={{ width: `${state.set.nw <= 0 ? 100 : Math.min(100, (dailyNewDone / state.set.nw) * 100)}%` }}
               />
             </div>
           </div>
@@ -394,13 +413,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex justify-between text-xs mb-1">
               <span>مرور:</span>
               <span>
-                {state.daily.r} از {state.set.rv}
+                {dailyReviewDone} از {state.set.rv}
               </span>
             </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
               <div
                 className="bg-emerald-500 h-full transition-all"
-                style={{ width: `${Math.min(100, (state.daily.r / (state.set.rv || 1)) * 100)}%` }}
+                style={{ width: `${state.set.rv <= 0 ? 100 : Math.min(100, (dailyReviewDone / state.set.rv) * 100)}%` }}
               />
             </div>
           </div>
@@ -412,19 +431,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </p>
 
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              onClick={() => onNavigate('daily')}
-              className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition flex-1"
-            >
-              🌟 شروع جلسهٔ روزانه
-            </button>
-            <button
-              onClick={() => onNavigate('prac')}
-              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition"
-            >
-              فهرست تمرین‌ها
-            </button>
+          <div className="pt-1">
+            {dailyComplete ? (
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                ✅ تمرین‌های امروز تمام شده‌اند. برای تمرین بیشتر، از بخش تمرین‌ها استفاده کنید.
+              </div>
+            ) : (
+              <button
+                onClick={() => onNavigate('daily')}
+                className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
+              >
+                🌟 شروع جلسهٔ روزانه ({dailyTasksLeft} تمرین باقی‌مانده)
+              </button>
+            )}
           </div>
         </div>
 
@@ -454,7 +473,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center col-span-2 sm:col-span-1">
               <span className="text-[11px] text-[#5d6676] block mb-0.5">امروز (جدید / مرور)</span>
               <b className="text-base text-slate-800 dark:text-slate-200">
-                {state.daily.n} / {state.daily.r}
+                {dailyNewDone} / {dailyReviewDone}
               </b>
             </div>
           </div>
@@ -519,7 +538,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="pt-1">
               <button
-                onClick={() => onPracticeWords(hardMistakenWords.map(w => w.id))}
+                onClick={() => onPracticeWords(hardMistakenWords.map(w => w.id), 'targeted')}
                 className="w-full bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white py-3 px-4 rounded-xl text-xs md:text-sm font-bold shadow-xs transition flex items-center justify-center gap-2"
               >
                 <span>🎯 تمرین اختصاصی این واژه‌های سخت ({hardMistakenWords.length} واژه)</span>
