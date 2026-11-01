@@ -487,7 +487,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
-          <span>🤖</span> وضعیت هوش مصنوعی (Google Gemini - سرور)
+          <span>🤖</span> اتصال به هوش مصنوعی 
         </h3>
         <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-relaxed">
           کلیه فرایندهای هوش مصنوعی (تکمیل واژگان، ترجمه سریع، استخراج از تصاویر، تولید تمرین‌ها و ادغام لغات تکراری) با سرعت بالا از طریق سرور انجام می‌شوند.
