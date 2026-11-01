@@ -362,7 +362,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {totalAuditedIssues > 0 ? `${totalAuditedIssues} واژه نیاز به بررسی دارد` : 'کیفیت عالی'}
               </span>
             </div>
-            <span className="text-xs text-[#1f5fbf] dark:text-[#7fb0ff]">مشاهده در پاپ‌آپ ↗</span>
+            <span className="text-xs text-[#1f5fbf] dark:text-[#7fb0ff]">مشاهده ↗</span>
           </button>
         </div>
       </div>
