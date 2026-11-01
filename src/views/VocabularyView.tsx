@@ -1073,7 +1073,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
           {/* Notes */}
           <div className="text-xs">
-            <label className="block font-bold mb-1">یادداشت / یادیار / خانواده واژگانی و ساختار:</label>
+            <label className="block font-bold mb-1">یادداشت/ یادیار/ خانواده واژگانی و ساختار:</label>
             <textarea
               dir="rtl"
               rows={3}
