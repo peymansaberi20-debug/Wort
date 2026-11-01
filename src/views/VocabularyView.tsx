@@ -8,6 +8,13 @@ import { speak } from '../utils/audio';
 const duplicateKey = (value: string) =>
   (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
 
+// Normalize an AI-produced German headword locally so this view does not
+// depend on an optional export from utils/ai.ts.
+const normalizeAIHeadword = (value: string, _pos = '', _art = ''): string => {
+  const cleaned = (value || '').normalize('NFC').trim().replace(/\s+/g, ' ');
+  return cleaned.replace(/^(der|die|das)\s+/i, '').trim();
+};
+
 const parseGermanEntry = (input: string, selectedArt = ''): { de: string; art: string } => {
   const value = duplicateKey(input);
   const match = /^(der|die|das)\s+(.+)$/i.exec(value);
@@ -39,7 +46,6 @@ interface VocabularyViewProps {
   onDeleteCategory: (cat: string) => void;
   onSelectWord: (word: Word) => void;
   onOpenWordManager: () => void;
-  onOpenDuplicateDetector?: () => void;
   onOpenHelp: (topic: string) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
@@ -54,7 +60,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   onDeleteCategory,
   onSelectWord,
   onOpenWordManager,
-  onOpenDuplicateDetector,
   onOpenHelp,
   onShowToast
 }) => {
@@ -66,6 +71,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
   // Category open accordion
   const [openCat, setOpenCat] = useState<string | null>(null);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [collapsedInSearch, setCollapsedInSearch] = useState<Set<string>>(new Set());
 
   // Translation visibility map for compact word previews
@@ -98,6 +104,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [formConj, setFormConj] = useState(editingWord?.conj || '');
   const [formPrat, setFormPrat] = useState(editingWord?.prat || '');
   const [formPerf, setFormPerf] = useState(editingWord?.perf || '');
+  const [formKomparativ, setFormKomparativ] = useState(editingWord?.komparativ || '');
+  const [formSuperlativ, setFormSuperlativ] = useState(editingWord?.superlativ || '');
+  const [formImperativDu, setFormImperativDu] = useState(editingWord?.imperativDu || '');
+  const [formImperativIhr, setFormImperativIhr] = useState(editingWord?.imperativIhr || '');
+  const [formImperativSie, setFormImperativSie] = useState(editingWord?.imperativSie || '');
   const [formSep, setFormSep] = useState(editingWord?.sep || '');
   const [formTags, setFormTags] = useState(editingWord?.tags || '');
   const [formNotes, setFormNotes] = useState(editingWord?.notes || '');
@@ -120,6 +131,15 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
   // Categories list
   const categories = useMemo(() => getCategories(words), [words]);
+
+  React.useEffect(() => {
+    if (!isCategoryManagerOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsCategoryManagerOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCategoryManagerOpen]);
 
   // When editingWord changes, sync form
   React.useEffect(() => {
@@ -144,6 +164,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       setFormConj(editingWord.conj || '');
       setFormPrat(editingWord.prat || '');
       setFormPerf(editingWord.perf || '');
+      setFormKomparativ(editingWord.komparativ || '');
+      setFormSuperlativ(editingWord.superlativ || '');
+      setFormImperativDu(editingWord.imperativDu || '');
+      setFormImperativIhr(editingWord.imperativIhr || '');
+      setFormImperativSie(editingWord.imperativSie || '');
       setFormSep(editingWord.sep || '');
       setFormTags(editingWord.tags || '');
       setFormNotes(editingWord.notes || '');
@@ -224,6 +249,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     setFormConj('');
     setFormPrat('');
     setFormPerf('');
+    setFormKomparativ('');
+    setFormSuperlativ('');
+    setFormImperativDu('');
+    setFormImperativIhr('');
+    setFormImperativSie('');
     setFormSep('');
     setFormTags('');
     setFormNotes('');
@@ -255,6 +285,13 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       const { ws, errs } = aiToIMP(parsed, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
       if (ws.length > 0) {
         const item = ws[0];
+        const normalizedHeadword = normalizeAIHeadword(item.de || formDe, item.pos || formPos, item.art || formArt);
+        const normalizedDuplicate = findExistingDuplicate(normalizedHeadword, item.art || formArt, wordsRef.current, editingWordId);
+        if (normalizedDuplicate) {
+          onShowToast(`واژهٔ نرمال‌شده با «${normalizedDuplicate.de}» تکراری است؛ اطلاعات اعمال نشد.`, true);
+          return;
+        }
+        if (normalizedHeadword) setFormDe(normalizedHeadword);
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
         if (item.syn) setFormSyn(item.syn);
@@ -273,6 +310,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (item.conj) setFormConj(item.conj);
         if (item.prat) setFormPrat(item.prat);
         if (item.perf) setFormPerf(item.perf);
+        if (item.komparativ) setFormKomparativ(item.komparativ);
+        if (item.superlativ) setFormSuperlativ(item.superlativ);
+        if (item.imperativDu) setFormImperativDu(item.imperativDu);
+        if (item.imperativIhr) setFormImperativIhr(item.imperativIhr);
+        if (item.imperativSie) setFormImperativSie(item.imperativSie);
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         if (item.cat && !formCat) setFormCat(item.cat);
@@ -335,7 +377,13 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       }
       if (ws.length > 0) {
         const item = ws[0];
-        if (item.de) setFormDe(item.de);
+        const normalizedHeadword = normalizeAIHeadword(item.de || formDe, item.pos || formPos, item.art || formArt);
+        const normalizedDuplicate = findExistingDuplicate(normalizedHeadword, item.art || formArt, wordsRef.current, editingWordId);
+        if (normalizedDuplicate) {
+          onShowToast(`واژهٔ نرمال‌شده با «${normalizedDuplicate.de}» تکراری است؛ اطلاعات اعمال نشد.`, true);
+          return;
+        }
+        if (normalizedHeadword) setFormDe(normalizedHeadword);
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
         if (item.cat) setFormCat(item.cat);
@@ -355,6 +403,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (item.conj) setFormConj(item.conj);
         if (item.prat) setFormPrat(item.prat);
         if (item.perf) setFormPerf(item.perf);
+        if (item.komparativ) setFormKomparativ(item.komparativ);
+        if (item.superlativ) setFormSuperlativ(item.superlativ);
+        if (item.imperativDu) setFormImperativDu(item.imperativDu);
+        if (item.imperativIhr) setFormImperativIhr(item.imperativIhr);
+        if (item.imperativSie) setFormImperativSie(item.imperativSie);
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         setPasteAiJson('');
@@ -416,6 +469,11 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         conj: formConj.trim(),
         prat: formPrat.trim(),
         perf: formPerf.trim(),
+        komparativ: formKomparativ.trim(),
+        superlativ: formSuperlativ.trim(),
+        imperativDu: formImperativDu.trim(),
+        imperativIhr: formImperativIhr.trim(),
+        imperativSie: formImperativSie.trim(),
         sep: formSep.trim(),
         tags: formTags.trim(),
         notes: formNotes.trim(),
@@ -429,28 +487,169 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
   return (
     <div className="space-y-4 text-right">
-      {/* Top Action Header: Word Manager Button & Add Word Form Trigger */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2">
-          {/* Fulfills User Request #24: Button to open Word Manager popup */}
-          <button
-            onClick={onOpenWordManager}
-            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition flex items-center gap-1.5"
-          >
-            <span>🗂 مدیریت گروهی واژه‌ها</span>
-          </button>
+      {/*
+        Fulfills User Request #2:
+        "در قسمت واژگان ، جستجو توی یک خط مستقل بیاد
+        و سه تا تنظیم جستجو کنار هم و تو یک خط زیر همون جستجو قرار بگیرن"
+      */}
+      <div className="space-y-2.5 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
+        {/* Line 1: Search input by itself */}
+        <div>
+          <input
+            type="text"
+            placeholder="🔍 جستجو در واژگان (کلمه آلمانی یا معنی فارسی)..."
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              setCollapsedInSearch(new Set());
+            }}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-base outline-none focus:border-[#1f5fbf]"
+          />
         </div>
 
+        {/* Line 2: 3 search filters side-by-side in one line */}
+        <div className="grid grid-cols-3 gap-2">
+          {/* 1. Article Filter */}
+          <select
+            value={filterArt}
+            onChange={e => setFilterArt(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+          >
+            <option value="">آرتیکل: همه</option>
+            <option value="der">der</option>
+            <option value="die">die</option>
+            <option value="das">das</option>
+          </select>
+
+          {/* 2. Status Filter */}
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+          >
+            <option value="all">وضعیت: همه</option>
+            <option value="new">جدید</option>
+            <option value="due">سررسید مرور</option>
+            <option value="learn">در حال یادگیری</option>
+            <option value="hard">سخت 🩸</option>
+          </select>
+
+          {/* 3. Sort Order */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as any)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+          >
+            <option value="de">مرتب‌سازی: الفبا</option>
+            <option value="added">تاریخ افزودن</option>
+            <option value="hard">سختی</option>
+            <option value="due">مرور بعدی</option>
+          </select>
+        </div>
+      </div>
+
+
+      {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
+      <div className="grid grid-cols-3 gap-2">
         <button
+          type="button"
           onClick={() => {
             if (isFormOpen && isEditing) resetForm();
             else setIsFormOpen(!isFormOpen);
           }}
-          className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5"
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
         >
-          <span>{isFormOpen ? '▲ بستن فرم' : '➕ افزودن واژهٔ جدید'}</span>
+          <span aria-hidden="true">{isFormOpen ? '▲' : '➕'}</span>
+          <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenWordManager}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">🗂</span>
+          <span className="truncate">گروهی</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsCategoryManagerOpen(true)}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">📁</span>
+          <span className="truncate">دسته‌ها</span>
+          <span className="hidden sm:inline text-xs opacity-70">({categories.length})</span>
         </button>
       </div>
+
+      {/* Category manager modal */}
+      {isCategoryManagerOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-3 sm:p-6"
+          onMouseDown={e => { if (e.target === e.currentTarget) setIsCategoryManagerOpen(false); }}
+          role="presentation"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-manager-title"
+            className="w-full max-w-xl max-h-[85dvh] overflow-y-auto rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#1b2029] p-4 sm:p-6 shadow-2xl text-right"
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
+              <h2 id="category-manager-title" className="text-base sm:text-lg font-bold">🗂 مدیریت دسته‌ها ({categories.length})</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenHelp('cat_mgr')}
+                  className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300"
+                >راهنما</button>
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryManagerOpen(false)}
+                  aria-label="بستن مدیریت دسته‌ها"
+                  className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-lg"
+                >✕</button>
+              </div>
+            </div>
+            <p className="mb-3 text-xs leading-6 text-slate-500 dark:text-slate-400">برای ادغام، نام دسته را به نام یک دستهٔ موجود تغییر دهید. حذف دسته فقط واژه‌های آن را به «بدون دسته» منتقل می‌کند.</p>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {categories.length === 0 ? (
+                <p className="py-4 text-sm text-[#5d6676]">هنوز دسته‌ای ساخته نشده است.</p>
+              ) : categories.map(([catName, count]) => (
+                <div key={catName} className="flex items-center justify-between gap-3 py-3 text-sm">
+                  <span className="min-w-0 break-words font-medium text-slate-800 dark:text-slate-200">📁 {catName} <span className="text-xs text-[#5d6676]">({count} واژه)</span></span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newName = prompt('نام جدید دسته را وارد کنید:', catName);
+                        if (newName && newName.trim() && newName.trim() !== catName) {
+                          const target = newName.trim();
+                          const existing = categories.some(([name]) => name === target);
+                          if (existing && !confirm(`دستهٔ «${catName}» با دستهٔ موجود «${target}» ادغام شود؟`)) return;
+                          onRenameCategory(catName, target);
+                        }
+                      }}
+                      title="تغییر نام / ادغام"
+                      aria-label={`تغییر نام یا ادغام دسته ${catName}`}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    >✏️</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`آیا از حذف دستهٔ «${catName}» اطمینان دارید؟ واژه‌ها حذف نمی‌شوند و فقط بدون دسته خواهند شد.`)) onDeleteCategory(catName);
+                      }}
+                      title="حذف دسته"
+                      aria-label={`حذف دسته ${catName}`}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60"
+                    >🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
@@ -471,20 +670,10 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
                 ❓ راهنما
               </button>
               <button
-                type="button"
                 onClick={resetForm}
-                className="w-8 h-8 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-lg font-bold transition flex items-center justify-center"
-                title="انصراف"
-                aria-label="انصراف"
+                className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-xl font-semibold transition"
               >
-                ×
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs hover:opacity-95 transition"
-              >
-                {isEditing ? 'ذخیره' : 'افزودن'}
+                انصراف ✕
               </button>
             </div>
           </div>
@@ -740,6 +929,19 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
             </div>
           </div>
 
+          {/(صفت|adjektiv|adjective)/i.test(formPos) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+              <div>
+                <label className="block font-bold mb-1">Komparativ (صفت تفضیلی):</label>
+                <input type="text" dir="ltr" value={formKomparativ} onChange={e => setFormKomparativ(e.target.value)} placeholder="z. B. größer" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Superlativ (عالی‌ترین):</label>
+                <input type="text" dir="ltr" value={formSuperlativ} onChange={e => setFormSuperlativ(e.target.value)} placeholder="z. B. am größten / der größte" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+            </div>
+          )}
+
           {/* Example sentences */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
             <div>
@@ -859,6 +1061,23 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
             </div>
           </div>
 
+          {/(فعل|verb)/i.test(formPos) && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+              <div>
+                <label className="block font-bold mb-1">Imperativ du (تو):</label>
+                <input type="text" dir="ltr" value={formImperativDu} onChange={e => setFormImperativDu(e.target.value)} placeholder="z. B. mach! / fahr!" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Imperativ ihr (شما، جمع غیررسمی):</label>
+                <input type="text" dir="ltr" value={formImperativIhr} onChange={e => setFormImperativIhr(e.target.value)} placeholder="z. B. macht! / fahrt!" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Imperativ Sie (شما، رسمی):</label>
+                <input type="text" dir="ltr" value={formImperativSie} onChange={e => setFormImperativSie(e.target.value)} placeholder="z. B. machen Sie! / fahren Sie!" className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none" />
+              </div>
+            </div>
+          )}
+
           {/* Notes */}
           <div className="text-xs">
             <label className="block font-bold mb-1">یادداشت / یادیار / خانواده واژگانی و ساختار:</label>
@@ -892,140 +1111,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         </div>
       )}
 
-      {/* Category Management Collapsible */}
-      <details className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-        <summary className="font-bold text-sm cursor-pointer select-none flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span>🗂 مدیریت دسته‌ها ({categories.length})</span>
-          </div>
-          {/* Fulfills Request #20: Help for Category Management */}
-          <button
-            type="button"
-            onClick={e => {
-              e.preventDefault();
-              onOpenHelp('cat_mgr');
-            }}
-            className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold"
-          >
-            ❓ راهنما
-          </button>
-        </summary>
-
-        {/*
-          Fulfills User Request #23:
-          "در قسمت مدیریت دسته ها ، جلوی هر دسته نوشته شده «تغییر نام / ادغام» ،
-          این نوشته رو بردار همون ایکون مداد ک گذاشتی باشه کافیه .
-          ایکون حذف هم که سطل اشغاله همون باشه خوبه .
-          هر دو ایکون به سمت چپ ردیف خودشون فیکس بشن ."
-        */}
-        <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800 space-y-1">
-          {categories.length === 0 ? (
-            <p className="text-xs text-[#5d6676] py-2">هنوز دسته‌ای ساخته نشده است.</p>
-          ) : (
-            categories.map(([catName, count]) => (
-              <div
-                key={catName}
-                className="py-2 flex items-center justify-between gap-2 text-xs md:text-sm"
-              >
-                <span className="font-medium text-slate-800 dark:text-slate-200">
-                  📁 {catName} <span className="text-[#5d6676] text-xs">({count} واژه)</span>
-                </span>
-
-                {/* Icons pinned to the left (end in RTL) */}
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      const newName = prompt('نام جدید دسته را وارد کنید:', catName);
-                      if (newName && newName.trim() && newName.trim() !== catName) {
-                        onRenameCategory(catName, newName.trim());
-                      }
-                    }}
-                    title="تغییر نام / ادغام"
-                    aria-label="تغییر نام دسته"
-                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-sm transition"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`آیا از حذف دستهٔ «${catName}» اطمینان دارید؟ واژه‌ها حذف نمی‌شوند و فقط بدون دسته خواهند شد.`)) {
-                        onDeleteCategory(catName);
-                      }
-                    }}
-                    title="حذف دسته"
-                    aria-label="حذف دسته"
-                    className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 flex items-center justify-center text-sm transition"
-                  >
-                    🗑
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </details>
-
-      {/*
-        Fulfills User Request #2:
-        "در قسمت واژگان ، جستجو توی یک خط مستقل بیاد
-        و سه تا تنظیم جستجو کنار هم و تو یک خط زیر همون جستجو قرار بگیرن"
-      */}
-      <div className="space-y-2.5 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-        {/* Line 1: Search input by itself */}
-        <div>
-          <input
-            type="text"
-            placeholder="🔍 جستجو در واژگان (کلمه آلمانی یا معنی فارسی)..."
-            value={searchQuery}
-            onChange={e => {
-              setSearchQuery(e.target.value);
-              setCollapsedInSearch(new Set());
-            }}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-base outline-none focus:border-[#1f5fbf]"
-          />
-        </div>
-
-        {/* Line 2: 3 search filters side-by-side in one line */}
-        <div className="grid grid-cols-3 gap-2">
-          {/* 1. Article Filter */}
-          <select
-            value={filterArt}
-            onChange={e => setFilterArt(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
-          >
-            <option value="">آرتیکل: همه</option>
-            <option value="der">der</option>
-            <option value="die">die</option>
-            <option value="das">das</option>
-          </select>
-
-          {/* 2. Status Filter */}
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
-          >
-            <option value="all">وضعیت: همه</option>
-            <option value="new">جدید</option>
-            <option value="due">سررسید مرور</option>
-            <option value="learn">در حال یادگیری</option>
-            <option value="hard">سخت 🩸</option>
-          </select>
-
-          {/* 3. Sort Order */}
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
-          >
-            <option value="de">مرتب‌سازی: الفبا</option>
-            <option value="added">تاریخ افزودن</option>
-            <option value="hard">سختی</option>
-            <option value="due">مرور بعدی</option>
-          </select>
-        </div>
-      </div>
-
       {/*
         Fulfills User Request #27 and Part F duplicate button
       */}
@@ -1042,15 +1127,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {onOpenDuplicateDetector && (
-            <button
-              onClick={onOpenDuplicateDetector}
-              className="bg-amber-50 hover:bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200 dark:border-amber-800 px-3 py-1 rounded-xl font-bold transition flex items-center gap-1 shadow-2xs"
-            >
-              <span>🔍</span>
-              <span>بررسی تکراری‌ها و مشابه</span>
-            </button>
-          )}
           {searchQuery && (
             <button
               onClick={() => {
