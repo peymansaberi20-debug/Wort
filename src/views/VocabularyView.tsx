@@ -528,7 +528,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); onSelectWord(existing); }}
+                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); setVisFa({}); onSelectWord(existing); }}
                   className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 text-xs font-bold transition"
                 >
                   مشاهدهٔ پروفایل واژهٔ موجود
@@ -1178,7 +1178,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
                       return (
                         <div
                           key={w.id}
-                          onClick={() => onSelectWord(w)}
+                          onClick={() => { setVisFa({}); onSelectWord(w); }}
                           className="pt-1.5 pb-1.5 px-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition flex items-center justify-between gap-3 text-xs md:text-sm"
                         >
                           {/* Word + Article + Hidden Translation + Audio */}
