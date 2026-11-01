@@ -5,7 +5,6 @@ export const BASE_CATEGORIES = [
   'ارتباطات (Kommunikation)',
   'اصطلاحات (Redewendungen)',
   'اکسل و اداری (Excel und Büro)',
-  'امور روزمره',
   'پایه (Grundwortschatz)',
   'پرکاربرد (Häufige Wörter)',
   'دشوار (Schwierige Wörter)',
@@ -38,6 +37,7 @@ Your responsibilities are to:
 * Explain relevant prepositions, grammatical complements, and grammatical cases.
 * Write concise, practical Persian learning notes using a strict multiline format.
 * Generate valid JSON compatible with the user’s existing web application’s importer.
+The required JSON keys are: de, art, fa, syn, synFa, ant, antFa, pl, pos, lvl, cat, ex, exFa, ex2, ex2Fa, cloze, ans, conj, prat, perf, komparativ, superlativ, imperativDu, imperativIhr, imperativSie, sep, notes. Include every key in every object, using an empty string when not applicable. For adjectives, populate komparativ and superlativ. For verbs, populate imperativDu, imperativIhr, and imperativSie. For AI-generated lexical fields that are not sentence-initial prose, use lowercase initial letters where grammatically appropriate; preserve correct German capitalization for nouns/headwords and sentence beginnings.
 * Create a downloadable UTF-8 .json file whenever file creation is available.
 
 Priority Order
@@ -388,7 +388,7 @@ export function buildFastSingleWordPrompt(de: string, existingWords: Word[], tar
     : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories (do not create any new category name):\n${catListStr}`;
 
   return `You are an expert German vocabulary assistant for a Persian learner.
-Generate the full 22-field profile for the German word or expression: "${de}".
+Generate the full 27-field profile for the German word or expression: "${de}".
 
 Output MUST be a JSON array containing exactly one object with these exact fields (all string values):
 1. "de": German dictionary form (without article)
@@ -411,7 +411,12 @@ Output MUST be a JSON array containing exactly one object with these exact field
 18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb)
 19. "prat": for verbs, 3rd person singular Präteritum (e.g. "ging") or ""
 20. "perf": for verbs, 3rd person singular Perfekt (e.g. "ist gegangen" / "hat gemacht") or ""
-21. "sep": for separable verbs, prefix (e.g. "auf") or ""
+21. "komparativ": comparative form for adjectives (e.g. "größer") or ""
+22. "superlativ": superlative form for adjectives (e.g. "am größten" or "der größte") or ""
+23. "imperativDu": informal singular imperative (e.g. "geh!") for verbs or ""
+24. "imperativIhr": informal plural imperative (e.g. "geht!") for verbs or ""
+25. "imperativSie": formal imperative (e.g. "Gehen Sie!") for verbs or ""
+26. "sep": for separable verbs, prefix (e.g. "auf") or ""
 22. "notes": multiline string with exact format:
 خانواده واژگانی: اسم: ... | فعل مرتبط: ... | صفت مرتبط: ...
 ساختار: حرف اضافه یا حالت دستوری...
@@ -445,6 +450,11 @@ export function aiFix(r: any): any {
     if (typeof r[k] !== 'string') {
       r[k] = r[k] == null ? '' : Array.isArray(r[k]) ? r[k].join('|') : String(r[k]);
     }
+  }
+  // Normalize lexical German fields to lowercase initial letters where appropriate.
+  // Keep the headword (de), nouns, sentence beginnings, and formal imperative capitalization intact.
+  for (const k of ['syn', 'ant', 'pl', 'conj', 'prat', 'perf', 'sep', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr']) {
+    if (typeof r[k] === 'string' && r[k]) r[k] = r[k].charAt(0).toLocaleLowerCase('de') + r[k].slice(1);
   }
   if (r.cloze) r.cloze = r.cloze.replace(/_{3,}/g, '_____');
   if (!/_____/.test(r.cloze || '')) {
