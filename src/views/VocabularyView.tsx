@@ -66,6 +66,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
   // Category open accordion
   const [openCat, setOpenCat] = useState<string | null>(null);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [collapsedInSearch, setCollapsedInSearch] = useState<Set<string>>(new Set());
 
   // Translation visibility map for compact word previews
@@ -999,13 +1000,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => {
-            const categoryManager = document.getElementById('category-manager-details') as HTMLDetailsElement | null;
-            if (categoryManager) {
-              categoryManager.open = true;
-              categoryManager.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }}
+          onClick={() => setCategoryManagerOpen(true)}
           className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
         >
           <span aria-hidden="true">📁</span>
@@ -1013,24 +1008,36 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         </button>
       </div>
 
-      {/* Category Management Collapsible */}
-      <details id="category-manager-details" className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-        <summary className="font-bold text-sm cursor-pointer select-none flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span>🗂 مدیریت دسته‌ها ({categories.length})</span>
-          </div>
-          {/* Fulfills Request #20: Help for Category Management */}
-          <button
-            type="button"
-            onClick={e => {
-              e.preventDefault();
-              onOpenHelp('cat_mgr');
-            }}
-            className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold"
-          >
-            ❓ راهنما
-          </button>
-        </summary>
+      {/* Category Management Modal: hidden until the pale-blue action button is pressed */}
+      {categoryManagerOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6"
+          onClick={e => {
+            if (e.target === e.currentTarget) setCategoryManagerOpen(false);
+          }}
+        >
+          <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-base">🗂 مدیریت دسته‌ها ({categories.length})</h3>
+              <div className="flex items-center gap-2">
+                {/* Fulfills Request #20: Help for Category Management */}
+                <button
+                  type="button"
+                  onClick={() => onOpenHelp('cat_mgr')}
+                  className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2.5 py-1.5 rounded-lg font-bold"
+                >
+                  ❓ راهنما
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCategoryManagerOpen(false)}
+                  aria-label="بستن مدیریت دسته‌ها"
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
 
         {/*
           Fulfills User Request #23:
@@ -1084,8 +1091,9 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
             ))
           )}
         </div>
-      </details>
-
+          </div>
+        </div>
+      )}
 
       {/*
         Fulfills User Request #27 and Part F duplicate button
