@@ -542,35 +542,35 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       </div>
 
 
-      {/* Primary actions: equal cards, ordered right-to-left */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+      {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
+      <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => {
             if (isFormOpen && isEditing) resetForm();
             else setIsFormOpen(!isFormOpen);
           }}
-          className="min-w-0 min-h-[54px] w-full rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#1b2029] px-3 py-3 text-sm font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center gap-2"
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
         >
           <span aria-hidden="true">{isFormOpen ? '▲' : '➕'}</span>
-          <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن واژه'}</span>
+          <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن'}</span>
         </button>
         <button
           type="button"
           onClick={onOpenWordManager}
-          className="min-w-0 min-h-[54px] w-full rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] px-3 py-3 text-sm font-bold text-white shadow-xs hover:opacity-95 transition flex items-center justify-center gap-2"
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
         >
           <span aria-hidden="true">🗂</span>
-          <span className="truncate">مدیریت گروهی</span>
+          <span className="truncate">گروهی</span>
         </button>
         <button
           type="button"
           onClick={() => setIsCategoryManagerOpen(true)}
-          className="min-w-0 min-h-[54px] w-full rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#1b2029] px-3 py-3 text-sm font-bold text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center gap-2"
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
         >
           <span aria-hidden="true">📁</span>
-          <span className="truncate">مدیریت دسته‌ها</span>
-          <span className="text-xs opacity-70">({categories.length})</span>
+          <span className="truncate">دسته‌ها</span>
+          <span className="hidden sm:inline text-xs opacity-70">({categories.length})</span>
         </button>
       </div>
 
