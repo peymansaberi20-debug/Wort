@@ -654,29 +654,45 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
         <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4 animate-fadeIn">
-          <div className="flex items-center justify-between border-b pb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">{isEditing ? '✏️' : '➕'}</span>
-              <h3 className="font-bold text-base md:text-lg">
-                {isEditing ? `ویرایش واژه: ${editingWord?.de}` : 'افزودن واژهٔ جدید'}
-              </h3>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Fulfills Request #20: Help button for Add Word */}
-              <button
-                onClick={() => onOpenHelp('add_word')}
-                className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1"
-              >
-                ❓ راهنما
-              </button>
-              <button
-                onClick={resetForm}
-                className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-xl font-semibold transition"
-              >
-                انصراف ✕
-              </button>
-            </div>
-          </div>
+
+<div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+  <div className="flex min-w-0 items-center gap-2">
+    <span className="text-xl">
+      {isEditing ? '✏️' : '➕'}
+    </span>
+    <h3 className="font-bold text-base md:text-lg">
+      {isEditing
+        ? `ویرایش واژه: ${editingWord?.de}`
+        : 'افزودن واژهٔ جدید'}
+    </h3>
+  </div>
+
+  <div className="flex flex-wrap items-center gap-2">
+    <button
+      type="button"
+      onClick={() => onOpenHelp('add_word')}
+      className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2.5 py-2 rounded-xl font-bold transition flex items-center gap-1"
+    >
+      ❓ راهنما
+    </button>
+
+    <button
+      type="button"
+      onClick={resetForm}
+      className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl font-semibold transition"
+    >
+      انصراف ✕
+    </button>
+
+    <button
+      type="button"
+      onClick={handleSave}
+      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
+    >
+      {isEditing ? 'ذخیره تغییرات' : 'افزودن واژه'}
+    </button>
+  </div>
+</div>
 
           {/*
             Fulfills User Request #25:
