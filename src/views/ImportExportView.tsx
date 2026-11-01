@@ -800,14 +800,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         */}
         <div className="flex flex-wrap items-center gap-2.5 pt-1">
           {/* Category Selector next to auto-fill button */}
-          <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+          <div className="flex items-center gap-1.5 w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-[200px]">
             <label className="text-xs font-bold text-[#5d6676] flex-shrink-0">
               دستهٔ لغات:
             </label>
             <select
               value={bulkCategory}
               onChange={e => setBulkCategory(e.target.value)}
-              className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs flex-1 outline-none font-medium"
+              className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs flex-1 min-w-0 outline-none font-medium"
             >
               <option value="">📁 به تشخیص هوش مصنوعی</option>
               {categories.map(([c, n]) => (
