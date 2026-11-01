@@ -38,7 +38,7 @@ export const ImportHelpModal: React.FC<ImportHelpModalProps> = ({
             onClick={onClose}
             className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer"
           >
-            ✕ بستن
+            ×
           </button>
         </div>
 
