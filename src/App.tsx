@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, Word, CaseQuestion } from './types';
 import {
   loadState,
@@ -68,6 +68,13 @@ export default function App() {
 
   // Active Modals
   const [selectedWord, setSelectedWord] = useState<Word | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<{ words: Word[]; kind: 'single' | 'bulk'; source: string } | null>(null);
+  const [isDeletionInProgress, setIsDeletionInProgress] = useState(false);
+  const deletionLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!pendingDeletion) deletionLockRef.current = false;
+  }, [pendingDeletion]);
   const [editingWordId, setEditingWordId] = useState<string | null>(null);
   const [isQualityModalOpen, setIsQualityModalOpen] = useState(false);
   const [isWordManagerOpen, setIsWordManagerOpen] = useState(false);
@@ -238,14 +245,50 @@ export default function App() {
     setEditingWordId(null);
   };
 
-  // Delete single word
+  // Centralized deletion request: no record is removed until the user confirms.
   const handleDeleteWord = (word: Word) => {
-    setState(prev => ({
-      ...prev,
-      words: prev.words.filter(w => w.id !== word.id)
-    }));
-    if (selectedWord?.id === word.id) setSelectedWord(null);
-    showToast(`واژهٔ «${word.de}» حذف شد.`);
+    const current = state.words.find(w => w.id === word.id);
+    if (!current) {
+      showToast('این واژه دیگر در کتابخانه وجود ندارد.', true);
+      return;
+    }
+    setPendingDeletion({ words: [current], kind: 'single', source: 'واژه' });
+  };
+
+  const handleBatchDeleteWords = (wordIds: string[], source = 'مدیریت گروهی') => {
+    const ids = new Set(wordIds);
+    const selected = state.words.filter(w => ids.has(w.id));
+    if (selected.length === 0) return;
+    setPendingDeletion({ words: selected, kind: 'bulk', source });
+  };
+
+  const confirmPendingDeletion = () => {
+    if (!pendingDeletion || deletionLockRef.current) return;
+    deletionLockRef.current = true;
+    setIsDeletionInProgress(true);
+    const ids = new Set(pendingDeletion.words.map(w => w.id));
+    const count = ids.size;
+    setState(prev => ({ ...prev, words: prev.words.filter(w => !ids.has(w.id)) }));
+    setSelectedWord(prev => (prev && ids.has(prev.id) ? null : prev));
+    setEditingWordId(prev => (prev && ids.has(prev) ? null : prev));
+    setPendingDeletion(null);
+    setIsDeletionInProgress(false);
+    showToast(count === 1
+      ? `واژهٔ «${pendingDeletion.words[0].de}» حذف شد.`
+      : `${count} واژه با موفقیت حذف شدند.`);
+  };
+
+  const handleEditWord = (word: Word) => {
+    // Keep a route back to the exercise/profile context, while preventing stale exercise IDs.
+    if (currentTab !== 'lib' || activeExercise) {
+      setHistoryStack(prev => [...prev.slice(-25), currentTab]);
+    }
+    setSelectedWord(null);
+    setEditingWordId(word.id);
+    setCurrentTab('lib');
+    setActiveExercise(null);
+    setPracticeWordIds(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Word Image Change
@@ -285,15 +328,6 @@ export default function App() {
       words: prev.words.map(w => (idSet.has(w.id) ? { ...w, cat: targetCat } : w))
     }));
     showToast(`${wordIds.length} واژه به دستهٔ «${targetCat || 'بدون دسته'}» منتقل شدند.`);
-  };
-
-  const handleBatchDeleteWords = (wordIds: string[]) => {
-    const idSet = new Set(wordIds);
-    setState(prev => ({
-      ...prev,
-      words: prev.words.filter(w => !idSet.has(w.id))
-    }));
-    showToast(`${wordIds.length} واژه با موفقیت حذف شدند.`);
   };
 
   const handleMergeWords = (canonicalId: string, mergedData: Partial<Word>, removedIds: string[]) => {
@@ -609,7 +643,7 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[#dde1ea] dark:border-[#333b4a] py-6 px-4 text-center text-xs text-[#5d6676] dark:text-[#a3adbd] space-y-1 mt-auto">
+      <footer className="border-t border-[#dde1ea] dark:border-[#333b4a] pt-5 pb-[calc(6.25rem+env(safe-area-inset-bottom))] md:pb-6 px-4 text-center text-xs text-[#475569] dark:text-[#c0c8d5] space-y-1 mt-auto">
         <p>
           نام محصول: <b>WörterBuch: واژه‌نامه آلمانی و فلش کارت</b>
         </p>
@@ -625,13 +659,7 @@ export default function App() {
       <WordDetailModal
         word={selectedWord}
         onClose={() => setSelectedWord(null)}
-        onEdit={w => {
-          setSelectedWord(null);
-          setEditingWordId(w.id);
-          setCurrentTab('lib');
-          setActiveExercise(null);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
+        onEdit={handleEditWord}
         onDelete={handleDeleteWord}
         onImageChange={handleImageChange}
       />
@@ -643,10 +671,7 @@ export default function App() {
           onClose={() => setIsQualityModalOpen(false)}
           onEditWord={w => {
             setIsQualityModalOpen(false);
-            setEditingWordId(w.id);
-            setCurrentTab('lib');
-            setActiveExercise(null);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            handleEditWord(w);
           }}
           onIgnoreWord={handleIgnoreQualityWord}
           onDeleteWord={handleDeleteWord}
@@ -668,6 +693,7 @@ export default function App() {
           words={state.words}
           onClose={() => setIsDuplicateModalOpen(false)}
           onDeleteWord={handleDeleteWord}
+          onBatchDelete={(ids: string[]) => handleBatchDeleteWords(ids, 'تشخیص واژه‌های تکراری')}
           onMergeWords={handleMergeWords}
           onShowToast={showToast}
         />
@@ -695,12 +721,42 @@ export default function App() {
         />
       )}
 
+      {pendingDeletion && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+          role="presentation"
+          onClick={e => { if (e.target === e.currentTarget && !isDeletionInProgress) setPendingDeletion(null); }}
+        >
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+            className="w-full max-w-md rounded-2xl border border-red-200 dark:border-red-900 bg-white dark:bg-[#1b2029] p-5 shadow-2xl text-right"
+            dir="rtl"
+          >
+            <h2 id="delete-confirm-title" className="text-lg font-extrabold text-red-700 dark:text-red-300 mb-2">تأیید حذف واژه</h2>
+            {pendingDeletion.kind === 'single' ? (
+              <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">آیا از حذف واژهٔ «<strong>{pendingDeletion.words[0].de}</strong>» اطمینان دارید؟ این عملیات فقط همین واژه را حذف می‌کند و قابل بازگشت نیست.</p>
+            ) : (
+              <div className="text-sm leading-7 text-slate-700 dark:text-slate-200">
+                <p>آیا از حذف کامل <strong>{pendingDeletion.words.length} واژه</strong> انتخاب‌شده از بخش «{pendingDeletion.source}» مطمئن هستید؟ {pendingDeletion.source === 'تشخیص واژه‌های تکراری' ? 'این‌ها رکوردهای تکراری/منبع هستند؛ واژه‌های انتخاب‌شده حذف می‌شوند و فقط نسخه‌هایی که در این فهرست انتخاب نشده‌اند باقی می‌مانند.' : ''} این عملیات قابل بازگشت نیست.</p>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">نمونه: {pendingDeletion.words.slice(0, 3).map(w => w.de).join('، ')}{pendingDeletion.words.length > 3 ? ' و موارد دیگر' : ''}</p>
+              </div>
+            )}
+            <div className="mt-5 flex justify-start gap-2">
+              <button type="button" disabled={isDeletionInProgress} onClick={() => setPendingDeletion(null)} className="rounded-xl px-4 py-2 text-sm font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50">انصراف</button>
+              <button type="button" disabled={isDeletionInProgress} onClick={confirmPendingDeletion} className="rounded-xl px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white disabled:opacity-50">بله، حذف شود</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* Floating Back Button at bottom-left */}
       {(historyStack.length > 0 || !!activeExercise) && (
         <button
           onClick={handleBack}
           aria-label="بازگشت"
-          className="fixed left-4 bottom-20 md:bottom-6 z-40 min-h-11 px-3 py-2 rounded-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-xs shadow-lg flex items-center gap-1 hover:scale-105 active:scale-95 transition-all border border-white/20"
+          className="fixed left-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 z-40 min-h-10 px-3 py-2 rounded-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-xs shadow-lg flex items-center gap-1 hover:scale-105 active:scale-95 transition-all border border-white/20"
         >
           <span className="text-sm leading-none" aria-hidden="true">↩</span>
           <span>بازگشت</span>
