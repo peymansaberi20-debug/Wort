@@ -74,9 +74,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onShowToast
 }) => {
   // Free review configuration
-  const [freeCat, setFreeCat] = useState<string>('');
-  const [freeDir, setFreeDir] = useState<'de' | 'fa'>('de');
-  const [freeRnd, setFreeRnd] = useState<boolean>(true);
+  const [freeCat, setFreeCat] = useState<string>(settings?.freeCat || '');
+  const [freeDir, setFreeDir] = useState<'de' | 'fa'>(settings?.freeDir || 'de');
+  const [freeRnd, setFreeRnd] = useState<boolean>(settings?.freeRnd ?? true);
   const [isFreeStarted, setIsFreeStarted] = useState<boolean>(false);
 
   // Flashcard setup config
@@ -244,12 +244,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     if (!currentItem) return;
 
-    // Determine direction for this card
+    // Free practice uses its own direction setting, independently of scheduled review settings.
     const defaultDir = settings?.dir || 'de';
-    if (defaultDir === 'rand') {
+    if (activeMode === 'free') {
+      setCurrentCardDir(freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir);
+    } else if (defaultDir === 'rand') {
       setCurrentCardDir(Math.random() > 0.5 ? 'de' : 'fa');
-    } else if (activeMode === 'free') {
-      setCurrentCardDir(freeDir);
     } else if (activeMode === 'flash') {
       setCurrentCardDir(flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir);
     } else {
@@ -294,7 +294,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
       stopSpeaking();
     };
-  }, [currentIndex, currentItem?.id, activeMode]);
+  }, [currentIndex, currentItem?.id, activeMode, freeDir, freeRnd, flashDir, settings?.dir]);
 
   // Advance to next question
   const advanceQuestion = () => {
@@ -710,6 +710,50 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // Independent Free Category Review setup
+  // ==========================================
+  if (activeMode === 'free' && !isFreeStarted) {
+    const selectedCount = words.filter(w => !freeCat || w.cat === freeCat).length;
+
+
+    return (
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5 text-right max-w-xl mx-auto">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <h2 className="text-base md:text-lg font-bold flex items-center gap-2"><span>📚</span> مرور آزاد دسته</h2>
+          <button onClick={() => onSelectMode(null)} className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold">↩ بازگشت</button>
+        </div>
+        <div>
+          <label className="block text-xs font-bold mb-1.5">دستهٔ واژگان</label>
+          <select value={freeCat} onChange={e => { setFreeCat(e.target.value); }} className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2 text-sm">
+            <option value="">همهٔ دسته‌ها ({words.length} واژه)</option>
+            {categories.map(([cat, count]) => <option key={cat} value={cat}>{cat} ({count} واژه)</option>)}
+          </select>
+          <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-1.5">{selectedCount} واژه در این انتخاب؛ مستقل از سررسید و جعبه‌های لایتنر.</p>
+        </div>
+        <div>
+          <label className="block text-xs font-bold mb-1.5">جهت تمرین</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button onClick={() => { setFreeDir('de'); setFreeRnd(false); }} className={`py-3 px-3 rounded-xl font-bold text-xs md:text-sm transition ${!freeRnd && freeDir === 'de' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🇩🇪 آلمانی ← فارسی</button>
+            <button onClick={() => { setFreeDir('fa'); setFreeRnd(false); }} className={`py-3 px-3 rounded-xl font-bold text-xs md:text-sm transition ${!freeRnd && freeDir === 'fa' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🇮🇷 فارسی ← آلمانی</button>
+            <button onClick={() => { setFreeRnd(true); }} className={`py-3 px-3 rounded-xl font-bold text-xs md:text-sm transition ${freeRnd ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🔀 تصادفی برای هر کارت</button>
+          </div>
+        </div>
+        <button disabled={selectedCount === 0} onClick={() => {
+          const freeWords = words.filter(w => !freeCat || w.cat === freeCat);
+          setQueue(freeWords.map(w => w.id));
+          setCurrentIndex(0);
+          setKnownMap({});
+          setRevealedCardId(null);
+          setIsFreeStarted(true);
+        }} className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md">
+          {selectedCount ? `شروع مرور (${selectedCount} واژه) ▶` : 'این دسته واژه‌ای ندارد'}
+        </button>
+        {selectedCount === 0 && <p className="text-sm text-amber-700 dark:text-amber-300">این دسته واژه‌ای ندارد. دستهٔ دیگری انتخاب کنید.</p>}
       </div>
     );
   }
