@@ -6,6 +6,7 @@ import { speak, stopSpeaking } from '../utils/audio';
 import { splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
 import { ConjugatedForm } from '../components/ConjugatedForm';
+import { today } from '../utils/dates';
 
 export type ExerciseMode =
   | 'flash'
@@ -57,6 +58,7 @@ interface ExercisesViewProps {
   settings?: AppSettings;
   activeMode: ExerciseMode | null;
   practiceWordIds?: string[] | null;
+  dailyProgress?: { d: string; n: number; r: number };
   onSelectMode: (mode: ExerciseMode | null) => void;
   onRecordResult: (word: Word | CaseQuestion, mode: string, grade: number, isRetry: boolean) => void;
   onOpenHelp: (topic: string) => void;
@@ -68,6 +70,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   settings,
   activeMode,
   practiceWordIds,
+  dailyProgress,
   onSelectMode,
   onRecordResult,
   onOpenHelp,
@@ -193,11 +196,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       }
       qIds = pool.map(w => w.id).slice(0, settings?.rv || 20);
     } else if (activeMode === 'daily') {
-      const due = pool.filter(w => w.last && w.due <= n);
+      const due = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due);
       const nw = pool.filter(w => !w.last);
       const dailyNewLimit = settings?.nw ?? 10;
       const dailyRevLimit = settings?.rv ?? 20;
-      qIds = [...due.slice(0, dailyRevLimit), ...nw.slice(0, dailyNewLimit)].map(w => w.id);
+      const completedNew = dailyProgress?.d === today() ? dailyProgress.n : 0;
+      const completedReviews = dailyProgress?.d === today() ? dailyProgress.r : 0;
+      const remainingNew = dailyNewLimit > 0 ? Math.max(0, dailyNewLimit - completedNew) : 0;
+      const remainingReviews = dailyRevLimit > 0 ? Math.max(0, dailyRevLimit - completedReviews) : 0;
+      qIds = [...due.slice(0, remainingReviews), ...nw.slice(0, remainingNew)].map(w => w.id);
     } else if (activeMode === 'art') {
       qIds = pool.filter(w => !!w.art).sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'cloze') {
@@ -223,7 +230,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setCaseResult(null);
     setAnswerResult(null);
     setHintLevel(0);
-  }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct]);
+  }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct, settings?.nw, settings?.rv, settings?.leechN]);
 
   // Current item
   const currentItem = useMemo(() => {
