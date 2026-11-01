@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Word } from '../types';
 import { getCategories, resolveCat } from '../utils/storage';
 
@@ -25,6 +25,15 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
   const [showHelp, setShowHelp] = useState<boolean>(false);
 
   const categories = useMemo(() => getCategories(words), [words]);
+
+  // Drop IDs only after the corresponding records are actually gone; canceling confirmation preserves selection.
+  useEffect(() => {
+    const existingIds = new Set(words.map(word => word.id));
+    setSelectedIds(prev => {
+      const next = new Set(Array.from(prev).filter(id => existingIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [words]);
 
   // Filtered words
   const filteredWords = useMemo(() => {
@@ -87,10 +96,7 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
 
   const handleDelete = () => {
     if (selectedIds.size === 0) return;
-    if (confirm(`آیا از حذف کامل ${selectedIds.size} واژهٔ انتخاب‌شده مطمئن هستید؟ این عملیات غیرقابل بازگشت است.`)) {
-      onBatchDelete(Array.from(selectedIds));
-      setSelectedIds(new Set());
-    }
+    onBatchDelete(Array.from(selectedIds));
   };
 
   return (
