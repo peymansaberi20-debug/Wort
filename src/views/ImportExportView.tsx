@@ -605,7 +605,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     <div className="space-y-5 text-right">
       {/* Pending Import Preview Card */}
       {pendingImport && (
-        <div className="bg-white dark:bg-[#1b2029] border-2 border-emerald-400 dark:border-emerald-700 rounded-2xl p-4 md:p-5 shadow-md space-y-4 animate-fadeIn">
+        <div className="bg-white dark:bg-[#1b2029] border-2 border-emerald-400 dark:border-emerald-700 rounded-3xl p-5 shadow-md space-y-4 animate-fadeIn">
           <div className="flex items-center justify-between border-b pb-3">
             <h3 className="font-bold text-base md:text-lg text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
               <span>📋</span> پیش‌نمایش داده‌های آمادهٔ ورود
@@ -614,7 +614,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               onClick={() => setPendingImport(null)}
               className="text-xs bg-slate-200 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold"
             >
-              انصراف ✕
+              ×
             </button>
           </div>
 
@@ -705,13 +705,13 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             )}
           </div>
 
-          <div className="flex flex-wrap items-stretch gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               onClick={() => {
                 onImportWords(pendingImport.words, false);
                 setPendingImport(null);
               }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 min-h-10 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
             >
               ➕ افزودن (بدون بازنویسی تکراری‌ها)
             </button>
@@ -722,7 +722,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
                   setPendingImport(null);
                 }
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 min-h-10 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
             >
               🔄 به‌روزرسانی و بازنویسی تکراری‌ها
             </button>
@@ -734,7 +734,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
                     setPendingImport(null);
                   }
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-2 min-h-10 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
               >
                 ♻️ جایگزینی کامل با پشتیبان
               </button>
@@ -751,7 +751,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       */}
 
       {/* 1. FIRST CARD: افزودن گروهی با هوش مصنوعی */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🤖</span>
@@ -798,7 +798,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           همه لغاتی که اون بالا تو باکس تایپ شده به یک دسته خاص اضافه بشه اون دسته رو انتخاب کنم ،
           با این کار وقتی تکمیل خودکار همه لغات رو زدم هوش مصنوعی همه رو طبق دسته ای ک من گفتم بچینه"
         */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
           {/* Category Selector next to auto-fill button */}
           <div className="flex items-center gap-1.5 w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-[200px]">
             <label className="text-xs font-bold text-[#5d6676] flex-shrink-0">
@@ -877,7 +877,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       </div>
 
       {/* 2. SECOND CARD: ورود (Excel, CSV یا JSON) - Fulfills Task 3 */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">📥</span>
@@ -931,7 +931,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         Fulfills User Request #15:
         "سه تا گزینه زیر خروجی هم توی یک خط جا داده بشن"
       */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
         <div className="flex items-center gap-2 border-b pb-3">
           <span className="text-2xl">💾</span>
           <div>
