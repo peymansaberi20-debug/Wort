@@ -34,15 +34,15 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={onAbout}
-          className="bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1.5 text-xs md:text-sm transition flex items-center gap-1"
+          className="w-9 h-9 bg-white hover:bg-slate-100 text-[#1f5fbf] rounded-lg text-base transition flex items-center justify-center shadow-sm"
           title="درباره ما / About"
           aria-label="درباره ما"
         >
-          ℹ️ <span className="hidden sm:inline">درباره ما</span>
+          ℹ️
         </button>
         <button
           onClick={onToggleTheme}
-          className="bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1.5 text-xs md:text-sm transition"
+          className="w-9 h-9 bg-white hover:bg-slate-100 text-[#1f5fbf] rounded-lg text-base transition flex items-center justify-center shadow-sm"
           title="تغییر پوسته"
           aria-label="تغییر پوسته"
         >
@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
         <button
           onClick={onSaveAndExit}
-          className="bg-white text-[#1f5fbf] hover:bg-slate-100 font-bold rounded-lg p-2 text-xs md:text-sm shadow-sm transition flex items-center justify-center"
+          className="w-9 h-9 bg-white text-[#1f5fbf] hover:bg-slate-100 font-bold rounded-lg text-xs md:text-sm shadow-sm transition flex items-center justify-center"
           title="ذخیره و خروج / Save and Exit"
           aria-label="ذخیره و خروج"
         >
@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
             strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-4 h-4 md:w-5 md:h-5"
+            className="w-4 h-4"
             aria-hidden="true"
           >
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
