@@ -106,7 +106,7 @@ export function GeminiKeyCard() {
           type="button"
           onClick={test}
           disabled={busy}
-          className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold rounded-full py-3 disabled:opacity-60"
+          className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold rounded-xl px-4 py-2 text-sm disabled:opacity-60"
         >
           {busy ? 'در حال بررسی...' : '🔌 بررسی و ذخیره'}
         </button>
