@@ -32,6 +32,7 @@ import { ExercisesView, ExerciseMode } from './views/ExercisesView';
 import { VocabularyView } from './views/VocabularyView';
 import { ImportExportView } from './views/ImportExportView';
 import { SettingsView } from './views/SettingsView';
+import { today } from './utils/dates';
 
 const normalizeGermanDuplicateKey = (value: string) =>
   (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
@@ -63,6 +64,7 @@ export default function App() {
   // Active exercise mode if inside practice
   const [activeExercise, setActiveExercise] = useState<ExerciseMode | null>(null);
   const [practiceWordIds, setPracticeWordIds] = useState<string[] | null>(null);
+  const [lastTargetedMode, setLastTargetedMode] = useState<ExerciseMode | null>(null);
 
   // Active Modals
   const [selectedWord, setSelectedWord] = useState<Word | null>(null);
@@ -341,7 +343,9 @@ export default function App() {
     const isWord = !('cs' in item);
     setState(prev => {
       let nextWords = prev.words;
-      let nextDaily = { ...prev.daily };
+      let nextDaily = prev.daily.d === today()
+        ? { ...prev.daily }
+        : { d: today(), n: 0, r: 0 };
 
       if (isWord) {
         const w = item as Word;
@@ -464,7 +468,11 @@ export default function App() {
               settings={state.set}
               activeMode={activeExercise}
               practiceWordIds={practiceWordIds}
-              onSelectMode={setActiveExercise}
+              dailyProgress={state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 }}
+              onSelectMode={mode => {
+                setActiveExercise(mode);
+                if (mode === null) setPracticeWordIds(null);
+              }}
               onRecordResult={handleRecordResult}
               onOpenHelp={setActiveHelpTopic}
               onShowToast={showToast}
@@ -483,9 +491,44 @@ export default function App() {
                     }
                   }}
                   onOpenQualityModal={() => setIsQualityModalOpen(true)}
-                  onPracticeWords={ids => {
-                    setPracticeWordIds(ids);
-                    setActiveExercise('flash');
+                  onPracticeWords={(ids, intent = 'targeted') => {
+                    const selectedIds = new Set(ids);
+                    if (intent === 'review') {
+                      const dueIds = state.words
+                        .filter(w => selectedIds.has(w.id) && w.last && w.due <= Date.now())
+                        .sort((a, b) => a.due - b.due)
+                        .map(w => w.id);
+                      if (dueIds.length === 0) {
+                        showToast('در حال حاضر واژهٔ سررسیدشده‌ای برای مرور وجود ندارد.');
+                        return;
+                      }
+                      setPracticeWordIds(dueIds);
+                      setActiveExercise('review');
+                      return;
+                    }
+
+                    const selectedWords = state.words.filter(w => selectedIds.has(w.id));
+                    const candidates: { mode: ExerciseMode; ids: string[] }[] = [
+                      { mode: 'art', ids: selectedWords.filter(w => !!w.art).map(w => w.id) },
+                      { mode: 'cloze', ids: selectedWords.filter(w => !!w.cloze || !!w.ans).map(w => w.id) },
+                      { mode: 'plural', ids: selectedWords.filter(w => !!w.pl).map(w => w.id) },
+                      { mode: 'conj', ids: selectedWords.filter(w => !!w.conj).map(w => w.id) },
+                      { mode: 'tense', ids: selectedWords.filter(w => !!w.prat || !!w.perf).map(w => w.id) },
+                      { mode: 'sent', ids: selectedWords.filter(w => !!w.last).map(w => w.id) },
+                      { mode: 'dict', ids: selectedWords.map(w => w.id) },
+                      { mode: 'prod', ids: selectedWords.map(w => w.id) }
+                    ].filter(candidate => candidate.ids.length > 0 && candidate.ids.length === selectedWords.length);
+
+                    if (candidates.length === 0 || selectedWords.length === 0) {
+                      showToast('واژهٔ مناسبی برای تمرین اختصاصی پیدا نشد.', true);
+                      return;
+                    }
+                    const alternatives = candidates.filter(candidate => candidate.mode !== lastTargetedMode);
+                    const choices = alternatives.length > 0 ? alternatives : candidates;
+                    const selected = choices[Math.floor(Math.random() * choices.length)];
+                    setLastTargetedMode(selected.mode);
+                    setPracticeWordIds(selected.ids);
+                    setActiveExercise(selected.mode);
                   }}
                   onUpdateDailyNewTarget={target => {
                     setState(prev => ({
