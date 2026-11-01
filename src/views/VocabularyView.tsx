@@ -914,78 +914,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         </div>
       )}
 
-      {/* Category Management Collapsible */}
-      <details id="category-manager-details" className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-        <summary className="font-bold text-sm cursor-pointer select-none flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span>🗂 مدیریت دسته‌ها ({categories.length})</span>
-          </div>
-          {/* Fulfills Request #20: Help for Category Management */}
-          <button
-            type="button"
-            onClick={e => {
-              e.preventDefault();
-              onOpenHelp('cat_mgr');
-            }}
-            className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold"
-          >
-            ❓ راهنما
-          </button>
-        </summary>
-
-        {/*
-          Fulfills User Request #23:
-          "در قسمت مدیریت دسته ها ، جلوی هر دسته نوشته شده «تغییر نام / ادغام» ،
-          این نوشته رو بردار همون ایکون مداد ک گذاشتی باشه کافیه .
-          ایکون حذف هم که سطل اشغاله همون باشه خوبه .
-          هر دو ایکون به سمت چپ ردیف خودشون فیکس بشن ."
-        */}
-        <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800 space-y-1">
-          {categories.length === 0 ? (
-            <p className="text-xs text-[#5d6676] py-2">هنوز دسته‌ای ساخته نشده است.</p>
-          ) : (
-            categories.map(([catName, count]) => (
-              <div
-                key={catName}
-                className="py-2 flex items-center justify-between gap-2 text-xs md:text-sm"
-              >
-                <span className="font-medium text-slate-800 dark:text-slate-200">
-                  📁 {catName} <span className="text-[#5d6676] text-xs">({count} واژه)</span>
-                </span>
-
-                {/* Icons pinned to the left (end in RTL) */}
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      const newName = prompt('نام جدید دسته را وارد کنید:', catName);
-                      if (newName && newName.trim() && newName.trim() !== catName) {
-                        onRenameCategory(catName, newName.trim());
-                      }
-                    }}
-                    title="تغییر نام / ادغام"
-                    aria-label="تغییر نام دسته"
-                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-sm transition"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`آیا از حذف دستهٔ «${catName}» اطمینان دارید؟ واژه‌ها حذف نمی‌شوند و فقط بدون دسته خواهند شد.`)) {
-                        onDeleteCategory(catName);
-                      }
-                    }}
-                    title="حذف دسته"
-                    aria-label="حذف دسته"
-                    className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 flex items-center justify-center text-sm transition"
-                  >
-                    🗑
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </details>
 
       {/*
         Fulfills User Request #2:
@@ -1071,13 +999,93 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => document.getElementById('category-manager-details')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+          onClick={() => {
+            const categoryManager = document.getElementById('category-manager-details') as HTMLDetailsElement | null;
+            if (categoryManager) {
+              categoryManager.open = true;
+              categoryManager.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }}
           className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
         >
           <span aria-hidden="true">📁</span>
           <span className="truncate">مدیریت دسته</span>
         </button>
       </div>
+
+      {/* Category Management Collapsible */}
+      <details id="category-manager-details" className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
+        <summary className="font-bold text-sm cursor-pointer select-none flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span>🗂 مدیریت دسته‌ها ({categories.length})</span>
+          </div>
+          {/* Fulfills Request #20: Help for Category Management */}
+          <button
+            type="button"
+            onClick={e => {
+              e.preventDefault();
+              onOpenHelp('cat_mgr');
+            }}
+            className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold"
+          >
+            ❓ راهنما
+          </button>
+        </summary>
+
+        {/*
+          Fulfills User Request #23:
+          "در قسمت مدیریت دسته ها ، جلوی هر دسته نوشته شده «تغییر نام / ادغام» ،
+          این نوشته رو بردار همون ایکون مداد ک گذاشتی باشه کافیه .
+          ایکون حذف هم که سطل اشغاله همون باشه خوبه .
+          هر دو ایکون به سمت چپ ردیف خودشون فیکس بشن ."
+        */}
+        <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800 space-y-1">
+          {categories.length === 0 ? (
+            <p className="text-xs text-[#5d6676] py-2">هنوز دسته‌ای ساخته نشده است.</p>
+          ) : (
+            categories.map(([catName, count]) => (
+              <div
+                key={catName}
+                className="py-2 flex items-center justify-between gap-2 text-xs md:text-sm"
+              >
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  📁 {catName} <span className="text-[#5d6676] text-xs">({count} واژه)</span>
+                </span>
+
+                {/* Icons pinned to the left (end in RTL) */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      const newName = prompt('نام جدید دسته را وارد کنید:', catName);
+                      if (newName && newName.trim() && newName.trim() !== catName) {
+                        onRenameCategory(catName, newName.trim());
+                      }
+                    }}
+                    title="تغییر نام / ادغام"
+                    aria-label="تغییر نام دسته"
+                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-sm transition"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`آیا از حذف دستهٔ «${catName}» اطمینان دارید؟ واژه‌ها حذف نمی‌شوند و فقط بدون دسته خواهند شد.`)) {
+                        onDeleteCategory(catName);
+                      }
+                    }}
+                    title="حذف دسته"
+                    aria-label="حذف دسته"
+                    className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 flex items-center justify-center text-sm transition"
+                  >
+                    🗑
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </details>
+
 
       {/*
         Fulfills User Request #27 and Part F duplicate button
