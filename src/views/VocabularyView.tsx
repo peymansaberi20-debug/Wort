@@ -459,29 +459,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
   return (
     <div className="space-y-4 text-right">
-      {/* Top Action Header: Word Manager Button & Add Word Form Trigger */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2">
-          {/* Fulfills User Request #24: Button to open Word Manager popup */}
-          <button
-            onClick={onOpenWordManager}
-            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition flex items-center gap-1.5"
-          >
-            <span>🗂 مدیریت گروهی واژه‌ها</span>
-          </button>
-        </div>
-
-        <button
-          onClick={() => {
-            if (isFormOpen && isEditing) resetForm();
-            else setIsFormOpen(!isFormOpen);
-          }}
-          className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5"
-        >
-          <span>{isFormOpen ? '▲ بستن فرم' : '➕ افزودن واژهٔ جدید'}</span>
-        </button>
-      </div>
-
       {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
         <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4 animate-fadeIn">
@@ -938,7 +915,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       )}
 
       {/* Category Management Collapsible */}
-      <details className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
+      <details id="category-manager-details" className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
         <summary className="font-bold text-sm cursor-pointer select-none flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span>🗂 مدیریت دسته‌ها ({categories.length})</span>
@@ -1020,7 +997,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         <div>
           <input
             type="text"
-            placeholder="🔍 جستجو در واژگان (آلمانی یا فارسی)..."
+            placeholder="🔍 جستجو در واژگان (کلمه آلمانی یا معنی فارسی)..."
             value={searchQuery}
             onChange={e => {
               setSearchQuery(e.target.value);
@@ -1069,6 +1046,37 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
             <option value="due">مرور بعدی</option>
           </select>
         </div>
+      </div>
+
+      {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (isFormOpen && isEditing) resetForm();
+            else setIsFormOpen(!isFormOpen);
+          }}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">{isFormOpen ? '▲' : '➕'}</span>
+          <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن واژهٔ جدید'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenWordManager}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">🗂</span>
+          <span className="truncate">مدیریت گروهی</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => document.getElementById('category-manager-details')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">📁</span>
+          <span className="truncate">مدیریت دسته</span>
+        </button>
       </div>
 
       {/*
