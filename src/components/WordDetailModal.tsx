@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Word } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
@@ -23,6 +23,11 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   onImageChange
 }) => {
   const [showFa, setShowFa] = useState(false);
+
+  // Hide every Persian translation whenever the active word changes or the modal closes.
+  useEffect(() => {
+    setShowFa(false);
+  }, [word?.id]);
 
   if (!word) return null;
 
@@ -175,7 +180,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
       onClick={e => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) { setShowFa(false); onClose(); }
       }}
     >
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
@@ -187,7 +192,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
         <div className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2">
           {/* Back button on right in RTL */}
           <button
-            onClick={onClose}
+            onClick={() => { setShowFa(false); onClose(); }}
             className="flex items-center gap-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs md:text-sm shadow-xs hover:opacity-95 transition"
           >
             ↩ بازگشت
@@ -233,16 +238,16 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
 
           {/* Translation with toggle or reveal */}
           <div className="mt-2 text-center" dir="rtl">
-            {showFa ? (
+            {showFa && word.fa ? (
               <p className="text-xl md:text-2xl font-bold text-amber-200">{word.fa}</p>
-            ) : (
-              <button
-                onClick={() => setShowFa(true)}
-                className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-4 py-1.5 text-sm font-medium transition"
-              >
-                👁 نمایش ترجمه فارسی
-              </button>
-            )}
+            ) : null}
+            <button
+              onClick={() => setShowFa(value => !value)}
+              className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-4 py-1.5 text-sm font-medium transition"
+              aria-expanded={showFa}
+            >
+              {showFa ? '🙈 مخفی کردن ترجمه‌ها' : '👁 نمایش همه ترجمه‌ها'}
+            </button>
           </div>
 
           {/* Badges */}
@@ -288,14 +293,14 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                 <div className="flex flex-wrap items-center gap-2 justify-start">
                   <span className="font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">مترادف:</span>
                   <span className="font-bold" dir="ltr">{word.syn}</span>
-                  {word.synFa && <span className="text-[#5d6676] dark:text-[#a3adbd]">({word.synFa})</span>}
+                  {showFa && word.synFa && <span className="text-[#5d6676] dark:text-[#a3adbd]">({word.synFa})</span>}
                 </div>
               )}
               {word.ant && (
                 <div className="flex flex-wrap items-center gap-2 justify-start">
                   <span className="font-bold text-amber-600 dark:text-amber-400">متضاد:</span>
                   <span className="font-bold" dir="ltr">{word.ant}</span>
-                  {word.antFa && <span className="text-[#5d6676] dark:text-[#a3adbd]">({word.antFa})</span>}
+                  {showFa && word.antFa && <span className="text-[#5d6676] dark:text-[#a3adbd]">({word.antFa})</span>}
                 </div>
               )}
             </div>
@@ -339,7 +344,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                         🔊
                       </button>
                     </div>
-                    {word.exFa && (
+                    {showFa && word.exFa && (
                       <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5 text-right" dir="rtl">
                         {word.exFa}
                       </p>
@@ -360,7 +365,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                         🔊
                       </button>
                     </div>
-                    {word.ex2Fa && (
+                    {showFa && word.ex2Fa && (
                       <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5 text-right" dir="rtl">
                         {word.ex2Fa}
                       </p>
