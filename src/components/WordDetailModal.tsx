@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Word } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
@@ -23,12 +23,6 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   onImageChange
 }) => {
   const [showFa, setShowFa] = useState(false);
-
-  // A profile's reveal state belongs only to the currently displayed word.
-  // Reset it whenever the selected word changes so translations start hidden.
-  useEffect(() => {
-    setShowFa(false);
-  }, [word?.id]);
 
   if (!word) return null;
 
@@ -76,7 +70,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
 
   // Verb tables builder
   const renderVerbTable = () => {
-    if (!word.conj && !word.prat && !word.perf) return null;
+    if (!word.conj && !word.prat && !word.perf && !word.imperativDu && !word.imperativIhr && !word.imperativSie) return null;
     // Shared splitter: accepts "a|b|c|d|e|f" and also comma-separated data
     const presForms = word.conj ? splitConj(word.conj) : [];
 
@@ -131,6 +125,19 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
               <div className="text-xs space-y-1" dir="ltr">
                 <div className="text-slate-500 text-[11px]">Hilfsverb + Partizip II:</div>
                 <div className="font-bold text-sm text-emerald-700 dark:text-emerald-300">{word.perf}</div>
+              </div>
+            </div>
+          )}
+
+          {(word.imperativDu || word.imperativIhr || word.imperativSie) && (
+            <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3">
+              <div className="font-bold text-xs text-violet-600 dark:text-violet-400 border-b pb-1 mb-2 flex justify-between">
+                <span>Imperativ</span><span className="text-[#5d6676]">وجه امری</span>
+              </div>
+              <div className="space-y-2 text-xs" dir="ltr">
+                {word.imperativDu && <div className="flex justify-between gap-3"><span className="text-slate-500">du</span><strong>{word.imperativDu}</strong></div>}
+                {word.imperativIhr && <div className="flex justify-between gap-3"><span className="text-slate-500">ihr</span><strong>{word.imperativIhr}</strong></div>}
+                {word.imperativSie && <div className="flex justify-between gap-3"><span className="text-slate-500">Sie</span><strong>{word.imperativSie}</strong></div>}
               </div>
             </div>
           )}
@@ -332,7 +339,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                         🔊
                       </button>
                     </div>
-                    {showFa && word.exFa && (
+                    {word.exFa && (
                       <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5 text-right" dir="rtl">
                         {word.exFa}
                       </p>
@@ -353,7 +360,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
                         🔊
                       </button>
                     </div>
-                    {showFa && word.ex2Fa && (
+                    {word.ex2Fa && (
                       <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5 text-right" dir="rtl">
                         {word.ex2Fa}
                       </p>
@@ -365,6 +372,12 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
           )}
 
           {/* Verb conjugations if verb */}
+          {(word.komparativ || word.superlativ) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-3">
+              {word.komparativ && <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-slate-50 dark:bg-[#141923] p-3"><div className="text-xs text-[#5d6676] mb-1">Komparativ · صفت تفضیلی</div><div dir="ltr" className="font-bold">{word.komparativ}</div></div>}
+              {word.superlativ && <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-slate-50 dark:bg-[#141923] p-3"><div className="text-xs text-[#5d6676] mb-1">Superlativ · صفت عالی</div><div dir="ltr" className="font-bold">{word.superlativ}</div></div>}
+            </div>
+          )}
           {renderVerbTable()}
 
           {/* Notes and structure */}
