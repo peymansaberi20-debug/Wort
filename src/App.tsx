@@ -564,7 +564,6 @@ export default function App() {
                   onDeleteCategory={handleDeleteCategory}
                   onSelectWord={setSelectedWord}
                   onOpenWordManager={() => setIsWordManagerOpen(true)}
-                  onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}
                   onOpenHelp={setActiveHelpTopic}
                   onShowToast={showToast}
                 />
