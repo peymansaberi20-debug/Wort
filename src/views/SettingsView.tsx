@@ -30,6 +30,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Destructive delete confirmation step
   const [deleteStep, setDeleteStep] = useState<number>(0);
+  const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
 
   // Load voices asynchronously
   useEffect(() => {
@@ -47,6 +48,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isVoiceGuideOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsVoiceGuideOpen(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isVoiceGuideOpen]);
 
   const categories = useMemo(() => getCategories(words), [words]);
 
@@ -111,11 +119,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 text-right max-w-3xl mx-auto pb-10">
+    <div className="space-y-5 text-right max-w-3xl mx-auto pb-10">
       {/* ========================================================= */}
       {/* 1. Appearance & Flashcard Direction (Section 2) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>🎨</span> پوسته و جهت فلش‌کارت‌ها
         </h3>
@@ -155,7 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 2. Daily Learning Limits & Session Order (Section 3) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>📊</span> محدودیت‌های روزانه و ترتیب جلسه
         </h3>
@@ -248,7 +256,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 3. Review Algorithm & Difficult Words (Section 4) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>🧠</span> الگوریتم تکرار فاصله‌دار و واژه‌های دشوار
         </h3>
@@ -303,7 +311,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 4. Flashcard Timer (Section 5) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>⏱️</span> تایمر فلش‌کارت
         </h3>
@@ -341,7 +349,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 5. Pronunciation and Audio Settings (Section 6) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>🔊</span> تلفظ و تنظیمات صوتی آلمانی
         </h3>
@@ -425,6 +433,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleTestVoice}
@@ -433,7 +442,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span>🔊</span>
             <span>تست صدا (Test Voice)</span>
           </button>
-          <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+          <button
+            type="button"
+            onClick={() => setIsVoiceGuideOpen(true)}
+            className="bg-blue-50 hover:bg-blue-100 text-[#1f5fbf] dark:bg-blue-950/50 dark:hover:bg-blue-900/60 dark:text-[#a9cbff] border border-blue-200 dark:border-blue-800 px-4 py-2 rounded-xl text-xs md:text-sm font-bold transition"
+          >
+            راهنمای نصب و طبیعی کردن صدا
+          </button>
+          </div>
+          <span className="text-[11px] text-[#5d6676] dark:text-[#c0c8d5]">
             عبارت تستی: «Guten Tag! Ich lerne Deutsch in Wien.»
           </span>
         </div>
@@ -442,7 +459,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 6. Daily Goal & Backup Reminder (Section 7) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>🎯</span> هدف روزانه و یادآوری پشتیبان‌گیری
         </h3>
@@ -485,12 +502,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       {/* 7. Gemini AI Integration (Server-Side) */}
       {/* ========================================================= */}
+      {isVoiceGuideOpen && (
+        <div
+          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+          onMouseDown={event => { if (event.target === event.currentTarget) setIsVoiceGuideOpen(false); }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="voice-guide-title" dir="rtl" className="w-full max-w-2xl max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#1b2029] text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3 mb-4">
+              <div>
+                <h2 id="voice-guide-title" className="text-base sm:text-lg font-extrabold">راهنمای نصب و طبیعی کردن صدا</h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">نام منوها بسته به نسخهٔ سیستم‌عامل و دستگاه ممکن است کمی متفاوت باشد.</p>
+              </div>
+              <button type="button" autoFocus onClick={() => setIsVoiceGuideOpen(false)} aria-label="بستن راهنما" className="shrink-0 rounded-lg px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-bold">✕ بستن</button>
+            </div>
+            <p className="text-sm leading-7 mb-4">برنامه از صداهای آلمانی نصب‌شده روی دستگاه استفاده می‌کند. کیفیت و دسترسی به صداها به سیستم‌عامل، مرورگر و صداهایی که مرورگر در اختیار برنامه می‌گذارد بستگی دارد؛ برنامه نمی‌تواند صدایی را که مرورگر ارائه نمی‌کند مستقیماً انتخاب کند.</p>
+            <div className="space-y-3 text-sm leading-7">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>📱 آیفون و آیپد</b><p>Settings → Accessibility → Spoken Content → Voices → German. اگر گزینهٔ Enhanced یا Premium موجود بود، آن را دانلود کنید.</p></div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>🤖 اندروید</b><p>Settings → System → Languages &amp; input → Text-to-speech output. موتور گفتار Google را انتخاب کنید و در تنظیمات آن، دادهٔ صدای آلمانی را نصب کنید.</p></div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>🪟 ویندوز</b><p>Microsoft Edge ممکن است در صورت پشتیبانی، صداهای آنلاین با کیفیت بالاتر ارائه کند. در Windows 11 مسیر Settings → Time &amp; language → Speech → Manage voices → Add voices → German را بررسی کنید.</p></div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>🍎 macOS</b><p>System Settings → Accessibility → Spoken Content → System voice → Manage Voices. در صورت وجود، صدای آلمانی با کیفیت بالاتر را دانلود کنید.</p></div>
+            </div>
+            <div className="mt-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 p-3 text-sm leading-7">
+              برای صدای طبیعی‌تر، سرعت را حدود <b dir="ltr">0.8–0.9</b> تنظیم کنید، از دکمهٔ «تست صدا» استفاده کنید و پس از نصب صدای جدید، صفحهٔ برنامه را تازه‌سازی کنید. نام یا کیفیت مشخصی از صدا در همهٔ دستگاه‌ها تضمین‌شده نیست.
+            </div>
+          </section>
+        </div>
+      )}
+
       <GeminiKeyCard />
 
       {/* ========================================================= */}
       {/* 8. Data Management & Destructive Actions (Section 8) */}
       {/* ========================================================= */}
-      <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-900/60 rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-900/60 rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-red-100 dark:border-red-950 pb-3 text-red-700 dark:text-red-400">
           <span>⚠️</span> مدیریت داده‌ها و عملیات حساس
         </h3>
