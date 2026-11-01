@@ -1,12 +1,19 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, normalizeAIHeadword } from '../utils/ai';
+import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
   (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
+
+// Normalize an AI-produced German headword locally so this view does not
+// depend on an optional export from utils/ai.ts.
+const normalizeAIHeadword = (value: string, _pos = '', _art = ''): string => {
+  const cleaned = (value || '').normalize('NFC').trim().replace(/\s+/g, ' ');
+  return cleaned.replace(/^(der|die|das)\s+/i, '').trim();
+};
 
 const parseGermanEntry = (input: string, selectedArt = ''): { de: string; art: string } => {
   const value = duplicateKey(input);
@@ -1073,7 +1080,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
           {/* Notes */}
           <div className="text-xs">
-            <label className="block font-bold mb-1">یادداشت/ یادیار/ خانواده واژگانی و ساختار:</label>
+            <label className="block font-bold mb-1">یادداشت / یادیار / خانواده واژگانی و ساختار:</label>
             <textarea
               dir="rtl"
               rows={3}
