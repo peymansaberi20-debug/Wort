@@ -151,7 +151,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ topicKey, onClose }) => {
             onClick={onClose}
             className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
           >
-            ✕ بستن
+            ×
           </button>
         </div>
 
