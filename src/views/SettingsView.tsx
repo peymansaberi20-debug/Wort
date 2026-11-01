@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AppSettings, Word } from '../types';
 import { getCategories } from '../utils/storage';
 import { getGermanVoices, speak, stopSpeaking } from '../utils/audio';
+import { GeminiKeyCard } from '../components/GeminiKeyCard';
 
 interface SettingsViewProps {
   settings: AppSettings;
