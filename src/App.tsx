@@ -510,6 +510,9 @@ export default function App() {
               onRecordResult={handleRecordResult}
               onOpenHelp={setActiveHelpTopic}
               onShowToast={showToast}
+              onEditWord={handleEditWord}
+              onDeleteWord={handleDeleteWord}
+              onImageChange={handleImageChange}
             />
           ) : (
             <>
@@ -527,6 +530,16 @@ export default function App() {
                   onOpenQualityModal={() => setIsQualityModalOpen(true)}
                   onPracticeWords={(ids, intent = 'targeted') => {
                     const selectedIds = new Set(ids);
+                    if (intent === 'hard') {
+                      const hardIds = state.words.filter(w => selectedIds.has(w.id)).map(w => w.id);
+                      if (hardIds.length === 0) {
+                        showToast('واژهٔ مناسبی برای تمرین اختصاصی پیدا نشد.', true);
+                        return;
+                      }
+                      setPracticeWordIds(hardIds);
+                      setActiveExercise('hard');
+                      return;
+                    }
                     if (intent === 'review') {
                       const dueIds = state.words
                         .filter(w => selectedIds.has(w.id) && w.last && w.due <= Date.now())
@@ -550,7 +563,8 @@ export default function App() {
                       { mode: 'tense', ids: selectedWords.filter(w => !!w.prat || !!w.perf).map(w => w.id) },
                       { mode: 'sent', ids: selectedWords.filter(w => !!w.last).map(w => w.id) },
                       { mode: 'dict', ids: selectedWords.map(w => w.id) },
-                      { mode: 'prod', ids: selectedWords.map(w => w.id) }
+                      { mode: 'prod', ids: selectedWords.map(w => w.id) },
+                      { mode: 'synant', ids: selectedWords.filter(w => !!w.syn || !!w.ant).map(w => w.id) }
                     ].filter(candidate => candidate.ids.length > 0 && candidate.ids.length === selectedWords.length);
 
                     if (candidates.length === 0 || selectedWords.length === 0) {
@@ -584,6 +598,9 @@ export default function App() {
                   onRecordResult={handleRecordResult}
                   onOpenHelp={setActiveHelpTopic}
                   onShowToast={showToast}
+                  onEditWord={handleEditWord}
+                  onDeleteWord={handleDeleteWord}
+                  onImageChange={handleImageChange}
                 />
               )}
 
