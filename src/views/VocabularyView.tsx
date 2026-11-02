@@ -114,6 +114,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [translateLoading, setTranslateLoading] = useState(false);
   const [pasteAiJson, setPasteAiJson] = useState('');
   const [duplicateWord, setDuplicateWord] = useState<Word | null>(null);
+  const [aiChoicePrompt, setAiChoicePrompt] = useState<{ title: string; message: string; options: { label: string; target: string; instruction: string }[] } | null>(null);
   const wordsRef = useRef(words);
   const aiOperationRef = useRef(false);
   wordsRef.current = words;
@@ -247,22 +248,46 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     setIsFormOpen(false);
   };
 
-  const handleAiAutoFill = async () => {
+  const handleAiAutoFill = async (choice?: { target: string; instruction: string }) => {
     if (aiOperationRef.current) return;
+    if (!choice) {
+      const raw = formDe.trim();
+      const lower = raw.toLocaleLowerCase('de');
+      const ambiguityMap: Record<string, { label: string; target: string; instruction: string }[]> = {
+        essen: [
+          { label: 'اسم: Essen (غذا / وعدهٔ غذایی)', target: 'Essen', instruction: 'منظور کاربر اسم «das Essen» به معنی غذا/وعدهٔ غذایی است، نه فعل essen. همه فیلدها را برای همین معنی اسمی تولید کن.' },
+          { label: 'فعل: essen (غذا خوردن)', target: 'essen', instruction: 'منظور کاربر فعل «essen» به معنی غذا خوردن است، نه اسم Essen. همه فیلدها را برای فعل و صرف‌های آن تولید کن.' }
+        ]
+      };
+      if (ambiguityMap[lower]) {
+        setAiChoicePrompt({ title: 'این واژه چند معنی یا نقش دارد', message: `«${raw}» می‌تواند اسم یا فعل باشد. کدام مورد مدنظر شماست؟`, options: ambiguityMap[lower] });
+        return;
+      }
+      const participleMap: Record<string, string> = { gegessen: 'essen', gesehen: 'sehen', geschrieben: 'schreiben', gesprochen: 'sprechen', genommen: 'nehmen', gegangen: 'gehen', gekommen: 'kommen', geworden: 'werden', gefunden: 'finden', gebunden: 'binden', geblieben: 'bleiben', gefahren: 'fahren', geflogen: 'fliegen', geschlafen: 'schlafen', gelesen: 'lesen', getrunken: 'trinken', geholfen: 'helfen', geöffnet: 'öffnen', gekauft: 'kaufen', gemacht: 'machen', gesagt: 'sagen', gelernt: 'lernen', gearbeitet: 'arbeiten', aufgestanden: 'aufstehen', angekommen: 'ankommen', eingeladen: 'einladen', entschieden: 'entscheiden', verstanden: 'verstehen', begonnen: 'beginnen', verloren: 'verlieren', vergessen: 'vergessen' };
+      const likelyParticiple = participleMap[lower] || (/^(ge\w{2,}(t|en)|\w+(iert))$/i.test(raw) && raw.length > 4 ? '' : '');
+      if (likelyParticiple) {
+        setAiChoicePrompt({ title: 'احتمالاً شکل Partizip II فعل است', message: `«${raw}» شکل Partizip II فعل «${likelyParticiple}» است. می‌خواهید آن را به‌عنوان صفت/Partizip ذخیره کنید یا پروفایل خودِ فعل را بسازید؟`, options: [
+          { label: `همین شکل «${raw}» را به‌عنوان صفت/Partizip ذخیره کن`, target: raw, instruction: `واژهٔ هدف دقیقاً «${raw}» است و باید به‌عنوان صفت یا Partizip II با کاربرد وصفی بررسی شود؛ آن را به مصدر تبدیل نکن. توضیح بده که این شکل Partizip II فعل ${likelyParticiple} است.` },
+          { label: `پروفایل فعل «${likelyParticiple}» را بساز`, target: likelyParticiple, instruction: `کاربر شکل Partizip II «${raw}» وارد کرده اما فعل پایه مدنظرش است. واژهٔ هدف را به مصدر «${likelyParticiple}» برگردان و فیلدهای فعل را کامل کن.` }
+        ] });
+        return;
+      }
+    }
     if (!formDe.trim()) {
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
       return;
     }
-    if (checkForDuplicate()) {
+    if (checkForDuplicate(choice?.target || formDe.trim())) {
       onShowToast('این واژه از قبل در کتابخانه وجود دارد؛ هوش مصنوعی اجرا نشد.', true);
       return;
     }
     aiOperationRef.current = true;
     setAiLoading(true);
     try {
-      const prompt = AIP(formDe.trim(), wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
+      const targetWord = choice?.target || formDe.trim();
+      const prompt = AIP(targetWord, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined) + (choice?.instruction ? `\n\nIMPORTANT USER-SELECTED MEANING/FORM:\n${choice.instruction}\nUse the selected target exactly and do not revert to another meaning.` : '');
       const resText = await generateWithGemini(prompt, { timeoutMs: 25000 });
-      const duplicateAfterAi = checkForDuplicate();
+      const duplicateAfterAi = checkForDuplicate(choice?.target || formDe.trim());
       if (duplicateAfterAi) {
         onShowToast('این واژه در حین پردازش به کتابخانه اضافه شده است؛ اطلاعات تولیدشده اعمال نشد.', true);
         return;
@@ -1256,6 +1281,22 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
           })
         )}
       </div>
+      {aiChoicePrompt && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-4">
+            <h3 id="ai-choice-title" className="text-base font-extrabold text-slate-900 dark:text-white">{aiChoicePrompt.title}</h3>
+            <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">{aiChoicePrompt.message}</p>
+            <div className="space-y-2">
+              {aiChoicePrompt.options.map((option, index) => (
+                <button key={`${option.target}-${index}`} type="button" onClick={() => { setAiChoicePrompt(null); setFormDe(option.target); void handleAiAutoFill({ target: option.target, instruction: option.instruction }); }} className="w-full rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 px-4 py-3 text-right text-sm font-bold transition">
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setAiChoicePrompt(null)} className="w-full rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold">انصراف</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
