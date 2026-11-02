@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppSettings, CaseQuestion, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
-import { checkWord, fullWord, getCategories, intervalPreview, isLeech } from '../utils/storage';
+import { checkWord, fullWord, getCategories, intervalPreview, isLeech, nz } from '../utils/storage';
 import { speak, stopSpeaking } from '../utils/audio';
 import { splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
 import { ConjugatedForm } from '../components/ConjugatedForm';
+import { MistakeComparison } from '../components/MistakeComparison';
 
 export type ExerciseMode =
   | 'flash'
@@ -20,6 +21,8 @@ export type ExerciseMode =
   | 'tense'
   | 'case'
   | 'prod'
+  | 'synant'
+  | 'hard'
   | 'sent';
 
 export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string; desc: string }> = {
@@ -35,6 +38,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   tense: { title: 'زمان فعل', icon: '⏳', desc: 'تمرین زمان‌های Präteritum و Perfekt' },
   case: { title: 'حالت و حرف اضافه', icon: '🧩', desc: 'دو جای خالی مجزا برای حرف اضافه و آرتیکل' },
   prod: { title: 'فارسی ← آلمانی (تایپی)', icon: '🔁', desc: 'دیدن ترجمه و نوشتن کامل واژه آلمانی' },
+  synant: { title: 'مترادف و متضاد', icon: '↔️', desc: 'نوشتن مترادف یا متضاد واژهٔ داده‌شده' },
+  hard: { title: 'تمرین ترکیبی واژه‌های سخت', icon: '🩸', desc: 'هر واژهٔ سخت در قالب‌های مختلف و با چیدمان تصادفی' },
   sent: { title: 'تولید جمله', icon: '🗣', desc: 'جمله‌سازی با واژه و بررسی ساختار' }
 };
 
@@ -52,6 +57,61 @@ export const HighlightedVerbForm: React.FC<{
   <ConjugatedForm verb={verb} form={form} pronounIndex={pronounIndex} sep={sep} />
 );
 
+const shuffleArr = <T,>(arr: T[]): T[] => {
+  const r = [...arr];
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+};
+
+/** Splits "a, b; c" style lists (synonyms / antonyms) into separate entries. */
+const splitList = (s: string): string[] =>
+  (s || '').split(/[,;،؛/|]/).map(x => x.trim()).filter(Boolean);
+
+/** Queue key for the synonym/antonym exercise: "<wordId>::<sub>::<syn|ant>" */
+const synAntKey = (w: Word, sub = 'synant'): string => {
+  const kinds: string[] = [];
+  if (splitList(w.syn).length) kinds.push('syn');
+  if (splitList(w.ant).length) kinds.push('ant');
+  const kind = kinds[Math.floor(Math.random() * kinds.length)] || 'syn';
+  return `${w.id}::${sub}::${kind}`;
+};
+
+/**
+ * Mixed session for hard words: every word is asked in several different formats,
+ * and the whole order is reshuffled every time a session starts.
+ */
+const buildHardQueue = (ws: Word[]): string[] => {
+  const keys: string[] = [];
+  ws.forEach(w => {
+    const subs = ['flashFa', 'flashDe', 'dict', 'prod'];
+    if (w.cloze || w.ans) subs.push('cloze');
+    const extras: string[] = [];
+    if (w.art) extras.push('art');
+    if (w.pl) extras.push('plural');
+    if (w.conj) extras.push('conj');
+    if (w.prat || w.perf) extras.push('tense');
+    if (splitList(w.syn).length || splitList(w.ant).length) extras.push('synant');
+    [...subs, ...shuffleArr(extras).slice(0, 2)].forEach(sub => {
+      keys.push(sub === 'synant' ? synAntKey(w) : `${w.id}::${sub}`);
+    });
+  });
+  const idOf = (k: string) => k.split('::')[0];
+  const subOf = (k: string) => k.split('::')[1];
+  const rest = shuffleArr(keys);
+  const out: string[] = [];
+  while (rest.length) {
+    const prev = out[out.length - 1];
+    let idx = rest.findIndex(k => !prev || (idOf(k) !== idOf(prev) && subOf(k) !== subOf(prev)));
+    if (idx < 0) idx = rest.findIndex(k => !prev || idOf(k) !== idOf(prev));
+    if (idx < 0) idx = 0;
+    out.push(rest.splice(idx, 1)[0]);
+  }
+  return out;
+};
+
 interface ExercisesViewProps {
   words: Word[];
   settings?: AppSettings;
@@ -61,6 +121,9 @@ interface ExercisesViewProps {
   onRecordResult: (word: Word | CaseQuestion, mode: string, grade: number, isRetry: boolean) => void;
   onOpenHelp: (topic: string) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  onEditWord?: (word: Word) => void;
+  onDeleteWord?: (word: Word) => void;
+  onImageChange?: (word: Word, newImg: string) => void;
 }
 
 export const ExercisesView: React.FC<ExercisesViewProps> = ({
@@ -71,7 +134,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onSelectMode,
   onRecordResult,
   onOpenHelp,
-  onShowToast
+  onShowToast,
+  onEditWord,
+  onDeleteWord,
+  onImageChange
 }) => {
   // Free review configuration
   const [freeCat, setFreeCat] = useState<string>(settings?.freeCat || '');
@@ -99,7 +165,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [caseArtInput, setCaseArtInput] = useState<string>('');
   const [caseResult, setCaseResult] = useState<{ prepOk: boolean; artOk: boolean } | null>(null);
 
-  const [answerResult, setAnswerResult] = useState<{ ok: number; exp: string; msg?: string } | null>(null);
+  const [answerResult, setAnswerResult] = useState<{ ok: number; exp: string; msg?: string; cands?: string[] } | null>(null);
   const [hintLevel, setHintLevel] = useState<number>(0);
 
   // Fulfills Section 21: View Full Word Profile modal accessible from EVERY exercise
@@ -113,6 +179,32 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [knownMap, setKnownMap] = useState<Record<string, number>>({});
 
   const categories = useMemo(() => getCategories(words), [words]);
+
+  // Words already counted towards the daily goal in a mixed hard-word session
+  const hardCountedRef = useRef<Set<string>>(new Set());
+
+  // Queue keys: plain word id, or "<id>::<sub>[::<kind>]" for the mixed / synonym exercises
+  const currentKey = queue[currentIndex] || '';
+  const keyParts = currentKey.split('::');
+  const currentSub = keyParts[1] || '';
+  const currentKind = keyParts[2] || '';
+  const qMode: ExerciseMode | null = !activeMode
+    ? null
+    : activeMode === 'hard'
+      ? (currentSub === 'flashDe' || currentSub === 'flashFa' ? 'flash' : ((currentSub as ExerciseMode) || 'flash'))
+      : activeMode;
+  const hardFlashDir: 'de' | 'fa' | null = activeMode === 'hard'
+    ? (currentSub === 'flashFa' ? 'fa' : currentSub === 'flashDe' ? 'de' : null)
+    : null;
+
+  const record = (item: Word | CaseQuestion, mode: string, grade: number) => {
+    let retry = false;
+    if (activeMode === 'hard') {
+      retry = hardCountedRef.current.has(item.id);
+      hardCountedRef.current.add(item.id);
+    }
+    onRecordResult(item, mode, grade, retry);
+  };
 
   // Clean up timers and audio on unmount or question change
   useEffect(() => {
@@ -156,8 +248,25 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       pool = pool.filter(w => !isLeech(w, leechThreshold));
     }
 
-    if (practiceWordIds && practiceWordIds.length > 0) {
+    hardCountedRef.current = new Set();
+
+    if (activeMode === 'hard') {
+      const wanted = new Set(
+        practiceWordIds && practiceWordIds.length > 0
+          ? practiceWordIds
+          : words.filter(w => (w.bad || 0) > 3).map(w => w.id)
+      );
+      qIds = buildHardQueue(words.filter(w => wanted.has(w.id)));
+    } else if (practiceWordIds && practiceWordIds.length > 0) {
       qIds = [...practiceWordIds];
+      if (activeMode === 'synant') {
+        qIds = words.filter(w => practiceWordIds.includes(w.id)).map(w => synAntKey(w));
+      }
+    } else if (activeMode === 'synant') {
+      const synAntPool: Word[] = pool.filter((w: Word) => splitList(w.syn).length > 0 || splitList(w.ant).length > 0);
+      qIds = shuffleArr<Word>(synAntPool)
+        .slice(0, 15)
+        .map((w: Word) => synAntKey(w));
     } else if (activeMode === 'case') {
       qIds = CASEQ.map(q => q.id).sort(() => Math.random() - 0.5);
     } else if (activeMode === 'free') {
@@ -228,7 +337,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // Current item
   const currentItem = useMemo(() => {
     if (queue.length === 0 || currentIndex >= queue.length) return null;
-    const id = queue[currentIndex];
+    const id = queue[currentIndex].split('::')[0];
     if (activeMode === 'case') {
       return CASEQ.find(q => q.id === id) || null;
     }
@@ -246,7 +355,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     // Free practice uses its own direction setting, independently of scheduled review settings.
     const defaultDir = settings?.dir || 'de';
-    if (activeMode === 'free') {
+    if (hardFlashDir) {
+      setCurrentCardDir(hardFlashDir);
+    } else if (activeMode === 'free') {
       setCurrentCardDir(freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir);
     } else if (defaultDir === 'rand') {
       setCurrentCardDir(Math.random() > 0.5 ? 'de' : 'fa');
@@ -260,7 +371,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setRevealedCardId(null);
     setCardTimerSec(0);
 
-    const isFlashType = activeMode === 'flash' || activeMode === 'free' || activeMode === 'review';
+    const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review';
+    const isTimerType = isFlashType || qMode === 'daily';
 
     // Automatic TTS for question if German is shown (Section 6.1)
     if (isFlashType && settings?.auto && currentCardDir === 'de') {
@@ -276,7 +388,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const revealSec = settings?.revealSec || 0;
     const showTimer = !!settings?.showTimer;
 
-    if (isFlashType && (revealSec > 0 || showTimer)) {
+    if (isTimerType && (revealSec > 0 || showTimer)) {
       let elapsed = 0;
       timerRef.current = setInterval(() => {
         elapsed++;
@@ -294,7 +406,31 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
       stopSpeaking();
     };
-  }, [currentIndex, currentItem?.id, activeMode, freeDir, freeRnd, flashDir, settings?.dir]);
+  }, [currentIndex, currentItem?.id, currentKey, qMode, activeMode, freeDir, freeRnd, flashDir, settings?.dir]);
+
+  // If a word is deleted while practising (e.g. from the word profile), drop it from the session
+  useEffect(() => {
+    if (profileModalWord && activeMode !== 'case' && !CASEQ.some(q => q.id === profileModalWord.id)) {
+      if (!words.some(w => w.id === profileModalWord.id)) setProfileModalWord(null);
+    }
+    if (!activeMode || activeMode === 'case' || queue.length === 0) return;
+    const exists = new Set(words.map(w => w.id));
+    const keep = queue.map(k => exists.has(k.split('::')[0]));
+    if (keep.every(Boolean)) return;
+    const removedBefore = keep.slice(0, currentIndex).filter(x => !x).length;
+    const currentRemoved = currentIndex < keep.length && !keep[currentIndex];
+    setQueue(queue.filter((_, i) => keep[i]));
+    setCurrentIndex(Math.max(0, currentIndex - removedBefore));
+    if (currentRemoved) {
+      setRevealedCardId(null);
+      setUserInput('');
+      setCasePrepInput('');
+      setCaseArtInput('');
+      setCaseResult(null);
+      setAnswerResult(null);
+      setHintLevel(0);
+    }
+  }, [words]);
 
   // Advance to next question
   const advanceQuestion = () => {
@@ -312,9 +448,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   const handleFlashGrade = (grade: number) => {
     if (!currentItem) return;
-    onRecordResult(currentItem, activeMode || 'flash', grade, false);
+    record(currentItem, qMode || 'flash', grade);
     if (grade === 0) {
-      setQueue(prev => [...prev, currentItem.id]);
+      setQueue(prev => [...prev, currentKey]);
     }
     advanceQuestion();
   };
@@ -392,9 +528,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       msg
     });
 
-    onRecordResult(q, 'case', isBothOk ? 2 : (isPrepOk || isArtOk ? 1 : 0), false);
+    record(q, 'case', isBothOk ? 2 : (isPrepOk || isArtOk ? 1 : 0));
     if (!isBothOk) {
-      setQueue(prev => [...prev, q.id]);
+      setQueue(prev => [...prev, currentKey]);
     }
   };
 
@@ -409,20 +545,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     const w = currentItem as Word;
 
-    if (activeMode === 'conj') {
+    if (qMode === 'conj') {
       const forms = w.conj.split('|');
       const isCorrect = forms.some(f => f.trim().toLowerCase() === trimmed.toLowerCase());
       const res = {
         ok: isCorrect ? 1 : 0,
         exp: forms[0] || w.de,
-        msg: isCorrect ? undefined : `شکل درست: ${forms.join(' | ')}`
+        msg: isCorrect ? undefined : `شکل درست: ${forms.join(' | ')}`,
+        cands: forms.map(f => f.trim()).filter(Boolean)
       };
       setAnswerResult(res);
-      onRecordResult(w, 'conj', isCorrect ? 2 : 0, false);
+      record(w, 'conj', isCorrect ? 2 : 0);
       return;
     }
 
-    if (activeMode === 'tense') {
+    if (qMode === 'tense') {
       const expPrat = w.prat || '';
       const expPerf = w.perf || '';
       const isCorrect =
@@ -432,25 +569,57 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       const res = {
         ok: isCorrect ? 1 : 0,
         exp: expPrat || expPerf,
-        msg: isCorrect ? undefined : `شکل‌های درست: Prät: ${w.prat} • Perf: ${w.perf}`
+        msg: isCorrect ? undefined : `شکل‌های درست: Prät: ${w.prat} • Perf: ${w.perf}`,
+        cands: [expPrat, expPerf, expPrat ? `er ${expPrat}` : ''].filter(Boolean)
       };
       setAnswerResult(res);
-      onRecordResult(w, 'tense', isCorrect ? 2 : 0, false);
+      record(w, 'tense', isCorrect ? 2 : 0);
+      return;
+    }
+
+    if (qMode === 'plural') {
+      const base = (w.pl || '').trim().replace(/^die\s+/i, '');
+      const cands = [base, `die ${base}`];
+      const isCorrect = cands.some(c => nz(c) === nz(trimmed));
+      setAnswerResult({
+        ok: isCorrect ? 1 : 0,
+        exp: base,
+        msg: isCorrect ? undefined : `شکل جمع درست: ${base}`,
+        cands
+      });
+      record(w, 'plural', isCorrect ? (hintLevel > 0 ? 1 : 2) : 0);
+      if (!isCorrect) setQueue(prev => [...prev, currentKey]);
+      return;
+    }
+
+    if (qMode === 'synant') {
+      const isAnt = currentKind === 'ant';
+      const cands = splitList(isAnt ? w.ant : w.syn);
+      const strip = (x: string) => nz(x).replace(/^(der|die|das)\s+/, '');
+      const isCorrect = cands.some(c => strip(c) === strip(trimmed));
+      setAnswerResult({
+        ok: isCorrect ? 1 : 0,
+        exp: cands[0] || '',
+        msg: isCorrect ? undefined : `${isAnt ? 'متضاد' : 'مترادف'} درست: ${cands.join('، ')}`,
+        cands
+      });
+      record(w, 'synant', isCorrect ? (hintLevel > 0 ? 1 : 2) : 0);
+      if (!isCorrect) setQueue(prev => [...prev, currentKey]);
       return;
     }
 
     const r = checkWord(w, trimmed);
-    setAnswerResult(r);
-    onRecordResult(w, activeMode || 'cloze', r.ok ? (hintLevel > 0 ? 1 : 2) : 0, false);
+    setAnswerResult({ ok: r.ok, exp: r.exp, msg: r.msg, cands: [r.exp, ...(w.acc || [])] });
+    record(w, qMode || 'cloze', r.ok ? (hintLevel > 0 ? 1 : 2) : 0);
     if (!r.ok) {
-      setQueue(prev => [...prev, w.id]);
+      setQueue(prev => [...prev, currentKey]);
     }
   };
 
   // Open Full Word Profile Modal from ANY exercise (Section 21)
   const handleOpenWordProfile = () => {
     if (!currentItem) return;
-    if (activeMode === 'case') {
+    if (qMode === 'case') {
       const q = currentItem as CaseQuestion;
       const cleanNoun = q.n.replace(/^(der|die|das)\s+/i, '').trim();
       const matched = words.find(w => w.de.toLowerCase() === cleanNoun.toLowerCase());
@@ -612,7 +781,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </div>
 
         <div className="space-y-2.5">
-          {(Object.keys(EXERCISE_NAMES) as ExerciseMode[]).map(mode => {
+          {(Object.keys(EXERCISE_NAMES) as ExerciseMode[]).filter(mode => mode !== 'hard').map(mode => {
             const info = EXERCISE_NAMES[mode];
             return (
               <div
@@ -762,10 +931,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // Active Exercise Runner
   // ==========================================
   const progressPercent = queue.length > 0 ? Math.round(((currentIndex + 1) / queue.length) * 100) : 0;
-  const isFlashType = activeMode === 'flash' || activeMode === 'free' || activeMode === 'review' || activeMode === 'daily';
+  const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily';
   const isCardRevealed = !!currentItem && revealedCardId === currentItem.id;
 
-  if (queue.length === 0 || currentIndex >= queue.length) {
+  if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
         <span className="text-4xl block">🎉</span>
@@ -835,10 +1004,18 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         <div className="flex items-center justify-between text-xs text-[#5d6676] dark:text-[#a3adbd]">
           <span className="font-medium">
             سؤال {currentIndex + 1} از {queue.length}
-            {settings?.showTimer && cardTimerSec > 0 && (
-              <span className="mr-2 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                ⏱ {cardTimerSec}s
-              </span>
+            {isFlashType && (settings?.revealSec || 0) > 0 ? (
+              !isCardRevealed && (
+                <span className="mr-2 px-2 py-0.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold font-mono">
+                  ⏱ {Math.max(0, (settings?.revealSec || 0) - cardTimerSec)}s
+                </span>
+              )
+            ) : (
+              settings?.showTimer && cardTimerSec > 0 && (
+                <span className="mr-2 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
+                  ⏱ {cardTimerSec}s
+                </span>
+              )
             )}
           </span>
           <span>{progressPercent}٪ تکمیل</span>
@@ -847,6 +1024,17 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
       {/* Active Card Body */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
+        {activeMode === 'hard' && qMode && (
+          <div className="flex justify-center">
+            <span className="px-3 py-1 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-[11px] font-bold">
+              {currentSub === 'flashFa'
+                ? '🎴 فلش‌کارت فارسی ← آلمانی'
+                : currentSub === 'flashDe'
+                  ? '🎴 فلش‌کارت آلمانی ← فارسی'
+                  : `${EXERCISE_NAMES[qMode].icon} ${EXERCISE_NAMES[qMode].title}`}
+            </span>
+          </div>
+        )}
         {/* ========================================================= */}
         {/* FLASHCARD / REVIEW CARD (Sections 10 & 11) */}
         {/* ========================================================= */}
@@ -905,7 +1093,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   {renderUnifiedWordCard(w)}
 
                   {/* Rating / Decision Buttons */}
-                  {activeMode === 'free' ? (
+                  {qMode === 'free' ? (
                     <div className="flex items-center justify-center gap-3 pt-3">
                       <button
                         onClick={() => handleFreeKnow(0)}
@@ -957,7 +1145,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* ========================================================= */}
         {/* ARTICLE PRACTICE (der / die / das) */}
         {/* ========================================================= */}
-        {activeMode === 'art' && (() => {
+        {qMode === 'art' && (() => {
           const w = currentItem as Word;
           return (
             <div className="space-y-4 text-center">
@@ -979,7 +1167,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                           exp: `${art} ${w.de}`,
                           msg: ok ? undefined : `آرتیکل درست: ${w.art}`
                         });
-                        onRecordResult(w, 'art', ok ? 2 : 0, false);
+                        record(w, 'art', ok ? 2 : 0);
                       }}
                       className={`py-3 rounded-2xl font-bold text-lg font-sans transition ${
                         art === 'der' ? 'bg-blue-100 hover:bg-blue-200 text-blue-900' :
@@ -1014,7 +1202,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* ========================================================= */}
         {/* Fulfills Section 19: REDESIGNED CASE AND PREPOSITION WITH 2 BLANKS */}
         {/* ========================================================= */}
-        {activeMode === 'case' && (() => {
+        {qMode === 'case' && (() => {
           const q = currentItem as CaseQuestion;
           const bareNoun = q.n.replace(/^(der|die|das|den|dem|des)\s+/i, '').trim();
           const remainingHints = Math.max(0, 2 - hintLevel);
@@ -1116,6 +1304,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   }`}>
                     {answerResult.msg}
                   </div>
+                  {caseResult && !caseResult.prepOk && (
+                    <MistakeComparison label="حرف اضافه" user={casePrepInput} expected={q.prepAns} />
+                  )}
+                  {caseResult && !caseResult.artOk && (
+                    <MistakeComparison label="آرتیکل" user={caseArtInput} expected={q.artAns} />
+                  )}
                   <div className="p-3 bg-slate-50 dark:bg-[#141923] rounded-xl text-xs text-right space-y-1">
                     <p><b>قاعده:</b> {q.r}</p>
                     <p dir="ltr" className="font-semibold text-slate-800 dark:text-slate-200">{q.ex}</p>
@@ -1136,13 +1330,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* ========================================================= */}
         {/* OTHER INTERACTIVE EXERCISES */}
         {/* ========================================================= */}
-        {(activeMode === 'conj' || activeMode === 'tense' || activeMode === 'cloze' || activeMode === 'plural' || activeMode === 'dict' || activeMode === 'prod') && (() => {
+        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant') && (() => {
           const w = currentItem as Word;
           const remainingHints = Math.max(0, 2 - hintLevel);
 
           return (
             <div className="space-y-4 text-center">
-              {activeMode === 'conj' && (
+              {qMode === 'conj' && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">صرف فعل برای ضمیر داده‌شده:</p>
                   <div className="text-2xl font-bold font-sans py-1 text-slate-900 dark:text-slate-100" dir="ltr">
@@ -1154,7 +1348,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {activeMode === 'tense' && (
+              {qMode === 'tense' && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">فعل را به Präteritum یا Perfekt ببرید:</p>
                   <div className="text-2xl font-bold font-sans py-1 text-slate-900 dark:text-slate-100" dir="ltr">
@@ -1166,7 +1360,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {activeMode === 'cloze' && (
+              {qMode === 'cloze' && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">جای خالی را با کلمه مناسب تکمیل کنید:</p>
                   <div className="text-xl md:text-2xl font-bold font-sans py-2 text-slate-900 dark:text-slate-100 leading-relaxed" dir="ltr">
@@ -1176,7 +1370,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {activeMode === 'plural' && (
+              {qMode === 'plural' && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">شکل جمع این اسم را بنویسید:</p>
                   <div className="text-2xl font-bold font-sans py-1" dir="ltr">
@@ -1186,7 +1380,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {activeMode === 'dict' && (
+              {qMode === 'dict' && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">واژه را بشنوید و بنویسید:</p>
                   <button
@@ -1199,7 +1393,33 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {activeMode === 'prod' && (
+              {qMode === 'synant' && (() => {
+                const isAnt = currentKind === 'ant';
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-[#5d6676]">
+                      {isAnt ? 'متضاد (واژهٔ مخالف)' : 'مترادف (واژهٔ هم‌معنی)'} این واژه را بنویسید:
+                    </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-2xl md:text-3xl font-extrabold font-sans" dir="ltr">{fullWord(w)}</span>
+                      <button
+                        onClick={() => speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
+                        className="w-8 h-8 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
+                      >
+                        🔊
+                      </button>
+                    </div>
+                    <p className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{w.fa}</p>
+                    <span className={`inline-block px-3 py-0.5 rounded-full text-[11px] font-bold ${
+                      isAnt ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'
+                    }`}>
+                      {isAnt ? '↔️ متضاد' : '🟰 مترادف'}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {qMode === 'prod' && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">معادل آلمانی را تایپ کنید (با آرتیکل در صورت اسم بودن):</p>
                   <div className="text-2xl md:text-3xl font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff] py-1">
@@ -1247,7 +1467,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                   {hintLevel > 0 && (
                     <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 rounded-xl text-xs text-amber-900 dark:text-amber-200" dir="ltr">
-                      {w.ans ? w.ans.slice(0, hintLevel * 2) + '...' : w.de.slice(0, hintLevel * 2) + '...'}
+                      {qMode === 'synant' ? (() => {
+                        const isAnt = currentKind === 'ant';
+                        const list = splitList(isAnt ? w.ant : w.syn);
+                        const fa = isAnt ? w.antFa : w.synFa;
+                        return hintLevel === 1
+                          ? `${list.length} پاسخ ممکن — شروع یکی از آن‌ها: ${(list[0] || '').slice(0, 2)}...`
+                          : (fa ? `ترجمهٔ فارسی: ${fa}` : `شروع یکی از پاسخ‌ها: ${(list[0] || '').slice(0, 4)}...`);
+                      })() : qMode === 'plural'
+                        ? (w.pl || w.de).slice(0, hintLevel * 2) + '...'
+                        : w.ans ? w.ans.slice(0, hintLevel * 2) + '...' : w.de.slice(0, hintLevel * 2) + '...'}
                     </div>
                   )}
                 </div>
@@ -1258,6 +1487,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   }`}>
                     {answerResult.ok ? '✔ درست است! آفرین.' : `✘ ${answerResult.msg || 'پاسخ نادرست است.'}`}
                   </div>
+
+                  {!answerResult.ok && (
+                    <MistakeComparison
+                      user={userInput}
+                      expected={answerResult.cands && answerResult.cands.length > 0 ? answerResult.cands : answerResult.exp}
+                    />
+                  )}
 
                   {renderUnifiedWordCard(w)}
 
@@ -1275,15 +1511,20 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       </div>
 
       {/* Fulfills Section 21: Full Word Profile Modal from Exercise */}
-      {profileModalWord && (
-        <WordDetailModal
-          word={profileModalWord}
-          onClose={() => setProfileModalWord(null)}
-          onEdit={() => {}}
-          onDelete={() => {}}
-          onImageChange={() => {}}
-        />
-      )}
+      {profileModalWord && (() => {
+        const inLibrary = words.some(x => x.id === profileModalWord.id);
+        const liveWord = words.find(x => x.id === profileModalWord.id) || profileModalWord;
+        const notSaved = () => onShowToast('این مورد نمونهٔ آموزشی است و در کتابخانهٔ شما ذخیره نشده است.', true);
+        return (
+          <WordDetailModal
+            word={liveWord}
+            onClose={() => setProfileModalWord(null)}
+            onEdit={w => (inLibrary ? onEditWord?.(w) : notSaved())}
+            onDelete={w => (inLibrary ? onDeleteWord?.(w) : notSaved())}
+            onImageChange={(w, img) => (inLibrary ? onImageChange?.(w, img) : notSaved())}
+          />
+        );
+      })()}
     </div>
   );
 };
