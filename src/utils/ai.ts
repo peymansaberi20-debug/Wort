@@ -402,10 +402,10 @@ Output MUST be a JSON array containing exactly one object with these exact field
 9. "pos": "اسم" | "فعل" | "صفت" | "قید" | "حرف اضافه" | "اصطلاح"
 10. "lvl": "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
 11. "cat": ${catRule}
-12. "ex": natural German example sentence
-13. "exFa": Persian translation of ex
-14. "ex2": second natural German example sentence
-15. "ex2Fa": Persian translation of ex2
+12. "ex": A natural, grammatically correct German example sentence at CEFR level A1–A2. Use simple sentence structure, common everyday vocabulary, and a clear context that demonstrates the target word's meaning.
+13. "exFa": An accurate, natural Persian translation of ex.
+14. "ex2": A natural, grammatically correct German example sentence at CEFR level B1–B2. Use more varied sentence structures, richer vocabulary, and a realistic context appropriate for an intermediate learner. The sentence must clearly demonstrate the target word's meaning.
+15. "ex2Fa": An accurate, natural Persian translation of ex2.
 16. "cloze": German sentence where target word/expression is replaced with _____
 17. "ans": the exact answer to fill cloze
 18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb)
