@@ -393,6 +393,8 @@ interface ExercisesViewProps {
   onEditWord?: (word: Word) => void;
   onDeleteWord?: (word: Word) => void;
   onImageChange?: (word: Word, newImg: string) => void;
+  /** true while the exercise is hidden behind the word edit form */
+  paused?: boolean;
 }
 
 export const ExercisesView: React.FC<ExercisesViewProps> = ({
@@ -406,8 +408,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onShowToast,
   onEditWord,
   onDeleteWord,
-  onImageChange
+  onImageChange,
+  paused
 }) => {
+  const pausedRef = useRef<boolean>(!!paused);
+  pausedRef.current = !!paused;
+
   // Free review configuration
   const [freeCat, setFreeCat] = useState<string>(settings?.freeCat || '');
   const [freeDir, setFreeDir] = useState<'de' | 'fa'>(settings?.freeDir || 'de');
@@ -660,6 +666,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     if (isTimerType && (revealSec > 0 || showTimer)) {
       let elapsed = 0;
       timerRef.current = setInterval(() => {
+        if (pausedRef.current) return;
         elapsed++;
         setCardTimerSec(elapsed);
 
@@ -1788,7 +1795,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           <WordDetailModal
             word={liveWord}
             onClose={() => setProfileModalWord(null)}
-            onEdit={w => (inLibrary ? onEditWord?.(w) : notSaved())}
+            onEdit={w => {
+              if (!inLibrary) return notSaved();
+              setProfileModalWord(null);
+              onEditWord?.(w);
+            }}
             onDelete={w => (inLibrary ? onDeleteWord?.(w) : notSaved())}
             onImageChange={(w, img) => (inLibrary ? onImageChange?.(w, img) : notSaved())}
           />
