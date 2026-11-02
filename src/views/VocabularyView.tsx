@@ -575,7 +575,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleAiAutoFill}
+                onClick={() => void handleAiAutoFill()}
                 disabled={aiLoading || translateLoading || !formDe.trim()}
                 className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
               >
