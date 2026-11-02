@@ -19,7 +19,7 @@ interface DashboardViewProps {
   ignoredQualityIds: Record<string, number>;
   onNavigate: (view: string) => void;
   onOpenQualityModal: () => void;
-  onPracticeWords: (wordIds: string[], intent?: 'review' | 'targeted') => void;
+  onPracticeWords: (wordIds: string[], intent?: 'review' | 'targeted' | 'hard') => void;
   onUpdateDailyNewTarget: (target: number) => void;
   onSelectWord: (word: Word) => void;
 }
@@ -538,7 +538,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="pt-1">
               <button
-                onClick={() => onPracticeWords(hardMistakenWords.map(w => w.id), 'targeted')}
+                onClick={() => onPracticeWords(hardMistakenWords.map(w => w.id), 'hard')}
                 className="w-full bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white py-3 px-4 rounded-xl text-xs md:text-sm font-bold shadow-xs transition flex items-center justify-center gap-2"
               >
                 <span>🎯 تمرین اختصاصی این واژه‌های سخت ({hardMistakenWords.length} واژه)</span>
