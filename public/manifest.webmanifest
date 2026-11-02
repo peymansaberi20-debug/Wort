@@ -1,0 +1,27 @@
+
+{
+  "id": "/",
+  "name": "Wort",
+  "short_name": "Wort",
+  "description": "Deutscher Wortschatz lernen",
+  "lang": "de",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/IMG_9113.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/IMG_9113.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
