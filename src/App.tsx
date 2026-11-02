@@ -756,7 +756,7 @@ export default function App() {
               <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">آیا از حذف واژهٔ «<strong>{pendingDeletion.words[0].de}</strong>» اطمینان دارید؟ این عملیات فقط همین واژه را حذف می‌کند و قابل بازگشت نیست.</p>
             ) : (
               <div className="text-sm leading-7 text-slate-700 dark:text-slate-200">
-                <p>آیا از حذف کامل <strong>{pendingDeletion.words.length} واژه</strong> انتخاب‌شده از بخش «{pendingDeletion.source}» مطمئن هستید؟ {pendingDeletion.source === 'تشخیص واژه‌های تکراری' ? 'این‌ها رکوردهای تکراری/منبع هستند؛ واژه‌های انتخاب‌شده حذف می‌شوند و فقط نسخه‌هایی که در این فهرست انتخاب نشده‌اند باقی می‌مانند.' : ''} این عملیات قابل بازگشت نیست.</p>
+                <p>آیااز حذف کامل <strong>{pendingDeletion.words.length} واژه</strong> انتخاب‌شده از بخش «{pendingDeletion.source}» مطمئن هستید؟ {pendingDeletion.source === 'تشخیص واژه‌های تکراری' ? 'این‌ها رکوردهای تکراری/منبع هستند؛ واژه‌های انتخاب‌شده حذف می‌شوند و فقط نسخه‌هایی که در این فهرست انتخاب نشده‌اند باقی می‌مانند.' : ''} این عملیات قابل بازگشت نیست.</p>
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">نمونه: {pendingDeletion.words.slice(0, 3).map(w => w.de).join('، ')}{pendingDeletion.words.length > 3 ? ' و موارد دیگر' : ''}</p>
               </div>
             )}
