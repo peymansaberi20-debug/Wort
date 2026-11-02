@@ -1,27 +1,23 @@
 
 {
-  "id": "/",
-  "name": "Wort",
+  "id": "/Wort/",
+  "name": "Wort – Deutscher Wortschatz",
   "short_name": "Wort",
-  "description": "Deutscher Wortschatz lernen",
-  "lang": "de",
-  "start_url": "/",
-  "scope": "/",
+  "description": "واژه‌نامه آلمانی، فلش‌کارت و تمرین واژگان",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "/IMG_9113.png",
+      "src": "./IMG_9113.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "/IMG_9113.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ]
 }
