@@ -76,6 +76,17 @@ export default function App() {
     if (!pendingDeletion) deletionLockRef.current = false;
   }, [pendingDeletion]);
   const [editingWordId, setEditingWordId] = useState<string | null>(null);
+  // True while a word is edited from inside an exercise: the exercise stays alive (hidden) and is shown again afterwards
+  const [exerciseSuspended, setExerciseSuspended] = useState(false);
+  const [exerciseReturnTab, setExerciseReturnTab] = useState<NavTab>('dash');
+
+  useEffect(() => {
+    if (exerciseSuspended && !editingWordId) {
+      setExerciseSuspended(false);
+      setCurrentTab(exerciseReturnTab);
+      window.scrollTo({ top: 0 });
+    }
+  }, [exerciseSuspended, editingWordId, exerciseReturnTab]);
   const [isQualityModalOpen, setIsQualityModalOpen] = useState(false);
   const [isWordManagerOpen, setIsWordManagerOpen] = useState(false);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
@@ -139,6 +150,7 @@ export default function App() {
     if (editingWordId && tab !== 'lib') {
       setEditingWordId(null);
     }
+    setExerciseSuspended(false);
 
     setCurrentTab(tab);
     setActiveExercise(null);
@@ -174,6 +186,12 @@ export default function App() {
     }
     if (activeHelpTopic) {
       setActiveHelpTopic(null);
+      return;
+    }
+
+    // Editing a word that was opened from an exercise: close the form and go back to the exercise
+    if (exerciseSuspended) {
+      setEditingWordId(null);
       return;
     }
 
@@ -279,12 +297,20 @@ export default function App() {
   };
 
   const handleEditWord = (word: Word) => {
-    // Keep a route back to the exercise/profile context, while preventing stale exercise IDs.
-    if (currentTab !== 'lib' || activeExercise) {
-      setHistoryStack(prev => [...prev.slice(-25), currentTab]);
-    }
     setSelectedWord(null);
     setEditingWordId(word.id);
+    if (activeExercise) {
+      // Opened from inside an exercise: keep the exercise alive (hidden) so it can be resumed afterwards
+      setExerciseReturnTab(currentTab);
+      setExerciseSuspended(true);
+      setCurrentTab('lib');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    // Keep a route back to the previous context.
+    if (currentTab !== 'lib') {
+      setHistoryStack(prev => [...prev.slice(-25), currentTab]);
+    }
     setCurrentTab('lib');
     setActiveExercise(null);
     setPracticeWordIds(null);
@@ -496,8 +522,10 @@ export default function App() {
 
         {/* Dynamic Tab View */}
         <main className="min-w-0">
-          {activeExercise ? (
+          {activeExercise && (
+            <div className={exerciseSuspended ? 'hidden' : ''}>
             <ExercisesView
+              paused={exerciseSuspended}
               words={state.words}
               settings={state.set}
               activeMode={activeExercise}
@@ -514,7 +542,9 @@ export default function App() {
               onDeleteWord={handleDeleteWord}
               onImageChange={handleImageChange}
             />
-          ) : (
+            </div>
+          )}
+          {(!activeExercise || exerciseSuspended) && (
             <>
               {currentTab === 'dash' && (
                 <DashboardView
@@ -756,7 +786,7 @@ export default function App() {
               <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">آیا از حذف واژهٔ «<strong>{pendingDeletion.words[0].de}</strong>» اطمینان دارید؟ این عملیات فقط همین واژه را حذف می‌کند و قابل بازگشت نیست.</p>
             ) : (
               <div className="text-sm leading-7 text-slate-700 dark:text-slate-200">
-                <p>آیااز حذف کامل <strong>{pendingDeletion.words.length} واژه</strong> انتخاب‌شده از بخش «{pendingDeletion.source}» مطمئن هستید؟ {pendingDeletion.source === 'تشخیص واژه‌های تکراری' ? 'این‌ها رکوردهای تکراری/منبع هستند؛ واژه‌های انتخاب‌شده حذف می‌شوند و فقط نسخه‌هایی که در این فهرست انتخاب نشده‌اند باقی می‌مانند.' : ''} این عملیات قابل بازگشت نیست.</p>
+                <p>آیا از حذف کامل <strong>{pendingDeletion.words.length} واژه</strong> انتخاب‌شده از بخش «{pendingDeletion.source}» مطمئن هستید؟ {pendingDeletion.source === 'تشخیص واژه‌های تکراری' ? 'این‌ها رکوردهای تکراری/منبع هستند؛ واژه‌های انتخاب‌شده حذف می‌شوند و فقط نسخه‌هایی که در این فهرست انتخاب نشده‌اند باقی می‌مانند.' : ''} این عملیات قابل بازگشت نیست.</p>
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">نمونه: {pendingDeletion.words.slice(0, 3).map(w => w.de).join('، ')}{pendingDeletion.words.length > 3 ? ' و موارد دیگر' : ''}</p>
               </div>
             )}
