@@ -316,94 +316,47 @@ export function aiToIMP(
 /**
  * ساخت prompt برای واردکردن و تکمیل گروهی واژه‌ها
  */
-export function AIPM(
-  words: string | Word[],
-  existingWords: Word[] = [],
-  category = ''
-): string {
-  const input =
-    typeof words === 'string'
-      ? words
-      : words.map((word) => word.de).filter(Boolean).join('\n');
-
-  const existing = existingWords
-    .map((word) => word.de)
-    .filter(Boolean)
-    .slice(0, 150);
-
-  return `
-تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
-برای هر واژه اطلاعات آموزشی آلمانی به فارسی تولید کن.
-فقط JSON معتبر و بدون Markdown برگردان.
-
-دسته‌بندی: ${JSON.stringify(category)}
-واژه‌های موجود: ${JSON.stringify(existing)}
-واژه‌های ورودی:
-${input}
-
-ساختار خروجی:
-{
-  "words": [
-    {
-      "de": "",
-      "art": "",
-      "fa": "",
-      "syn": "",
-      "synFa": "",
-      "ant": "",
-      "antFa": "",
-      "pl": "",
-      "pos": "",
-      "lvl": "",
-      "ex": "",
-      "exFa": "",
-      "ex2": "",
-      "ex2Fa": "",
-      "conj": "",
-      "prat": "",
-      "perf": "",
-      "komparativ": "",
-      "superlativ": "",
-      "imperativDu": "",
-      "imperativIhr": "",
-      "imperativSie": "",
-      "sep": ""
-    }
-  ]
-}
-`.trim();
-}
-
-/**
- * ساخت prompt برای تهیه اطلاعات یک واژه
- */
 export function AIP(
   targetWord: string | Word,
   words: Word[] = [],
   category = ''
 ): string {
-  const term =
+  const term = asText(
     typeof targetWord === 'string'
       ? targetWord
-      : targetWord.de;
+      : targetWord.de
+  );
 
-  const existing = words
-    .slice(0, 150)
-    .map((word) => word.de)
-    .filter(Boolean)
-    .join(', ');
+  // فهرست واژه‌های موجود صرفاً برای بررسی تکراری‌ها بود؛
+  // نباید وارد دستور تولید یک واژه شود.
+  void words;
+
+  if (!term) {
+    throw new Error('واژه‌ای برای تکمیل به هوش مصنوعی ارسال نشده است.');
+  }
 
   return `
 تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
-برای واژه زیر اطلاعات آموزشی دقیق تولید کن.
-معنی‌ها و توضیحات فارسی روان باشند.
-فقط JSON معتبر و بدون Markdown برگردان.
 
-واژه: ${JSON.stringify(term)}
-دسته‌بندی: ${JSON.stringify(category)}
-واژه‌های موجود برای جلوگیری از تکرار: ${JSON.stringify(existing)}
+فقط پروفایل همین یک واژه یا عبارت را تکمیل کن.
 
-ساختار خروجی:
+واژه هدف:
+${JSON.stringify(term)}
+
+قوانین الزامی:
+1. فقط یک شیء JSON برگردان؛ نه آرایه و نه چند واژه.
+2. فیلد de باید همین واژه هدف باشد؛ واژه دیگری نساز و جایگزین نکن.
+3. اگر واژه با der، die یا das نوشته شده است، آرتیکل را در art و خود اسم را در de قرار بده.
+4. اگر ورودی یک عبارت یا فعل چندکلمه‌ای است، تمام عبارت را حفظ کن.
+5. واژه‌های موجود، نمونه‌ها و واژه‌های پیش‌فرض برنامه ورودی تولید نیستند.
+6. معنی و توضیحات را به فارسی روان بنویس.
+7. برای اطلاعات نامربوط، رشته خالی قرار بده؛ اطلاعات دستوری را حدس نزن.
+8. فقط JSON معتبر و بدون Markdown برگردان.
+
+دسته‌بندی:
+${JSON.stringify(category)}
+
+ساختار دقیق خروجی:
 {
   "de": "",
   "art": "",
@@ -539,53 +492,155 @@ export async function processBatchWordsWithGemini(
     return { ws, errs: ['هیچ واژه‌ای برای پردازش ارسال نشده است.'] };
   }
 
+  const normalizeInput = (value: string): string =>
+    asText(value)
+      .normalize('NFC')
+      .replace(/^\[(?:A1|A2|B1|B2|C1|C2)\]\s*/i, '')
+      .replace(/^(?:der|die|das)\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .toLocaleLowerCase('de');
+
   const batchSize = 5;
 
   for (let start = 0; start < input.length; start += batchSize) {
     const batch = input.slice(start, start + batchSize);
+    const requested = new Set(batch.map(normalizeInput));
 
     onProgress?.(
       start,
       input.length,
-      `در حال تکمیل واژه‌های ${start + 1} تا ${Math.min(start + batch.length, input.length)}`
+      `در حال تکمیل واژه‌های ${start + 1} تا ${Math.min(
+        start + batch.length,
+        input.length
+      )}`
     );
 
     const prompt = `
-برای هر یک از واژه‌ها یا عبارت‌های زیر اطلاعات آموزشی آلمانی تولید کن.
-خروجی فقط JSON معتبر و شامل آرایه‌ای در کلید words باشد.
-ترجمه فارسی، نوع کلمه و مثال‌ها را تا حد ممکن دقیق بنویس.
-واژه‌های ناقص یا غیرقابل تشخیص را حدس نزن.
+برای هر یک از ورودی‌های مشخص‌شده، اطلاعات آموزشی آلمانی تولید کن.
 
-ساختار هر واژه:
-{"de":"","art":"","fa":"","syn":"","synFa":"","ant":"","antFa":"","pl":"","pos":"","lvl":"","ex":"","exFa":"","ex2":"","ex2Fa":"","conj":"","prat":"","perf":"","komparativ":"","superlativ":"","imperativDu":"","imperativIhr":"","imperativSie":"","sep":""}
+قوانین:
+- فقط ورودی‌های آرایه را پردازش کن.
+- هیچ واژه پیش‌فرض یا واژه جدیدی اضافه نکن.
+- فیلد de باید با همان ورودی متناظر باشد.
+- ترتیب ورودی‌ها را حفظ کن.
+- اگر ورودی با پیشوند سطح مانند [B2] شروع می‌شود، آن پیشوند را از de حذف کن و سطح را در lvl قرار بده.
+- برای هر ورودی یک شیء خروجی تولید کن.
+- فقط JSON معتبر برگردان.
 
-دسته‌بندی: ${JSON.stringify(category || '')}
-واژه‌های ورودی: ${JSON.stringify(batch)}
+دسته‌بندی:
+${JSON.stringify(category || '')}
 
-خروجی:
-{"words":[...]}
+آرایه ورودی:
+${JSON.stringify(batch)}
+
+ساختار خروجی:
+{
+  "words": [
+    {
+      "de": "",
+      "art": "",
+      "fa": "",
+      "syn": "",
+      "synFa": "",
+      "ant": "",
+      "antFa": "",
+      "pl": "",
+      "pos": "",
+      "lvl": "",
+      "ex": "",
+      "exFa": "",
+      "ex2": "",
+      "ex2Fa": "",
+      "conj": "",
+      "prat": "",
+      "perf": "",
+      "komparativ": "",
+      "superlativ": "",
+      "imperativDu": "",
+      "imperativIhr": "",
+      "imperativSie": "",
+      "sep": ""
+    }
+  ]
+}
 `.trim();
 
     try {
-      const response = await requestGemini(prompt, { timeoutMs: 45000 });
+      const response = await requestGemini(prompt, {
+        timeoutMs: 45000
+      });
+
       const parsed = parseAI(response);
+      const returned = unwrapWords(parsed);
+
+      if (!returned.length) {
+        errs.push(
+          `بسته ${Math.floor(start / batchSize) + 1}: خروجی واژه‌ای نداشت.`
+        );
+        continue;
+      }
+
       const converted = aiToIMP(
-        parsed?.words ?? parsed,
+        returned,
         [...existingWords, ...ws],
         category || ''
       );
 
-      ws.push(...converted.ws);
+      const accepted = converted.ws.filter((word) =>
+        requested.has(normalizeInput(word.de))
+      );
+
+      const unexpected = converted.ws.filter(
+        (word) => !requested.has(normalizeInput(word.de))
+      );
+
+      ws.push(...accepted);
+
       errs.push(...converted.errs);
+
+      for (const word of unexpected) {
+        errs.push(
+          `«${word.de}» وارد نشد؛ این واژه در فهرست ورودی این بسته نبود.`
+        );
+      }
+
+      const acceptedKeys = new Set(
+        accepted.map((word) => normalizeInput(word.de))
+      );
+
+      for (const term of batch) {
+        if (!acceptedKeys.has(normalizeInput(term))) {
+          const alreadyReported = converted.errs.some((message) =>
+            message.toLocaleLowerCase('de').includes(
+              normalizeInput(term)
+            )
+          );
+
+          if (!alreadyReported) {
+            errs.push(
+              `«${term}»: در خروجی معتبر این بسته پیدا نشد.`
+            );
+          }
+        }
+      }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'خطای نامشخص Gemini';
+        error instanceof Error
+          ? error.message
+          : 'خطای نامشخص Gemini';
 
-      errs.push(`بسته ${Math.floor(start / batchSize) + 1}: ${message}`);
+      errs.push(
+        `بسته ${Math.floor(start / batchSize) + 1}: ${message}`
+      );
     }
 
     const done = Math.min(start + batch.length, input.length);
-    onProgress?.(done, input.length, `پردازش ${done} از ${input.length} واژه`);
+
+    onProgress?.(
+      done,
+      input.length,
+      `پردازش ${done} از ${input.length} واژه`
+    );
   }
 
   return { ws, errs };
