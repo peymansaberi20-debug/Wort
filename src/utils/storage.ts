@@ -310,16 +310,104 @@ export function lev(a: string, b: string): number {
 export const nz = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase();
 export const nz2 = (s: string): string => nz(s).replace(/[.,!?;:"“”]/g, '');
 
-export function checkWord(w: Word, inp: string): { ok: number; exp: string; cat?: string; msg?: string } {
-  const exp = w.ans || fullWord(w);
-  if ([exp, ...w.acc].some(a => nz(a) === nz(inp))) return { ok: 1, exp };
+const normPos = (p?: string) => (p || '').trim().toLowerCase();
+/** Part-of-speech labels may be Persian (app prompts) or German (other AI prompts): accept both. */
+export const isVerbPos = (p?: string) => ['فعل', 'verb'].includes(normPos(p));
+export const isAdjPos = (p?: string) => ['صفت', 'adjektiv', 'adjective'].includes(normPos(p));
+export const isNounPos = (p?: string) => ['اسم', 'nomen', 'substantiv', 'noun'].includes(normPos(p));
+
+const VERB_PARTICLES = [
+  'ab', 'an', 'auf', 'aus', 'bei', 'ein', 'fest', 'her', 'hin', 'los', 'mit', 'nach', 'um', 'vor', 'weg',
+  'weiter', 'zu', 'zurück', 'zusammen', 'statt', 'teil', 'heraus', 'hinaus', 'herein', 'hinein', 'vorbei',
+  'wieder', 'durch', 'dar', 'fern', 'frei', 'hoch', 'nieder', 'empor', 'zurecht'
+];
+
+/**
+ * Accepted ways to write a verb as a headword. For separable verbs both the infinitive
+ * ("abziehen") and the separated form ("ziehen ab") are accepted.
+ */
+export function verbForms(w: Partial<Word>): string[] {
+  const de = (w.de || '').trim();
+  if (!de) return [];
+  const out = new Set<string>([de]);
+  const sep = (w.sep || '').trim().toLowerCase();
+  const low = de.toLowerCase();
+  if (sep && low.startsWith(sep) && low.length > sep.length) {
+    out.add(`${de.slice(sep.length)} ${sep}`);
+  }
+  const parts = de.split(/\s+/);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1].toLowerCase();
+    if (last === sep || VERB_PARTICLES.includes(last)) {
+      out.add(last + parts.slice(0, -1).join(' ').replace(/^sich\s+/i, '').replace(/\s+/g, ''));
+      out.add(parts.slice(0, -1).join(' '));
+    }
+  }
+  return [...out];
+}
+
+const ARTICLE_WORDS = ['der', 'die', 'das'];
+
+export function checkWord(
+  w: Word,
+  inp: string,
+  kind: string = 'cloze'
+): { ok: number; exp: string; cat?: string; msg?: string; cands?: string[] } {
+  // "dict" and "prod" ask for the headword itself; only the cloze exercise uses the blank's answer.
+  const isForm = kind === 'prod' || kind === 'dict';
+  const exp = isForm ? fullWord(w) : w.ans || fullWord(w);
+  const isVerb = isVerbPos(w.pos);
+  const isAdj = isAdjPos(w.pos);
+  const clean = (x: string) => nz2(x || '');
+
+  let accepted: string[] = [exp, ...(w.acc || [])];
+  if (isForm && isVerb) accepted = [...accepted, ...verbForms(w)];
+  if (isForm && !w.art && w.de) accepted.push(w.de);
+
+  // Adjectives in the cloze exercise: only the exact inflected form of the sentence is correct
+  if (!isForm && isAdj && w.ans) accepted = [w.ans];
+
+  // Imperatives in the cloze exercise: the form must match the pronoun of the sentence
+  const impMap: [string, string | undefined][] = [
+    ['du', w.imperativDu],
+    ['ihr', w.imperativIhr],
+    ['Sie', w.imperativSie]
+  ];
+  const impHit = !isForm && isVerb && w.ans ? impMap.find(([, v]) => v && clean(v) === clean(w.ans)) : undefined;
+  if (impHit) accepted = [w.ans];
+
+  if (accepted.some(a => nz2(a) === nz2(inp)) && nz(inp)) return { ok: 1, exp, cands: accepted };
+
+  const base = { ok: 0, exp, cands: accepted };
+
+  if (impHit) {
+    const other = impMap.find(([p, v]) => p !== impHit[0] && v && clean(v) === clean(inp));
+    if (other) {
+      return { ...base, cat: 'imperative', msg: `این شکل امری برای ضمیر «${other[0]}» است؛ در این جمله ضمیر «${impHit[0]}» لازم است: ${exp}` };
+    }
+    if (clean(inp) === clean(w.de)) {
+      return { ...base, cat: 'imperative', msg: `شکل امری (برای ضمیر «${impHit[0]}») لازم است، نه مصدر: ${exp}` };
+    }
+    return { ...base, cat: 'imperative', msg: `شکل امری درست برای ضمیر «${impHit[0]}»: ${exp}` };
+  }
+
+  if (!isForm && isAdj && w.ans) {
+    if (clean(inp) === clean(w.de) && clean(w.de) !== clean(w.ans)) {
+      return { ...base, cat: 'adjective', msg: `شکل پایهٔ صفت را نوشته‌اید؛ در این جمله صفت باید صرف شود: ${exp}` };
+    }
+    return {
+      ...base,
+      cat: lev(nz(inp), nz(exp)) <= 2 ? 'spelling' : 'adjective',
+      msg: `صفت باید به شکل صرف‌شدهٔ درست نوشته شود: ${exp}`
+    };
+  }
 
   const e = exp.split(' ');
   const u = inp.trim().split(/\s+/);
   let cat = 'other';
   let msg = 'پاسخ نادرست است.';
 
-  if (e.length === 2) {
+  if (e.length === 2 && ARTICLE_WORDS.includes(e[0].toLowerCase())) {
     if (u.length === 1 && nz(u[0]) === nz(e[1])) {
       cat = 'missing';
       msg = 'آرتیکل را ننوشتید؛ آرتیکل درست: ' + e[0].toLowerCase();
@@ -334,7 +422,7 @@ export function checkWord(w: Word, inp: string): { ok: number; exp: string; cat?
     cat = 'spelling';
     msg = 'املا اشتباه است؛ درست: ' + exp;
   }
-  return { ok: 0, exp, cat, msg };
+  return { ...base, cat, msg };
 }
 
 export function genCheck(q: { exp: string; acc?: string[] }, v: string): { ok: number; exp: string; msg?: string } {
@@ -393,7 +481,7 @@ const SUF: Record<string, string[]> = {
 
 export function auditWord(w: Word): string[] {
   const o: string[] = [];
-  const noun = w.pos === 'اسم' || !!w.art;
+  const noun = isNounPos(w.pos) || !!w.art;
   const ex = (w.ex || '').trim();
 
   if (noun) {
@@ -409,7 +497,7 @@ export function auditWord(w: Word): string[] {
     if (!w.pl) o.push('جمع ثبت نشده');
   }
 
-  if (w.pos === 'فعل') {
+  if (isVerbPos(w.pos)) {
     if (!w.conj) o.push('صرف حال ندارد');
     if (!w.perf) o.push('Perfekt ندارد');
   }
@@ -418,11 +506,6 @@ export function auditWord(w: Word): string[] {
     o.push('جملهٔ مثال ندارد');
   } else {
     if (ex.split(/\s+/).length < 3) o.push('مثال خیلی کوتاه است (طبیعی نیست)');
-    const b = (w.sep && w.de.startsWith(w.sep) ? w.de.slice(w.sep.length) : w.de).toLowerCase().replace(/e?n$/, '');
-    const s = b.slice(0, Math.max(3, b.length - 2));
-    if (!ex.toLowerCase().includes(s) && !(w.pl && ex.toLowerCase().includes(w.pl.toLowerCase().slice(0, Math.max(3, w.pl.length - 1))))) {
-      o.push('واژه در جملهٔ مثال دیده نمی‌شود');
-    }
     if (!w.exFa) o.push('ترجمهٔ مثال ندارد');
     if (w.ex2 && w.ex2 === ex) o.push('دو مثال یکسان است');
   }
@@ -431,7 +514,6 @@ export function auditWord(w: Word): string[] {
     o.push('ترجمهٔ فارسی ندارد');
   } else {
     if (/[A-Za-z]/.test(w.fa)) o.push('ترجمه حروف لاتین دارد؛ بررسی شود');
-    if (w.fa.split(/[،؛\/|]/).length > 2) o.push('چندمعنایی؟ برای هر معنی ورودی جدا بسازید');
   }
 
   if (w.ant && (w.ant.toLowerCase() === w.de.toLowerCase() || w.ant === w.syn)) {
@@ -445,4 +527,57 @@ export function auditWord(w: Word): string[] {
   }
 
   return o;
+}
+
+/**
+ * Word family parsing (for the noun ↔ verb exercises).
+ * Reads the line "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | ..." from the notes.
+ */
+export interface WordFamily {
+  nouns: string[];
+  verbs: string[];
+  adjs: string[];
+}
+
+export function parseFamily(notes: string): WordFamily {
+  const fam: WordFamily = { nouns: [], verbs: [], adjs: [] };
+  const line = String(notes || '')
+    .split(/\r?\n/)
+    .find(l => l.trim().startsWith('خانواده واژگانی'));
+  if (!line) return fam;
+  const body = line.replace(/^[^:：]*[:：]/, '');
+  body.split(/[|｜]/).forEach(part => {
+    const m = part.match(/^\s*(اسم|فعل|صفت)[^:：]*[:：]\s*(.+)$/);
+    if (!m) return;
+    const bucket = m[1] === 'اسم' ? fam.nouns : m[1] === 'فعل' ? fam.verbs : fam.adjs;
+    m[2]
+      .replace(/[（(][^)）]*[)）]/g, '') // remove Persian glosses in parentheses
+      .split(/[,،;؛/]|\s+یا\s+/)
+      .map(x => x.trim())
+      .filter(x => /[A-Za-zÄÖÜäöüß]/.test(x))
+      .forEach(x => {
+        if (!bucket.some(b => nz(b) === nz(x))) bucket.push(x);
+      });
+  });
+  return fam;
+}
+
+/**
+ * Correct answers of the noun → verb ('n2v') and verb → noun ('v2n') exercises.
+ */
+export function familyCands(w: Word, mode: string): string[] {
+  const fam = parseFamily(w.notes);
+  const self = nz(w.de);
+  if (mode === 'n2v') {
+    if (!(w.art || isNounPos(w.pos))) return [];
+    return fam.verbs.map(v => v.replace(/^sich\s+/i, '').trim()).filter(v => v && nz(v) !== self);
+  }
+  if (mode === 'v2n') {
+    if (!isVerbPos(w.pos)) return [];
+    return fam.nouns
+      .filter(n => /^(der|die|das)\s+\S/i.test(n))
+      .map(n => n.replace(/\s+/g, ' ').trim())
+      .filter(n => nz(n.replace(/^(der|die|das)\s+/i, '')) !== self);
+  }
+  return [];
 }
