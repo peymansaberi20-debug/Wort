@@ -8,6 +8,8 @@ interface WordManagerModalProps {
   onMoveWords: (wordIds: string[], targetCategory: string) => void;
   onBatchDelete: (wordIds: string[]) => void;
   onOpenDuplicateDetector?: () => void;
+  onOpenQualityControl?: () => void;
+  qualityIssueCount?: number;
 }
 
 export const WordManagerModal: React.FC<WordManagerModalProps> = ({
@@ -15,7 +17,9 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
   onClose,
   onMoveWords,
   onBatchDelete,
-  onOpenDuplicateDetector
+  onOpenDuplicateDetector,
+  onOpenQualityControl,
+  qualityIssueCount = 0
 }) => {
   const [srcCat, setSrcCat] = useState<string>('*'); // default: all words!
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -108,14 +112,14 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
     >
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col text-right">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
+        <div className="px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
           <div className="flex items-center gap-2">
             <span className="text-xl">🗂</span>
             <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
               مدیریت و انتقال گروهی واژه‌ها
             </h3>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {onOpenDuplicateDetector && (
               <button
                 onClick={onOpenDuplicateDetector}
@@ -125,17 +129,33 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
                 🔍 بررسی تکراری‌ها
               </button>
             )}
+            {onOpenQualityControl && (
+              <button
+                onClick={onOpenQualityControl}
+                className="bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1"
+                title="کنترل کیفیت واژگان"
+              >
+                ✅ کنترل کیفیت
+                {qualityIssueCount > 0 && (
+                  <span className="bg-amber-500 text-white rounded-full px-1.5 text-[10px] leading-4">{qualityIssueCount}</span>
+                )}
+              </button>
+            )}
             <button
               onClick={() => setShowHelp(prev => !prev)}
-              className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1"
+              aria-label="راهنما"
+              title="راهنما"
+              className="w-8 h-8 rounded-full bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 text-base font-extrabold transition flex items-center justify-center"
             >
-              ❓ راهنما
+              !
             </button>
             <button
               onClick={onClose}
-              className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
+              aria-label="خروج"
+              title="خروج"
+              className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 text-base font-semibold transition flex items-center justify-center"
             >
-              ✕ بستن
+              ✕
             </button>
           </div>
         </div>
