@@ -14,7 +14,8 @@ import {
   norm,
   fullWord,
   clearReviewHistory,
-  clearAllVocabulary
+  clearAllVocabulary,
+  auditWord
 } from './utils/storage';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
@@ -151,6 +152,8 @@ export default function App() {
       setEditingWordId(null);
     }
     setExerciseSuspended(false);
+    setIsQualityModalOpen(false);
+    setIsWordManagerOpen(false);
 
     setCurrentTab(tab);
     setActiveExercise(null);
@@ -159,6 +162,11 @@ export default function App() {
   };
 
   const handleBack = () => {
+    // Word edit form opened from the quality control list: close it and show the list again
+    if (editingWordId && isQualityModalOpen) {
+      setEditingWordId(null);
+      return;
+    }
     // If modal is open, close modal first
     if (selectedWord) {
       setSelectedWord(null);
@@ -299,6 +307,12 @@ export default function App() {
   const handleEditWord = (word: Word) => {
     setSelectedWord(null);
     setEditingWordId(word.id);
+    if (isQualityModalOpen) {
+      // Opened from the quality control list (which stays open, hidden, behind the form)
+      setCurrentTab('lib');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (activeExercise) {
       // Opened from inside an exercise: keep the exercise alive (hidden) so it can be resumed afterwards
       setExerciseReturnTab(currentTab);
@@ -386,6 +400,8 @@ export default function App() {
   };
 
   // Quality Control operations
+  const qualityIssueCount = state.words.filter(w => !(extData.ok || {})[w.id] && auditWord(w).length > 0).length;
+
   const handleIgnoreQualityWord = (wordId: string) => {
     const updated = { ...extData, ok: { ...(extData.ok || {}), [wordId]: 1 } };
     setExtData(updated);
@@ -525,7 +541,7 @@ export default function App() {
           {activeExercise && (
             <div className={exerciseSuspended ? 'hidden' : ''}>
             <ExercisesView
-              paused={exerciseSuspended}
+              paused={exerciseSuspended || !!activeHelpTopic}
               words={state.words}
               settings={state.set}
               activeMode={activeExercise}
@@ -557,7 +573,6 @@ export default function App() {
                       navigateToTab('prac');
                     }
                   }}
-                  onOpenQualityModal={() => setIsQualityModalOpen(true)}
                   onPracticeWords={(ids, intent = 'targeted') => {
                     const selectedIds = new Set(ids);
                     if (intent === 'hard') {
@@ -591,7 +606,6 @@ export default function App() {
                       { mode: 'plural', ids: selectedWords.filter(w => !!w.pl).map(w => w.id) },
                       { mode: 'conj', ids: selectedWords.filter(w => !!w.conj).map(w => w.id) },
                       { mode: 'tense', ids: selectedWords.filter(w => !!w.prat || !!w.perf).map(w => w.id) },
-                      { mode: 'sent', ids: selectedWords.filter(w => !!w.last).map(w => w.id) },
                       { mode: 'dict', ids: selectedWords.map(w => w.id) },
                       { mode: 'prod', ids: selectedWords.map(w => w.id) },
                       { mode: 'synant', ids: selectedWords.filter(w => !!w.syn || !!w.ant).map(w => w.id) }
@@ -711,29 +725,31 @@ export default function App() {
         onImageChange={handleImageChange}
       />
 
-      {isQualityModalOpen && (
-        <QualityControlModal
-          words={state.words}
-          ignoredIds={extData.ok || {}}
-          onClose={() => setIsQualityModalOpen(false)}
-          onEditWord={w => {
-            setIsQualityModalOpen(false);
-            handleEditWord(w);
-          }}
-          onIgnoreWord={handleIgnoreQualityWord}
-          onDeleteWord={handleDeleteWord}
-        />
-      )}
+      {/* Popups below stay mounted (but hidden) while a word is edited from the quality list */}
+      <div className={editingWordId ? 'hidden' : ''}>
+        {isWordManagerOpen && (
+          <WordManagerModal
+            words={state.words}
+            onClose={() => setIsWordManagerOpen(false)}
+            onMoveWords={handleBatchMoveWords}
+            onBatchDelete={handleBatchDeleteWords}
+            onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}
+            onOpenQualityControl={() => setIsQualityModalOpen(true)}
+            qualityIssueCount={qualityIssueCount}
+          />
+        )}
 
-      {isWordManagerOpen && (
-        <WordManagerModal
-          words={state.words}
-          onClose={() => setIsWordManagerOpen(false)}
-          onMoveWords={handleBatchMoveWords}
-          onBatchDelete={handleBatchDeleteWords}
-          onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}
-        />
-      )}
+        {isQualityModalOpen && (
+          <QualityControlModal
+            words={state.words}
+            ignoredIds={extData.ok || {}}
+            onClose={() => setIsQualityModalOpen(false)}
+            onEditWord={handleEditWord}
+            onIgnoreWord={handleIgnoreQualityWord}
+            onDeleteWord={handleDeleteWord}
+          />
+        )}
+      </div>
 
       {isDuplicateModalOpen && (
         <DuplicateDetectorModal
