@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
+import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, checkGermanSpelling } from '../utils/ai';
+import type { SpellResult } from '../utils/ai';
 import { speak } from '../utils/audio';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
@@ -303,6 +304,35 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
           option(knownLemma ? `پروفایل فعل پایه «${knownLemma}» را بساز` : 'مصدر فعل را با کمک هوش مصنوعی تشخیص بده', knownLemma || raw, baseInstruction + (knownLemma ? '' : ' پس از دریافت پاسخ، فیلد ورودی را نیز با مصدر خروجی جایگزین کن.'))
         ] });
         return;
+      }
+
+      // Spelling check: suggest the right spelling, or say that no such word exists
+      if (raw && !checkForDuplicate(raw)) {
+        aiOperationRef.current = true;
+        setAiLoading(true);
+        let spell: SpellResult | undefined;
+        try {
+          spell = (await checkGermanSpelling([raw]))[raw];
+        } finally {
+          aiOperationRef.current = false;
+          setAiLoading(false);
+        }
+        if (spell?.status === 'invalid') {
+          onShowToast(`«${raw}» چنین لغتی در زبان آلمانی وجود ندارد؛ املای آن را بررسی کنید.`, true);
+          return;
+        }
+        if (spell?.status === 'corrected' && spell.suggestion && spell.suggestion.toLowerCase() !== raw.toLowerCase()) {
+          const sug = spell.suggestion;
+          setAiChoicePrompt({
+            title: 'املای این واژه احتمالاً اشتباه است',
+            message: `«${raw}» در زبان آلمانی به این شکل نیست. منظور شما «${sug}» است؟`,
+            options: [
+              { label: `✔ بله، «${sug}»`, target: sug, instruction: `املای ورودی کاربر اصلاح شد؛ واژهٔ درست «${sug}» است. فیلد ورودی را نیز با مصدر خروجی جایگزین کن.` },
+              { label: `نه، همین «${raw}» را نگه دار`, target: raw, instruction: `کاربر تأیید کرد که همین املا «${raw}» را می‌خواهد؛ آن را بدون تغییر املا پردازش کن.` }
+            ]
+          });
+          return;
+        }
       }
     }
     if (!formDe.trim()) {
