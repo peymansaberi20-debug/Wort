@@ -388,6 +388,85 @@ ${JSON.stringify(category)}
 /**
  * ترجمه سریع واژه آلمانی
  */
+
+
+/**
+ * ساخت prompt برای استخراج و تکمیل گروهی واژه‌ها
+ */
+export function AIPM(
+  words: string | Word[],
+  existingWords: Word[] = [],
+  category = ''
+): string {
+  const source = (
+    typeof words === 'string'
+      ? words.trim()
+      : words.map((word) => asText(word?.de)).filter(Boolean).join('\n')
+  );
+
+  // واژه‌های موجود نباید باعث تولید واژه‌های پیش‌فرض شوند.
+  void existingWords;
+
+  if (!source) {
+    throw new Error('هیچ واژه یا متنی برای پردازش ارسال نشده است.');
+  }
+
+  return `
+تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
+
+وظیفه تو استخراج و تکمیل اطلاعات آموزشی فقط برای واژه‌های موجود در ورودی است.
+
+متن ورودی:
+${JSON.stringify(source)}
+
+قوانین الزامی:
+1. فقط واژه‌ها و عبارت‌های آلمانی موجود در متن ورودی را پردازش کن.
+2. هیچ واژه جدید، پیش‌فرض یا پیشنهادی به فهرست اضافه نکن.
+3. برای هر ورودی، فقط یک شیء خروجی تولید کن.
+4. فیلد de باید همان واژه یا عبارت ورودی باشد؛ املای آن را بی‌دلیل تغییر نده.
+5. اگر ورودی شامل آرتیکل der، die یا das است، آرتیکل را در art و اسم را در de قرار بده.
+6. اگر ورودی با پیشوند سطح مانند [B2] شروع می‌شود، سطح را در lvl قرار بده و پیشوند را از de حذف کن.
+7. معنی، ترجمه و توضیحات را به فارسی روان بنویس.
+8. اگر اطلاعاتی کاربرد ندارد یا از آن مطمئن نیستی، رشته خالی قرار بده.
+9. خروجی باید یک شیء JSON با کلید words و مقدار آرایه باشد.
+10. فقط JSON معتبر و بدون Markdown برگردان.
+
+دسته‌بندی:
+${JSON.stringify(category)}
+
+ساختار خروجی:
+{
+  "words": [
+    {
+      "de": "",
+      "art": "",
+      "fa": "",
+      "syn": "",
+      "synFa": "",
+      "ant": "",
+      "antFa": "",
+      "pl": "",
+      "pos": "",
+      "lvl": "",
+      "ex": "",
+      "exFa": "",
+      "ex2": "",
+      "ex2Fa": "",
+      "conj": "",
+      "prat": "",
+      "perf": "",
+      "komparativ": "",
+      "superlativ": "",
+      "imperativDu": "",
+      "imperativIhr": "",
+      "imperativSie": "",
+      "sep": ""
+    }
+  ]
+}
+`.trim();
+}
+
 export async function quickTranslateWithGemini(
   germanWord: string
 ): Promise<{ fa: string; art?: string; pos?: string; lvl?: string }> {
