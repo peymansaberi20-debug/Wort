@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AppState, Word } from '../types';
 import { getCategories, norm, matchCat, resolveCat } from '../utils/storage';
-import { AIPM, buildMasterPrompt, generateWithGemini, parseAI, aiToIMP, processBatchWordsWithGemini } from '../utils/ai';
+import { AIPM, buildMasterPrompt, generateWithGemini, parseAI, aiToIMP, processBatchWordsWithGemini, checkGermanSpelling } from '../utils/ai';
 import * as XLSX from 'xlsx';
 import { ImportHelpModal } from '../components/ImportHelpModal';
 
@@ -353,10 +353,34 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
     }
 
     setBulkLoading(true);
-    setBulkStatus('در حال آماده‌سازی و ارسال به هوش مصنوعی...');
+    setBulkStatus('در حال بررسی املای واژه‌ها...');
     try {
+      // Spelling check: fix misspelled words, skip words that do not exist in German
+      const spellable = lines.filter(l => l.length <= 40 && l.split(/\s+/).length <= 3);
+      const spell = await checkGermanSpelling(spellable);
+      const spellMsgs: string[] = [];
+      const cleanedLines: string[] = [];
+      lines.forEach(l => {
+        const r = spell[l];
+        if (r?.status === 'invalid') {
+          spellMsgs.push(`«${l}» چنین لغتی در زبان آلمانی وجود ندارد و وارد نشد.`);
+        } else if (r?.status === 'corrected' && r.suggestion && r.suggestion.toLowerCase() !== l.toLowerCase()) {
+          spellMsgs.push(`املای «${l}» به «${r.suggestion}» اصلاح شد.`);
+          cleanedLines.push(r.suggestion);
+        } else {
+          cleanedLines.push(l);
+        }
+      });
+      if (cleanedLines.length === 0) {
+        setPendingImport(null);
+        setBulkStatus(spellMsgs.join(' • ') || 'واژهٔ معتبری برای افزودن پیدا نشد.');
+        onShowToast('هیچ‌کدام از واژه‌ها املای معتبر آلمانی نداشتند.', true);
+        return;
+      }
+
+      setBulkStatus('در حال آماده‌سازی و ارسال به هوش مصنوعی...');
       const { ws, errs } = await processBatchWordsWithGemini(
-        lines,
+        cleanedLines,
         words,
         finalCatOverride,
         (_done, _total, msg) => setBulkStatus(msg)
@@ -364,7 +388,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
 
       setPendingImport({
         words: ws,
-        errors: errs
+        errors: [...spellMsgs, ...errs]
       });
       setBulkStatus(`تکمیل شد: ${ws.length} واژه آماده وارد کردن است.`);
     } catch (err: any) {
@@ -751,124 +775,116 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       */}
 
       {/* 1. FIRST CARD: افزودن گروهی با هوش مصنوعی */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🤖</span>
-            <div>
-              <b className="text-base text-slate-900 dark:text-slate-100">افزودن گروهی با هوش مصنوعی</b>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                کلمات آلمانی را بنویسید تا ترجمه، مثال، آرتیکل، صرف و یادداشت‌ها خودکار تولید شوند
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-4 md:p-5 shadow-xs space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <span className="text-2xl leading-none mt-0.5">🤖</span>
+            <div className="min-w-0">
+              <b className="block text-sm md:text-base text-slate-900 dark:text-slate-100">افزودن گروهی با هوش مصنوعی</b>
+              <p className="text-[11px] md:text-xs text-[#5d6676] dark:text-[#a3adbd] leading-relaxed mt-0.5">
+                کلمات آلمانی را بنویسید تا ترجمه، مثال، آرتیکل، صرف و یادداشت‌ها خودکار تولید شوند.
               </p>
             </div>
           </div>
-          {/* Fulfills Request #20: Help button for Bulk Add with AI */}
           <button
             onClick={() => onOpenHelp('bulk_ai')}
-            className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-3 py-1 rounded-xl font-bold transition flex items-center gap-1"
+            aria-label="راهنما"
+            title="راهنما"
+            className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 text-base font-extrabold transition flex items-center justify-center"
           >
-            ❓ راهنما
+            !
           </button>
         </div>
 
-        {/* Image extract trigger button */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onOpenImageExtract}
-            className="bg-blue-50 hover:bg-blue-100 text-[#1f5fbf] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-          >
-            <span>📷 استخراج لغات از تصویر و دست‌نوشته</span>
-          </button>
-          <span className="text-xs text-[#5d6676]">هر کلمه را در یک خط وارد کنید</span>
-        </div>
-
-        <textarea
-          dir="ltr"
-          rows={5}
-          placeholder="z.B.&#10;Entscheidung&#10;[B2] zur Verfügung stehen&#10;nachhaltig"
-          value={bulkText}
-          onChange={e => setBulkText(e.target.value)}
-          className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 text-xs md:text-sm outline-none font-sans"
-        />
-
-        {/*
-          Fulfills User Request #17:
-          "کنار گزینه تکمیل خودکار همه کلمات ، انتخاب دسته رو قرار بده ،
-          پیش فرضش باشه به تشخیص هوش مصنوعی ، لیست دسته ها باشه و اگر من خواستم
-          همه لغاتی که اون بالا تو باکس تایپ شده به یک دسته خاص اضافه بشه اون دسته رو انتخاب کنم ،
-          با این کار وقتی تکمیل خودکار همه لغات رو زدم هوش مصنوعی همه رو طبق دسته ای ک من گفتم بچینه"
-        */}
-        <div className="flex flex-wrap items-center gap-2.5 pt-1">
-          {/* Category Selector next to auto-fill button */}
-          <div className="flex items-center gap-1.5 w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-[200px]">
-            <label className="text-xs font-bold text-[#5d6676] flex-shrink-0">
-              دستهٔ لغات:
-            </label>
-            <select
-              value={bulkCategory}
-              onChange={e => setBulkCategory(e.target.value)}
-              className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs flex-1 min-w-0 outline-none font-medium"
+        {/* Words box */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-bold text-slate-800 dark:text-slate-200">کلمات (هر کلمه در یک خط)</label>
+            <button
+              onClick={onOpenImageExtract}
+              className="bg-blue-50 hover:bg-blue-100 text-[#1f5fbf] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-[11px] md:text-xs font-bold transition flex items-center gap-1"
             >
-              <option value="">📁 به تشخیص هوش مصنوعی</option>
-              {categories.map(([c, n]) => (
-                <option key={c} value={c}>
-                  {c} ({n} واژه)
-                </option>
-              ))}
-              <option value="__new">➕ دستهٔ جدید…</option>
-            </select>
+              <span>📷 استخراج از تصویر</span>
+            </button>
           </div>
+          <textarea
+            dir="ltr"
+            rows={5}
+            placeholder="z.B.&#10;Entscheidung&#10;[B2] zur Verfügung stehen&#10;nachhaltig"
+            value={bulkText}
+            onChange={e => setBulkText(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm leading-relaxed outline-none font-sans focus:border-[#1f5fbf]"
+          />
+        </div>
 
+        {/* Category */}
+        <div className="space-y-2">
+          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">دستهٔ لغات</label>
+          <select
+            value={bulkCategory}
+            onChange={e => setBulkCategory(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm outline-none font-medium focus:border-[#1f5fbf]"
+          >
+            <option value="">📁 به تشخیص هوش مصنوعی</option>
+            {categories.map(([c, n]) => (
+              <option key={c} value={c}>
+                {c} ({n} واژه)
+              </option>
+            ))}
+            <option value="__new">➕ دستهٔ جدید…</option>
+          </select>
           {bulkCategory === '__new' && (
             <input
               type="text"
-              placeholder="نام دسته جدید..."
+              placeholder="نام دستهٔ جدید..."
               value={bulkNewCatName}
               onChange={e => setBulkNewCatName(e.target.value)}
-              className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs outline-none flex-1 min-w-[140px]"
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1f5fbf]"
             />
           )}
+        </div>
 
-          {/* Action buttons */}
+        {/* Action buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-2.5">
           <button
             onClick={handleBulkAutoFill}
             disabled={bulkLoading || !bulkText.trim()}
-            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex-shrink-0"
+            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition"
           >
             {bulkLoading ? '⏳ در حال تکمیل...' : '✨ تکمیل خودکار همهٔ کلمات'}
           </button>
-
           <button
             onClick={handleCopyBulkPrompt}
             disabled={!bulkText.trim()}
-            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold disabled:opacity-40 transition"
+            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition"
           >
             📋 کپی دستور گروهی
           </button>
         </div>
 
         {bulkStatus && (
-          <p className="text-xs text-[#1f5fbf] dark:text-[#7fb0ff]">{bulkStatus}</p>
+          <p className="text-xs text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50/60 dark:bg-blue-950/20 rounded-xl px-3 py-2">{bulkStatus}</p>
         )}
 
         {/* Collapsible Manual JSON Paste */}
-        <details className="text-xs pt-1">
-          <summary className="cursor-pointer text-[#5d6676] hover:text-[#1f5fbf] font-medium">
+        <details className="text-xs border border-[#dde1ea] dark:border-[#333b4a] rounded-xl bg-slate-50/60 dark:bg-[#141923]/60">
+          <summary className="cursor-pointer px-3 py-2.5 text-[#5d6676] dark:text-[#a3adbd] hover:text-[#1f5fbf] font-semibold">
             یا خروجی JSON هوش مصنوعی را دستی اینجا بچسبانید
           </summary>
-          <div className="pt-2 space-y-2">
+          <div className="px-3 pb-3 space-y-2">
             <textarea
               dir="ltr"
               rows={3}
               placeholder="JSON خروجی هوش مصنوعی را اینجا بچسبانید..."
               value={pastedJson}
               onChange={e => setPastedJson(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-2.5 text-xs outline-none font-mono"
+              className="w-full bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-2.5 text-xs outline-none font-mono focus:border-[#1f5fbf]"
             />
             <button
               onClick={handleApplyPastedBulkJson}
               disabled={!pastedJson.trim()}
-              className="bg-[#1f5fbf] text-white px-3.5 py-1.5 rounded-xl font-bold disabled:opacity-40"
+              className="w-full bg-[#1f5fbf] text-white px-3.5 py-2 rounded-xl text-sm font-bold disabled:opacity-40"
             >
               وارد کردن متن چسبانده‌شده
             </button>
