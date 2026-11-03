@@ -32,20 +32,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deleteStep, setDeleteStep] = useState<number>(0);
   const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
 
-  // Load voices asynchronously
+  // Load German voices reliably in Safari and other browsers
   useEffect(() => {
-    const updateVoices = () => {
-      const v = getGermanVoices();
-      setAvailableVoices(v);
-    };
-    updateVoices();
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = updateVoices;
+    let active = true;
+    const timers: number[] = [];
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setAvailableVoices([]);
+      return;
     }
+
+    const synth = window.speechSynthesis;
+
+    const updateVoices = () => {
+      if (!active) return;
+
+      const voices = synth.getVoices().filter(
+        voice => /^de(?:-|$)/i.test(voice.lang.trim())
+      );
+
+      setAvailableVoices(voices);
+    };
+
+    updateVoices();
+    synth.addEventListener('voiceschanged', updateVoices);
+
+    // Safari may populate the voice list after the page loads.
+    [250, 750, 1500, 3000, 5000].forEach(delay => {
+      const timer = window.setTimeout(updateVoices, delay);
+      timers.push(timer);
+    });
+
     return () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
+      active = false;
+      synth.removeEventListener('voiceschanged', updateVoices);
+      timers.forEach(timer => window.clearTimeout(timer));
     };
   }, []);
 
