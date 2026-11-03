@@ -18,7 +18,7 @@ interface DashboardViewProps {
   state: AppState;
   ignoredQualityIds: Record<string, number>;
   onNavigate: (view: string) => void;
-  onOpenQualityModal: () => void;
+  onOpenQualityModal?: () => void;
   onPracticeWords: (wordIds: string[], intent?: 'review' | 'targeted' | 'hard') => void;
   onUpdateDailyNewTarget: (target: number) => void;
   onSelectWord: (word: Word) => void;
@@ -309,39 +309,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.
             </div>
           ) : (
-            <div className="max-h-44 overflow-y-auto divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a] px-3 py-1">
-              {dueReviewWords.map((w, idx) => {
-                const shamsi = w.due ? formatShamsiFullNumeric(w.due) : 'امروز';
-                const greg = w.due ? formatGregorianNumeric(w.due) : formatGregorianNumeric(Date.now());
-                return (
-                  <div key={w.id || idx} className="py-2 flex items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm" dir="ltr">
-                        {fullWord(w)}
-                      </span>
-                      {w.lvl && (
-                        <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
-                          {w.lvl}
-                        </span>
-                      )}
-                      {w.cat && (
-                        <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">
-                          ({w.cat})
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                      {!w.last ? (
-                        <span className="text-purple-600 dark:text-purple-400 font-semibold">واژه جدید (اولین مطالعه)</span>
-                      ) : (
-                        <span>
-                          سررسید: <b className="text-slate-700 dark:text-slate-300">{shamsi}</b> • {greg}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="max-h-52 overflow-y-auto bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
+              <table className="w-full table-fixed text-xs border-collapse">
+                <colgroup>
+                  <col style={{ width: '36%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '29%' }} />
+                </colgroup>
+                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-bold">واژه</th>
+                    <th className="px-1 py-1.5 text-center font-bold">سطح</th>
+                    <th className="px-2 py-1.5 text-right font-bold">دسته</th>
+                    <th className="px-2 py-1.5 text-right font-bold">سررسید</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {dueReviewWords.map((w, idx) => {
+                    const shamsi = w.due ? formatShamsiFullNumeric(w.due) : 'امروز';
+                    return (
+                      <tr key={w.id || idx} className="align-middle">
+                        <td className="px-2 py-2 text-left font-bold text-slate-900 dark:text-slate-100 text-sm truncate" dir="ltr">
+                          {fullWord(w)}
+                        </td>
+                        <td className="px-1 py-2 text-center">
+                          {w.lvl ? (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                              {w.lvl}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-right text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">
+                          {w.cat || '—'}
+                        </td>
+                        <td className="px-2 py-2 text-right text-[11px] whitespace-nowrap">
+                          {!w.last ? (
+                            <span className="text-purple-600 dark:text-purple-400 font-semibold">واژهٔ جدید</span>
+                          ) : (
+                            <b className="text-slate-700 dark:text-slate-300">{shamsi}</b>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -364,25 +379,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
           )}
 
-        </div>
-
-        {/*
-          Fulfills User Request #5:
-          "در قسمت کنترل کیفیت واژگان داشبورد ، وقتی روش میزنم لیست زیرش باز نشه ، پاپ اپ باز بشه ..."
-        */}
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <button
-            onClick={onOpenQualityModal}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-100/80 hover:bg-slate-200/80 dark:bg-slate-800/60 dark:hover:bg-slate-800 transition text-xs md:text-sm font-bold text-slate-800 dark:text-slate-200"
-          >
-            <div className="flex items-center gap-2">
-              <span>🔍 کنترل کیفیت واژگان:</span>
-              <span className={totalAuditedIssues > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}>
-                {totalAuditedIssues > 0 ? `${totalAuditedIssues} واژه نیاز به بررسی دارد` : 'کیفیت عالی'}
-              </span>
-            </div>
-            <span className="text-xs text-[#1f5fbf] dark:text-[#7fb0ff]">مشاهده ↗</span>
-          </button>
         </div>
       </div>
 
