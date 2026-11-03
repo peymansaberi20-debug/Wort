@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppSettings, CaseQuestion, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
-import { checkWord, fullWord, getCategories, intervalPreview, isLeech, nz } from '../utils/storage';
+import { checkWord, familyCands, fullWord, getCategories, intervalPreview, isAdjPos, isLeech, isVerbPos, nz } from '../utils/storage';
 import { speak, stopSpeaking } from '../utils/audio';
 import { splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
@@ -21,6 +21,8 @@ export type ExerciseMode =
   | 'case'
   | 'prod'
   | 'synant'
+  | 'n2v'
+  | 'v2n'
   | 'hard'
   | 'sent';
 
@@ -38,6 +40,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   case: { title: 'حالت و حرف اضافه', icon: '🧩', desc: 'دو جای خالی مجزا برای حرف اضافه و آرتیکل' },
   prod: { title: 'فارسی ← آلمانی (تایپی)', icon: '🔁', desc: 'دیدن ترجمه و نوشتن کامل واژه آلمانی' },
   synant: { title: 'مترادف و متضاد', icon: '↔️', desc: 'نوشتن مترادف یا متضاد واژهٔ داده‌شده' },
+  n2v: { title: 'اسم ← فعل', icon: '🔁', desc: 'از روی اسم، فعل هم‌خانواده را بنویسید' },
+  v2n: { title: 'فعل ← اسم', icon: '🔂', desc: 'از روی فعل، اسم هم‌خانواده را (با آرتیکل) بنویسید' },
   hard: { title: 'تمرین ترکیبی واژه‌های سخت', icon: '🩸', desc: 'هر واژهٔ سخت در قالب‌های مختلف و با چیدمان تصادفی' },
   sent: { title: 'تولید جمله', icon: '🗣', desc: 'جمله‌سازی با واژه و بررسی ساختار' }
 };
@@ -326,6 +330,90 @@ export const MistakeComparison: React.FC<MistakeComparisonProps> = ({ user, expe
   );
 };
 
+/** "Haus" -> "H _ _ _" (level 1) or "Ha _ s" (level 2) */
+const maskText = (text: string, level: number): string =>
+  text
+    .split(' ')
+    .map(tok => {
+      const chars = [...tok];
+      if (chars.length <= 1) return tok;
+      if (chars.length === 2) return level >= 2 ? tok : `${chars[0]} _`;
+      const head = level >= 2 ? 2 : 1;
+      const tail = level >= 2 ? 1 : 0;
+      return chars.map((c, i) => (i < head || i >= chars.length - tail ? c : '_')).join(' ');
+    })
+    .join('   ');
+
+interface HintInfo {
+  note: string;
+  mask: string;
+}
+
+/**
+ * Progressive hints for typed exercises.
+ * Level 1: what kind of answer is expected + its length and first letter.
+ * Level 2: more letters (first two and the last one) and, where useful, extra information.
+ */
+const buildHint = (
+  mode: string,
+  w: Word,
+  level: number,
+  ctx: { pron: number; kind: string; cands: string[] }
+): HintInfo => {
+  const len = (t: string) => `${[...t.replace(/ /g, '')].length} حرف`;
+  let target = '';
+  const notes: string[] = [];
+
+  switch (mode) {
+    case 'cloze': {
+      target = w.ans || w.de;
+      const imp: [string, string | undefined][] = [['du', w.imperativDu], ['ihr', w.imperativIhr], ['Sie', w.imperativSie]];
+      const hit = isVerbPos(w.pos) ? imp.find(([, v]) => v && nz(v.replace(/[!.]/g, '')) === nz(target.replace(/[!.]/g, ''))) : undefined;
+      if (hit) notes.push(`شکل امری برای ضمیر «${hit[0]}»`);
+      else if (isVerbPos(w.pos)) notes.push('فعل باید با فاعل جمله صرف شود');
+      else if (isAdjPos(w.pos)) notes.push('صفت باید با پایانهٔ مناسب جمله صرف شود');
+      break;
+    }
+    case 'dict':
+    case 'prod': {
+      target = fullWord(w);
+      if (w.art) notes.push('اسم است؛ آرتیکل را هم بنویسید');
+      else if (isVerbPos(w.pos)) notes.push('مصدر فعل را بنویسید');
+      break;
+    }
+    case 'plural':
+      target = (w.pl || '').replace(/^die\s+/i, '');
+      notes.push('شکل جمع (بدون آرتیکل هم قبول است)');
+      break;
+    case 'conj': {
+      const forms = (w.conj || '').split('|');
+      target = (forms[ctx.pron] || forms[2] || '').trim();
+      notes.push(`شکل فعل برای «${P6[ctx.pron]}»`);
+      break;
+    }
+    case 'tense':
+      target = w.prat || w.perf || '';
+      notes.push(w.prat ? 'Präteritum' : 'Perfekt');
+      break;
+    case 'synant':
+    case 'n2v':
+    case 'v2n': {
+      target = ctx.cands[0] || '';
+      notes.push(`${ctx.cands.length} پاسخ ممکن است`);
+      if (level >= 2 && mode === 'synant') {
+        const fa = ctx.kind === 'ant' ? w.antFa : w.synFa;
+        if (fa) notes.push(`ترجمهٔ فارسی: ${fa}`);
+      }
+      break;
+    }
+    default:
+      target = w.de;
+  }
+
+  if (target) notes.push(len(target));
+  return { note: notes.join(' • '), mask: target ? maskText(target, level) : '' };
+};
+
 const shuffleArr = <T,>(arr: T[]): T[] => {
   const r = [...arr];
   for (let i = r.length - 1; i > 0; i--) {
@@ -413,6 +501,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 }) => {
   const pausedRef = useRef<boolean>(!!paused);
   pausedRef.current = !!paused;
+  const [faShown, setFaShown] = useState(false);
+  const [conjPron, setConjPron] = useState(2);
 
   // Free review configuration
   const [freeCat, setFreeCat] = useState<string>(settings?.freeCat || '');
@@ -445,6 +535,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   // Fulfills Section 21: View Full Word Profile modal accessible from EVERY exercise
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
+  pausedRef.current = !!paused || !!profileModalWord;
 
   // Fulfills Section 5: Flashcard timer per card
   const [cardTimerSec, setCardTimerSec] = useState<number>(0);
@@ -501,6 +592,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setCaseResult(null);
       setAnswerResult(null);
       setHintLevel(0);
+    setFaShown(false);
+    setConjPron(Math.floor(Math.random() * 6));
       setIsFreeStarted(false);
       setIsFlashConfigured(false);
       stopSpeaking();
@@ -542,6 +635,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       qIds = shuffleArr<Word>(synAntPool)
         .slice(0, 15)
         .map((w: Word) => synAntKey(w));
+    } else if (activeMode === 'n2v' || activeMode === 'v2n') {
+      qIds = shuffleArr<Word>(pool.filter((w: Word) => familyCands(w, activeMode).length > 0))
+        .slice(0, 15)
+        .map((w: Word) => w.id);
     } else if (activeMode === 'case') {
       qIds = CASEQ.map(q => q.id).sort(() => Math.random() - 0.5);
     } else if (activeMode === 'free') {
@@ -607,6 +704,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setCaseResult(null);
     setAnswerResult(null);
     setHintLevel(0);
+    setFaShown(false);
+    setConjPron(Math.floor(Math.random() * 6));
   }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct]);
 
   // Current item
@@ -705,6 +804,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setCaseResult(null);
       setAnswerResult(null);
       setHintLevel(0);
+    setFaShown(false);
+    setConjPron(Math.floor(Math.random() * 6));
     }
   }, [words]);
 
@@ -720,6 +821,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setCaseResult(null);
     setAnswerResult(null);
     setHintLevel(0);
+    setFaShown(false);
+    setConjPron(Math.floor(Math.random() * 6));
   };
 
   const handleFlashGrade = (grade: number) => {
@@ -822,16 +925,17 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const w = currentItem as Word;
 
     if (qMode === 'conj') {
-      const forms = w.conj.split('|');
-      const isCorrect = forms.some(f => f.trim().toLowerCase() === trimmed.toLowerCase());
+      const forms = w.conj.split('|').map(f => f.trim());
+      const target = forms[conjPron] || forms[2] || forms[0] || w.de;
+      const isCorrect = nz(target) === nz(trimmed);
       const res = {
         ok: isCorrect ? 1 : 0,
-        exp: forms[0] || w.de,
-        msg: isCorrect ? undefined : `شکل درست: ${forms.join(' | ')}`,
-        cands: forms.map(f => f.trim()).filter(Boolean)
+        exp: target,
+        msg: isCorrect ? undefined : `شکل درست برای «${P6[conjPron]}»: ${target}`,
+        cands: [target]
       };
       setAnswerResult(res);
-      record(w, 'conj', isCorrect ? 2 : 0);
+      record(w, 'conj', isCorrect ? (faShown ? 1 : 2) : 0);
       return;
     }
 
@@ -849,7 +953,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         cands: [expPrat, expPerf, expPrat ? `er ${expPrat}` : ''].filter(Boolean)
       };
       setAnswerResult(res);
-      record(w, 'tense', isCorrect ? 2 : 0);
+      record(w, 'tense', isCorrect ? (faShown ? 1 : 2) : 0);
       return;
     }
 
@@ -863,7 +967,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         msg: isCorrect ? undefined : `شکل جمع درست: ${base}`,
         cands
       });
-      record(w, 'plural', isCorrect ? (hintLevel > 0 ? 1 : 2) : 0);
+      record(w, 'plural', isCorrect ? (hintLevel > 0 || faShown ? 1 : 2) : 0);
       if (!isCorrect) setQueue(prev => [...prev, currentKey]);
       return;
     }
@@ -879,14 +983,33 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         msg: isCorrect ? undefined : `${isAnt ? 'متضاد' : 'مترادف'} درست: ${cands.join('، ')}`,
         cands
       });
-      record(w, 'synant', isCorrect ? (hintLevel > 0 ? 1 : 2) : 0);
+      record(w, 'synant', isCorrect ? (hintLevel > 0 || faShown ? 1 : 2) : 0);
       if (!isCorrect) setQueue(prev => [...prev, currentKey]);
       return;
     }
 
-    const r = checkWord(w, trimmed);
-    setAnswerResult({ ok: r.ok, exp: r.exp, msg: r.msg, cands: [r.exp, ...(w.acc || [])] });
-    record(w, qMode || 'cloze', r.ok ? (hintLevel > 0 ? 1 : 2) : 0);
+    if (qMode === 'n2v' || qMode === 'v2n') {
+      const cands = familyCands(w, qMode);
+      const noSich = (x: string) => nz(x.replace(/^sich\s+/i, ''));
+      const isCorrect = qMode === 'n2v'
+        ? cands.some(c => noSich(c) === noSich(trimmed))
+        : cands.some(c => nz(c) === nz(trimmed));
+      let msg: string | undefined;
+      if (!isCorrect) {
+        const bare = cands.find(c => nz(c.replace(/^(der|die|das)\s+/i, '')) === nz(trimmed));
+        msg = qMode === 'v2n' && bare
+          ? `آرتیکل را ننوشتید؛ پاسخ درست: ${bare}`
+          : `${qMode === 'n2v' ? 'فعل' : 'اسم'} هم‌خانوادهٔ درست: ${cands.join('، ')}`;
+      }
+      setAnswerResult({ ok: isCorrect ? 1 : 0, exp: cands[0] || '', msg, cands });
+      record(w, qMode, isCorrect ? (hintLevel > 0 || faShown ? 1 : 2) : 0);
+      if (!isCorrect) setQueue(prev => [...prev, currentKey]);
+      return;
+    }
+
+    const r = checkWord(w, trimmed, qMode || 'cloze');
+    setAnswerResult({ ok: r.ok, exp: r.exp, msg: r.msg, cands: r.cands && r.cands.length ? r.cands : [r.exp, ...(w.acc || [])] });
+    record(w, qMode || 'cloze', r.ok ? (hintLevel > 0 || faShown ? 1 : 2) : 0);
     if (!r.ok) {
       setQueue(prev => [...prev, currentKey]);
     }
@@ -1210,6 +1333,18 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily';
   const isCardRevealed = !!currentItem && revealedCardId === currentItem.id;
 
+  // Persian translations stay hidden until the learner asks for them (or has answered)
+  const faVisible = faShown || !!answerResult || !!caseResult;
+  const faButton = (
+    <button
+      type="button"
+      onClick={() => setFaShown(true)}
+      className="px-3 py-1 rounded-full bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-800 text-[11px] font-bold transition"
+    >
+      👁 مشاهدهٔ ترجمه
+    </button>
+  );
+
   if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
@@ -1218,7 +1353,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           تبریک! تمرین به پایان رسید.
         </h3>
         <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-          تمامی پرسش‌های این بخش با موفقیت مرور و بررسی شدند.
+          {queue.length === 0 && (activeMode === 'synant' || activeMode === 'n2v' || activeMode === 'v2n')
+            ? activeMode === 'synant'
+              ? 'هنوز هیچ واژه‌ای در کتابخانه، مترادف یا متضاد ثبت‌شده ندارد (یا در دسته‌های فعال فعلی نیست). این تمرین از فیلدهای «مترادف» و «متضاد» واژه‌ها استفاده می‌کند.'
+              : 'هنوز واژه‌ای با «خانواده واژگانی» مناسب پیدا نشد. این تمرین از خط «خانواده واژگانی: اسم: ... | فعل مرتبط: ...» در یادداشت واژه‌ها استفاده می‌کند.'
+            : 'تمامی پرسش‌های این بخش با موفقیت مرور و بررسی شدند.'}
         </p>
         <button
           onClick={() => onSelectMode(null)}
@@ -1429,7 +1568,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <div className="text-3xl font-extrabold font-sans py-2" dir="ltr">
                 {w.de}
               </div>
-              <p className="text-sm font-semibold text-[#1f5fbf]">{w.fa}</p>
+              <div className="text-sm font-semibold text-[#1f5fbf]">{faVisible ? w.fa : faButton}</div>
 
               {!answerResult ? (
                 <div className="grid grid-cols-3 gap-3 pt-2 max-w-sm mx-auto">
@@ -1443,7 +1582,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                           exp: `${art} ${w.de}`,
                           msg: ok ? undefined : `آرتیکل درست: ${w.art}`
                         });
-                        record(w, 'art', ok ? 2 : 0);
+                        record(w, 'art', ok ? (faShown ? 1 : 2) : 0);
                       }}
                       className={`py-3 rounded-2xl font-bold text-lg font-sans transition ${
                         art === 'der' ? 'bg-blue-100 hover:bg-blue-200 text-blue-900' :
@@ -1495,7 +1634,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               </div>
 
               <div className="text-xs text-[#5d6676]">
-                کلمه مرجع: <span className="font-bold font-sans" dir="ltr">({bareNoun})</span> — {q.fa}
+                کلمه مرجع: <span className="font-bold font-sans" dir="ltr">({bareNoun})</span>
+                {' — '}
+                {faVisible ? q.fa : faButton}
               </div>
 
               {!answerResult ? (
@@ -1562,12 +1703,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 text-right space-y-1">
                       <p>
                         <b>راهنمایی ۱ (حالت دستوری): </b>
-                        <span>{q.c}</span>
+                        <span dir="ltr">{q.c.replace(/\s*\(.*\)\s*/, '').trim()}</span>
+                        <span> — جنسیت اسم: </span>
+                        <span dir="ltr">{(q.n.match(/^(der|die|das)/i) || ['—'])[0].toLowerCase()}</span>
                       </p>
                       {hintLevel >= 2 && (
-                        <p className="border-t border-amber-200/60 pt-1">
-                          <b>راهنمایی ۲ (آرتیکل اسم / حرف اول): </b>
-                          <span dir="ltr">({q.n}) — شروع پاسخ با «{q.prepAns.slice(0, 1)}...»</span>
+                        <p className="border-t border-amber-200/60 pt-1 space-y-0.5">
+                          <b>راهنمایی ۲: </b>
+                          <span dir="ltr" className="font-mono font-bold tracking-widest">
+                            {maskText(q.prepAns, 1)} + {maskText(q.artAns, 1)}
+                          </span>
                         </p>
                       )}
                     </div>
@@ -1606,7 +1751,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* ========================================================= */}
         {/* OTHER INTERACTIVE EXERCISES */}
         {/* ========================================================= */}
-        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant') && (() => {
+        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'sent') && (() => {
           const w = currentItem as Word;
           const remainingHints = Math.max(0, 2 - hintLevel);
 
@@ -1616,10 +1761,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-[#5d6676]">صرف فعل برای ضمیر داده‌شده:</p>
                   <div className="text-2xl font-bold font-sans py-1 text-slate-900 dark:text-slate-100" dir="ltr">
-                    er/sie/es _____
+                    {P6[conjPron]} _____
                   </div>
-                  <div className="text-xs text-[#5d6676]">
-                    مصدر: <span className="font-bold font-sans" dir="ltr">{w.de}</span> ({w.fa})
+                  <div className="text-xs text-[#5d6676] flex flex-wrap items-center justify-center gap-2">
+                    <span>
+                      مصدر: <span className="font-bold font-sans" dir="ltr">{w.de}</span>
+                    </span>
+                    {faVisible ? <span>({w.fa})</span> : faButton}
                   </div>
                 </div>
               )}
@@ -1631,7 +1779,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     {w.de}
                   </div>
                   <div className="text-xs text-[#5d6676]">
-                    ترجمه: <span className="font-bold">{w.fa}</span>
+                    {faVisible ? <>ترجمه: <span className="font-bold">{w.fa}</span></> : faButton}
                   </div>
                 </div>
               )}
@@ -1642,7 +1790,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-xl md:text-2xl font-bold font-sans py-2 text-slate-900 dark:text-slate-100 leading-relaxed" dir="ltr">
                     {w.cloze || `${w.de} _____`}
                   </div>
-                  <p className="text-xs text-[#5d6676]">({w.fa})</p>
+                  <div className="text-xs text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
                 </div>
               )}
 
@@ -1652,7 +1800,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-2xl font-bold font-sans py-1" dir="ltr">
                     {fullWord(w)}
                   </div>
-                  <p className="text-xs text-[#5d6676]">({w.fa})</p>
+                  <div className="text-xs text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
                 </div>
               )}
 
@@ -1665,7 +1813,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   >
                     🔊
                   </button>
-                  <p className="text-xs text-[#5d6676]">معنی: {w.fa}</p>
+                  <div className="text-xs text-[#5d6676]">{faVisible ? `معنی: ${w.fa}` : faButton}</div>
                 </div>
               )}
 
@@ -1685,7 +1833,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                         🔊
                       </button>
                     </div>
-                    <p className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{w.fa}</p>
+                    <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible ? w.fa : faButton}</div>
                     <span className={`inline-block px-3 py-0.5 rounded-full text-[11px] font-bold ${
                       isAnt ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'
                     }`}>
@@ -1694,6 +1842,43 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   </div>
                 );
               })()}
+
+              {(qMode === 'n2v' || qMode === 'v2n') && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-[#5d6676]">
+                    {qMode === 'n2v'
+                      ? 'فعلِ هم‌خانوادهٔ این اسم را بنویسید (مصدر):'
+                      : 'اسمِ هم‌خانوادهٔ این فعل را با آرتیکل بنویسید:'}
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-2xl md:text-3xl font-extrabold font-sans" dir="ltr">
+                      {qMode === 'n2v' ? fullWord(w) : w.de}
+                    </span>
+                    <button
+                      onClick={() => speak(qMode === 'n2v' ? fullWord(w) : w.de, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
+                      className="w-8 h-8 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
+                    >
+                      🔊
+                    </button>
+                  </div>
+                  <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible ? w.fa : faButton}</div>
+                  <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 text-violet-800">
+                    {qMode === 'n2v' ? '🔁 اسم ← فعل' : '🔂 فعل ← اسم'}
+                  </span>
+                </div>
+              )}
+
+              {qMode === 'sent' && (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#141923] text-xs text-[#5d6676] space-y-2">
+                  <p>🛠 تمرین «تولید جمله» هنوز آماده نیست.</p>
+                  <button
+                    onClick={() => onSelectMode(null)}
+                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-1.5 rounded-xl text-xs font-bold"
+                  >
+                    بازگشت به مرکز تمرین‌ها
+                  </button>
+                </div>
+              )}
 
               {qMode === 'prod' && (
                 <div className="space-y-2">
@@ -1706,7 +1891,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               )}
 
               {/* Input Box and Action Bar */}
-              {!answerResult ? (
+              {qMode === 'sent' ? null : !answerResult ? (
                 <div className="space-y-3 pt-2 max-w-sm mx-auto">
                   <input
                     type="text"
@@ -1741,20 +1926,25 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     </button>
                   </div>
 
-                  {hintLevel > 0 && (
-                    <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 rounded-xl text-xs text-amber-900 dark:text-amber-200" dir="ltr">
-                      {qMode === 'synant' ? (() => {
-                        const isAnt = currentKind === 'ant';
-                        const list = splitList(isAnt ? w.ant : w.syn);
-                        const fa = isAnt ? w.antFa : w.synFa;
-                        return hintLevel === 1
-                          ? `${list.length} پاسخ ممکن — شروع یکی از آن‌ها: ${(list[0] || '').slice(0, 2)}...`
-                          : (fa ? `ترجمهٔ فارسی: ${fa}` : `شروع یکی از پاسخ‌ها: ${(list[0] || '').slice(0, 4)}...`);
-                      })() : qMode === 'plural'
-                        ? (w.pl || w.de).slice(0, hintLevel * 2) + '...'
-                        : w.ans ? w.ans.slice(0, hintLevel * 2) + '...' : w.de.slice(0, hintLevel * 2) + '...'}
-                    </div>
-                  )}
+                  {hintLevel > 0 && (() => {
+                    const cands =
+                      qMode === 'synant'
+                        ? splitList(currentKind === 'ant' ? w.ant : w.syn)
+                        : qMode === 'n2v' || qMode === 'v2n'
+                          ? familyCands(w, qMode)
+                          : [];
+                    const hint = buildHint(qMode || 'cloze', w, hintLevel, { pron: conjPron, kind: currentKind, cands });
+                    return (
+                      <div className="p-2.5 bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                        {hint.note && <div>{hint.note}</div>}
+                        {hint.mask && (
+                          <div dir="ltr" className="font-mono font-bold text-base tracking-widest">
+                            {hint.mask}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="space-y-3 pt-2">
