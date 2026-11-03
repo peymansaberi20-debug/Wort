@@ -309,6 +309,69 @@ export function aiToIMP(
   }
 
   return { ws, errs };
+
+}
+
+
+/**
+ * ساخت prompt برای واردکردن و تکمیل گروهی واژه‌ها
+ */
+export function AIPM(
+  words: string | Word[],
+  existingWords: Word[] = [],
+  category = ''
+): string {
+  const input =
+    typeof words === 'string'
+      ? words
+      : words.map((word) => word.de).filter(Boolean).join('\n');
+
+  const existing = existingWords
+    .map((word) => word.de)
+    .filter(Boolean)
+    .slice(0, 150);
+
+  return `
+تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
+برای هر واژه اطلاعات آموزشی آلمانی به فارسی تولید کن.
+فقط JSON معتبر و بدون Markdown برگردان.
+
+دسته‌بندی: ${JSON.stringify(category)}
+واژه‌های موجود: ${JSON.stringify(existing)}
+واژه‌های ورودی:
+${input}
+
+ساختار خروجی:
+{
+  "words": [
+    {
+      "de": "",
+      "art": "",
+      "fa": "",
+      "syn": "",
+      "synFa": "",
+      "ant": "",
+      "antFa": "",
+      "pl": "",
+      "pos": "",
+      "lvl": "",
+      "ex": "",
+      "exFa": "",
+      "ex2": "",
+      "ex2Fa": "",
+      "conj": "",
+      "prat": "",
+      "perf": "",
+      "komparativ": "",
+      "superlativ": "",
+      "imperativDu": "",
+      "imperativIhr": "",
+      "imperativSie": "",
+      "sep": ""
+    }
+  ]
+}
+`.trim();
 }
 
 /**
@@ -332,9 +395,9 @@ export function AIP(
 
   return `
 تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
-برای واژه آلمانی زیر اطلاعات آموزشی دقیق تولید کن.
-توضیحات فارسی روان و کاربردی باشند.
-فقط JSON معتبر برگردان؛ بدون Markdown و توضیح اضافه.
+برای واژه زیر اطلاعات آموزشی دقیق تولید کن.
+معنی‌ها و توضیحات فارسی روان باشند.
+فقط JSON معتبر و بدون Markdown برگردان.
 
 واژه: ${JSON.stringify(term)}
 دسته‌بندی: ${JSON.stringify(category)}
@@ -342,29 +405,29 @@ export function AIP(
 
 ساختار خروجی:
 {
-  "de": "واژه آلمانی",
-  "art": "der/die/das در صورت اسم بودن",
-  "fa": "معنی فارسی",
-  "syn": "مترادف‌ها",
-  "synFa": "معنی فارسی مترادف‌ها",
-  "ant": "متضادها",
-  "antFa": "معنی فارسی متضادها",
-  "pl": "جمع اسم",
-  "pos": "نوع کلمه",
-  "lvl": "سطح تقریبی CEFR",
-  "ex": "جمله نمونه آلمانی",
-  "exFa": "ترجمه فارسی جمله",
-  "ex2": "جمله نمونه دوم آلمانی",
-  "ex2Fa": "ترجمه فارسی جمله دوم",
-  "conj": "صرف فعل در صورت نیاز",
-  "prat": "Präteritum فعل",
-  "perf": "Partizip II فعل",
-  "komparativ": "حالت مقایسه‌ای صفت",
-  "superlativ": "حالت عالی صفت",
-  "imperativDu": "امر du",
-  "imperativIhr": "امر ihr",
-  "imperativSie": "امر Sie",
-  "sep": "جداشدنی بودن فعل، در صورت کاربرد"
+  "de": "",
+  "art": "",
+  "fa": "",
+  "syn": "",
+  "synFa": "",
+  "ant": "",
+  "antFa": "",
+  "pl": "",
+  "pos": "",
+  "lvl": "",
+  "ex": "",
+  "exFa": "",
+  "ex2": "",
+  "ex2Fa": "",
+  "conj": "",
+  "prat": "",
+  "perf": "",
+  "komparativ": "",
+  "superlativ": "",
+  "imperativDu": "",
+  "imperativIhr": "",
+  "imperativSie": "",
+  "sep": ""
 }
 `.trim();
 }
@@ -379,10 +442,13 @@ export async function quickTranslateWithGemini(
 واژه آلمانی ${JSON.stringify(germanWord)} را برای زبان‌آموز فارسی‌زبان تحلیل کن.
 فقط JSON معتبر برگردان:
 {"fa":"معنی فارسی","art":"der/die/das در صورت اسم","pos":"نوع کلمه","lvl":"سطح CEFR"}
-اگر اسم نیست، art را رشته خالی قرار بده.
+اگر واژه اسم نیست، art را رشته خالی قرار بده.
 `.trim();
 
-  const result = parseAI(await requestGemini(prompt, { timeoutMs: 20000 }));
+  const result = parseAI(
+    await requestGemini(prompt, { timeoutMs: 20000 })
+  );
+
   const item = Array.isArray(result) ? result[0] : result;
 
   if (!item || typeof item !== 'object' || !asText(item.fa)) {
