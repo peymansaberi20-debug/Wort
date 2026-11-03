@@ -49,7 +49,7 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
       onClick={e => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -149,10 +149,7 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
                           {/* Action Buttons: ویرایش, نادیده بگیر, حذف کامل */}
                           <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
                             <button
-                              onClick={() => {
-                                onClose();
-                                onEditWord(word);
-                              }}
+                              onClick={() => onEditWord(word)}
                               className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1"
                             >
                               ✏️ ویرایش
@@ -161,14 +158,10 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
                               onClick={() => onIgnoreWord(word.id)}
                               className="bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1"
                             >
-                              🙈 نادیده بگیر
+                               نادیده بگیر
                             </button>
                             <button
-                              onClick={() => {
-                                if (confirm(`آیا از حذف کامل واژهٔ «${word.de}» اطمینان دارید؟`)) {
-                                  onDeleteWord(word);
-                                }
-                              }}
+                              onClick={() => onDeleteWord(word)}
                               className="bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-300 px-2.5 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1"
                             >
                               🗑 حذف کامل
