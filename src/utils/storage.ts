@@ -1,4 +1,4 @@
-import { AppSettings, AppState, CaseQuestion, DailyGoal, ExtData, Word } from '../types';
+import { AppSettings, AppState, CaseQuestion, DailyGoal, ExtData, ExerciseTimerCfg, Word } from '../types';
 import { INITIAL_SEED, P6 } from '../data/seed';
 import { dayStart, today, dstr } from './dates';
 
@@ -348,24 +348,84 @@ export function verbForms(w: Partial<Word>): string[] {
 
 const ARTICLE_WORDS = ['der', 'die', 'das'];
 
+const DETERMINER_RE =
+  /^(der|die|das|den|dem|des|ein|eine|einen|einem|einer|eines|kein|keine|keinen|keinem|keiner|keines|mein|meine|meinen|meinem|meiner|meines|dein|deine|deinen|deinem|deiner|sein|seine|seinen|seinem|seiner|ihr|ihre|ihren|ihrem|ihrer|unser|unsere|unseren|unserem|unserer|dieser|diese|dieses|diesen|diesem|jeder|jede|jedes|jeden|jedem)$/i;
+
+/** Looks at the words around the blank (_____) of a cloze sentence. */
+export function clozeContext(cloze: string): { prev: string; next: string; atStart: boolean } {
+  const m = String(cloze || '').match(/^([\s\S]*?)_{3,}([\s\S]*)$/);
+  if (!m) return { prev: '', next: '', atStart: false };
+  const before = m[1].trim();
+  const prev = (before.split(/\s+/).filter(Boolean).pop() || '').replace(/[^\p{L}]/gu, '');
+  const next = (m[2].trim().split(/\s+/)[0] || '').replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}]+$/u, '');
+  return { prev, next, atStart: !before };
+}
+
+/** Attributive position: the blank is directly followed by a noun (capitalised word). */
+export function isAttributiveBlank(cloze: string): boolean {
+  const c = clozeContext(cloze);
+  if (!!c.next && /^\p{Lu}/u.test(c.next)) return true;
+  // After a determiner the blank can still be attributive when more adjectives follow:
+  // "eine ___ neue Idee", "eine ___ und günstige Lösung"
+  if (!DETERMINER_RE.test(c.prev)) return false;
+  const m = String(cloze || '').match(/^[\s\S]*?_{3,}([\s\S]*)$/);
+  const toks = (m ? m[1] : '').trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  for (const raw of toks) {
+    const t = raw.replace(/^[^\p{L}]+/u, '').replace(/[^\p{L}]+$/u, '');
+    if (!t) return false;
+    if (/^(und|oder|sowie|aber)$/i.test(t)) continue;
+    if (/^\p{Lu}/u.test(t)) return true;
+    if (!/^[a-zäöüß]+(e|en|er|es|em)$/.test(t)) return false;
+    if (/[.!?;:]$/.test(raw)) return false;
+  }
+  return false;
+}
+
 export function checkWord(
   w: Word,
   inp: string,
   kind: string = 'cloze'
 ): { ok: number; exp: string; cat?: string; msg?: string; cands?: string[] } {
-  // "dict" and "prod" ask for the headword itself; only the cloze exercise uses the blank's answer.
+  // "dict" and "prod" ask for the complete vocabulary item (with article for nouns);
+  // the cloze exercise asks only for what the blank covers.
   const isForm = kind === 'prod' || kind === 'dict';
-  const exp = isForm ? fullWord(w) : w.ans || fullWord(w);
   const isVerb = isVerbPos(w.pos);
   const isAdj = isAdjPos(w.pos);
   const clean = (x: string) => nz2(x || '');
+  const ctx = isForm ? { prev: '', next: '', atStart: false } : clozeContext(w.cloze);
+  const prevIsDet = DETERMINER_RE.test(ctx.prev);
+  const stripArt = (x: string) => (x || '').replace(/^(der|die|das)\s+/i, '').trim();
 
+  let exp = isForm ? fullWord(w) : w.ans || fullWord(w);
   let accepted: string[] = [exp, ...(w.acc || [])];
+  let articleInSentence = false;
+
+  // Noun blank directly after an article/determiner of the sentence: the article is NOT part of the answer
+  if (!isForm && w.art && !isAdj && !isVerb && prevIsDet) {
+    exp = stripArt(w.ans || w.de);
+    accepted = [exp, ...(w.acc || []).map(stripArt)];
+    articleInSentence = true;
+  }
+  // Noun blank at the start of the sentence: the full noun phrase (nominative) is also valid
+  if (!isForm && w.art && !isAdj && !isVerb && !prevIsDet && ctx.atStart && w.ans && !/^(der|die|das)\s/i.test(w.ans)) {
+    accepted.push(`${w.art} ${w.ans}`);
+  }
   if (isForm && isVerb) accepted = [...accepted, ...verbForms(w)];
   if (isForm && !w.art && w.de) accepted.push(w.de);
 
-  // Adjectives in the cloze exercise: only the exact inflected form of the sentence is correct
-  if (!isForm && isAdj && w.ans) accepted = [w.ans];
+  // Adjectives in the cloze exercise: the expected form depends on the position of the blank
+  let adjNote = '';
+  if (!isForm && isAdj && w.ans) {
+    const inflected = clean(w.ans) !== clean(w.de);
+    if (inflected && !isAttributiveBlank(w.cloze)) {
+      // no noun follows the blank: dictionary form (predicative / adverbial use)
+      exp = w.de;
+      accepted = [w.de, ...(w.acc || [])];
+      adjNote = 'در این جمله بعد از جای خالی اسمی نیامده؛ شکل پایهٔ صفت (بدون پایانه) لازم است';
+    } else {
+      accepted = [w.ans];
+    }
+  }
 
   // Imperatives in the cloze exercise: the form must match the pronoun of the sentence
   const impMap: [string, string | undefined][] = [
@@ -376,7 +436,7 @@ export function checkWord(
   const impHit = !isForm && isVerb && w.ans ? impMap.find(([, v]) => v && clean(v) === clean(w.ans)) : undefined;
   if (impHit) accepted = [w.ans];
 
-  if (accepted.some(a => nz2(a) === nz2(inp)) && nz(inp)) return { ok: 1, exp, cands: accepted };
+  if (nz(inp) && accepted.some(a => nz2(a) === nz2(inp))) return { ok: 1, exp, cands: accepted };
 
   const base = { ok: 0, exp, cands: accepted };
 
@@ -392,14 +452,21 @@ export function checkWord(
   }
 
   if (!isForm && isAdj && w.ans) {
+    if (adjNote) {
+      return { ...base, cat: 'adjective', msg: `${adjNote}: ${exp}` };
+    }
     if (clean(inp) === clean(w.de) && clean(w.de) !== clean(w.ans)) {
-      return { ...base, cat: 'adjective', msg: `شکل پایهٔ صفت را نوشته‌اید؛ در این جمله صفت باید صرف شود: ${exp}` };
+      return { ...base, cat: 'adjective', msg: `شکل پایهٔ صفت را نوشته‌اید؛ در این جمله (قبل از اسم) صفت باید صرف شود: ${exp}` };
     }
     return {
       ...base,
       cat: lev(nz(inp), nz(exp)) <= 2 ? 'spelling' : 'adjective',
       msg: `صفت باید به شکل صرف‌شدهٔ درست نوشته شود: ${exp}`
     };
+  }
+
+  if (articleInSentence && /^(der|die|das)\s/i.test(inp.trim())) {
+    return { ...base, cat: 'article', msg: `آرتیکل در خود جمله آمده است؛ فقط اسم را بنویسید: ${exp}` };
   }
 
   const e = exp.split(' ');
@@ -410,7 +477,7 @@ export function checkWord(
   if (e.length === 2 && ARTICLE_WORDS.includes(e[0].toLowerCase())) {
     if (u.length === 1 && nz(u[0]) === nz(e[1])) {
       cat = 'missing';
-      msg = 'آرتیکل را ننوشتید؛ آرتیکل درست: ' + e[0].toLowerCase();
+      msg = 'آرتیکل را ننوشتید؛ در این تمرین آرتیکل بخشی از پاسخ است. آرتیکل درست: ' + e[0].toLowerCase();
     } else if (u.length === 2 && nz(u[1]) === nz(e[1])) {
       cat = 'article';
       msg = 'آرتیکل اشتباه است؛ آرتیکل درست: ' + e[0].toLowerCase();
@@ -423,6 +490,49 @@ export function checkWord(
     msg = 'املا اشتباه است؛ درست: ' + exp;
   }
   return { ...base, cat, msg };
+}
+
+const ART_SPLIT = /^(der|die|das)\s+(.+)$/;
+
+/**
+ * Validation of the synonym / antonym exercise.
+ * - A stored entry WITH an article is a complete lexical item: the article is required.
+ * - A stored entry WITHOUT an article is accepted bare; an article typed in front is accepted only
+ *   when it is the right one (looked up in the library) or cannot be verified.
+ */
+export function checkSynAnt(
+  cands: string[],
+  input: string,
+  lookupArt: (bare: string) => string = () => ''
+): { ok: boolean; msg?: string } {
+  const inp = nz2(input);
+  const im = inp.match(ART_SPLIT);
+  for (const c of cands) {
+    const n = nz2(c);
+    if (ART_SPLIT.test(n)) {
+      if (n === inp) return { ok: true };
+      continue;
+    }
+    if (n === inp) return { ok: true };
+    if (im && im[2] === n) {
+      const art = (lookupArt(c) || '').toLowerCase();
+      if (!art || art === im[1]) return { ok: true };
+    }
+  }
+  const missing = cands.find(c => {
+    const m = nz2(c).match(ART_SPLIT);
+    return !!m && m[2] === inp;
+  });
+  if (missing) return { ok: false, msg: `آرتیکل را ننوشتید؛ در این تمرین آرتیکل بخشی از پاسخ است: ${missing}` };
+  const wrongArt = cands.find(c => {
+    const bare = nz2(c).replace(ART_SPLIT, '$2');
+    return !!im && im[2] === bare;
+  });
+  if (wrongArt) {
+    const art = ART_SPLIT.test(nz2(wrongArt)) ? wrongArt : `${lookupArt(wrongArt) || ''} ${wrongArt}`.trim();
+    return { ok: false, msg: `آرتیکل اشتباه است؛ شکل درست: ${art}` };
+  }
+  return { ok: false };
 }
 
 export function genCheck(q: { exp: string; acc?: string[] }, v: string): { ok: number; exp: string; msg?: string } {
@@ -581,3 +691,19 @@ export function familyCands(w: Word, mode: string): string[] {
   }
   return [];
 }
+
+
+const FLASH_TIMER_MODES = ['flash', 'free', 'review', 'daily'];
+
+/**
+ * Timer configuration of one exercise type.
+ * Older saved settings (no per-exercise timers) fall back to the former global flashcard value,
+ * everything else defaults to "off, 30 seconds".
+ */
+export const getTimerCfg = (set: AppSettings | undefined, mode: string): ExerciseTimerCfg => {
+  const clamp = (n: number) => Math.max(3, Math.min(600, Math.round(+n || 30)));
+  const saved = set?.timers?.[mode];
+  if (saved && typeof saved.on === 'boolean') return { on: saved.on, sec: clamp(saved.sec) };
+  if (FLASH_TIMER_MODES.includes(mode) && (set?.revealSec || 0) > 0) return { on: true, sec: clamp(set!.revealSec) };
+  return { on: false, sec: 30 };
+};
