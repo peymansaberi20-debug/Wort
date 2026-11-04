@@ -1,726 +1,745 @@
-import type { Word } from '../types';
-import { GEM_KEY, GEM_MOD, DEF_MOD } from './storage';
+import { Word } from '../types';
+import { norm, matchCat } from './storage';
 
-export type SpellResult = {
-  status: 'correct' | 'corrected' | 'invalid' | 'unknown';
-  suggestion?: string;
-  explanation?: string;
-};
+export const BASE_CATEGORIES = [
+  'ارتباطات (Kommunikation)',
+  'اصطلاحات (Redewendungen)',
+  'اکسل و اداری (Excel und Büro)',
+  'پایه (Grundwortschatz)',
+  'پرکاربرد (Häufige Wörter)',
+  'دشوار (Schwierige Wörter)',
+  'روزمره (Alltag)',
+  'مالی (Finanzen und Buchhaltung)'
+];
 
-type AIOptions = {
-  timeoutMs?: number;
-  model?: string;
-};
-
-type ProgressCallback = (
-  doneCount: number,
-  totalCount: number,
-  currentMsg: string
-) => void;
-
-const readKey = (): string => {
-  try {
-    return localStorage.getItem(GEM_KEY) ||
-      localStorage.getItem('gemini_api_key') ||
-      '';
-  } catch {
-    return '';
-  }
-};
-
-const readModel = (): string => {
-  try {
-    return (
-      localStorage.getItem(GEM_MOD) ||
-      DEF_MOD ||
-      'gemini-2.5-flash'
-    ).trim();
-  } catch {
-    return 'gemini-2.5-flash';
-  }
-};
-
-async function requestGemini(
-  prompt: string,
-  options: AIOptions = {}
-): Promise<string> {
-  const apiKey = readKey();
-
-  if (!apiKey) {
-    throw new Error(
-      'کلید Gemini پیدا نشد. ابتدا کلید API را در تنظیمات برنامه وارد کنید.'
-    );
-  }
-
-  const model = options.model || readModel();
-  const timeoutMs = options.timeoutMs ?? 30000;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: 'application/json',
-          },
-        }),
-        signal: controller.signal,
-      }
-    );
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const message =
-        data?.error?.message ||
-        `خطای Gemini (${response.status})`;
-
-      throw new Error(message);
-    }
-
-    const text = data?.candidates?.[0]?.content?.parts
-      ?.map((part: { text?: string }) => part.text || '')
-      .join('')
-      .trim();
-
-    if (!text) {
-      throw new Error('Gemini پاسخ متنی معتبری برنگرداند.');
-    }
-
-    return text;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('زمان انتظار پاسخ Gemini به پایان رسید.');
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+export function getDynamicCategories(existingWords: Word[]): string[] {
+  const customCats = new Set<string>(BASE_CATEGORIES);
+  existingWords.forEach(w => {
+    if (w.cat && w.cat.trim()) customCats.add(w.cat.trim());
+  });
+  return Array.from(customCats).sort((a, b) => a.localeCompare(b, 'fa'));
 }
 
-/**
- * ارسال درخواست متنی به Gemini
- */
+export const MASTER_PROMPT_STATIC = `German Vocabulary Master Prompt — Final Comprehensive Version
+
+1. Role and Objective
+
+You are an expert German vocabulary extraction, classification, and JSON-generation assistant for a Persian-speaking German learner.
+
+Your responsibilities are to:
+
+* Process German words and expressions supplied directly by the user.
+* Extract useful German vocabulary from images, screenshots, handwritten notes, documents, books, magazines, articles, and longer texts.
+* Prioritize valuable vocabulary instead of obvious beginner words.
+* Identify the correct meaning, part of speech, and CEFR level.
+* Provide accurate Persian translations and natural German example sentences.
+* Identify genuine word-family relationships, including related nouns, verbs, adjectives, and adverbs.
+* Explain relevant prepositions, grammatical complements, and grammatical cases.
+* Write concise, practical Persian learning notes using a strict multiline format.
+* Generate valid JSON compatible with the user’s existing web application’s importer.
+The required JSON keys are: de, art, fa, syn, synFa, ant, antFa, pl, pos, lvl, cat, ex, exFa, ex2, ex2Fa, cloze, ans, conj, prat, perf, komparativ, superlativ, imperativDu, imperativIhr, imperativSie, sep, notes. Include every key in every object, using an empty string when not applicable. For adjectives, populate komparativ and superlativ. For verbs, populate imperativDu, imperativIhr, and imperativSie. For AI-generated lexical fields that are not sentence-initial prose, use lowercase initial letters where grammatically appropriate; preserve correct German capitalization for nouns/headwords and sentence beginnings.
+* Create a downloadable UTF-8 .json file whenever file creation is available.
+
+Priority Order
+
+1. Exact JSON schema and import compatibility.
+2. Linguistic accuracy.
+3. Educational usefulness.
+4. Consistent formatting.
+5. Conciseness.
+
+Never sacrifice JSON compatibility or factual accuracy to add more information.
+
+⸻
+
+2. Input Workflows
+
+A. When the User Sends German Words Directly
+
+When the user sends one German word, multiple words, or a vocabulary list:
+
+1. Process every submitted item immediately.
+2. Determine the correct dictionary form and meaning.
+3. Identify the part of speech and other applicable grammatical information.
+4. Provide accurate translations, synonyms, antonyms, examples, and verb forms where applicable.
+5. Identify useful related words from the same word family.
+6. Explain relevant prepositions, grammatical structures, and cases in notes.
+7. Generate one JSON object for each submitted vocabulary item.
+8. Return exactly one valid JSON array.
+9. If file creation is available, provide a downloadable UTF-8 .json file containing exactly the same array.
+
+Do not ask the user to select items before generating JSON.
+
+If the same item appears multiple times, avoid unnecessary duplicate objects unless the user explicitly requests duplicates or the items represent genuinely different meanings.
+
+For expressions and idioms, preserve the complete expression when it has independent learning value.
+
+B. When the User Sends an Image, Text, or Document
+
+When the user sends a photo, screenshot, handwritten note, scanned page, document, book, magazine, article, or longer German text:
+
+1. Read the source as accurately as possible.
+2. Extract useful German vocabulary directly.
+3. Apply the vocabulary selection and difficulty filter in Section 3.
+4. Identify the relevant dictionary forms and context-specific meanings.
+5. Generate JSON objects directly for the selected vocabulary.
+6. Return exactly one valid JSON array.
+7. If file creation is available, provide a downloadable UTF-8 .json file containing exactly the same array.
+
+Do not create a numbered selection list, do not wait for the user to select numbers, and do not ask for selection confirmation. Extract and process suitable vocabulary directly.
+
+Additional rules:
+
+* Recognize German spelling, capitalization, umlauts, and ß correctly.
+* Do not invent words that are absent from the source.
+* Do not silently guess unreadable or ambiguous words.
+* Omit uncertain words when their intended form cannot be established reliably.
+* Avoid unnecessary duplicates.
+* Preserve complete expressions when isolated words would not convey their meaning adequately.
+* Use the meaning that best matches the source context.
+
+⸻
+
+3. Vocabulary Selection and Difficulty Filter
+
+Do not automatically extract every word that appears in the source. Select vocabulary according to usefulness, difficulty, context, and learning value.
+
+A. Exclude Obvious Beginner Vocabulary
+
+Generally exclude very common A1 words that most learners are expected to know already, such as:
+
+* Schule
+* Haus
+* Mann
+* Frau
+* Kind
+* machen
+* gehen
+* kommen
+* sein
+* haben
+* gut
+* schön
+
+These examples are guidelines, not an absolute blacklist.
+
+Include a basic word when it has a noteworthy advanced meaning, an important less-obvious usage, a useful idiom, a valuable grammatical pattern, or another clear learning benefit.
+
+Do not include a basic word merely because it appears in the source.
+
+B. Prioritize Valuable Vocabulary
+
+Give priority to:
+
+* B1–C2 vocabulary.
+* Useful A2 vocabulary that is less obvious or easily misunderstood.
+* Words with multiple meanings or subtle distinctions.
+* Important verbs, including separable and inseparable verbs.
+* Meaningful noun–verb combinations and collocations.
+* Idioms, fixed expressions, and common constructions.
+* Formal, academic, professional, administrative, and specialized vocabulary when relevant.
+* Words that are difficult to infer from context.
+* Vocabulary that Persian-speaking learners commonly confuse.
+* Vocabulary that improves reading comprehension, speaking, writing, or listening.
+* Useful word-family relationships that connect nouns, verbs, adjectives, and adverbs.
+
+C. Evaluate Expressions in Context
+
+Do not discard a valuable expression simply because its individual components are basic.
+
+Examples:
+
+* eine Entscheidung treffen
+* zur Verfügung stehen
+* sich mit etwas auseinandersetzen
+* in Betracht ziehen
+
+Prioritize the complete expression when it has meaningful learning value. Include individual components separately only if they also have independent learning value.
+
+D. Exclude Low-Value Entries
+
+Avoid including:
+
+* Obvious beginner vocabulary with little additional learning value.
+* Repetitive items already represented by a more useful expression.
+* Ordinary articles, pronouns, and basic grammatical words unless their specific usage is noteworthy.
+* Proper names and incidental words that are not useful vocabulary-learning targets.
+* Words included merely to increase the number of entries.
+
+E. Apply a Relevance Test
+
+Before including an item, ask:
+
+“Would this item meaningfully expand the vocabulary or improve the German comprehension of a learner who already knows common A1 vocabulary?”
+
+If the answer is no, exclude it. If the answer is yes, include it and assign the most defensible CEFR level.
+
+F. Prefer Quality over Quantity
+
+When the source supports it, aim for approximately 70–80% B1–C2 vocabulary, with the remaining entries reserved for particularly useful A2 vocabulary and valuable expressions.
+
+This is a guideline only.
+
+* Do not force the ratio.
+* Do not invent advanced vocabulary.
+* Do not artificially increase CEFR levels.
+* If the source contains only a few valuable items, return a shorter, higher-quality list.
+
+⸻
+
+4. Mandatory JSON Schema and Import Compatibility
+
+Every vocabulary object must contain exactly these 22 keys in the exact order shown:
+
+1. de
+2. art
+3. fa
+4. syn
+5. synFa
+6. ant
+7. antFa
+8. pl
+9. pos
+10. lvl
+11. ex
+12. exFa
+13. ex2
+14. ex2Fa
+15. cloze
+16. ans
+17. conj
+18. prat
+19. perf
+20. sep
+21. notes
+22. cat
+
+Never add, remove, rename, or reorder these keys.
+
+Mandatory rules:
+
+* Every object must contain all 22 keys, even when some fields are not applicable.
+* Every value must be a string.
+* Use "" for empty or non-applicable fields.
+* Never use null, numbers, arrays, or nested objects as field values.
+* Do not add IDs, extraction numbers, metadata, comments, or extra keys.
+* Use valid JSON syntax with double quotes.
+* Escape quotation marks and special characters correctly.
+* Do not include trailing commas.
+* Do not wrap the array in another object.
+
+Final JSON Output
+
+The final data must be exactly one JSON array containing the vocabulary objects.
+
+* Do not include explanatory text inside the JSON.
+* Do not use Markdown code fences around the final JSON output.
+* Do not include comments or annotations.
+* Do not add headings or introductions inside the JSON data.
+* Ensure the array can be parsed by a standard JSON parser.
+
+If a brief sentence is needed to introduce a downloadable file, keep that sentence outside the file. The file itself must contain only the JSON array.
+
+Before returning the result, silently validate the syntax, key count, key order, data types, and permitted category values.
+
+⸻
+
+5. Field-by-Field Rules
+
+de
+The German vocabulary item in its dictionary form.
+* Nouns: singular form without the article.
+* Verbs: infinitive.
+* Adjectives and adverbs: base form when appropriate.
+* Expressions: complete expression.
+
+art
+The definite article for German nouns: der, die, or das. For non-nouns, use "".
+
+fa
+A clear, natural Persian translation appropriate to the source context.
+* Include important meanings concisely when necessary.
+* For expressions, translate the complete expression rather than translating each word mechanically.
+* Avoid unnecessary repetition.
+
+syn
+German synonyms separated by , . Use "" if no suitable synonym exists.
+
+synFa
+Persian translations of the synonyms in syn, in the same order and separated by , . Use "" if syn is empty.
+
+ant
+German antonyms separated by , . Use "" if no suitable antonym exists.
+
+antFa
+Persian translations of the antonyms in ant, in the same order and separated by , . Use "" if ant is empty.
+
+pl
+The plural form of a German noun. For non-nouns, use "". Never guess an uncertain plural form.
+
+pos
+Use a short, consistent part-of-speech label, such as: Nomen, Verb, Adjektiv, Adverb, Präposition, Konjunktion, Redewendung, Ausdruck.
+
+lvl
+The CEFR level: A1, A2, B1, B2, C1, or C2.
+
+ex
+A natural German example sentence illustrating the intended meaning.
+
+exFa
+A natural Persian translation of ex.
+
+ex2
+A second German example sentence differing meaningfully from ex.
+
+ex2Fa
+A natural Persian translation of ex2.
+
+cloze
+A fill-in-the-blank version of the first German example sentence.
+* Replace the target word or expression with _____.
+* For a noun, hide both the article and noun together.
+* For a verb, hide the conjugated form appearing in the sentence.
+
+ans
+The exact German word or expression needed to fill cloze.
+
+conj
+For verbs, provide the six present-tense forms in this exact order:
+ich | du | er/sie/es | wir | ihr | sie/Sie
+Put only the six conjugated forms in the field, separated by |, without labels or commentary. For non-verbs, use "".
+
+prat
+For verbs, provide the third-person singular Präteritum form (e.g. siegte). For non-verbs, use "".
+
+perf
+For verbs, provide the third-person singular Perfekt form, including auxiliary and past participle (e.g. hat gesiegt, ist gegangen). For non-verbs, use "".
+
+sep
+For verbs, provide the separable prefix when applicable (e.g. for aufstehen, use auf). For non-prefixed or non-verbs, use "".
+
+⸻
+
+6. notes — Mandatory Word Family, Grammar, and Learning Notes
+
+The notes field must contain concise, practical supplementary explanations in Persian.
+Whenever relevant information exists, use this exact order:
+1. Line 1: word family and related parts of speech.
+2. Line 2: prepositions, grammatical structures, and cases.
+3. Line 3 onward: additional explanations and learning notes.
+Do not combine these sections into one continuous paragraph.
+
+Line 1 — Word Family
+Always begin with:
+خانواده واژگانی:
+Identify genuine and useful related words from the same word family (e.g. اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)).
+If no useful related form exists, write: خانواده واژگانی: شکل مرتبطِ رایج و مفیدی وجود ندارد.
+
+Line 2 — Prepositions and Grammatical Cases
+Always begin with:
+ساختار:
+Explain important prepositions, complements, and cases (NOM, AKK, DAT, GEN).
+Examples:
+* warten: ساختار: warten auf + AKK (منتظر کسی/چیزی بودن)
+* helfen: ساختار: helfen + DAT (به کسی کمک کردن)
+If no special structure is relevant, write: ساختار: حرف اضافه یا حالت دستوری ویژه‌ای ندارد.
+
+Line 3 Onward — Additional Learning Notes
+After the first two lines, include useful practical notes (تفاوت معنایی:, کاربرد:, نکته:).
+
+Mandatory Multiline Formatting:
+Separate sections using newline characters in the decoded notes string. In raw JSON, encode each newline as \\n.
+
+Required formatting example:
+"notes": "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)\\nساختار: der Sieg über + AKK (پیروزی بر کسی/چیزی)؛ siegen über + AKK\\nتفاوت معنایی: Sieg بر پیروزی در رقابت تأکید دارد؛ Erfolg مفهوم گسترده‌تری از موفقیت دارد."
+
+⸻
+
+7. cat — Approved Categories
+
+Assign exactly one category to each vocabulary object.
+Use only these exact values:
+* ارتباطات (Kommunikation)
+* اصطلاحات (Redewendungen)
+* اکسل و اداری (Excel und Büro)
+* امور روزمره
+* پایه (Grundwortschatz)
+* پرکاربرد (Häufige Wörter)
+* دشوار (Schwierige Wörter)
+* روزمره (Alltag)
+* مالی (Finanzen und Buchhaltung)
+`;
+
+export function buildMasterPrompt(existingWords: Word[], targetCategory?: string): string {
+  const dynamicCats = getDynamicCategories(existingWords);
+  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
+  const catRule = targetCategory
+    ? `\nCRITICAL CATEGORY OVERRIDE:\nThe user specifically requested that ALL generated items MUST use this exact category in the "cat" field: "${targetCategory}".\n`
+    : `\nCRITICAL MANDATORY CATEGORY RESTRICTION:\nYou MUST assign every word strictly to one of the EXISTING categories below. Do NOT create or invent any new category name. Every word's "cat" value must be an exact string from this list:\n${catListStr}\n`;
+
+  return `${MASTER_PROMPT_STATIC}\n${catRule}\nEvery value must be a string. Return ONLY a valid JSON array.`;
+}
+
+export function buildFastSingleWordPrompt(de: string, existingWords: Word[], targetCategory?: string): string {
+  const dynamicCats = getDynamicCategories(existingWords);
+  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
+  const catRule = targetCategory
+    ? `CRITICAL CATEGORY OVERRIDE: Assign "cat": "${targetCategory}".`
+    : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories (do not create any new category name):\n${catListStr}`;
+
+  return `You are an expert German vocabulary assistant for a Persian learner.
+Generate the full 27-field profile for the German word or expression: "${de}".
+
+Output MUST be a JSON array containing exactly one object with these exact fields (all string values):
+1. "de": German dictionary form (without article)
+2. "art": "der" | "die" | "das" | ""
+3. "fa": precise, natural Persian translation
+4. "syn": German synonym or ""
+5. "synFa": Persian translation of synonym or ""
+6. "ant": German antonym or ""
+7. "antFa": Persian translation of antonym or ""
+8. "pl": plural form (e.g. "-en" or "Bücher") or ""
+9. "pos": "اسم" | "فعل" | "صفت" | "قید" | "حرف اضافه" | "اصطلاح"
+10. "lvl": "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
+11. "cat": ${catRule}
+12. "ex": A natural, grammatically correct German example sentence at CEFR level A1–A2. Use simple sentence structure, common everyday vocabulary, and a clear context that demonstrates the target word's meaning.
+13. "exFa": An accurate, natural Persian translation of ex.
+14. "ex2": A natural, grammatically correct German example sentence at CEFR level B1–B2. Use more varied sentence structures, richer vocabulary, and a realistic context appropriate for an intermediate learner. The sentence must clearly demonstrate the target word's meaning.
+15. "ex2Fa": An accurate, natural Persian translation of ex2.
+16. "cloze": German sentence where target word/expression is replaced with _____
+17. "ans": the exact answer to fill cloze
+18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb)
+19. "prat": for verbs, 3rd person singular Präteritum (e.g. "ging") or ""
+20. "perf": for verbs, 3rd person singular Perfekt (e.g. "ist gegangen" / "hat gemacht") or ""
+21. "komparativ": comparative form for adjectives (e.g. "größer") or ""
+22. "superlativ": superlative form for adjectives (e.g. "am größten" or "der größte") or ""
+23. "imperativDu": informal singular imperative (e.g. "geh!") for verbs or ""
+24. "imperativIhr": informal plural imperative (e.g. "geht!") for verbs or ""
+25. "imperativSie": formal imperative (e.g. "Gehen Sie!") for verbs or ""
+26. "sep": for separable verbs, prefix (e.g. "auf") or ""
+22. "notes": multiline string with exact format:
+خانواده واژگانی: اسم: ... | فعل مرتبط: ... | صفت مرتبط: ...
+ساختار: حرف اضافه یا حالت دستوری...
+توضیحات کاربردی / کاربرد / تفاوت معنایی...
+
+Return ONLY valid JSON array with 1 object.`;
+}
+
+export const AIP = (de: string, words: Word[], catOverride?: string): string =>
+  buildFastSingleWordPrompt(de, words, catOverride);
+
+export const AIPM = (lines: string[], words: Word[], catOverride?: string): string =>
+  buildMasterPrompt(words, catOverride) +
+  `\n\n=== INPUT (Vocabulary List) ===\n${lines.join('\n')}\n\nIf a line begins with [A1], [A2], [B1] or [B2], use that exact level for lvl. Return exactly one JSON array containing exactly one object per item above, in the same order.`;
+
+export function parseAI(t: string): any[] {
+  t = t.replace(/```(?:json)?/gi, '').trim();
+  const i = t.search(/[\[{]/);
+  if (i < 0) throw new Error('محتوای JSON در پاسخ یافت نشد.');
+  t = t.slice(i);
+  const j = Math.max(t.lastIndexOf(']'), t.lastIndexOf('}'));
+  let o = JSON.parse(t.slice(0, j + 1));
+  if (o && Array.isArray(o.words)) o = o.words;
+  return Array.isArray(o) ? o : [o];
+}
+
+export function aiFix(r: any): any {
+  if (!r || typeof r !== 'object') return null;
+  r = Object.assign({}, r);
+  for (const k in r) {
+    if (typeof r[k] !== 'string') {
+      r[k] = r[k] == null ? '' : Array.isArray(r[k]) ? r[k].join('|') : String(r[k]);
+    }
+  }
+  // Normalize lexical German fields to lowercase initial letters where appropriate.
+  // Keep the headword (de), nouns, sentence beginnings, and formal imperative capitalization intact.
+  for (const k of ['syn', 'ant', 'pl', 'conj', 'prat', 'perf', 'sep', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr']) {
+    if (typeof r[k] === 'string' && r[k]) r[k] = r[k].charAt(0).toLocaleLowerCase('de') + r[k].slice(1);
+  }
+  if (r.cloze) r.cloze = r.cloze.replace(/_{3,}/g, '_____');
+  if (!/_____/.test(r.cloze || '')) {
+    r.cloze = '';
+    r.ans = '';
+  }
+  return r;
+}
+
+export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: string): { ws: Word[]; errs: string[] } {
+  const errs: string[] = [];
+  const ws: Word[] = [];
+  const seenC: string[] = [];
+  const existingCatNames = getDynamicCategories(existingWords);
+  const defaultFallbackCat = existingCatNames[0] || 'روزمره (Alltag)';
+
+  list.forEach((r, i) => {
+    r = aiFix(r);
+    if (!r || !(r.de || '').trim()) {
+      errs.push(`مورد ${i + 1}: کلمهٔ آلمانی خالی است`);
+      return;
+    }
+    const m = /^(der|die|das)\s+(.+)$/i.exec(r.de.trim());
+    if (m && !r.art) {
+      r.art = m[1].toLowerCase();
+      r.de = m[2];
+    }
+    if (!(r.fa || '').trim()) {
+      errs.push(`مورد ${i + 1} (${r.de}): ترجمهٔ فارسی خالی است`);
+      return;
+    }
+
+    let suggestedNewCat: string | undefined = undefined;
+    if (targetCategory) {
+      r.cat = targetCategory;
+    } else if (r.cat) {
+      const matched = matchCat(r.cat, existingWords, seenC);
+      if (matched) {
+        r.cat = matched;
+        if (!seenC.includes(matched)) seenC.push(matched);
+      } else {
+        // AI proposed a new category not in existing categories!
+        suggestedNewCat = String(r.cat).trim().slice(0, 40);
+        r.cat = defaultFallbackCat;
+      }
+    } else {
+      r.cat = defaultFallbackCat;
+    }
+
+    const w = norm(r);
+    if (w) {
+      if (suggestedNewCat) {
+        w.suggestedNewCat = suggestedNewCat;
+      }
+      ws.push(w);
+    }
+  });
+  return { ws, errs };
+}
+
 export async function generateWithGemini(
   prompt: string,
-  options: AIOptions = {}
+  options?: { timeoutMs?: number; model?: string; retries?: number }
 ): Promise<string> {
-  return requestGemini(prompt, options);
-}
+  const timeoutMs = options?.timeoutMs || 25000;
+  const maxRetries = options?.retries ?? 1;
+  const model = options?.model || 'gemini-3.1-flash-lite';
 
-/**
- * استخراج JSON از پاسخ هوش مصنوعی
- */
-export function parseAI(input: unknown): any {
-  if (typeof input !== 'string') {
-    return input;
-  }
+  let lastError: any = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  let text = input.trim();
-
-  text = text
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    // گاهی پاسخ شامل توضیح قبل یا بعد از JSON است.
-  }
-
-  const startArray = text.indexOf('[');
-  const startObject = text.indexOf('{');
-
-  let start = -1;
-
-  if (startArray >= 0 && startObject >= 0) {
-    start = Math.min(startArray, startObject);
-  } else {
-    start = Math.max(startArray, startObject);
-  }
-
-  if (start < 0) {
-    throw new Error('JSON معتبری در پاسخ هوش مصنوعی پیدا نشد.');
-  }
-
-  const opening = text[start];
-  const closing = opening === '[' ? ']' : '}';
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = start; i < text.length; i++) {
-    const char = text[i];
-
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-
-      continue;
-    }
-
-    if (char === '"') {
-      inString = true;
-      continue;
-    }
-
-    if (char === opening) {
-      depth++;
-    } else if (char === closing) {
-      depth--;
-
-      if (depth === 0) {
-        return JSON.parse(text.slice(start, i + 1));
-      }
-    }
-  }
-
-  throw new Error('ساختار JSON ناقص است.');
-}
-
-const asText = (value: unknown): string =>
-  value == null ? '' : String(value).trim();
-
-const unwrapWords = (value: any): any[] => {
-  if (Array.isArray(value)) return value;
-
-  if (value && typeof value === 'object') {
-    if (Array.isArray(value.words)) return value.words;
-    if (Array.isArray(value.ws)) return value.ws;
-    if (Array.isArray(value.results)) return value.results;
-
-    if (value.de || value.word || value.german) {
-      return [value];
-    }
-  }
-
-  return [];
-};
-
-const createWord = (source: any, category = ''): Word => {
-  const de = asText(source?.de ?? source?.word ?? source?.german);
-  const fa = asText(source?.fa ?? source?.translation ?? source?.persian);
-
-  return {
-    id: asText(source?.id) || `ai-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    de,
-    art: asText(source?.art ?? source?.article),
-    fa,
-    syn: asText(source?.syn ?? source?.synonyms),
-    synFa: asText(source?.synFa),
-    ant: asText(source?.ant ?? source?.antonyms),
-    antFa: asText(source?.antFa),
-    pl: asText(source?.pl ?? source?.plural),
-    pos: asText(source?.pos ?? source?.partOfSpeech),
-    lvl: asText(source?.lvl ?? source?.level),
-    ex: asText(source?.ex ?? source?.example),
-    exFa: asText(source?.exFa ?? source?.exampleFa),
-    ex2: asText(source?.ex2 ?? source?.example2),
-    ex2Fa: asText(source?.ex2Fa ?? source?.example2Fa),
-    conj: asText(source?.conj ?? source?.conjugation),
-    prat: asText(source?.prat ?? source?.praeteritum),
-    perf: asText(source?.perf ?? source?.partizipII),
-    komparativ: asText(source?.komparativ),
-    superlativ: asText(source?.superlativ),
-    imperativDu: asText(source?.imperativDu),
-    imperativIhr: asText(source?.imperativIhr),
-    imperativSie: asText(source?.imperativSie),
-    sep: asText(source?.sep),
-    cat: category || asText(source?.cat ?? source?.category),
-    cloze: asText(source?.cloze),
-    ans: asText(source?.ans),
-    acc: Array.isArray(source?.acc) ? source.acc.map(String) : [],
-    tags: asText(source?.tags),
-    notes: asText(source?.notes),
-    img: asText(source?.img),
-    added: Number(source?.added) || Date.now(),
-    last: Number(source?.last) || 0,
-    due: Number(source?.due) || 0,
-    ivl: Number(source?.ivl) || 0,
-    ease: Number(source?.ease) || 2.5,
-    stage: Number(source?.stage) || 0,
-    ok: Number(source?.ok) || 0,
-    bad: Number(source?.bad) || 0,
-    res: asText(source?.res),
-    ...(source?.cs != null ? { cs: Number(source.cs) || 0 } : {}),
-  };
-};
-
-/**
- * تبدیل پاسخ هوش مصنوعی به واژه‌های قابل استفاده در برنامه
- */
-export function aiToIMP(
-  parsed: unknown,
-  existingWords: Word[] = [],
-  category = ''
-): { ws: Word[]; errs: string[] } {
-  const ws: Word[] = [];
-  const errs: string[] = [];
-  const seen = new Set(
-    existingWords.map((word) => asText(word.de).toLocaleLowerCase('de'))
-  );
-
-  for (const [index, item] of unwrapWords(parsed).entries()) {
     try {
-      const word = createWord(item, category);
+      const res = await fetch('/api/gemini/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          prompt,
+          model,
+          responseMimeType: 'application/json'
+        })
+      });
 
-      if (!word.de || !word.fa) {
-        errs.push(`ردیف ${index + 1}: واژه آلمانی یا ترجمه فارسی ناقص است.`);
-        continue;
+      clearTimeout(timeoutId);
+
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((j && j.error) || `خطای ارتباط با سرور هوش مصنوعی (${res.status})`);
       }
 
-      const key = word.de.toLocaleLowerCase('de');
+      const text = j.text || '';
+      if (!text) throw new Error('پاسخ خالی از هوش مصنوعی دریافت شد.');
+      return text;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const isAbort = err.name === 'AbortError' || /aborted/i.test(err.message || '');
+      lastError = isAbort
+        ? new Error('زمان انتظار برای دریافت پاسخ هوش مصنوعی به پایان رسید (تایم‌اوت). لطفاً دوباره تلاش کنید.')
+        : err;
 
-      if (seen.has(key)) {
-        errs.push(`«${word.de}»: این واژه از قبل وجود دارد.`);
-        continue;
+      if (attempt < maxRetries) {
+        // Short pause before retry
+        await new Promise(r => setTimeout(r, 600));
       }
+    }
+  }
 
-      seen.add(key);
-      ws.push(word);
+  throw lastError || new Error('خطا در پردازش هوش مصنوعی.');
+}
+
+export interface SpellResult {
+  status: 'ok' | 'corrected' | 'invalid';
+  suggestion?: string;
+}
+
+/**
+ * Checks the spelling of German words typed by the learner.
+ * - ok: a real German word (or expression), spelled correctly
+ * - corrected: misspelled, a clear intended word exists (suggestion)
+ * - invalid: no such German word
+ * If the AI is unreachable the check is skipped (empty result), so adding words never gets blocked.
+ */
+export async function checkGermanSpelling(inputs: string[]): Promise<Record<string, SpellResult>> {
+  const out: Record<string, SpellResult> = {};
+  const list = inputs.map(s => s.trim()).filter(Boolean);
+  const CHUNK = 30;
+  for (let i = 0; i < list.length; i += CHUNK) {
+    const chunk = list.slice(i, i + CHUNK);
+    const prompt = `You are a strict German spelling checker for a vocabulary learner.
+For every input entry below, decide:
+- "ok": it is a real German word or fixed expression, spelled correctly (inflected forms, compounds, separable verbs, and less common words are ok; an optional article like "der Tisch" is ok).
+- "corrected": it is misspelled but one specific German word is clearly meant. Give that word as "suggestion" in standard spelling (keep the article if the input had one, keep the same word type, same case as normal German spelling).
+- "invalid": it is not a German word and no clear intended word exists.
+Be conservative: never mark a valid word as corrected or invalid.
+Return ONLY a valid JSON array with exactly ${chunk.length} objects in the same order as the inputs, each shaped {"input":"...","status":"ok|corrected|invalid","suggestion":"..."} (use "" for suggestion unless status is corrected).
+
+Inputs:
+${chunk.map((x, n) => `${n + 1}. ${x}`).join('\n')}`;
+    try {
+      const text = await generateWithGemini(prompt, { timeoutMs: 20000, retries: 0 });
+      const arr = parseAI(text);
+      chunk.forEach((inp, idx) => {
+        const r: any = arr[idx];
+        if (!r) return;
+        if (r.status === 'invalid') out[inp] = { status: 'invalid' };
+        else if (r.status === 'corrected' && typeof r.suggestion === 'string' && r.suggestion.trim()) {
+          out[inp] = { status: 'corrected', suggestion: r.suggestion.trim() };
+        } else out[inp] = { status: 'ok' };
+      });
     } catch {
-      errs.push(`ردیف ${index + 1}: تبدیل واژه با خطا مواجه شد.`);
+      // network / parsing problem: skip the spelling check for this chunk
     }
   }
-
-  if (ws.length === 0 && errs.length === 0) {
-    errs.push('هیچ واژه قابل استفاده‌ای در پاسخ پیدا نشد.');
-  }
-
-  return { ws, errs };
-
-}
-
-
-/**
- * ساخت prompt برای واردکردن و تکمیل گروهی واژه‌ها
- */
-export function AIP(
-  targetWord: string | Word,
-  words: Word[] = [],
-  category = ''
-): string {
-  const term = asText(
-    typeof targetWord === 'string'
-      ? targetWord
-      : targetWord.de
-  );
-
-  // فهرست واژه‌های موجود صرفاً برای بررسی تکراری‌ها بود؛
-  // نباید وارد دستور تولید یک واژه شود.
-  void words;
-
-  if (!term) {
-    throw new Error('واژه‌ای برای تکمیل به هوش مصنوعی ارسال نشده است.');
-  }
-
-  return `
-تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
-
-فقط پروفایل همین یک واژه یا عبارت را تکمیل کن.
-
-واژه هدف:
-${JSON.stringify(term)}
-
-قوانین الزامی:
-1. فقط یک شیء JSON برگردان؛ نه آرایه و نه چند واژه.
-2. فیلد de باید همین واژه هدف باشد؛ واژه دیگری نساز و جایگزین نکن.
-3. اگر واژه با der، die یا das نوشته شده است، آرتیکل را در art و خود اسم را در de قرار بده.
-4. اگر ورودی یک عبارت یا فعل چندکلمه‌ای است، تمام عبارت را حفظ کن.
-5. واژه‌های موجود، نمونه‌ها و واژه‌های پیش‌فرض برنامه ورودی تولید نیستند.
-6. معنی و توضیحات را به فارسی روان بنویس.
-7. برای اطلاعات نامربوط، رشته خالی قرار بده؛ اطلاعات دستوری را حدس نزن.
-8. فقط JSON معتبر و بدون Markdown برگردان.
-
-دسته‌بندی:
-${JSON.stringify(category)}
-
-ساختار دقیق خروجی:
-{
-  "de": "",
-  "art": "",
-  "fa": "",
-  "syn": "",
-  "synFa": "",
-  "ant": "",
-  "antFa": "",
-  "pl": "",
-  "pos": "",
-  "lvl": "",
-  "ex": "",
-  "exFa": "",
-  "ex2": "",
-  "ex2Fa": "",
-  "conj": "",
-  "prat": "",
-  "perf": "",
-  "komparativ": "",
-  "superlativ": "",
-  "imperativDu": "",
-  "imperativIhr": "",
-  "imperativSie": "",
-  "sep": ""
-}
-`.trim();
-}
-
-/**
- * ترجمه سریع واژه آلمانی
- */
-
-
-/**
- * ساخت prompt برای استخراج و تکمیل گروهی واژه‌ها
- */
-export function AIPM(
-  words: string | Word[],
-  existingWords: Word[] = [],
-  category = ''
-): string {
-  const source = (
-    typeof words === 'string'
-      ? words.trim()
-      : words.map((word) => asText(word?.de)).filter(Boolean).join('\n')
-  );
-
-  // واژه‌های موجود نباید باعث تولید واژه‌های پیش‌فرض شوند.
-  void existingWords;
-
-  if (!source) {
-    throw new Error('هیچ واژه یا متنی برای پردازش ارسال نشده است.');
-  }
-
-  return `
-تو دستیار تخصصی آموزش زبان آلمانی برای فارسی‌زبانان هستی.
-
-وظیفه تو استخراج و تکمیل اطلاعات آموزشی فقط برای واژه‌های موجود در ورودی است.
-
-متن ورودی:
-${JSON.stringify(source)}
-
-قوانین الزامی:
-1. فقط واژه‌ها و عبارت‌های آلمانی موجود در متن ورودی را پردازش کن.
-2. هیچ واژه جدید، پیش‌فرض یا پیشنهادی به فهرست اضافه نکن.
-3. برای هر ورودی، فقط یک شیء خروجی تولید کن.
-4. فیلد de باید همان واژه یا عبارت ورودی باشد؛ املای آن را بی‌دلیل تغییر نده.
-5. اگر ورودی شامل آرتیکل der، die یا das است، آرتیکل را در art و اسم را در de قرار بده.
-6. اگر ورودی با پیشوند سطح مانند [B2] شروع می‌شود، سطح را در lvl قرار بده و پیشوند را از de حذف کن.
-7. معنی، ترجمه و توضیحات را به فارسی روان بنویس.
-8. اگر اطلاعاتی کاربرد ندارد یا از آن مطمئن نیستی، رشته خالی قرار بده.
-9. خروجی باید یک شیء JSON با کلید words و مقدار آرایه باشد.
-10. فقط JSON معتبر و بدون Markdown برگردان.
-
-دسته‌بندی:
-${JSON.stringify(category)}
-
-ساختار خروجی:
-{
-  "words": [
-    {
-      "de": "",
-      "art": "",
-      "fa": "",
-      "syn": "",
-      "synFa": "",
-      "ant": "",
-      "antFa": "",
-      "pl": "",
-      "pos": "",
-      "lvl": "",
-      "ex": "",
-      "exFa": "",
-      "ex2": "",
-      "ex2Fa": "",
-      "conj": "",
-      "prat": "",
-      "perf": "",
-      "komparativ": "",
-      "superlativ": "",
-      "imperativDu": "",
-      "imperativIhr": "",
-      "imperativSie": "",
-      "sep": ""
-    }
-  ]
-}
-`.trim();
+  return out;
 }
 
 export async function quickTranslateWithGemini(
-  germanWord: string
-): Promise<{ fa: string; art?: string; pos?: string; lvl?: string }> {
-  const prompt = `
-واژه آلمانی ${JSON.stringify(germanWord)} را برای زبان‌آموز فارسی‌زبان تحلیل کن.
-فقط JSON معتبر برگردان:
-{"fa":"معنی فارسی","art":"der/die/das در صورت اسم","pos":"نوع کلمه","lvl":"سطح CEFR"}
-اگر واژه اسم نیست، art را رشته خالی قرار بده.
-`.trim();
-
-  const result = parseAI(
-    await requestGemini(prompt, { timeoutMs: 20000 })
-  );
-
-  const item = Array.isArray(result) ? result[0] : result;
-
-  if (!item || typeof item !== 'object' || !asText(item.fa)) {
-    throw new Error('ترجمه معتبر از Gemini دریافت نشد.');
-  }
-
-  return {
-    fa: asText(item.fa),
-    art: asText(item.art),
-    pos: asText(item.pos),
-    lvl: asText(item.lvl),
-  };
-}
-
-/**
- * بررسی املای واژه‌های آلمانی
- */
-export async function checkGermanSpelling(
-  words: string[]
-): Promise<Record<string, SpellResult>> {
-  const input = [...new Set(words.map(asText).filter(Boolean))];
-  const output: Record<string, SpellResult> = {};
-
-  if (!input.length) return output;
-
-  const prompt = `
-املای واژه‌های آلمانی زیر را بررسی کن.
-برای هر واژه یکی از وضعیت‌های correct، corrected یا invalid را تعیین کن.
-correct یعنی املای درست؛ corrected یعنی پیشنهاد اصلاح؛ invalid یعنی واژه قابل تشخیص نیست.
-فقط JSON معتبر با این ساختار برگردان:
-{"results":[{"word":"ورودی","status":"correct","suggestion":"","explanation":""}]}
-
-واژه‌ها:
-${JSON.stringify(input)}
-`.trim();
+  text: string
+): Promise<{ de: string; art?: string; fa: string; pos?: string; lvl?: string }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   try {
-    const parsed = parseAI(await requestGemini(prompt, { timeoutMs: 25000 }));
-    const items = unwrapWords(parsed?.results ?? parsed);
+    const res = await fetch('/api/gemini/quick-translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ text })
+    });
+    clearTimeout(timeoutId);
 
-    for (const item of items) {
-      const word = asText(item.word ?? item.de ?? item.input);
-      if (!word) continue;
-
-      const status = asText(item.status).toLowerCase();
-      const normalizedStatus: SpellResult['status'] =
-        status === 'correct'
-          ? 'correct'
-          : status === 'corrected'
-            ? 'corrected'
-            : status === 'invalid'
-              ? 'invalid'
-              : 'unknown';
-
-      output[word] = {
-        status: normalizedStatus,
-        suggestion: asText(item.suggestion),
-        explanation: asText(item.explanation),
-      };
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || `خطا در ترجمه (${res.status})`);
     }
-  } catch {
-    // در صورت قطع اتصال، نتیجه unknown است؛ واژه را غلط اعلام نکن.
-  }
 
-  for (const word of input) {
-    if (!output[word]) {
-      output[word] = { status: 'unknown' };
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    const isAbort = err.name === 'AbortError' || /aborted/i.test(err.message || '');
+    if (isAbort) {
+      throw new Error('زمان ترجمهٔ سریع به پایان رسید. دوباره تلاش کنید.');
     }
+    throw err;
   }
-
-  return output;
 }
 
-/**
- * تکمیل گروهی واژه‌های استخراج‌شده
- */
 export async function processBatchWordsWithGemini(
   lines: string[],
-  existingWords: Word[] = [],
-  category?: string,
-  onProgress?: ProgressCallback
+  words: Word[],
+  catOverride?: string,
+  onProgress?: (doneCount: number, totalCount: number, currentMsg: string) => void
 ): Promise<{ ws: Word[]; errs: string[] }> {
-  const input = lines.map(asText).filter(Boolean);
-  const ws: Word[] = [];
-  const errs: string[] = [];
-
-  if (!input.length) {
-    return { ws, errs: ['هیچ واژه‌ای برای پردازش ارسال نشده است.'] };
+  const BATCH_SIZE = 5;
+  const chunks: string[][] = [];
+  for (let i = 0; i < lines.length; i += BATCH_SIZE) {
+    chunks.push(lines.slice(i, i + BATCH_SIZE));
   }
 
-  const normalizeInput = (value: string): string =>
-    asText(value)
-      .normalize('NFC')
-      .replace(/^\[(?:A1|A2|B1|B2|C1|C2)\]\s*/i, '')
-      .replace(/^(?:der|die|das)\s+/i, '')
-      .replace(/\s+/g, ' ')
-      .toLocaleLowerCase('de');
+  const allWords: Word[] = [];
+  const allErrs: string[] = [];
 
-  const batchSize = 5;
-
-  for (let start = 0; start < input.length; start += batchSize) {
-    const batch = input.slice(start, start + batchSize);
-    const requested = new Set(batch.map(normalizeInput));
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const fromIdx = i * BATCH_SIZE + 1;
+    const toIdx = Math.min((i + 1) * BATCH_SIZE, lines.length);
 
     onProgress?.(
-      start,
-      input.length,
-      `در حال تکمیل واژه‌های ${start + 1} تا ${Math.min(
-        start + batch.length,
-        input.length
-      )}`
+      allWords.length,
+      lines.length,
+      `در حال تکمیل واژه‌های ${fromIdx} تا ${toIdx} از مجموع ${lines.length} واژه...`
     );
 
-    const prompt = `
-برای هر یک از ورودی‌های مشخص‌شده، اطلاعات آموزشی آلمانی تولید کن.
-
-قوانین:
-- فقط ورودی‌های آرایه را پردازش کن.
-- هیچ واژه پیش‌فرض یا واژه جدیدی اضافه نکن.
-- فیلد de باید با همان ورودی متناظر باشد.
-- ترتیب ورودی‌ها را حفظ کن.
-- اگر ورودی با پیشوند سطح مانند [B2] شروع می‌شود، آن پیشوند را از de حذف کن و سطح را در lvl قرار بده.
-- برای هر ورودی یک شیء خروجی تولید کن.
-- فقط JSON معتبر برگردان.
-
-دسته‌بندی:
-${JSON.stringify(category || '')}
-
-آرایه ورودی:
-${JSON.stringify(batch)}
-
-ساختار خروجی:
-{
-  "words": [
-    {
-      "de": "",
-      "art": "",
-      "fa": "",
-      "syn": "",
-      "synFa": "",
-      "ant": "",
-      "antFa": "",
-      "pl": "",
-      "pos": "",
-      "lvl": "",
-      "ex": "",
-      "exFa": "",
-      "ex2": "",
-      "ex2Fa": "",
-      "conj": "",
-      "prat": "",
-      "perf": "",
-      "komparativ": "",
-      "superlativ": "",
-      "imperativDu": "",
-      "imperativIhr": "",
-      "imperativSie": "",
-      "sep": ""
-    }
-  ]
-}
-`.trim();
-
     try {
-      const response = await requestGemini(prompt, {
-        timeoutMs: 45000
-      });
+      const prompt = AIPM(chunk, words, catOverride);
+      const resText = await generateWithGemini(prompt, { timeoutMs: 30000 });
+      const parsed = parseAI(resText);
+      const { ws, errs } = aiToIMP(parsed, words, catOverride);
+      allWords.push(...ws);
+      allErrs.push(...errs);
+    } catch (e: any) {
+      allErrs.push(`خطا در پردازش دسته ${i + 1}: ${e.message || 'ناموفق'}`);
+    }
+  }
 
-      const parsed = parseAI(response);
-      const returned = unwrapWords(parsed);
+  return { ws: allWords, errs: allErrs };
+}
 
-      if (!returned.length) {
-        errs.push(
-          `بسته ${Math.floor(start / batchSize) + 1}: خروجی واژه‌ای نداشت.`
-        );
-        continue;
-      }
+export async function generateStreamWithGemini(
+  prompt: string,
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  const res = await fetch('/api/gemini/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      model: 'gemini-3.8-flash'
+    })
+  });
 
-      const converted = aiToIMP(
-        returned,
-        [...existingWords, ...ws],
-        category || ''
-      );
+  if (!res.ok || !res.body) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j && j.error) || `خطای استریم هوش مصنوعی (${res.status})`);
+  }
 
-      const accepted = converted.ws.filter((word) =>
-        requested.has(normalizeInput(word.de))
-      );
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
 
-      const unexpected = converted.ws.filter(
-        (word) => !requested.has(normalizeInput(word.de))
-      );
-
-      ws.push(...accepted);
-
-      errs.push(...converted.errs);
-
-      for (const word of unexpected) {
-        errs.push(
-          `«${word.de}» وارد نشد؛ این واژه در فهرست ورودی این بسته نبود.`
-        );
-      }
-
-      const acceptedKeys = new Set(
-        accepted.map((word) => normalizeInput(word.de))
-      );
-
-      for (const term of batch) {
-        if (!acceptedKeys.has(normalizeInput(term))) {
-          const alreadyReported = converted.errs.some((message) =>
-            message.toLocaleLowerCase('de').includes(
-              normalizeInput(term)
-            )
-          );
-
-          if (!alreadyReported) {
-            errs.push(
-              `«${term}»: در خروجی معتبر این بسته پیدا نشد.`
-            );
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.text) {
+            fullText += parsed.text;
+            onChunk(parsed.text);
+          }
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+        } catch (e: any) {
+          if (e.message && e.message !== 'Unexpected end of JSON input') {
+            console.error(e);
           }
         }
       }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'خطای نامشخص Gemini';
-
-      errs.push(
-        `بسته ${Math.floor(start / batchSize) + 1}: ${message}`
-      );
     }
-
-    const done = Math.min(start + batch.length, input.length);
-
-    onProgress?.(
-      done,
-      input.length,
-      `پردازش ${done} از ${input.length} واژه`
-    );
   }
 
-  return { ws, errs };
+  return fullText;
+}
+
+export async function checkServerAiStatus(): Promise<{ ok: boolean; hasKey: boolean; model: string }> {
+  const res = await fetch('/api/gemini/status');
+  if (!res.ok) throw new Error(`خطای بررسی وضعیت سرور (${res.status})`);
+  return res.json();
 }
