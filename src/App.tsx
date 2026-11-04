@@ -557,6 +557,7 @@ export default function App() {
               onEditWord={handleEditWord}
               onDeleteWord={handleDeleteWord}
               onImageChange={handleImageChange}
+              onUpdateSettings={patch => setState(prev => ({ ...prev, set: { ...prev.set, ...patch } }))}
             />
             </div>
           )}
@@ -645,6 +646,7 @@ export default function App() {
                   onEditWord={handleEditWord}
                   onDeleteWord={handleDeleteWord}
                   onImageChange={handleImageChange}
+                  onUpdateSettings={patch => setState(prev => ({ ...prev, set: { ...prev.set, ...patch } }))}
                 />
               )}
 
