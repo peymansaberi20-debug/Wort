@@ -53,6 +53,12 @@ export interface HistItem {
   cat?: string;
 }
 
+/** Countdown timer of one exercise type (configured inside that exercise). */
+export interface ExerciseTimerCfg {
+  on: boolean;
+  sec: number;
+}
+
 export interface AppSettings {
   theme: 'light' | 'dark';
   dir: 'de' | 'fa' | 'rand';
@@ -75,6 +81,8 @@ export interface AppSettings {
   freeCat?: string;
   freeDir?: 'de' | 'fa';
   freeRnd?: boolean;
+  /** Per-exercise countdown timers, keyed by exercise type (e.g. 'cloze', 'dict', 'flash'). */
+  timers?: Record<string, ExerciseTimerCfg>;
 }
 
 export interface DailyGoal {
@@ -111,4 +119,3 @@ export interface CaseQuestion {
   ex: string;
   exFa: string;
 }
-
