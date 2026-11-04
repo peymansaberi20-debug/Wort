@@ -16,12 +16,44 @@ export interface ConjSegment {
   kind: SegKind;
 }
 
-/** Splits the stored conjugation string into (up to) six forms. */
+const PRON_RE = /^(ich|du|er\/sie\/es|er\/sie|er|es|wir|ihr|sie\/sie|sie)\s+(\S[\s\S]*)$/i;
+
+/** Grammatical slot (0 ich .. 5 sie/Sie) of a leading pronoun; a bare "sie" is resolved by its position. */
+function pronounSlot(pron: string, position: number): number {
+  const p = pron.toLowerCase();
+  if (p === 'ich') return 0;
+  if (p === 'du') return 1;
+  if (p === 'er' || p === 'es' || p === 'er/sie' || p === 'er/sie/es') return 2;
+  if (p === 'wir') return 3;
+  if (p === 'ihr') return 4;
+  if (p === 'sie/sie') return 5;
+  return position <= 3 ? 2 : 5; // plain "sie"
+}
+
+/**
+ * Splits the stored conjugation string into (up to) six forms in the fixed grammatical order
+ * ich, du, er/sie/es, wir, ihr, sie/Sie. Forms are returned WITHOUT a leading personal pronoun
+ * (the pronoun is shown separately by every screen), even if the stored text contained pronouns
+ * or listed the persons in a different order.
+ */
 export function splitConj(conj: string): string[] {
   const raw = (conj || '').trim();
   if (!raw) return [];
-  const parts = raw.includes('|') ? raw.split('|') : raw.split(/[,;،]/);
-  return parts.map(p => p.trim()).slice(0, 6);
+  const parts = (raw.includes('|') ? raw.split('|') : raw.split(/[,;،]/)).map(p => p.trim()).slice(0, 6);
+  const parsed = parts.map((p, i) => {
+    const m = p.match(PRON_RE);
+    return m ? { slot: pronounSlot(m[1], i), form: m[2].trim() } : null;
+  });
+  if (parsed.every(x => x === null)) return parts;
+  if (parsed.some(x => x === null)) return parts.map((p, i) => (parsed[i] ? parsed[i]!.form : p));
+  const out: string[] = new Array(Math.max(parts.length, 6)).fill('');
+  let unique = true;
+  parsed.forEach(x => {
+    if (out[x!.slot]) unique = false;
+    out[x!.slot] = x!.form;
+  });
+  if (!unique) return parsed.map(x => x!.form);
+  return parts.length === 6 ? out : out.slice(0, Math.max(...parsed.map(x => x!.slot)) + 1);
 }
 
 // Candidate regular endings per person (ich, du, er/sie/es, wir, ihr, sie/Sie).
@@ -228,4 +260,46 @@ export function segmentConjugation(
   for (let i = 0; i < stem.length; i++) pushSeg(out, stem[i], red[i] ? 'change' : 'stem');
   pushSeg(out, ending, 'ending');
   return finish();
+}
+
+export const P6_LABELS = ['ich', 'du', 'er/sie/es', 'wir', 'ihr', 'sie/Sie'];
+
+const PRON_ACCEPT: string[][] = [['ich'], ['du'], ['er', 'sie', 'es', 'er/sie/es'], ['wir'], ['ihr'], ['sie', 'sie/sie']];
+const ALL_SUBJECT_PRONOUNS = ['ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr'];
+const REFLEXIVE_PRONOUNS = ['mich', 'dich', 'sich', 'uns', 'euch'];
+
+const nzc = (x: string) => (x || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+export interface ConjCheck {
+  ok: boolean;
+  target: string; // the correct form for the requested pronoun
+  wrongPron: string; // a different subject pronoun typed in front of the form
+  otherIdx: number; // index of another person whose form was typed (-1 if none)
+  missingPart: boolean; // separable prefix missing
+  cands: string[];
+}
+
+/**
+ * Validates an answer of the conjugation exercise for the requested person (0 ich .. 5 sie/Sie).
+ * The pronoun belongs to the question: the answer may be written with or without it,
+ * but a different pronoun in front of the form is an error.
+ */
+export function checkConjAnswer(conj: string, pron: number, input: string, fallback = ''): ConjCheck {
+  const forms = splitConj(conj);
+  const target = forms[pron] || fallback;
+  const words = target.split(/\s+/);
+  const reflexive = words.length === 2 && REFLEXIVE_PRONOUNS.includes(words[1].toLowerCase());
+  const trimmed = (input || '').trim();
+  const parts = trimmed.split(/\s+/);
+  const first = nzc(parts[0] || '');
+  let candidate = trimmed;
+  let wrongPron = '';
+  if (parts.length > 1 && ALL_SUBJECT_PRONOUNS.includes(first)) {
+    if (PRON_ACCEPT[pron].includes(first)) candidate = parts.slice(1).join(' ');
+    else wrongPron = first;
+  }
+  const ok = !wrongPron && !!target && (nzc(target) === nzc(candidate) || (reflexive && nzc(words[0]) === nzc(candidate)));
+  const missingPart = !ok && !wrongPron && !reflexive && words.length > 1 && nzc(words[0]) === nzc(candidate);
+  const otherIdx = forms.findIndex((f, i) => i !== pron && nzc(f) === nzc(candidate));
+  return { ok, target, wrongPron, otherIdx: otherIdx >= 0 && nzc(forms[otherIdx]) !== nzc(target) ? otherIdx : -1, missingPart, cands: reflexive ? [target, words[0]] : [target] };
 }
