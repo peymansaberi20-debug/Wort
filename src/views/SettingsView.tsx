@@ -32,41 +32,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deleteStep, setDeleteStep] = useState<number>(0);
   const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
 
-  // Load German voices reliably in Safari and other browsers
+  // Load voices asynchronously
   useEffect(() => {
-    let active = true;
-    const timers: number[] = [];
-
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setAvailableVoices([]);
-      return;
-    }
-
-    const synth = window.speechSynthesis;
-
     const updateVoices = () => {
-      if (!active) return;
-
-      const voices = synth.getVoices().filter(
-        voice => /^de(?:-|$)/i.test(voice.lang.trim())
-      );
-
-      setAvailableVoices(voices);
+      const v = getGermanVoices();
+      setAvailableVoices(v);
     };
-
     updateVoices();
-    synth.addEventListener('voiceschanged', updateVoices);
-
-    // Safari may populate the voice list after the page loads.
-    [250, 750, 1500, 3000, 5000].forEach(delay => {
-      const timer = window.setTimeout(updateVoices, delay);
-      timers.push(timer);
-    });
-
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
     return () => {
-      active = false;
-      synth.removeEventListener('voiceschanged', updateVoices);
-      timers.forEach(timer => window.clearTimeout(timer));
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
     };
   }, []);
 
@@ -334,37 +313,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* ========================================================= */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
-          <span>⏱️</span> تایمر فلش‌کارت
+          <span>⏱️</span> تایمر تمرین‌ها
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm">
-          <div>
-            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
-              نمایش خودکار پاسخ پس از (ثانیه):
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={120}
-              value={settings.revealSec ?? 0}
-              onChange={e => onUpdateSettings({ revealSec: Math.max(0, Math.min(120, parseInt(e.target.value) || 0)) })}
-              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium text-center"
-            />
-            <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] block mt-1">۰ تا ۱۲۰ ثانیه (۰ = غیرفعال)</span>
-          </div>
-
-          <div className="flex items-center pt-3">
-            <label className="flex items-center gap-2.5 cursor-pointer text-xs md:text-sm font-semibold select-none">
-              <input
-                type="checkbox"
-                checked={!!settings.showTimer}
-                onChange={e => onUpdateSettings({ showTimer: e.target.checked })}
-                className="w-4 h-4 rounded text-[#1f5fbf] accent-[#1f5fbf] cursor-pointer"
-              />
-              <span>نمایش شمارشگر زمان در محیط مطالعه فلش‌کارت</span>
-            </label>
-          </div>
-        </div>
+        <p className="text-xs md:text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">
+          تایمر هر تمرین جداگانه تنظیم می‌شود: داخل هر تمرین، آیکن ⏱ را در نوار بالا (قبل از آیکن شناسنامهٔ واژه) بزنید، تایمر را روشن یا خاموش کنید و مدت آن را تعیین کنید. تنظیم هر تمرین ذخیره می‌ماند. «تمرین ترکیبی واژه‌های سخت» از تایمر همان تمرین اصلی هر سؤال پیروی می‌کند.
+        </p>
       </div>
 
       {/* ========================================================= */}
