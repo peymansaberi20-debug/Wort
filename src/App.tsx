@@ -34,27 +34,10 @@ import { VocabularyView } from './views/VocabularyView';
 import { ImportExportView } from './views/ImportExportView';
 import { SettingsView } from './views/SettingsView';
 import { today } from './utils/dates';
+import { isDuplicateEntry } from './utils/duplicates';
+import { ImportDecision, applyImportPlan, mergeWordUpdate } from './utils/vocabMerge';
 
-const normalizeGermanDuplicateKey = (value: string) =>
-  (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
-
-const isDuplicateVocabularyEntry = (candidate: Partial<Word>, words: Word[], excludeId?: string | null) => {
-  const raw = normalizeGermanDuplicateKey(candidate.de || '');
-  const candidateMatch = /^(der|die|das)\s+(.+)$/i.exec(raw);
-  const de = normalizeGermanDuplicateKey(candidateMatch ? candidateMatch[2] : raw);
-  const art = candidateMatch ? candidateMatch[1].toLowerCase() : normalizeGermanDuplicateKey(candidate.art || '');
-  if (!de) return false;
-
-  return words.some(word => {
-    if (excludeId && word.id === excludeId) return false;
-    const existingRaw = normalizeGermanDuplicateKey(word.de || '');
-    const existingMatch = /^(der|die|das)\s+(.+)$/i.exec(existingRaw);
-    const existingDe = normalizeGermanDuplicateKey(existingMatch ? existingMatch[2] : existingRaw);
-    const existingArt = existingMatch ? existingMatch[1].toLowerCase() : normalizeGermanDuplicateKey(word.art || '');
-    if (existingDe !== de) return false;
-    return !art || !existingArt || existingArt === art;
-  });
-};
+const isDuplicateVocabularyEntry = isDuplicateEntry;
 
 export default function App() {
   const [state, setState] = useState<AppState>(() => loadState());
@@ -154,6 +137,7 @@ export default function App() {
     setExerciseSuspended(false);
     setIsQualityModalOpen(false);
     setIsWordManagerOpen(false);
+    setIsDuplicateModalOpen(false);
 
     setCurrentTab(tab);
     setActiveExercise(null);
@@ -163,7 +147,7 @@ export default function App() {
 
   const handleBack = () => {
     // Word edit form opened from the quality control list: close it and show the list again
-    if (editingWordId && isQualityModalOpen) {
+    if (editingWordId && (isQualityModalOpen || isDuplicateModalOpen)) {
       setEditingWordId(null);
       return;
     }
@@ -307,8 +291,8 @@ export default function App() {
   const handleEditWord = (word: Word) => {
     setSelectedWord(null);
     setEditingWordId(word.id);
-    if (isQualityModalOpen) {
-      // Opened from the quality control list (which stays open, hidden, behind the form)
+    if (isQualityModalOpen || isDuplicateModalOpen) {
+      // Opened from the quality control / duplicate list (which stays open, hidden, behind the form)
       setCurrentTab('lib');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -480,20 +464,8 @@ export default function App() {
           existing.push(w);
           added++;
         } else if (overwrite) {
-          const old = existing[idx];
-          existing[idx] = {
-            ...old,
-            ...w,
-            id: old.id,
-            last: old.last,
-            due: old.due,
-            ivl: old.ivl,
-            ease: old.ease,
-            stage: old.stage,
-            ok: old.ok,
-            bad: old.bad,
-            res: old.res
-          };
+          // safe merge: identity, category and learning progress stay; empty values never erase data
+          existing[idx] = mergeWordUpdate(existing[idx], w);
           updated++;
         }
       });
@@ -506,6 +478,34 @@ export default function App() {
     } else {
       showToast(`${added} واژه با موفقیت به کتابخانه افزوده شد.`);
     }
+  };
+
+  /** Applies a reviewed import plan: new words + per-entry update/keep decisions (one atomic state change). */
+  const handleApplyImportPlan = (fresh: Word[], decisions: ImportDecision[], updateCategory = false) => {
+    const current = state.words;
+    const preview = applyImportPlan(current, fresh, decisions, { updateCategory });
+    setState(prev => {
+      const r = applyImportPlan(prev.words, fresh, decisions, { updateCategory });
+      return { ...prev, words: r.words };
+    });
+    const parts: string[] = [];
+    if (preview.added) parts.push(`${preview.added} واژهٔ جدید افزوده شد`);
+    if (preview.updated) parts.push(`${preview.updated} واژه به‌روزرسانی شد`);
+    if (preview.skipped) parts.push(`${preview.skipped} واژه بدون تغییر ماند`);
+    showToast(parts.length ? parts.join('، ') + '.' : 'تغییری اعمال نشد.');
+  };
+
+  /** Updates ONE existing word with imported data (single-word JSON import). */
+  const handleUpdateExistingWord = (id: string, incoming: Word, updateCategory = false) => {
+    if (!state.words.some(w => w.id === id)) {
+      showToast('این واژه دیگر در کتابخانه وجود ندارد.', true);
+      return;
+    }
+    setState(prev => ({
+      ...prev,
+      words: prev.words.map(w => (w.id === id ? mergeWordUpdate(w, incoming, { updateCategory }) : w))
+    }));
+    showToast('واژهٔ موجود به‌روزرسانی شد (شناسه، دسته و پیشرفت یادگیری حفظ شد).');
   };
 
   const handleRestoreBackup = (backupState: AppState) => {
@@ -527,6 +527,7 @@ export default function App() {
           !!activeExercise ||
           !!selectedWord ||
           isQualityModalOpen ||
+          isDuplicateModalOpen ||
           isWordManagerOpen
         }
       />
@@ -760,6 +761,9 @@ export default function App() {
           onDeleteWord={handleDeleteWord}
           onBatchDelete={(ids: string[]) => handleBatchDeleteWords(ids, 'تشخیص واژه‌های تکراری')}
           onMergeWords={handleMergeWords}
+          onEditWord={handleEditWord}
+          onImageChange={handleImageChange}
+          hidden={!!editingWordId}
           onShowToast={showToast}
         />
       )}
@@ -771,6 +775,7 @@ export default function App() {
           onAddEnrichedWords={enrichedWords => {
             handleImportWords(enrichedWords, false);
           }}
+          onApplyImportPlan={(fresh, decisions) => handleApplyImportPlan(fresh, decisions)}
           onShowToast={showToast}
         />
       )}
