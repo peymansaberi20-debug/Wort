@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppSettings, CaseQuestion, ExerciseTimerCfg, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
 import { checkSynAnt, checkWord, familyCands, fullWord, getCategories, intervalPreview, isAdjPos, isLeech, isNounPos, isVerbPos, nz, nz2, getTimerCfg } from '../utils/storage';
-import { EXTRA_CASEQ, adjSourceByCode, adjSources, analyzeMistake, buildAdjItem, closestAnswer, parseSpec, randomSpec, specToString } from '../utils/Grammar';
+import { EXTRA_CASEQ, adjSourceByCode, adjSources, analyzeMistake, buildAdjItem, closestAnswer, parseSpec, randomSpec, specToString } from '../utils/grammar';
 import { speak, stopSpeaking } from '../utils/audio';
 import { checkConjAnswer, splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
