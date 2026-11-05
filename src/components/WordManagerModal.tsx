@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { SORT_LABELS, SortKey, hasTimestamp, sortWords, splitCategoryName } from '../utils/wordSort';
 import { Word } from '../types';
 import { getCategories, resolveCat } from '../utils/storage';
 
@@ -27,6 +28,7 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
   const [targetCat, setTargetCat] = useState<string>('');
   const [newCatName, setNewCatName] = useState<string>('');
   const [showHelp, setShowHelp] = useState<boolean>(false);
+  const [sortKey, setSortKey] = useState<SortKey>('cat');
 
   const categories = useMemo(() => getCategories(words), [words]);
 
@@ -41,7 +43,7 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
 
   // Filtered words
   const filteredWords = useMemo(() => {
-    return words
+    const visible = words
       .filter(w => {
         const matchesCategory =
           srcCat === '*' ||
@@ -50,9 +52,11 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
           !searchQuery.trim() ||
           (w.de + ' ' + w.fa).toLowerCase().includes(searchQuery.trim().toLowerCase());
         return matchesCategory && matchesQuery;
-      })
-      .sort((a, b) => (a.cat || '').localeCompare(b.cat || '', 'fa') || a.de.localeCompare(b.de, 'de'));
-  }, [words, srcCat, searchQuery]);
+      });
+    // sorting works on a copy: the stored vocabulary order is never changed
+    return sortWords(visible, sortKey);
+  }, [words, srcCat, searchQuery, sortKey]);
+  const anyTimestamp = useMemo(() => words.some(hasTimestamp), [words]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -200,6 +204,24 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1">
+                مرتب‌سازی: <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{SORT_LABELS[sortKey]}</span>
+              </label>
+              <select
+                value={sortKey}
+                onChange={e => setSortKey(e.target.value as SortKey)}
+                aria-label="مرتب‌سازی فهرست"
+                className="w-full bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs md:text-sm outline-none"
+              >
+                {(Object.keys(SORT_LABELS) as SortKey[])
+                  .filter(k => anyTimestamp || (k !== 'newest' && k !== 'oldest'))
+                  .map(k => (
+                    <option key={k} value={k}>{SORT_LABELS[k]}</option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1">
                 جستجوی واژه:
               </label>
               <input
@@ -277,9 +299,15 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] px-2 py-0.5 rounded-full flex-shrink-0">
-                    {w.cat || 'بدون دسته'}
-                  </span>
+                  {(() => {
+                    const c = splitCategoryName(w.cat || 'بدون دسته');
+                    return (
+                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] leading-4 px-2 py-1 rounded-xl flex-shrink-0 max-w-[7.5rem] text-center">
+                        <span className="block" dir="rtl">{c.fa}</span>
+                        {c.de && <span className="block text-[10px] opacity-80" dir="ltr">{c.de}</span>}
+                      </span>
+                    );
+                  })()}
                 </label>
               );
             })
