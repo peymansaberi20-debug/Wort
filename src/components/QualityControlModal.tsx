@@ -43,8 +43,9 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
     return init;
   });
 
+  // Single-open accordion: opening one category closes every other one
   const toggleCat = (cat: string) => {
-    setOpenCats(prev => ({ ...prev, [cat]: !prev[cat] }));
+    setOpenCats(prev => (prev[cat] ? {} : { [cat]: true }));
   };
 
   return (
