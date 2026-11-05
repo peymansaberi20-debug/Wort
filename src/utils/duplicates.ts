@@ -1,8 +1,12 @@
 import { Word } from '../types';
-import { nz } from './storage';
 
+/**
+ * The single duplicate rule of the application (manual entry, JSON import, bulk import, image
+ * extraction, merge screen): Unicode NFC, whitespace cleanup, case folding; an article only has to
+ * match when both entries have one.
+ */
 const ARTS = ['der', 'die', 'das'];
-const key = (s: string) => nz((s || '').normalize('NFC'));
+const key = (s: string) => (s || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
 
 export function parseEntry(input: string, selectedArt = ''): { de: string; art: string } {
   const t = key(input);
@@ -29,3 +33,6 @@ export function findDuplicateWord(
     }) || null
   );
 }
+
+export const isDuplicateEntry = (candidate: Partial<Word>, words: Word[], excludeId?: string | null): boolean =>
+  !!findDuplicateWord(candidate.de || '', candidate.art || '', words, excludeId);
