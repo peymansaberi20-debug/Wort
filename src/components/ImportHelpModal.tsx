@@ -138,9 +138,64 @@ export const ImportHelpModal: React.FC<ImportHelpModalProps> = ({
                     <td className="p-2">نام دسته موضوعی (در صورت خالی بودن، دسته عمومی لحاظ می‌شود)</td>
                   </tr>
                   <tr>
-                    <td className="p-2 font-mono" dir="ltr">synonym / ant / cloze ...</td>
+                    <td className="p-2 font-mono" dir="ltr">example2 / ex2</td>
                     <td className="p-2 text-slate-500">اختیاری</td>
-                    <td className="p-2">سایر فیلدهای غنی‌سازی نظیر مترادف، متضاد، صرف فعل و یادداشت</td>
+                    <td className="p-2">جملهٔ مثال دوم (آلمانی)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">example2Translation / ex2Fa</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">ترجمهٔ فارسی مثال دوم</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">synonym / syn / مترادف</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">مترادف‌ها، با «،» یا «,» از هم جدا شوند: <code>das Haus, das Gebäude</code>. اسم‌ها با حرف بزرگ و در صورت امکان با آرتیکل</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">synonymTranslation / synFa</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">ترجمهٔ فارسی مترادف‌ها (با همان ترتیب)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">antonym / ant / متضاد</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">متضادها، مثل مترادف‌ها</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">antonymTranslation / antFa</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">ترجمهٔ فارسی متضادها</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">conjugation / conj / صرف</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">فقط برای فعل: شش شکل زمان حال <b>بدون ضمیر</b> و به ترتیب ich، du، er/sie/es، wir، ihr، sie/Sie، جداشده با <code>|</code>. مثال: <code>gehe|gehst|geht|gehen|geht|gehen</code>. فعل جداشدنی: <code>rufe an|rufst an|...</code>؛ فعل بازتابی: <code>freue mich|freust dich|...</code></td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">preteritum / prat</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">شکل گذشتهٔ ساده (فقط فعل)، مثل <code>ging</code></td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">perfekt / perf</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">شکل Perfekt (فقط فعل)، مثل <code>ist gegangen</code></td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">separablePrefix / sep</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">پیشوند جداشدنی، مثل <code>an</code> برای anrufen</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">notes / یادداشت</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">یادداشت دلخواه؛ سطرهای «خانواده واژگانی» برای تمرین اسم↔فعل از اینجا خوانده می‌شوند</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-mono" dir="ltr">tags / برچسب</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">برچسب‌های دلخواه</td>
                   </tr>
                 </tbody>
               </table>
@@ -155,7 +210,11 @@ export const ImportHelpModal: React.FC<ImportHelpModalProps> = ({
             <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-slate-300">
               <li><b>انکودینگ UTF-8:</b> هنگام خروجی گرفتن CSV از اکسل، گزینه <code>CSV UTF-8 (Comma delimited)</code> را انتخاب کنید تا حروف فارسی و آلمانی علامت سؤال یا ناخوانا نشوند.</li>
               <li><b>علامت گیومه (Quote):</b> در فایل‌های CSV، اگر در متن فیلدی علامت کاما (,) یا خط جدید وجود دارد، باید کل آن فیلد بین علامت <code>"..."</code> قرار گیرد.</li>
-              <li><b>واژه‌های تکراری:</b> اگر واژه‌ای قبلاً در کتابخانه شما وجود داشته باشد، اطلاعات تکمیلی آن به‌روزرسانی شده و تاریخچه مرور قبلی شما محفوظ خواهد ماند.</li>
+              <li><b>خالی بودن:</b> فقط «german» و «persian» اجباری‌اند؛ ردیفی که یکی از این دو را نداشته باشد در گزارش خطا می‌آید و وارد نمی‌شود. سلول خالی هرگز دادهٔ موجود را پاک نمی‌کند.</li>
+              <li><b>چند مقدار در یک سلول:</b> مترادف و متضاد با «،» یا «,»، و شش شکل صرف فعل با «|» جدا می‌شوند. «cloze» و «ans» ستون ورودی نیستند و برنامه آن‌ها را نمی‌خواند.</li>
+              <li><b>املای آلمانی:</b> اسم‌ها در مترادف، متضاد و جمع با حرف بزرگ ذخیره می‌شوند؛ شکل‌های صرف بدون ضمیر نگه داشته می‌شوند.</li>
+              <li><b>واژه‌های تکراری:</b> اگر واژه‌ای از قبل در کتابخانه باشد، در پیش‌نمایش می‌توانید «افزودن بدون بازنویسی» (واژهٔ موجود دست‌نخورده می‌ماند) یا «به‌روزرسانی» را بزنید. در به‌روزرسانی، شناسه، دسته و پیشرفت یادگیری حفظ می‌شود و مقدار خالی ورودی دادهٔ قبلی را پاک نمی‌کند. تکرار داخل خود فایل نادیده گرفته می‌شود.</li>
+              <li><b>خطاهای رایج:</b> نبودن ستون «german» یا «persian»، انکودینگ غیر UTF-8 (حروف ناخوانا)، و گیومهٔ ناتمام در CSV.</li>
             </ul>
           </div>
 
