@@ -1,1024 +1,572 @@
-import { applyGermanQuality } from '../utils/german';
-import { classifyImport } from '../utils/vocabMerge';
-import { copyText } from '../utils/clipboard';
-import React, { useState, useMemo } from 'react';
-import { AppState, Word } from '../types';
-import { getCategories, norm, matchCat, resolveCat } from '../utils/storage';
-import { AIPM, buildMasterPrompt, generateWithGemini, parseAI, aiToIMP, processBatchWordsWithGemini, checkGermanSpelling } from '../utils/ai';
-import * as XLSX from 'xlsx';
-import { ImportHelpModal } from '../components/ImportHelpModal';
+import React, { useState, useEffect, useMemo } from 'react';
+import { AppSettings, Word } from '../types';
+import { getCategories } from '../utils/storage';
+import { getGermanVoices, speak, stopSpeaking } from '../utils/audio';
+import { GeminiKeyCard } from '../components/GeminiKeyCard';
+import { PROVIDERS, describeAiError, getActiveProvider, getApiKey, getModel, testConnection } from '../utils/aiProvider';
 
-interface ImportExportViewProps {
-  state: AppState;
+interface SettingsViewProps {
+  settings: AppSettings;
   words: Word[];
-  onImportWords: (newWords: Word[], overwrite: boolean) => void;
-  onRestoreBackup: (backupState: AppState) => void;
-  onOpenImageExtract: () => void;
-  onOpenHelp: (topic: string) => void;
+  onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
+  onClearHistory: () => void;
+  onClearAllWords: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
 
-export const ImportExportView: React.FC<ImportExportViewProps> = ({
-  state,
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  settings,
   words,
-  onImportWords,
-  onRestoreBackup,
-  onOpenImageExtract,
-  onOpenHelp,
+  onUpdateSettings,
+  onClearHistory,
+  onClearAllWords,
   onShowToast
 }) => {
-  // Bulk AI state
-  const [bulkText, setBulkText] = useState('');
-  const [bulkCategory, setBulkCategory] = useState(''); // Default: empty = AI decides
-  const [bulkNewCatName, setBulkNewCatName] = useState('');
-  const [bulkLoading, setBulkLoading] = useState(false);
-  const [bulkStatus, setBulkStatus] = useState('');
-  const [pastedJson, setPastedJson] = useState('');
+  // Server-side Gemini AI status check
+  const [testStatus, setTestStatus] = useState('');
+  const [testing, setTesting] = useState(false);
 
-  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  // Available German voices
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
-  // Pending imported items preview
-  const [pendingImport, setPendingImport] = useState<{
-    words: Word[];
-    errors: string[];
-    backupState?: AppState;
-  } | null>(null);
+  // Destructive delete confirmation step
+  const [deleteStep, setDeleteStep] = useState<number>(0);
+  const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
+
+  // Load voices asynchronously
+  useEffect(() => {
+    const updateVoices = () => {
+      const v = getGermanVoices();
+      setAvailableVoices(v);
+    };
+    updateVoices();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVoiceGuideOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setIsVoiceGuideOpen(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isVoiceGuideOpen]);
 
   const categories = useMemo(() => getCategories(words), [words]);
 
-  // Fulfills Task 3.2: Generate genuine Excel-compatible workbook (.xlsx) with 2 sheets
-  const generateExcelTemplate = () => {
+  const handleTestAi = async () => {
+    setTesting(true);
+    setTestStatus('در حال بررسی هوش مصنوعی انتخاب‌شده...');
     try {
-      const wb = XLSX.utils.book_new();
-
-      const vocabHeaders = [
-        'german',
-        'article',
-        'persian',
-        'plural',
-        'partOfSpeech',
-        'level',
-        'example',
-        'exampleTranslation',
-        'example2',
-        'example2Translation',
-        'synonym',
-        'synonymTranslation',
-        'antonym',
-        'antonymTranslation',
-        'category',
-        'conjugation',
-        'preteritum',
-        'perfekt',
-        'separablePrefix',
-        'notes'
-      ];
-
-      const sampleRows = [
-        {
-          german: 'Entscheidung',
-          article: 'die',
-          persian: 'تصمیم',
-          plural: 'die Entscheidungen',
-          partOfSpeech: 'اسم',
-          level: 'B1',
-          example: 'Wir müssen eine wichtige Entscheidung treffen.',
-          exampleTranslation: 'ما باید یک تصمیم مهم بگیریم.',
-          example2: 'Die Entscheidung fiel mir nicht leicht.',
-          example2Translation: 'تصمیم‌گیری برایم آسان نبود.',
-          synonym: 'der Beschluss',
-          synonymTranslation: 'مصوبه، تصمیم',
-          antonym: 'die Unentschlossenheit',
-          antonymTranslation: 'بلاتکلیفی، دودلی',
-          category: 'ارتباطات (Kommunikation)',
-          conjugation: '',
-          preteritum: '',
-          perfekt: '',
-          separablePrefix: '',
-          notes: 'ترکیب فعلی: eine Entscheidung treffen (تصمیم گرفتن)'
-        },
-        {
-          german: 'Tisch',
-          article: 'der',
-          persian: 'میز',
-          plural: 'die Tische',
-          partOfSpeech: 'اسم',
-          level: 'A1',
-          example: 'Das Buch liegt auf dem Tisch.',
-          exampleTranslation: 'کتاب روی میز قرار دارد.',
-          example2: '',
-          example2Translation: '',
-          synonym: '',
-          synonymTranslation: '',
-          antonym: '',
-          antonymTranslation: '',
-          category: 'امور روزمره',
-          conjugation: '',
-          preteritum: '',
-          perfekt: '',
-          separablePrefix: '',
-          notes: 'حرف اضافه: an dem Tisch sitzen'
-        },
-        {
-          german: 'Haus',
-          article: 'das',
-          persian: 'خانه',
-          plural: 'die Häuser',
-          partOfSpeech: 'اسم',
-          level: 'A1',
-          example: 'Mein Haus hat einen schönen Garten.',
-          exampleTranslation: 'خانه من یک باغچه زیبا دارد.',
-          example2: '',
-          example2Translation: '',
-          synonym: 'das Gebäude',
-          synonymTranslation: 'ساختمان',
-          antonym: '',
-          antonymTranslation: '',
-          category: 'امور روزمره',
-          conjugation: '',
-          preteritum: '',
-          perfekt: '',
-          separablePrefix: '',
-          notes: 'ترکیب: nach Hause gehen (رفتن به خانه)'
-        },
-        {
-          german: 'freuen',
-          article: '',
-          persian: 'خوشحال شدن، منتظر بودن',
-          plural: '',
-          partOfSpeech: 'فعل',
-          level: 'A2',
-          example: 'Ich freue mich auf den Urlaub.',
-          exampleTranslation: 'من مشتاقانه منتظر تعطیلات هستم.',
-          example2: 'Er freut sich über das Geschenk.',
-          example2Translation: 'او از بابت هدیه خوشحال است.',
-          synonym: '',
-          synonymTranslation: '',
-          antonym: '',
-          antonymTranslation: '',
-          category: 'اصطلاحات (Redewendungen)',
-          conjugation: 'freue, freust, freut, freuen, freut, freuen',
-          preteritum: 'freute',
-          perfekt: 'hat gefreut',
-          separablePrefix: '',
-          notes: 'sich freuen auf + Akk (انتظار آینده)\nsich freuen über + Akk (شادی از حال/گذشته)'
-        },
-        {
-          german: 'anrufen',
-          article: '',
-          persian: 'تلفن زدن، تماس گرفتن',
-          plural: '',
-          partOfSpeech: 'فعل',
-          level: 'A1',
-          example: 'Ich rufe dich morgen an.',
-          exampleTranslation: 'من فردا به تو زنگ می‌زنم.',
-          example2: '',
-          example2Translation: '',
-          synonym: 'telefonieren',
-          synonymTranslation: 'تلفنی صحبت کردن',
-          antonym: '',
-          antonymTranslation: '',
-          category: 'ارتباطات (Kommunikation)',
-          conjugation: 'rufe an, rufst an, ruft an, rufen an, ruft an, rufen an',
-          preteritum: 'rief an',
-          perfekt: 'hat angerufen',
-          separablePrefix: 'an',
-          notes: 'فعل پیشوندی جداشدنی. مفعول مستقیم Akkusativ می‌گیرد.'
-        },
-        {
-          german: 'schnell',
-          article: '',
-          persian: 'سریع، تند',
-          plural: '',
-          partOfSpeech: 'صفت',
-          level: 'A1',
-          example: 'Der Zug fährt sehr schnell.',
-          exampleTranslation: 'قطار خیلی سریع حرکت می‌کند.',
-          example2: '',
-          example2Translation: '',
-          synonym: 'rasch',
-          synonymTranslation: 'شتابان، سریع',
-          antonym: 'langsam',
-          antonymTranslation: 'آرام، کند',
-          category: 'پایه (Grundwortschatz)',
-          conjugation: '',
-          preteritum: '',
-          perfekt: '',
-          separablePrefix: '',
-          notes: 'درجه‌بندی: schnell, schneller, am schnellsten'
-        }
-      ];
-
-      const wsVocab = XLSX.utils.json_to_sheet(sampleRows, { header: vocabHeaders });
-      wsVocab['!cols'] = [
-        { wch: 18 },
-        { wch: 8 },
-        { wch: 22 },
-        { wch: 20 },
-        { wch: 12 },
-        { wch: 8 },
-        { wch: 38 },
-        { wch: 35 },
-        { wch: 35 },
-        { wch: 30 },
-        { wch: 16 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 20 },
-        { wch: 25 },
-        { wch: 30 },
-        { wch: 14 },
-        { wch: 16 },
-        { wch: 14 },
-        { wch: 45 }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsVocab, 'قالب واژگان');
-
-      const instructionRows = [
-        { 'ستون': 'german', 'وضعیت': 'الزامی', 'توضیحات': 'سرواژه یا اصطلاح آلمانی در شکل پایه یا مصدری' },
-        { 'ستون': 'persian', 'وضعیت': 'الزامی', 'توضیحات': 'ترجمه فارسی روان و دقیق واژه' },
-        { 'ستون': 'article', 'وضعیت': 'اختیاری', 'توضیحات': 'فقط برای اسامی: der یا die یا das' },
-        { 'ستون': 'plural', 'وضعیت': 'اختیاری', 'توضیحات': 'شکل جمع اسم (مثلاً die Tische یا -e)' },
-        { 'ستون': 'partOfSpeech', 'وضعیت': 'اختیاری', 'توضیحات': 'نوع دستوری: اسم، فعل، صفت، قید، اصطلاح' },
-        { 'ستون': 'level', 'وضعیت': 'اختیاری', 'توضیحات': 'سطح CEFR از A1 تا C2' },
-        { 'ستون': 'example', 'وضعیت': 'اختیاری', 'توضیحات': 'جمله مثال کاربردی آلمانی' },
-        { 'ستون': 'exampleTranslation', 'وضعیت': 'اختیاری', 'توضیحات': 'ترجمه فارسی جمله مثال اول' },
-        { 'ستون': 'category', 'وضعیت': 'اختیاری', 'توضیحات': 'دسته موضوعی، در صورت خالی بودن دسته عمومی لحاظ می‌شود' },
-        { 'ستون': 'راهنما', 'وضعیت': 'نکته مهم', 'توضیحات': 'می‌توانید ردیف‌های نمونه را با واژگان دلخواه خود جایگزین کرده و فایل را بدون تغییر عناوین ستون‌ها مستقیماً در برنامه وارد کنید.' }
-      ];
-      const wsInst = XLSX.utils.json_to_sheet(instructionRows);
-      wsInst['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 60 }];
-      XLSX.utils.book_append_sheet(wb, wsInst, 'راهنمای تکمیل');
-
-      XLSX.writeFile(wb, 'deutschlab_template.xlsx');
-      onShowToast('قالب استاندارد اکسل (.xlsx) با موفقیت دانلود شد.');
-    } catch (err: any) {
-      console.error('Template generation error:', err);
-      onShowToast('خطا در تولید فایل قالب اکسل', true);
-    }
-  };
-
-  const downloadFile = (filename: string, content: string, type: string) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      a.remove();
-      URL.revokeObjectURL(url);
-    }, 1000);
-  };
-
-  // Convert words to CSV
-  const wordsToCSV = (ws: Word[]): string => {
-    const headers = [
-      'id',
-      'german',
-      'article',
-      'persian',
-      'synonym',
-      'synonymTranslation',
-      'antonym',
-      'antonymTranslation',
-      'plural',
-      'partOfSpeech',
-      'level',
-      'example',
-      'exampleTranslation',
-      'example2',
-      'example2Translation',
-      'conjugation',
-      'preteritum',
-      'perfekt',
-      'separablePrefix',
-      'clozeSentence',
-      'clozeAnswer',
-      'acceptedAnswers',
-      'tags',
-      'notes',
-      'category'
-    ];
-    const esc = (v: any) => {
-      const s = String(v == null ? '' : v);
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const rows = ws.map(w =>
-      [
-        w.id,
-        w.de,
-        w.art,
-        w.fa,
-        w.syn,
-        w.synFa,
-        w.ant,
-        w.antFa,
-        w.pl,
-        w.pos,
-        w.lvl,
-        w.ex,
-        w.exFa,
-        w.ex2,
-        w.ex2Fa,
-        w.conj,
-        w.prat,
-        w.perf,
-        w.sep,
-        w.cloze,
-        w.ans,
-        w.acc?.join('|') || '',
-        w.tags,
-        w.notes,
-        w.cat
-      ]
-        .map(esc)
-        .join(',')
-    );
-    return '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
-  };
-
-  // Handle Bulk AI auto-fill
-  const handleBulkAutoFill = async () => {
-    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) {
-      onShowToast('ابتدا فهرست کلمات را بنویسید.', true);
-      return;
-    }
-
-    let finalCatOverride: string | undefined = undefined;
-    if (bulkCategory === '__new') {
-      const resolved = resolveCat(bulkNewCatName, words);
-      if (resolved) finalCatOverride = resolved;
-    } else if (bulkCategory) {
-      finalCatOverride = bulkCategory;
-    }
-
-    setBulkLoading(true);
-    setBulkStatus('در حال بررسی املای واژه‌ها...');
-    try {
-      // Spelling check: fix misspelled words, skip words that do not exist in German
-      const spellable = lines.filter(l => l.length <= 40 && l.split(/\s+/).length <= 3);
-      const spell = await checkGermanSpelling(spellable);
-      const spellMsgs: string[] = [];
-      const cleanedLines: string[] = [];
-      lines.forEach(l => {
-        const r = spell[l];
-        if (r?.status === 'invalid') {
-          spellMsgs.push(`«${l}» چنین لغتی در زبان آلمانی وجود ندارد و وارد نشد.`);
-        } else if (r?.status === 'corrected' && r.suggestion && r.suggestion.toLowerCase() !== l.toLowerCase()) {
-          spellMsgs.push(`املای «${l}» به «${r.suggestion}» اصلاح شد.`);
-          cleanedLines.push(r.suggestion);
-        } else {
-          cleanedLines.push(l);
-        }
-      });
-      if (cleanedLines.length === 0) {
-        setPendingImport(null);
-        setBulkStatus(spellMsgs.join(' • ') || 'واژهٔ معتبری برای افزودن پیدا نشد.');
-        onShowToast('هیچ‌کدام از واژه‌ها املای معتبر آلمانی نداشتند.', true);
-        return;
-      }
-
-      setBulkStatus('در حال آماده‌سازی و ارسال به هوش مصنوعی...');
-      const { ws, errs } = await processBatchWordsWithGemini(
-        cleanedLines,
-        words,
-        finalCatOverride,
-        (_done, _total, msg) => setBulkStatus(msg)
-      );
-
-      setPendingImport({
-        words: ws,
-        errors: [...spellMsgs, ...errs]
-      });
-      setBulkStatus(`تکمیل شد: ${ws.length} واژه آماده وارد کردن است.`);
-    } catch (err: any) {
-      console.error(err);
-      onShowToast(err.message || 'خطا در تکمیل خودکار', true);
-      setBulkStatus('خطا در ارتباط با هوش مصنوعی. می‌توانید از دکمه «کپی دستور گروهی» استفاده کنید.');
-    } finally {
-      setBulkLoading(false);
-    }
-  };
-
-  const handleCopyBulkPrompt = async () => {
-    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) {
-      onShowToast('ابتدا فهرست کلمات را بنویسید.', true);
-      return;
-    }
-    let finalCatOverride: string | undefined = undefined;
-    if (bulkCategory === '__new') {
-      finalCatOverride = resolveCat(bulkNewCatName, words);
-    } else if (bulkCategory) {
-      finalCatOverride = bulkCategory;
-    }
-
-    // no network request: the prompt is only built and copied (works without any API key or quota)
-    const prompt = AIPM(lines, words, finalCatOverride);
-    if (await copyText(prompt)) {
-      onShowToast('دستور گروهی کپی شد. می‌توانید در ChatGPT یا Claude بچسبانید.');
-    } else {
-      onShowToast('کپی در کلیپ‌بورد ممکن نشد؛ مرورگر اجازهٔ کپی نمی‌دهد.', true);
-    }
-  };
-
-  const handleApplyPastedBulkJson = () => {
-    if (!pastedJson.trim()) return;
-    try {
-      const parsed = parseAI(pastedJson);
-      let finalCatOverride: string | undefined = undefined;
-      if (bulkCategory === '__new') {
-        finalCatOverride = resolveCat(bulkNewCatName, words);
-      } else if (bulkCategory) {
-        finalCatOverride = bulkCategory;
-      }
-      const { ws, errs } = aiToIMP(parsed, words, finalCatOverride);
-      setPendingImport({
-        words: ws,
-        errors: errs
-      });
-      setPastedJson('');
-      onShowToast(`${ws.length} واژه در پیش‌نمایش بارگذاری شد.`);
-    } catch (e: any) {
-      onShowToast('محتوای چسبانده‌شده یک JSON معتبر نیست.', true);
-    }
-  };
-
-  // Multi-format File Upload Parser (.xlsx, .xls, .csv, .json)
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-
-    const lowerName = file.name.toLowerCase();
-
-    try {
-      if (lowerName.endsWith('.json')) {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (parsed && Array.isArray(parsed.words)) {
-          // Full app backup
-          setPendingImport({
-            words: parsed.words.map(norm).filter(Boolean) as Word[],
-            errors: [],
-            backupState: parsed
-          });
-          onShowToast('فایل پشتیبان کامل JSON بارگذاری شد.');
-        } else if (Array.isArray(parsed)) {
-          const { ws, errs } = aiToIMP(parsed, words);
-          setPendingImport({ words: ws, errors: errs });
-        } else {
-          throw new Error('فرمت فایل JSON نامعتبر است.');
-        }
-      } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
-        // Genuine Excel Workbook parsing
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error('فایل اکسل هیچ برگه‌ای (Sheet) ندارد.');
-
-        const worksheet = workbook.Sheets[sheetName];
-        const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-        if (rawRows.length === 0) throw new Error('برگه اول فایل اکسل خالی است یا عنوانی ندارد.');
-
-        const ws: Word[] = [];
-        const errs: string[] = [];
-
-        rawRows.forEach((row, rowIdx) => {
-          // Normalize row keys to lowercase without spaces/underscores
-          const normRow: Record<string, string> = {};
-          for (const [k, v] of Object.entries(row)) {
-            const cleanKey = k.trim().toLowerCase().replace(/[\s"_-]/g, '');
-            normRow[cleanKey] = typeof v === 'string' ? v.trim() : (v != null ? String(v).trim() : '');
-          }
-
-          const getVal = (aliases: string[]): string => {
-            for (const a of aliases) {
-              if (normRow[a]) return normRow[a];
-            }
-            return '';
-          };
-
-          const de = getVal(['german', 'de', 'word', 'wort', 'آلمانی', 'کلمه', 'واژه']);
-          const fa = getVal(['persian', 'fa', 'translation', 'farsi', 'ترجمه', 'فارسی', 'معنی']);
-
-          if (!de) {
-            errs.push(`سطر ${rowIdx + 2}: ستون واژه آلمانی (german) خالی است.`);
-            return;
-          }
-          if (!fa) {
-            errs.push(`سطر ${rowIdx + 2} (${de}): ستون ترجمه فارسی (persian) خالی است.`);
-            return;
-          }
-
-          const art = getVal(['article', 'art', 'آرتیکل']);
-          const pl = getVal(['plural', 'pl', 'جمع']);
-          const pos = getVal(['partofspeech', 'pos', 'نوع', 'نقش']);
-          const lvl = getVal(['level', 'lvl', 'سطح']);
-          const ex = getVal(['example', 'ex', 'مثال']);
-          const exFa = getVal(['exampletranslation', 'exfa', 'ترجمهمثال']);
-          const ex2 = getVal(['example2', 'ex2']);
-          const ex2Fa = getVal(['example2translation', 'ex2fa']);
-          const syn = getVal(['synonym', 'syn', 'مترادف']);
-          const synFa = getVal(['synonymtranslation', 'synfa']);
-          const ant = getVal(['antonym', 'ant', 'متضاد']);
-          const antFa = getVal(['antonymtranslation', 'antfa']);
-          const cat = getVal(['category', 'cat', 'دسته', 'دسته‌بندی']);
-          const conj = getVal(['conjugation', 'conj', 'صرف']);
-          const prat = getVal(['preteritum', 'prat']);
-          const perf = getVal(['perfekt', 'perf']);
-          const sep = getVal(['separableprefix', 'sep']);
-          const notes = getVal(['notes', 'یادداشت', 'نکات']);
-          const tags = getVal(['tags', 'برچسب']);
-
-          const w = norm({
-            de,
-            art,
-            fa,
-            pl,
-            pos,
-            lvl,
-            ex,
-            exFa,
-            ex2,
-            ex2Fa,
-            syn,
-            synFa,
-            ant,
-            antFa,
-            cat,
-            conj,
-            prat,
-            perf,
-            sep,
-            notes,
-            tags
-          });
-
-          if (w) ws.push(applyGermanQuality(w));
-        });
-
-        if (ws.length === 0 && errs.length > 0) {
-          throw new Error(errs[0]);
-        }
-
-        setPendingImport({ words: ws, errors: errs });
-        onShowToast(`${ws.length} واژه از فایل اکسل (${file.name}) بارگذاری شد.`);
+      const p = getActiveProvider();
+      const key = getApiKey(p);
+      if (!key) {
+        setTestStatus(`⚠️ برای «${PROVIDERS[p].label}» هنوز کلیدی وارد نشده است.`);
+        onShowToast('ابتدا کلید API را وارد کنید.', true);
       } else {
-        // Comprehensive CSV parsing
-        const text = await file.text();
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) throw new Error('فایل خالی است یا عنوان ندارد.');
-
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s"_-]/g, ''));
-        const deIdx = headers.findIndex(h => ['german', 'de', 'word', 'wort', 'آلمانی'].includes(h));
-        const faIdx = headers.findIndex(h => ['persian', 'fa', 'translation', 'farsi', 'ترجمه', 'فارسی'].includes(h));
-
-        if (deIdx < 0 || faIdx < 0) {
-          throw new Error('ستون‌های german و persian در فایل الزامی هستند.');
-        }
-
-        const artIdx = headers.findIndex(h => ['article', 'art', 'آرتیکل'].includes(h));
-        const plIdx = headers.findIndex(h => ['plural', 'pl', 'جمع'].includes(h));
-        const posIdx = headers.findIndex(h => ['partofspeech', 'pos', 'نقش'].includes(h));
-        const lvlIdx = headers.findIndex(h => ['level', 'lvl', 'سطح'].includes(h));
-        const exIdx = headers.findIndex(h => ['example', 'ex', 'مثال'].includes(h));
-        const exFaIdx = headers.findIndex(h => ['exampletranslation', 'exfa', 'ترجمهمثال'].includes(h));
-        const catIdx = headers.findIndex(h => ['category', 'cat', 'دسته'].includes(h));
-
-        const ws: Word[] = [];
-        const errs: string[] = [];
-
-        lines.slice(1).forEach((line, rowIdx) => {
-          const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-          const de = cols[deIdx];
-          const fa = cols[faIdx];
-          if (!de) {
-            errs.push(`سطر ${rowIdx + 2}: کلمه آلمانی خالی است`);
-            return;
-          }
-          if (!fa) {
-            errs.push(`سطر ${rowIdx + 2} (${de}): ترجمه فارسی خالی است`);
-            return;
-          }
-
-          const w = norm({
-            de,
-            fa,
-            art: artIdx >= 0 ? cols[artIdx] : '',
-            pl: plIdx >= 0 ? cols[plIdx] : '',
-            pos: posIdx >= 0 ? cols[posIdx] : '',
-            lvl: lvlIdx >= 0 ? cols[lvlIdx] : '',
-            ex: exIdx >= 0 ? cols[exIdx] : '',
-            exFa: exFaIdx >= 0 ? cols[exFaIdx] : '',
-            cat: catIdx >= 0 ? cols[catIdx] : ''
-          });
-          if (w) ws.push(applyGermanQuality(w));
-        });
-
-        setPendingImport({ words: ws, errors: errs });
-        onShowToast(`${ws.length} واژه از فایل CSV خوانده شد.`);
+        const r = await testConnection(p, key);
+        setTestStatus(`${r.ok ? '✅' : '❌'} ${r.message} (مدل: ${getModel(p)})`);
+        onShowToast(r.message, !r.ok);
       }
     } catch (err: any) {
-      console.error('File upload error:', err);
-      onShowToast(err.message || 'خطا در خواندن فایل', true);
+      setTestStatus(`❌ ${describeAiError(err)}`);
+      onShowToast('خطا در آزمون اتصال', true);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleTestVoice = () => {
+    stopSpeaking();
+    speak('Guten Tag! Ich lerne Deutsch in Wien.', {
+      rate: settings.rate,
+      vreg: settings.vreg,
+      voiceName: settings.voice,
+      onErr: msg => onShowToast(msg, true)
+    });
+  };
+
+  const toggleCategory = (catName: string) => {
+    const current = settings.activeCats || [];
+    let updated: string[];
+    if (current.includes(catName)) {
+      updated = current.filter(c => c !== catName);
+    } else {
+      updated = [...current, catName];
+    }
+    onUpdateSettings({ activeCats: updated });
+  };
+
+  const handleClearHistoryClick = () => {
+    if (window.confirm('آیا از پاک کردن کامل تاریخچهٔ مرور و ریست شدن فواصل لایتنر مطمئن هستید؟ واژگان شما دست‌نخورده باقی خواهند ماند.')) {
+      onClearHistory();
+    }
+  };
+
+  const handleDeleteAllWordsClick = () => {
+    if (deleteStep === 0) {
+      setDeleteStep(1);
+    } else if (deleteStep === 1) {
+      if (window.confirm('⚠️ اخطار نهایی: کلیه واژگان، ترجمه‌ها، مثال‌ها و دسته‌بندی‌ها برای همیشه حذف خواهند شد. این عملیات قابل بازگشت نیست. آیا کاملاً مطمئن هستید؟')) {
+        onClearAllWords();
+        setDeleteStep(0);
+      }
     }
   };
 
   return (
-    <div className="space-y-5 text-right">
-      {/* Pending Import Preview Card */}
-      {pendingImport && (
-        <div className="bg-white dark:bg-[#1b2029] border-2 border-emerald-400 dark:border-emerald-700 rounded-3xl p-5 shadow-md space-y-4 animate-fadeIn">
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-bold text-base md:text-lg text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-              <span>📋</span> پیش‌نمایش داده‌های آمادهٔ ورود
-            </h3>
-            <button
-              onClick={() => setPendingImport(null)}
-              className="text-xs bg-slate-200 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold"
+    <div className="space-y-5 text-right max-w-3xl mx-auto pb-10">
+      {/* ========================================================= */}
+      {/* 1. Appearance & Flashcard Direction (Section 2) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
+          <span>🎨</span> پوسته و جهت فلش‌کارت‌ها
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              پوستهٔ برنامه:
+            </label>
+            <select
+              value={settings.theme || 'light'}
+              onChange={e => onUpdateSettings({ theme: e.target.value as 'light' | 'dark' })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 outline-none font-medium"
             >
-              ×
-            </button>
+              <option value="light">☀️ روشن (پیش‌فرض)</option>
+              <option value="dark">🌙 تیره (Dark Mode)</option>
+            </select>
           </div>
 
-          <div className="text-xs text-[#5d6676] space-y-1">
-            <p>
-              تعداد واژگان معتبر: <b className="text-emerald-600 text-sm">{pendingImport.words.length}</b> واژه
-              {pendingImport.errors.length > 0 && (
-                <span className="text-red-500 mr-2">({pendingImport.errors.length} خطا نادیده گرفته شد)</span>
-              )}
-            </p>
-          </div>
-
-          {/*
-            Fulfills User Request #2:
-            "وقتی هوش مصنوعی لیست لغات اضافه میکنه چرا میره دسته جدید درست میکنه ؟ باید تو دسته های قبلی بگنجاند. اگر نبود پیشنهاد بده سوال کنه از کاربر ک آیا میخواید فلان کلمه در دسته جدید با نام فلان ذخیره شود ، بعد دسته جدید اضافه بشه . پس فقط میره از لیست دسته های موجود انتخاب میکنه و انتقال میده اونجا"
-          */}
-          {pendingImport.words.some(w => w.suggestedNewCat) && (
-            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl p-3.5 space-y-2">
-              <b className="text-xs text-amber-900 dark:text-amber-200 block">
-                💡 پیشنهاد دسته‌بندی جدید توسط هوش مصنوعی:
-              </b>
-              <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
-                واژه‌های زیر به صورت پیش‌فرض در دسته‌های موجود قرار داده شده‌اند. اگر مایلید، می‌توانید ساخت دستهٔ پیشنهادی را تأیید کنید:
-              </p>
-              <div className="space-y-2 pt-1">
-                {pendingImport.words.filter(w => w.suggestedNewCat).map((w, idx) => (
-                  <div key={idx} className="flex flex-wrap items-center justify-between gap-2 text-xs bg-white dark:bg-[#1a202c] p-2.5 rounded-xl border border-amber-200 dark:border-amber-900 shadow-2xs">
-                    <div>
-                      <span>آیا واژهٔ <b>«{w.de}»</b> در دستهٔ جدید <b>«{w.suggestedNewCat}»</b> ذخیره شود؟</span>
-                      <span className="text-[10px] text-slate-500 block mt-0.5">
-                        (دسته فعلی در نظر گرفته شده: {w.cat})
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => {
-                          setPendingImport(prev => {
-                            if (!prev) return null;
-                            const nextWords = prev.words.map(x =>
-                              (x.id === w.id || (x.de === w.de && x.cat === w.cat))
-                                ? { ...x, cat: w.suggestedNewCat!, suggestedNewCat: undefined }
-                                : x
-                            );
-                            return { ...prev, words: nextWords };
-                          });
-                          onShowToast(`دسته جدید «${w.suggestedNewCat}» تایید شد.`);
-                        }}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg font-bold text-[11px]"
-                      >
-                        ✅ بله، ایجاد دسته جدید
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPendingImport(prev => {
-                            if (!prev) return null;
-                            const nextWords = prev.words.map(x =>
-                              (x.id === w.id || (x.de === w.de && x.cat === w.cat))
-                                ? { ...x, suggestedNewCat: undefined }
-                                : x
-                            );
-                            return { ...prev, words: nextWords };
-                          });
-                          onShowToast(`در دسته موجود (${w.cat}) ماند.`);
-                        }}
-                        className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-lg text-[11px]"
-                      >
-                        ❌ خیر، در دسته فعلی بماند
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Which words are new and which already exist (nothing is changed before you choose a button below) */}
-          {(() => {
-            const c = classifyImport(pendingImport.words, words);
-            return (
-              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-xs space-y-1.5">
-                <div className="flex flex-wrap gap-x-4 gap-y-1 font-bold">
-                  <span className="text-emerald-700 dark:text-emerald-400">🆕 جدید: {c.fresh.length}</span>
-                  <span className="text-amber-700 dark:text-amber-400">♻️ از قبل موجود: {c.conflicts.length}</span>
-                  {c.repeated.length > 0 && <span className="text-slate-500">تکراری داخل همین فهرست: {c.repeated.length}</span>}
-                  {c.invalid.length > 0 && <span className="text-red-600">نامعتبر: {c.invalid.length}</span>}
-                </div>
-                {c.conflicts.length > 0 && (
-                  <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6" dir="ltr">
-                    {c.conflicts.slice(0, 8).map(x => (x.existing.art ? `${x.existing.art} ` : '') + x.existing.de).join(', ')}
-                    {c.conflicts.length > 8 ? ` … +${c.conflicts.length - 8}` : ''}
-                  </p>
-                )}
-                {c.conflicts.length > 0 && (
-                  <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6">
-                    «افزودن» فقط واژه‌های جدید را ثبت می‌کند و موجودها را دست‌نخورده می‌گذارد. «به‌روزرسانی» اطلاعات تازه را با واژهٔ موجود ادغام می‌کند (شناسه، دسته و پیشرفت یادگیری حفظ می‌شود و مقدار خالی چیزی را پاک نمی‌کند).
-                  </p>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Quick list preview */}
-          <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs bg-slate-50 dark:bg-[#141923] p-3 rounded-2xl border">
-            {pendingImport.words.slice(0, 8).map((w, i) => (
-              <div key={i} className="py-1.5 flex items-center justify-between" dir="ltr">
-                <span className="font-bold">{w.art ? `${w.art} ${w.de}` : w.de}</span>
-                <span className="text-slate-500" dir="rtl">{w.fa}</span>
-              </div>
-            ))}
-            {pendingImport.words.length > 8 && (
-              <div className="pt-2 text-center text-[#5d6676]">
-                ... و {pendingImport.words.length - 8} واژه دیگر
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <button
-              onClick={() => {
-                onImportWords(pendingImport.words, false);
-                setPendingImport(null);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              جهت پیش‌فرض نمایش فلش‌کارت‌ها:
+            </label>
+            <select
+              value={settings.dir || 'de'}
+              onChange={e => onUpdateSettings({ dir: e.target.value as 'de' | 'fa' | 'rand' })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 outline-none font-medium"
             >
-              ➕ افزودن (بدون بازنویسی تکراری‌ها)
-            </button>
-            <button
-              onClick={() => {
-                if (confirm('واژه‌های تکراری با مقادیر جدید بازنویسی شوند؟')) {
-                  onImportWords(pendingImport.words, true);
-                  setPendingImport(null);
-                }
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
-            >
-              🔄 به‌روزرسانی و بازنویسی تکراری‌ها
-            </button>
-            {pendingImport.backupState && (
-              <button
-                onClick={() => {
-                  if (confirm('⚠️ کلیه واژگان و تاریخچه‌های فعلی با این نسخه پشتیبان جایگزین خواهند شد. ادامه؟')) {
-                    onRestoreBackup(pendingImport.backupState!);
-                    setPendingImport(null);
-                  }
-                }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs transition"
-              >
-                ♻️ جایگزینی کامل با پشتیبان
-              </button>
-            )}
+              <option value="de">🇩🇪 آلمانی ← فارسی</option>
+              <option value="fa">🇮🇷 فارسی ← آلمانی</option>
+              <option value="rand">🔀 جهت تصادفی برای هر کارت (مستقل)</option>
+            </select>
           </div>
         </div>
-      )}
-
-      {/*
-        Fulfills User Request #15:
-        "اول « افزودن گروهی با هوش مصنوعی» باشه،
-        بعد «ورود (CSV یا JSON) » باشه ،
-        بعد «خروجی/پشتیبان گیری»"
-      */}
-
-      {/* 1. FIRST CARD: افزودن گروهی با هوش مصنوعی */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-4 md:p-5 shadow-xs space-y-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-start gap-2.5 min-w-0">
-            <span className="text-2xl leading-none mt-0.5">🤖</span>
-            <div className="min-w-0">
-              <b className="block text-sm md:text-base text-slate-900 dark:text-slate-100">افزودن گروهی با هوش مصنوعی</b>
-              <p className="text-[11px] md:text-xs text-[#5d6676] dark:text-[#a3adbd] leading-relaxed mt-0.5">
-                کلمات آلمانی را بنویسید تا ترجمه، مثال، آرتیکل، صرف و یادداشت‌ها خودکار تولید شوند.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => onOpenHelp('bulk_ai')}
-            aria-label="راهنما"
-            title="راهنما"
-            className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 text-base font-extrabold transition flex items-center justify-center"
-          >
-            !
-          </button>
-        </div>
-
-        {/* Words box */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-xs font-bold text-slate-800 dark:text-slate-200">کلمات (هر کلمه در یک خط)</label>
-            <button
-              onClick={onOpenImageExtract}
-              className="bg-blue-50 hover:bg-blue-100 text-[#1f5fbf] dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-[11px] md:text-xs font-bold transition flex items-center gap-1"
-            >
-              <span>📷 استخراج از تصویر</span>
-            </button>
-          </div>
-          <textarea
-            dir="ltr"
-            rows={5}
-            placeholder="z.B.&#10;Entscheidung&#10;[B2] zur Verfügung stehen&#10;nachhaltig"
-            value={bulkText}
-            onChange={e => setBulkText(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm leading-relaxed outline-none font-sans focus:border-[#1f5fbf]"
-          />
-        </div>
-
-        {/* Category */}
-        <div className="space-y-2">
-          <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">دستهٔ لغات</label>
-          <select
-            value={bulkCategory}
-            onChange={e => setBulkCategory(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm outline-none font-medium focus:border-[#1f5fbf]"
-          >
-            <option value="">📁 به تشخیص هوش مصنوعی</option>
-            {categories.map(([c, n]) => (
-              <option key={c} value={c}>
-                {c} ({n} واژه)
-              </option>
-            ))}
-            <option value="__new">➕ دستهٔ جدید…</option>
-          </select>
-          {bulkCategory === '__new' && (
-            <input
-              type="text"
-              placeholder="نام دستهٔ جدید..."
-              value={bulkNewCatName}
-              onChange={e => setBulkNewCatName(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1f5fbf]"
-            />
-          )}
-        </div>
-
-        {/* Action buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-2.5">
-          <button
-            onClick={handleBulkAutoFill}
-            disabled={bulkLoading || !bulkText.trim()}
-            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition"
-          >
-            {bulkLoading ? '⏳ در حال تکمیل...' : '✨ تکمیل خودکار همهٔ کلمات'}
-          </button>
-          <button
-            onClick={handleCopyBulkPrompt}
-            disabled={!bulkText.trim()}
-            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition"
-          >
-            📋 کپی دستور گروهی
-          </button>
-        </div>
-
-        {bulkStatus && (
-          <p className="text-xs text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50/60 dark:bg-blue-950/20 rounded-xl px-3 py-2">{bulkStatus}</p>
-        )}
-
-        {/* Collapsible Manual JSON Paste */}
-        <details className="text-xs border border-[#dde1ea] dark:border-[#333b4a] rounded-xl bg-slate-50/60 dark:bg-[#141923]/60">
-          <summary className="cursor-pointer px-3 py-2.5 text-[#5d6676] dark:text-[#a3adbd] hover:text-[#1f5fbf] font-semibold">
-            یا خروجی JSON هوش مصنوعی را دستی اینجا بچسبانید
-          </summary>
-          <div className="px-3 pb-3 space-y-2">
-            <textarea
-              dir="ltr"
-              rows={3}
-              placeholder="JSON خروجی هوش مصنوعی را اینجا بچسبانید..."
-              value={pastedJson}
-              onChange={e => setPastedJson(e.target.value)}
-              className="w-full bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-2.5 text-xs outline-none font-mono focus:border-[#1f5fbf]"
-            />
-            <button
-              onClick={handleApplyPastedBulkJson}
-              disabled={!pastedJson.trim()}
-              className="w-full bg-[#1f5fbf] text-white px-3.5 py-2 rounded-xl text-sm font-bold disabled:opacity-40"
-            >
-              وارد کردن متن چسبانده‌شده
-            </button>
-          </div>
-        </details>
       </div>
 
-      {/* 2. SECOND CARD: ورود (Excel, CSV یا JSON) - Fulfills Task 3 */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">📥</span>
-            <div>
-              <b className="text-base text-slate-900 dark:text-slate-100">ورود فایل (Excel, CSV یا JSON)</b>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                پشتیبان‌های قبلی برنامه، فایل‌های اکسل (.xlsx) یا فایل‌های واژگان CSV استاندارد را وارد کنید
-              </p>
-            </div>
+      {/* ========================================================= */}
+      {/* 2. Daily Learning Limits & Session Order (Section 3) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
+          <span>📊</span> محدودیت‌های روزانه و ترتیب جلسه
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              سهمیه کلمه جدید در روز:
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={500}
+              value={settings.nw ?? 10}
+              onChange={e => onUpdateSettings({ nw: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium text-center"
+            />
+            <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] block mt-1">۰ تا ۵۰۰ (۰ = بدون لغت جدید)</span>
           </div>
 
-          {/* Help button beside heading (Task 3.1) */}
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              حداکثر مرور در روز:
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={500}
+              value={settings.rv ?? 20}
+              onChange={e => onUpdateSettings({ rv: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium text-center"
+            />
+            <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] block mt-1">۰ تا ۵۰۰ (۰ = بدون محدودیت مرور)</span>
+          </div>
+
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              ترتیب چینش کارت‌ها:
+            </label>
+            <select
+              value={settings.order || 'due'}
+              onChange={e => onUpdateSettings({ order: e.target.value as any })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium"
+            >
+              <option value="due">🔁 اول سررسیدها، سپس جدیدها</option>
+              <option value="new">🌟 اول واژگان جدید</option>
+              <option value="mix">🔀 ترکیب یکی‌درمیان (سررسید و جدید)</option>
+              <option value="rand">🎲 چینش کاملاً تصادفی</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Category Filter for Study Session (3.4) */}
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <label className="block font-bold text-xs md:text-sm mb-2 text-slate-800 dark:text-slate-200">
+            فیلتر دسته‌های فعال در جلسات روزانه:
+          </label>
+          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] mb-2">
+            در صورت عدم انتخاب، واژگان تمامی دسته‌ها در مطالعه روزانه شرکت می‌کنند.
+          </p>
+
+          <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl">
+            {categories.length === 0 ? (
+              <span className="text-xs text-slate-400">هنوز دسته‌ای ایجاد نشده است.</span>
+            ) : (
+              categories.map(([catName, count]) => {
+                const isSelected = (settings.activeCats || []).includes(catName);
+                return (
+                  <button
+                    key={catName}
+                    type="button"
+                    onClick={() => toggleCategory(catName)}
+                    className={`px-3 py-1 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-[#1f5fbf] text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{isSelected ? '✓' : '+'}</span>
+                    <span>{catName}</span>
+                    <span className="opacity-70 text-[10px]">({count})</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* 3. Review Algorithm & Difficult Words (Section 4) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
+          <span>🧠</span> الگوریتم تکرار فاصله‌دار و واژه‌های دشوار
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              ضریب فاصلهٔ مرور (ivlMod):
+            </label>
+            <select
+              value={settings.ivlMod ?? 1}
+              onChange={e => onUpdateSettings({ ivlMod: parseFloat(e.target.value) || 1 })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium"
+            >
+              <option value="0.8">0.8 (حالت سخت‌گیرانه - فواصل کوتاه‌تر)</option>
+              <option value="1">1.0 (حالت عادی استاندارد)</option>
+              <option value="1.25">1.25 (حالت آسان‌تر - فواصل طولانی‌تر)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              آستانهٔ خطای واژهٔ دشوار (leechN):
+            </label>
+            <input
+              type="number"
+              min={2}
+              max={20}
+              value={settings.leechN ?? 4}
+              onChange={e => onUpdateSettings({ leechN: Math.max(2, Math.min(20, parseInt(e.target.value) || 4)) })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium text-center"
+            />
+            <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] block mt-1">تعداد خطاهای مکرر (۲ تا ۲۰)</span>
+          </div>
+
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              واکنش به واژه‌های دشوار:
+            </label>
+            <select
+              value={settings.leechAct || 'mark'}
+              onChange={e => onUpdateSettings({ leechAct: e.target.value as 'mark' | 'suspend' })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium"
+            >
+              <option value="mark">فقط نشانه‌گذاری با 🩸 (بدون تعلیق)</option>
+              <option value="suspend">نشانه‌گذاری و تعلیق از جلسات روزانه</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* 4. Flashcard Timer (Section 5) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
+          <span>⏱️</span> تایمر تمرین‌ها
+        </h3>
+
+        <p className="text-xs md:text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">
+          تایمر هر تمرین جداگانه تنظیم می‌شود: داخل هر تمرین، آیکن ⏱ را در نوار بالا (قبل از آیکن شناسنامهٔ واژه) بزنید، تایمر را روشن یا خاموش کنید و مدت آن را تعیین کنید. تنظیم هر تمرین ذخیره می‌ماند. «تمرین ترکیبی واژه‌های سخت» از تایمر همان تمرین اصلی هر سؤال پیروی می‌کند.
+        </p>
+      </div>
+
+      {/* ========================================================= */}
+      {/* 5. Pronunciation and Audio Settings (Section 6) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
+          <span>🔊</span> تلفظ و تنظیمات صوتی آلمانی
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              لهجهٔ آلمانی (منطقه):
+            </label>
+            <select
+              value={settings.vreg || ''}
+              onChange={e => onUpdateSettings({ vreg: e.target.value })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium"
+            >
+              <option value="">خودکار / پیش‌فرض سیستم</option>
+              <option value="de-DE">آلمانی آلمان (de-DE)</option>
+              <option value="de-AT">آلمانی اتریش (de-AT)</option>
+              <option value="de-CH">آلمانی سوئیس (de-CH)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              صدای گوینده (Speech Voice):
+            </label>
+            <select
+              value={settings.voice || ''}
+              onChange={e => onUpdateSettings({ voice: e.target.value })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium"
+            >
+              <option value="">انتخاب خودکار صدای آلمانی</option>
+              {availableVoices.map(v => (
+                <option key={v.name} value={v.name}>
+                  {v.name} ({v.lang})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              سرعت گفتار: {settings.rate ?? 0.85}x
+            </label>
+            <input
+              type="range"
+              min={0.5}
+              max={1.1}
+              step={0.05}
+              value={settings.rate ?? 0.85}
+              onChange={e => onUpdateSettings({ rate: parseFloat(e.target.value) || 0.85 })}
+              className="w-full accent-[#1f5fbf] cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400">
+              <span>0.5x (آهسته)</span>
+              <span>0.85x</span>
+              <span>1.1x (سریع)</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <label className="flex items-center gap-2.5 cursor-pointer text-xs md:text-sm font-semibold select-none">
+            <input
+              type="checkbox"
+              checked={!!settings.auto}
+              onChange={e => onUpdateSettings({ auto: e.target.checked })}
+              className="w-4 h-4 rounded text-[#1f5fbf] accent-[#1f5fbf] cursor-pointer"
+            />
+            <span>پخش خودکار تلفظ کلمه هنگام باز شدن کارت</span>
+          </label>
+
+          <label className="flex items-center gap-2.5 cursor-pointer text-xs md:text-sm font-semibold select-none">
+            <input
+              type="checkbox"
+              checked={!!settings.autoEx}
+              onChange={e => onUpdateSettings({ autoEx: e.target.checked })}
+              className="w-4 h-4 rounded text-[#1f5fbf] accent-[#1f5fbf] cursor-pointer"
+            />
+            <span>خواندن جملهٔ مثال پس از پایان تلفظ واژه (در صورت وجود مثال)</span>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setIsHelpModalOpen(true)}
-            className="bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900 text-[#1f5fbf] dark:text-[#7fb0ff] border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            title="مشاهده راهنمای قالب فایل و ستون‌های استاندارد"
+            onClick={handleTestVoice}
+            className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 px-4 py-2 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 transition"
           >
-            <span>ℹ️ راهنمای ورود فایل</span>
+            <span>🔊</span>
+            <span>تست صدا (Test Voice)</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setIsVoiceGuideOpen(true)}
+            className="bg-blue-50 hover:bg-blue-100 text-[#1f5fbf] dark:bg-blue-950/50 dark:hover:bg-blue-900/60 dark:text-[#a9cbff] border border-blue-200 dark:border-blue-800 px-4 py-2 rounded-xl text-xs md:text-sm font-bold transition"
+          >
+            راهنمای نصب و طبیعی کردن صدا
+          </button>
+          </div>
+          <span className="text-[11px] text-[#5d6676] dark:text-[#c0c8d5]">
+            عبارت تستی: «Guten Tag! Ich lerne Deutsch in Wien.»
+          </span>
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-              انتخاب فایل از دستگاه (.xlsx, .xls, .csv, .json):
+      {/* ========================================================= */}
+      {/* 6. Daily Goal & Backup Reminder (Section 7) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
+          <span>🎯</span> هدف روزانه و یادآوری پشتیبان‌گیری
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm">
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              هدف مطالعه روزانه (تعداد کارت):
             </label>
+            <input
+              type="number"
+              min={0}
+              max={500}
+              value={settings.goal ?? 20}
+              onChange={e => onUpdateSettings({ goal: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium text-center"
+            />
+            <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] block mt-1">۰ تا ۵۰۰ (۰ = غیرفعال)</span>
+          </div>
 
-            {/* Downloadable sample Excel template button (Task 3.2) */}
-            <button
-              type="button"
-              onClick={generateExcelTemplate}
-              className="bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              title="دانلود فایل اکسل نمونه با ستون‌های استاندارد و نمونه‌های کاربردی"
+          <div>
+            <label className="block font-bold mb-1.5 text-slate-800 dark:text-slate-200">
+              دوره یادآوری پشتیبان‌گیری:
+            </label>
+            <select
+              value={settings.bkDays ?? 7}
+              onChange={e => onUpdateSettings({ bkDays: parseInt(e.target.value) || 0 })}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none font-medium"
             >
-              <span>📗 دانلود قالب نمونه اکسل (.xlsx)</span>
+              <option value="0">غیرفعال</option>
+              <option value="3">هر ۳ روز یک‌بار</option>
+              <option value="7">هر ۷ روز یک‌بار (پیش‌فرض)</option>
+              <option value="14">هر ۱۴ روز یک‌بار</option>
+              <option value="30">هر ۳۰ روز یک‌بار</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* 7. Gemini AI Integration (Server-Side) */}
+      {/* ========================================================= */}
+      {isVoiceGuideOpen && (
+        <div
+          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+          onMouseDown={event => { if (event.target === event.currentTarget) setIsVoiceGuideOpen(false); }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="voice-guide-title" dir="rtl" className="w-full max-w-2xl max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#1b2029] text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3 mb-4">
+              <div>
+                <h2 id="voice-guide-title" className="text-base sm:text-lg font-extrabold">راهنمای نصب و طبیعی کردن صدا</h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">نام منوها بسته به نسخهٔ سیستم‌عامل و دستگاه ممکن است کمی متفاوت باشد.</p>
+              </div>
+              <button type="button" autoFocus onClick={() => setIsVoiceGuideOpen(false)} aria-label="بستن راهنما" className="shrink-0 rounded-lg px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-bold">✕ بستن</button>
+            </div>
+            <p className="text-sm leading-7 mb-4">برنامه از صداهای آلمانی نصب‌شده روی دستگاه استفاده می‌کند. کیفیت و دسترسی به صداها به سیستم‌عامل، مرورگر و صداهایی که مرورگر در اختیار برنامه می‌گذارد بستگی دارد؛ برنامه نمی‌تواند صدایی را که مرورگر ارائه نمی‌کند مستقیماً انتخاب کند.</p>
+            <div className="space-y-3 text-sm leading-7">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>📱 آیفون و آیپد</b><p>Settings → Accessibility → Spoken Content → Voices → German. اگر گزینهٔ Enhanced یا Premium موجود بود، آن را دانلود کنید.</p></div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>🤖 اندروید</b><p>Settings → System → Languages &amp; input → Text-to-speech output. موتور گفتار Google را انتخاب کنید و در تنظیمات آن، دادهٔ صدای آلمانی را نصب کنید.</p></div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>🪟 ویندوز</b><p>Microsoft Edge ممکن است در صورت پشتیبانی، صداهای آنلاین با کیفیت بالاتر ارائه کند. در Windows 11 مسیر Settings → Time &amp; language → Speech → Manage voices → Add voices → German را بررسی کنید.</p></div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><b>🍎 macOS</b><p>System Settings → Accessibility → Spoken Content → System voice → Manage Voices. در صورت وجود، صدای آلمانی با کیفیت بالاتر را دانلود کنید.</p></div>
+            </div>
+            <div className="mt-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 p-3 text-sm leading-7">
+              برای صدای طبیعی‌تر، سرعت را حدود <b dir="ltr">0.8–0.9</b> تنظیم کنید، از دکمهٔ «تست صدا» استفاده کنید و پس از نصب صدای جدید، صفحهٔ برنامه را تازه‌سازی کنید. نام یا کیفیت مشخصی از صدا در همهٔ دستگاه‌ها تضمین‌شده نیست.
+            </div>
+          </section>
+        </div>
+      )}
+
+      <GeminiKeyCard />
+
+      {/* ========================================================= */}
+      {/* 8. Data Management & Destructive Actions (Section 8) */}
+      {/* ========================================================= */}
+      <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-900/60 rounded-2xl p-4 md:p-5 shadow-xs space-y-4">
+        <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-red-100 dark:border-red-950 pb-3 text-red-700 dark:text-red-400">
+          <span>⚠️</span> مدیریت داده‌ها و عملیات حساس
+        </h3>
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+          لطفاً پیش از انجام این عملیات، در صورت نیاز از تب «ورود و صدور» یک فایل پشتیبان دریافت کنید.
+        </p>
+
+        <div className="space-y-3 pt-2">
+          {/* Action 1: Clear Review History (8.1) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800">
+            <div>
+              <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100 block">
+                پاک کردن سابقهٔ مرور (Reset Review History)
+              </b>
+              <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+                واژه‌ها حفظ می‌شوند؛ فواصل، آمار درست/غلط و مراحل یادگیری صفر می‌شوند.
+              </span>
+            </div>
+            <button
+              onClick={handleClearHistoryClick}
+              className="bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 px-4 py-2 rounded-xl text-xs font-bold transition flex-shrink-0"
+            >
+              🔄 پاک کردن سابقه مرور
             </button>
           </div>
 
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv,.json"
-            onChange={handleFileUpload}
-            className="w-full text-xs file:bg-slate-100 dark:file:bg-slate-800 file:border-0 file:rounded-xl file:px-4 file:py-2.5 file:text-xs file:font-bold file:mr-2 cursor-pointer border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 bg-slate-50/50 dark:bg-[#141923]"
-          />
-        </div>
-      </div>
+          {/* Action 2: Delete All Vocabulary (8.2 - 2 steps) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-red-50/60 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40">
+            <div>
+              <b className="text-xs md:text-sm text-red-800 dark:text-red-300 block">
+                حذف کامل واژگان (Delete All Vocabulary)
+              </b>
+              <span className="text-[11px] text-red-600/80 dark:text-red-400/80">
+                کلیه لغات، دسته‌ها و سوابق به طور برگشت‌ناپذیر حذف می‌شوند. نیازمند دو مرحله تأیید.
+              </span>
+            </div>
 
-      {/*
-        3. THIRD CARD: خروجی/پشتیبان گیری
-        Fulfills User Request #15:
-        "سه تا گزینه زیر خروجی هم توی یک خط جا داده بشن"
-      */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 border-b pb-3">
-          <span className="text-2xl">💾</span>
-          <div>
-            <b className="text-base text-slate-900 dark:text-slate-100">خروجی و پشتیبان‌گیری</b>
-            <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-              دانلود واژگان در قالب فایل اکسل/CSV و ذخیره نسخه کامل تاریخچه و تنظیمات
-            </p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {deleteStep === 1 && (
+                <button
+                  onClick={() => setDeleteStep(0)}
+                  className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold"
+                >
+                  انصراف
+                </button>
+              )}
+              <button
+                onClick={handleDeleteAllWordsClick}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition"
+              >
+                {deleteStep === 0 ? '🗑 حذف کامل واژگان' : '⚠️ تأیید مرحله دوم: کاملاً مطمئنم'}
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* The 3 buttons side-by-side in a single line! */}
-        <div className="flex flex-row flex-wrap md:flex-nowrap items-center gap-2.5">
-          <button
-            onClick={() => downloadFile('deutschlab_vocab.csv', wordsToCSV(words), 'text/csv')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>📊 واژگان (CSV)</span>
-          </button>
-
-          <button
-            onClick={() => downloadFile('worterbuch_backup.json', JSON.stringify(state, null, 2), 'application/json')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>💾 پشتیبان کامل (JSON)</span>
-          </button>
-
-          <button
-            onClick={() => downloadFile('deutschlab_history.json', JSON.stringify(state.hist, null, 2), 'application/json')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>📈 تاریخچهٔ مرور (JSON)</span>
-          </button>
-        </div>
       </div>
-
-      {/* Import Help Modal (Task 3.1) */}
-      {isHelpModalOpen && (
-        <ImportHelpModal
-          onClose={() => setIsHelpModalOpen(false)}
-          onDownloadTemplate={generateExcelTemplate}
-        />
-      )}
     </div>
   );
 };
