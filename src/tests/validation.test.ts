@@ -143,3 +143,25 @@ test('mistake analysis: positions and diagnostics', () => {
   assert.match(art.notes.join(' '), /آرتیکل/);
   assert.equal(analyzeMistake('Straße', 'Straße').notes.length, 1); // identical text: only the generic note
 });
+
+import { sortWords, splitCategoryName, hasTimestamp } from '../utils/wordSort';
+
+test('sorting: deterministic, stable ties, never mutates, no invented timestamps', () => {
+  const mk = (id: string, de: string, o: any = {}): any => ({ id, de, art: '', fa: 'x', pos: 'اسم', cat: 'ب', added: 0, ...o });
+  const list = [mk('3', 'Zug', { added: 300, cat: 'ب' }), mk('1', 'Apfel', { added: 100, cat: 'الف' }), mk('2', 'Apfel', { added: 0, cat: 'ب' }), mk('4', 'ärger', { added: 200, pos: 'فعل' })];
+  const snapshot = list.map(w => w.id).join();
+  assert.deepEqual(sortWords(list, 'alpha').map(w => w.id), ['1', '2', '4', '3']);
+  assert.deepEqual(sortWords(list, 'newest').map(w => w.id), ['3', '4', '1', '2']); // id 2 has no real timestamp -> last
+  assert.deepEqual(sortWords(list, 'oldest').map(w => w.id), ['1', '4', '3', '2']);
+  assert.equal(list.map(w => w.id).join(), snapshot);
+  assert.deepEqual(sortWords(list, 'cat').map(w => w.id), sortWords([...list].reverse(), 'cat').map(w => w.id)); // same result for any input order
+  assert.deepEqual(sortWords(list, 'pos').map(w => w.id).slice(-1), ['4']);
+  assert.equal(hasTimestamp(mk('x', 'a', { added: 0 })), false);
+});
+
+test('category names: Persian on the first line, German below; no invented translation', () => {
+  assert.deepEqual(splitCategoryName('روزمره (Alltag)'), { fa: 'روزمره', de: 'Alltag' });
+  assert.deepEqual(splitCategoryName('ارتباطات (Kommunikation)'), { fa: 'ارتباطات', de: 'Kommunikation' });
+  assert.deepEqual(splitCategoryName('فقط فارسی'), { fa: 'فقط فارسی', de: '' });
+  assert.deepEqual(splitCategoryName('Redewendungen'), { fa: 'Redewendungen', de: '' });
+});
