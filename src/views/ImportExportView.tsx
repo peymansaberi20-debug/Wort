@@ -1,3 +1,6 @@
+import { applyGermanQuality } from '../utils/german';
+import { classifyImport } from '../utils/vocabMerge';
+import { copyText } from '../utils/clipboard';
 import React, { useState, useMemo } from 'react';
 import { AppState, Word } from '../types';
 import { getCategories, norm, matchCat, resolveCat } from '../utils/storage';
@@ -413,12 +416,12 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
       finalCatOverride = bulkCategory;
     }
 
-    try {
-      const prompt = AIPM(lines, words, finalCatOverride);
-      await navigator.clipboard.writeText(prompt);
+    // no network request: the prompt is only built and copied (works without any API key or quota)
+    const prompt = AIPM(lines, words, finalCatOverride);
+    if (await copyText(prompt)) {
       onShowToast('دستور گروهی کپی شد. می‌توانید در ChatGPT یا Claude بچسبانید.');
-    } catch (e) {
-      onShowToast('کپی در کلیپ‌بورد ممکن نشد.', true);
+    } else {
+      onShowToast('کپی در کلیپ‌بورد ممکن نشد؛ مرورگر اجازهٔ کپی نمی‌دهد.', true);
     }
   };
 
@@ -555,7 +558,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             tags
           });
 
-          if (w) ws.push(w);
+          if (w) ws.push(applyGermanQuality(w));
         });
 
         if (ws.length === 0 && errs.length > 0) {
@@ -613,7 +616,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             exFa: exFaIdx >= 0 ? cols[exFaIdx] : '',
             cat: catIdx >= 0 ? cols[catIdx] : ''
           });
-          if (w) ws.push(w);
+          if (w) ws.push(applyGermanQuality(w));
         });
 
         setPendingImport({ words: ws, errors: errs });
@@ -713,6 +716,32 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
               </div>
             </div>
           )}
+
+          {/* Which words are new and which already exist (nothing is changed before you choose a button below) */}
+          {(() => {
+            const c = classifyImport(pendingImport.words, words);
+            return (
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-xs space-y-1.5">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 font-bold">
+                  <span className="text-emerald-700 dark:text-emerald-400">🆕 جدید: {c.fresh.length}</span>
+                  <span className="text-amber-700 dark:text-amber-400">♻️ از قبل موجود: {c.conflicts.length}</span>
+                  {c.repeated.length > 0 && <span className="text-slate-500">تکراری داخل همین فهرست: {c.repeated.length}</span>}
+                  {c.invalid.length > 0 && <span className="text-red-600">نامعتبر: {c.invalid.length}</span>}
+                </div>
+                {c.conflicts.length > 0 && (
+                  <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6" dir="ltr">
+                    {c.conflicts.slice(0, 8).map(x => (x.existing.art ? `${x.existing.art} ` : '') + x.existing.de).join(', ')}
+                    {c.conflicts.length > 8 ? ` … +${c.conflicts.length - 8}` : ''}
+                  </p>
+                )}
+                {c.conflicts.length > 0 && (
+                  <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                    «افزودن» فقط واژه‌های جدید را ثبت می‌کند و موجودها را دست‌نخورده می‌گذارد. «به‌روزرسانی» اطلاعات تازه را با واژهٔ موجود ادغام می‌کند (شناسه، دسته و پیشرفت یادگیری حفظ می‌شود و مقدار خالی چیزی را پاک نمی‌کند).
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Quick list preview */}
           <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs bg-slate-50 dark:bg-[#141923] p-3 rounded-2xl border">
