@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Word } from '../types';
 import { getCategories, norm, uid } from '../utils/storage';
 import { processBatchWordsWithGemini } from '../utils/ai';
+import { describeAiError, generateWithImages, getActiveProvider } from '../utils/aiProvider';
+import { PROVIDERS } from '../utils/aiProvider';
+import { Conflict, ImportDecision, classifyImport } from '../utils/vocabMerge';
+import { ImportConflictDialog } from './ImportConflictDialog';
+import { copyText } from '../utils/clipboard';
+import { recognizeImage, releaseOcr } from '../utils/ocr';
+import {
+  BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, loadSession, makeCandidates, markCompleted, newSession,
+  nextOpenBatch, saveSession, sessionProgress, setBatchSize, splitCandidates, validateBatchResponse, validationToWords
+} from '../utils/extractSession';
 
 interface ExtractedCandidate {
   de: string;
@@ -15,6 +25,8 @@ interface ImageExtractModalProps {
   words: Word[];
   onClose: () => void;
   onAddEnrichedWords: (words: Word[]) => void;
+  /** Duplicate-aware import (new words + update/keep decisions); used by the external-AI batch workflow. */
+  onApplyImportPlan?: (fresh: Word[], decisions: ImportDecision[]) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
 
@@ -22,6 +34,7 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
   words,
   onClose,
   onAddEnrichedWords,
+  onApplyImportPlan,
   onShowToast
 }) => {
   const [candidates, setCandidates] = useState<ExtractedCandidate[]>([]);
@@ -34,6 +47,26 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
   const [sourceCollapsed, setSourceCollapsed] = useState<boolean>(false);
 
   const existingCategories = getCategories(words);
+
+  // Extraction method: AI (selected provider) | local OCR (no AI) | manual text (no AI)
+  const [method, setMethod] = useState<'ai' | 'ocr' | 'manual'>('ai');
+  const [manualText, setManualText] = useState('');
+  const [dropTrivial, setDropTrivial] = useState(true);
+  const [ocrMsg, setOcrMsg] = useState('');
+
+  // External-AI batch session (resumable; contains no secrets)
+  const [ext, setExt] = useState<BatchSession | null>(null);
+  const [extCats, setExtCats] = useState<Record<string, string>>({});
+  const [resumable, setResumable] = useState<BatchSession | null>(() => loadSession());
+  const [pasted, setPasted] = useState('');
+  const [problems, setProblems] = useState<string[]>([]);
+  const [copyFallback, setCopyFallback] = useState('');
+  const [conflictState, setConflictState] = useState<{ fresh: Word[]; conflicts: Conflict[]; cids: string[] } | null>(null);
+
+  useEffect(() => {
+    if (ext) saveSession(ext);
+  }, [ext]);
+  useEffect(() => () => { void releaseOcr(); }, []);
 
   // Fast client-side image resizing and encoding to minimize payload and latency
   const fileToBase64 = (file: File): Promise<string> => {
@@ -94,21 +127,8 @@ Rules:
         });
       }
 
-      // Single fast model request using gemini-3.1-flash-lite
-      const res = await fetch('/api/gemini/extract-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          images: imagesPayload,
-          model: 'gemini-3.1-flash-lite'
-        })
-      });
-
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || `خطا در سرور: ${res.status}`);
-
-      const rawText = j.text || '';
+      // One request to the ACTIVE provider only (no automatic fallback to another provider)
+      const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
       const lines = rawText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
 
       const seen = new Set<string>();
@@ -281,9 +301,150 @@ Rules:
     }
   };
 
+  const rowsFromList = (list: string[]): ExtractedCandidate[] => {
+    const have = new Set(words.map(w => w.de.toLowerCase()));
+    return list.map(de => ({ de, have: have.has(de.toLowerCase()), on: !have.has(de.toLowerCase()), correctedSpell: '', cat: '' }));
+  };
+
+  // Option B: local OCR in the browser (no AI provider, no API key)
+  const handleOcr = async () => {
+    if (files.length === 0) {
+      onShowToast('ابتدا یک یا چند تصویر انتخاب کنید.', true);
+      return;
+    }
+    setLoading(true);
+    setCandidates([]);
+    setStatusMsg('');
+    try {
+      let all = '';
+      let minConf = 100;
+      for (let i = 0; i < files.length; i++) {
+        const r = await recognizeImage(files[i], (pct, msg) => setOcrMsg(`${msg} ${pct}٪ — تصویر ${i + 1} از ${files.length}`));
+        all += '\n' + r.text;
+        if (r.quality !== 'empty') minConf = Math.min(minConf, r.confidence);
+      }
+      const list = splitCandidates(all, { dropTrivial });
+      if (list.length === 0) {
+        setManualText(all.trim());
+        setStatusMsg('متنی از تصویر خوانده نشد. تصویر واضح‌تر بگیرید یا متن را در «ورود متن به‌صورت دستی» بنویسید.');
+        return;
+      }
+      setCandidates(rowsFromList(list));
+      setSourceCollapsed(true);
+      setStatusMsg(
+        minConf < 55
+          ? `${list.length} واژه خوانده شد، ولی دقت OCR پایین است؛ املای واژه‌ها را حتماً بررسی و اصلاح کنید.`
+          : `${list.length} واژه با OCR محلی خوانده شد. املا را بررسی کنید؛ OCR فقط متن را می‌خواند و معنی را نمی‌فهمد.`
+      );
+    } catch (err: any) {
+      setStatusMsg(`خطا: ${err.message || 'OCR ناموفق بود.'}`);
+      onShowToast(err.message || 'خطا در OCR', true);
+    } finally {
+      setOcrMsg('');
+      setLoading(false);
+    }
+  };
+
+  // Option C: manual text (deterministic, no AI)
+  const handleManualText = () => {
+    const list = splitCandidates(manualText, { dropTrivial });
+    if (list.length === 0) {
+      setStatusMsg('واژهٔ قابل‌استفاده‌ای در متن پیدا نشد.');
+      return;
+    }
+    setCandidates(rowsFromList(list));
+    setSourceCollapsed(true);
+    setStatusMsg(`${list.length} واژه از متن ساخته شد. می‌توانید حذف یا اصلاحشان کنید.`);
+  };
+
+  // ---- external AI: batch workflow ----
+  const startExternal = () => {
+    const selected = candidates.filter(c => c.on);
+    if (selected.length === 0) {
+      onShowToast('لطفاً حداقل یک واژه را با تیک کنار آن انتخاب کنید.', true);
+      return;
+    }
+    const sc = makeCandidates(selected.map(c => ({ de: c.de })));
+    const cats: Record<string, string> = {};
+    sc.forEach((c, i) => {
+      if (selected[i].cat) cats[c.cid] = selected[i].cat;
+    });
+    setExtCats(cats);
+    setExt(newSession(sc));
+    setPasted('');
+    setProblems([]);
+    setCopyFallback('');
+  };
+
+  const prog = ext ? sessionProgress(ext) : null;
+  const batchPrompt = ext && prog ? buildExternalPrompt(prog.currentWords, prog.current, prog.batches, words) : '';
+
+  const copyBatch = async () => {
+    const ok = await copyText(batchPrompt);
+    if (ok) {
+      setCopyFallback('');
+      onShowToast('دستور این گروه کپی شد. آن را در ChatGPT، Claude یا هر هوش مصنوعی دیگر بچسبانید و پاسخ JSON را اینجا وارد کنید.');
+    } else {
+      setCopyFallback(batchPrompt);
+      onShowToast('کپی خودکار ممکن نشد؛ متن دستور را از کادر زیر دستی کپی کنید.', true);
+    }
+  };
+
+  const commitBatch = (fresh: Word[], decisions: ImportDecision[], cids: string[]) => {
+    if (onApplyImportPlan) onApplyImportPlan(fresh, decisions);
+    else onAddEnrichedWords(fresh);
+    setExt(prev => {
+      if (!prev) return prev;
+      let n = markCompleted(prev, cids);
+      const nxt = nextOpenBatch(n);
+      if (nxt >= 0) n = gotoBatch(n, nxt);
+      return n;
+    });
+    setPasted('');
+    setProblems([]);
+    setCopyFallback('');
+    setConflictState(null);
+  };
+
+  const submitBatch = () => {
+    if (!ext || !prog) return;
+    const v = validateBatchResponse(pasted, prog.currentWords);
+    if (!v.ok) {
+      setProblems(v.problems);
+      return;
+    }
+    const { ws, errs, cidOfWord } = validationToWords(v, prog.currentWords, words);
+    if (ws.length < prog.currentWords.length) {
+      setProblems(errs.length ? errs : ['بعضی از رکوردهای پاسخ معتبر نبودند.']);
+      return;
+    }
+    ws.forEach(w => {
+      const cid = cidOfWord.get(w);
+      if (cid && extCats[cid]) w.cat = extCats[cid];
+    });
+    const cls = classifyImport(ws, words);
+    if (cls.invalid.length > 0) {
+      setProblems(cls.invalid.map(i => i.reason));
+      return;
+    }
+    const cids = prog.currentWords.map(c => c.cid);
+    if (cls.conflicts.length > 0) {
+      setConflictState({ fresh: cls.fresh, conflicts: cls.conflicts, cids });
+      return;
+    }
+    commitBatch(cls.fresh, [], cids);
+  };
+
+  const closeExternal = () => {
+    saveSession(null);
+    setExt(null);
+    setResumable(null);
+  };
+
   const selectedCount = candidates.filter(c => c.on).length;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
       onClick={e => {
@@ -329,38 +490,91 @@ Rules:
         {/* Upload Controls (collapsible) */}
         {!sourceCollapsed && (
           <div className="p-4 border-b border-[#dde1ea] dark:border-[#333b4a] space-y-3 bg-slate-50/50 dark:bg-slate-900/20 text-xs">
-            <p className="text-[#5d6676] dark:text-[#a3adbd]">
-              تصویر کتاب، جزوه یا دست‌نوشته آلمانی را انتخاب کنید. پس از استخراج سریع، لغات مدنظرتان را انتخاب کنید تا با هوش مصنوعی مشخصات کامل آن‌ها تکمیل و ثبت شود:
-            </p>
-
-            <div>
-              <label className="block font-bold mb-1.5">انتخاب فایل(ها):</label>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={loading || enriching}
-                onChange={e => setFiles(Array.from(e.target.files || []))}
-                className="w-full text-xs file:bg-slate-100 file:border-0 file:rounded-xl file:px-3 file:py-1.5 file:text-xs file:font-bold file:mr-2 cursor-pointer"
-              />
+            <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="روش استخراج">
+              {([
+                ['ai', '🤖 هوش مصنوعی'],
+                ['ocr', '🔎 OCR بدون هوش مصنوعی'],
+                ['manual', '⌨️ ورود متن دستی']
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  role="tab"
+                  aria-selected={method === k}
+                  onClick={() => setMethod(k)}
+                  disabled={loading || enriching}
+                  className={`px-2 py-2 rounded-xl text-[11px] md:text-xs font-bold border transition ${
+                    method === k
+                      ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]'
+                      : 'bg-white dark:bg-[#141923] text-slate-700 dark:text-slate-300 border-[#dde1ea] dark:border-[#333b4a]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+
+            {method === 'ai' && (
+              <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                تصویر به <b>{PROVIDERS[getActiveProvider()].label}</b> (ارائه‌دهندهٔ فعال شما) فرستاده می‌شود. اگر سهمیه تمام شد یا کلید نداشتید، از «OCR بدون هوش مصنوعی» یا «ورود متن دستی» استفاده کنید؛ تصویر هرگز خودکار به ارائه‌دهندهٔ دیگری نمی‌رود.
+              </p>
+            )}
+            {method === 'ocr' && (
+              <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                متن تصویر داخل مرورگر شما خوانده می‌شود و به هیچ هوش مصنوعی فرستاده نمی‌شود. OCR فقط متن را تشخیص می‌دهد و مثل هوش مصنوعی معنی را نمی‌فهمد. بار اول موتور OCR و داده‌های زبان آلمانی از اینترنت دانلود می‌شود (به‌صورت کاملاً آفلاین تضمین نمی‌شود).
+              </p>
+            )}
+            {method === 'manual' && (
+              <p className="text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                متن را که از جای دیگری (دوربین گوشی، برنامهٔ OCR دیگر و...) گرفته‌اید اینجا بچسبانید. فهرست واژه‌ها بدون هیچ هوش مصنوعی و فقط با قواعد ساده ساخته می‌شود.
+              </p>
+            )}
+
+            {method !== 'manual' ? (
+              <div>
+                <label className="block font-bold mb-1.5">انتخاب فایل(ها):</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={loading || enriching}
+                  onChange={e => setFiles(Array.from(e.target.files || []))}
+                  className="w-full text-xs file:bg-slate-100 file:border-0 file:rounded-xl file:px-3 file:py-1.5 file:text-xs file:font-bold file:mr-2 cursor-pointer"
+                />
+              </div>
+            ) : (
+              <textarea
+                dir="ltr"
+                value={manualText}
+                onChange={e => setManualText(e.target.value)}
+                placeholder={'Schule\nsich freuen auf\nHausaufgabe'}
+                rows={5}
+                className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-sm outline-none font-sans"
+              />
+            )}
+
+            {method !== 'ai' && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={dropTrivial} onChange={e => setDropTrivial(e.target.checked)} className="w-4 h-4" />
+                <span>حذف واژه‌های کاملاً پایه (der، die، und، ist ...)</span>
+              </label>
+            )}
 
             <div className="flex items-center justify-between gap-2 pt-1">
               <button
-                onClick={handleExtract}
-                disabled={loading || enriching || files.length === 0}
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] hover:from-[#194ea0] hover:to-[#573db7] text-white px-4 py-2 rounded-xl font-bold disabled:opacity-40 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                onClick={method === 'ai' ? handleExtract : method === 'ocr' ? handleOcr : handleManualText}
+                disabled={loading || enriching || (method !== 'manual' && files.length === 0) || (method === 'manual' && !manualText.trim())}
+                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] hover:from-[#194ea0] hover:to-[#573db7] text-white px-4 py-2 rounded-xl font-bold disabled:opacity-40 transition flex items-center gap-2"
               >
                 {loading ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    <span>در حال استخراج سریع...</span>
+                    <span>{method === 'ocr' ? 'در حال OCR...' : 'در حال استخراج سریع...'}</span>
                   </>
                 ) : (
-                  <span>⚡ شروع استخراج سریع لغات</span>
+                  <span>{method === 'ai' ? '⚡ شروع استخراج سریع لغات' : method === 'ocr' ? '🔎 خواندن متن با OCR' : '📝 ساخت فهرست از متن'}</span>
                 )}
               </button>
-              <span className="text-[#5d6676] dark:text-[#a3adbd] truncate max-w-xs">{statusMsg}</span>
+              <span className="text-[#5d6676] dark:text-[#a3adbd] truncate max-w-xs">{ocrMsg || statusMsg}</span>
             </div>
           </div>
         )}
@@ -385,6 +599,93 @@ Rules:
           </div>
         )}
 
+        {ext && prog ? (
+          <div className="p-4 overflow-y-auto flex-1 max-h-[60vh] space-y-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <button onClick={() => setExt(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 font-bold">↩ بازگشت به فهرست واژه‌ها</button>
+              <label className="flex items-center gap-1.5 font-bold">
+                تعداد واژه‌ها در هر گروه:
+                <select
+                  value={ext.batchSize}
+                  onChange={e => { setExt(setBatchSize(ext, Number(e.target.value) as BatchSize)); setPasted(''); setProblems([]); setCopyFallback(''); }}
+                  className="bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1"
+                >
+                  {BATCH_SIZES.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
+              <div className="font-bold text-sm">
+                گروه فعلی: {prog.current} از {prog.batches}
+                {prog.currentDone && <span className="text-emerald-600"> ✔ ثبت شده</span>}
+              </div>
+              <div className="text-[#5d6676] dark:text-[#a3adbd]">
+                کل واژه‌های انتخاب‌شده: {prog.total} • تکمیل‌شده: {prog.doneWords} • مانده: {prog.remaining}
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div className="bg-emerald-600 h-2" style={{ width: `${prog.total ? Math.round((prog.doneWords / prog.total) * 100) : 0}%` }} />
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1" dir="ltr">
+                {prog.currentWords.map(c => (
+                  <span key={c.cid} className={`px-2 py-0.5 rounded-full border font-sans ${ext.completed.includes(c.cid) ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>
+                    {c.de}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {prog.remaining === 0 ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-900 dark:text-emerald-200 font-bold space-y-2">
+                <div>🎉 همهٔ گروه‌ها ثبت شد.</div>
+                <button onClick={() => { closeExternal(); onClose(); }} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold">بستن</button>
+              </div>
+            ) : (
+              <>
+                <ol className="list-decimal pr-5 space-y-0.5 text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                  <li>«کپی دستور این گروه» را بزنید و آن را در یک هوش مصنوعی خارجی (ChatGPT، Claude و...) بچسبانید.</li>
+                  <li>پاسخ JSON را کپی کنید و در کادر زیر بچسبانید.</li>
+                  <li>«ثبت پاسخ و ادامه» را بزنید؛ بعد از ثبت، گروه بعدی نشان داده می‌شود.</li>
+                </ol>
+
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={copyBatch} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl font-bold">📋 کپی دستور این گروه</button>
+                  <button onClick={() => { setExt(gotoBatch(ext, ext.current - 1)); setPasted(''); setProblems([]); setCopyFallback(''); }} disabled={prog.current <= 1} className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 font-bold disabled:opacity-40">گروه قبلی</button>
+                  <button onClick={() => { setExt(gotoBatch(ext, ext.current + 1)); setPasted(''); setProblems([]); setCopyFallback(''); }} disabled={prog.current >= prog.batches} className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 font-bold disabled:opacity-40">گروه بعدی</button>
+                </div>
+
+                {copyFallback && (
+                  <div className="space-y-1">
+                    <p className="font-bold text-amber-700 dark:text-amber-400">کپی خودکار ممکن نشد؛ متن زیر را انتخاب و دستی کپی کنید:</p>
+                    <textarea readOnly dir="ltr" value={copyFallback} rows={5} onFocus={e => e.currentTarget.select()} className="w-full bg-white dark:bg-[#141923] border border-amber-300 rounded-xl px-3 py-2 font-mono text-[11px]" />
+                  </div>
+                )}
+
+                <textarea
+                  dir="ltr"
+                  value={pasted}
+                  onChange={e => setPasted(e.target.value)}
+                  placeholder="پاسخ JSON هوش مصنوعی را اینجا بچسبانید..."
+                  rows={6}
+                  className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs outline-none font-mono"
+                />
+
+                {problems.length > 0 && (
+                  <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 text-red-800 dark:text-red-300 space-y-1" role="alert">
+                    <div className="font-bold">پاسخ پذیرفته نشد؛ این گروه هنوز ثبت نشده است:</div>
+                    <ul className="list-disc pr-5">{problems.map((m, i) => <li key={i}>{m}</li>)}</ul>
+                    <button onClick={copyBatch} className="mt-1 px-3 py-1.5 rounded-lg bg-red-600 text-white font-bold">🔁 تلاش مجدد (کپی دوبارهٔ دستور همین گروه)</button>
+                  </div>
+                )}
+
+                <button onClick={submitBatch} disabled={!pasted.trim()} className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-40">
+                  ✅ ثبت پاسخ و ادامه
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+        <>
         {/* Candidates List */}
         <div className="p-4 overflow-y-auto flex-1 max-h-[48vh] space-y-2.5">
           {candidates.length === 0 ? (
@@ -395,7 +696,18 @@ Rules:
                   <span className="font-semibold text-slate-600 dark:text-slate-300">در حال خواندن تصویر و فهرست‌کردن لغات آلمانی...</span>
                 </div>
               ) : (
-                <p>تصویری انتخاب نکرده‌اید یا لغتی هنوز استخراج نشده است.</p>
+                <>
+                  <p>تصویری انتخاب نکرده‌اید یا لغتی هنوز استخراج نشده است.</p>
+                  {resumable && resumable.completed.length < resumable.candidates.length && (
+                    <div className="mt-3 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-amber-900 dark:text-amber-200 space-y-2">
+                      <div className="font-bold">یک جلسهٔ نیمه‌تمام دارید: {resumable.completed.length} از {resumable.candidates.length} واژه ثبت شده است.</div>
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => { setExt(resumable); setResumable(null); }} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold">ادامهٔ جلسه</button>
+                        <button onClick={closeExternal} className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 font-bold">حذف جلسه</button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ) : (
@@ -504,6 +816,15 @@ Rules:
             </div>
 
             <button
+              onClick={startExternal}
+              disabled={enriching || selectedCount === 0}
+              className="bg-white dark:bg-[#1b2029] border border-[#1f5fbf] text-[#1f5fbf] dark:text-[#7fb0ff] px-3 py-2 rounded-xl font-bold disabled:opacity-40 transition"
+              title="بدون استفاده از هیچ سهمیه یا کلید API"
+            >
+              📋 کپی دستور برای هوش مصنوعی خارجی ({selectedCount})
+            </button>
+
+            <button
               onClick={handleStartEnrichmentAndImport}
               disabled={enriching || selectedCount === 0}
               className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-4 py-2 rounded-xl font-bold disabled:opacity-40 transition shadow-xs flex items-center gap-2 cursor-pointer"
@@ -519,7 +840,18 @@ Rules:
             </button>
           </div>
         )}
+        </>
+        )}
       </div>
     </div>
+    {conflictState && (
+      <ImportConflictDialog
+        conflicts={conflictState.conflicts}
+        mode={conflictState.conflicts.length === 1 ? 'single' : 'multi'}
+        onResolve={decisions => commitBatch(conflictState.fresh, decisions, conflictState.cids)}
+        onCancel={() => setConflictState(null)}
+      />
+    )}
+    </>
   );
 };
