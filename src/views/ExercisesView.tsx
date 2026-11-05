@@ -1,10 +1,3 @@
-برای رفع مشکل عدم نمایش تغییرات و اصلاح ساختار فایل **`src/views/ExercisesView.tsx`**، در ادامه متن کامل و اصلاح‌شده این فایل قرار داده شده است.
-
-در این نسخه، کامپوننت‌های جدید فاز ۲ (از جمله تفکیک برگه‌های تمرین به دو بخش **Wortschatz üben** و **Grammatik üben**، هدر استاندارد با دکمه خروج در سمت چپ و علامت سؤال، تایمر اصلاح‌شده و دکمه‌های شناور) به همراه تمام توابع و منطق قبلی شما ادغام شده‌اند تا بدون خطا کار کنند.
-
-### فایل کامل اصلاح‌شده: `src/views/ExercisesView.tsx`
-
-```tsx
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppSettings, CaseQuestion, ExerciseTimerCfg, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
@@ -1001,5 +994,3 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     </div>
   );
 };
-
-```
