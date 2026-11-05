@@ -6,7 +6,8 @@ import { AiError, describeAiError, generateText, getActiveProvider, getModel, ha
 export const BASE_CATEGORIES = [
   'ارتباطات (Kommunikation)',
   'اصطلاحات (Redewendungen)',
-  'اکسل و اداری (Excel und Büro)',
+  'اکسل (Excel)',
+  'اداری (Büro)',
   'پایه (Grundwortschatz)',
   'پرکاربرد (Häufige Wörter)',
   'دشوار (Schwierige Wörter)',
