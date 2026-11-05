@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Word } from '../types';
 import { lev, fullWord } from '../utils/storage';
 import { generateWithGemini } from '../utils/ai';
+import { WordDetailModal } from './WordDetailModal';
 
 export interface DuplicateGroup {
   id: string;
@@ -16,6 +17,11 @@ interface DuplicateDetectorModalProps {
   onClose: () => void;
   onDeleteWord: (word: Word) => void;
   onMergeWords: (canonicalId: string, mergedData: Partial<Word>, removedIds: string[]) => void;
+  /** Opens the edit form of a word. The detector stays mounted (hidden) and is shown again afterwards. */
+  onEditWord?: (word: Word) => void;
+  onImageChange?: (word: Word, newImg: string) => void;
+  /** true while the edit form of a word opened from this list is on screen */
+  hidden?: boolean;
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
 
@@ -24,8 +30,27 @@ export const DuplicateDetectorModal: React.FC<DuplicateDetectorModalProps> = ({
   onClose,
   onDeleteWord,
   onMergeWords,
+  onEditWord,
+  onImageChange,
+  hidden,
   onShowToast
 }) => {
+  // Word shown in the full profile (opened with "مشاهده"); the list context below is kept untouched
+  const [viewWordId, setViewWordId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const scrollTopRef = useRef(0);
+  const viewWord = viewWordId ? words.find(w => w.id === viewWordId) || null : null;
+
+  // a word deleted from the profile closes the profile; the groups are recomputed from the new word list
+  useEffect(() => {
+    if (viewWordId && !words.some(w => w.id === viewWordId)) setViewWordId(null);
+  }, [words, viewWordId]);
+
+  // restore the scroll position of the list after the edit form was closed
+  useEffect(() => {
+    if (!hidden && listRef.current) listRef.current.scrollTop = scrollTopRef.current;
+  }, [hidden]);
+
   // Ignored / dismissed groups for this session
   const [dismissedGroupIds, setDismissedGroupIds] = useState<Set<string>>(new Set());
 
@@ -305,7 +330,7 @@ Reply with ONLY a valid JSON object matching these keys:
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+      className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto ${hidden ? 'hidden' : ''}`}
       onClick={e => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -463,7 +488,11 @@ Reply with ONLY a valid JSON object matching these keys:
         )}
 
         {/* Groups List */}
-        <div className="p-4 overflow-y-auto flex-1 max-h-[58vh] space-y-4">
+        <div
+          ref={listRef}
+          onScroll={e => { scrollTopRef.current = e.currentTarget.scrollTop; }}
+          className="p-4 overflow-y-auto flex-1 max-h-[58vh] space-y-4"
+        >
           {visibleGroups.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-xs">
               🎉 موردی برای نمایش یافت نشد. همهٔ واژگان متمایز و پاکیزه هستند!
@@ -541,6 +570,13 @@ Reply with ONLY a valid JSON object matching these keys:
                         {/* Individual Word Actions */}
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button
+                            onClick={() => setViewWordId(w.id)}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-lg text-[11px] font-bold transition"
+                            title="مشاهدهٔ شناسنامهٔ کامل واژه"
+                          >
+                            👁 مشاهده
+                          </button>
+                          <button
                             onClick={() => handlePickCanonical(w, group)}
                             className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg text-[11px] font-bold transition"
                             title="حفظ این مورد و حذف بقیه"
@@ -575,6 +611,19 @@ Reply with ONLY a valid JSON object matching these keys:
           )}
         </div>
       </div>
+
+      {viewWord && !hidden && (
+        <WordDetailModal
+          word={viewWord}
+          onClose={() => setViewWordId(null)}
+          onEdit={w => {
+            setViewWordId(null);
+            onEditWord?.(w);
+          }}
+          onDelete={w => onDeleteWord(w)}
+          onImageChange={(w, img) => onImageChange?.(w, img)}
+        />
+      )}
     </div>
   );
 };
