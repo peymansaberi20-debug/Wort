@@ -1,3 +1,8 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppSettings, CaseQuestion, ExerciseTimerCfg, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
@@ -530,28 +535,23 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [faShown, setFaShown] = useState(false);
   const [conjPron, setConjPron] = useState(2);
 
-  // Tab State for Phase 2: Wortschatz üben vs Grammatik üben
   const [exerciseTab, setExerciseTab] = useState<ExerciseCategory>('vocabulary');
 
-  // Free review configuration
   const [freeCat, setFreeCat] = useState<string>(settings?.freeCat || '');
   const [freeDir, setFreeDir] = useState<'de' | 'fa'>(settings?.freeDir || 'de');
   const [freeRnd, setFreeRnd] = useState<boolean>(settings?.freeRnd ?? true);
   const [isFreeStarted, setIsFreeStarted] = useState<boolean>(false);
 
-  // Flashcard setup config
   const [flashDir, setFlashDir] = useState<'de' | 'fa' | 'rand'>(settings?.dir || 'de');
   const [flashCat, setFlashCat] = useState<string>('');
   const [isFlashConfigured, setIsFlashConfigured] = useState<boolean>(false);
 
-  // Active session queue
   const [queue, setQueue] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
 
   const [revealedCardId, setRevealedCardId] = useState<string | null>(null);
   const [currentCardDir, setCurrentCardDir] = useState<'de' | 'fa'>('de');
 
-  // Input states
   const [userInput, setUserInput] = useState<string>('');
   const [casePrepInput, setCasePrepInput] = useState<string>('');
   const [caseArtInput, setCaseArtInput] = useState<string>('');
@@ -563,12 +563,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
   pausedRef.current = !!paused || !!profileModalWord;
 
-  // Timer configuration (Fixed Phase 2 default/timer start issue)
   const timerCfg = getTimerCfg(settings);
   const [timeLeft, setTimeLeft] = useState<number | null>(timerCfg.enabled ? timerCfg.sec : null);
-  const [timerPopupOpen, setTimerPopupOpen] = useState(false);
-  const [sentTimeUp, setSentTimeUp] = useState(0);
-  const timeUpRef = useRef<() => void>(() => {});
   const timerRef = useRef<any>(null);
 
   const [knownMap, setKnownMap] = useState<Record<string, number>>({});
@@ -726,7 +722,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setFaShown(false);
   }, [activeMode, isFlashConfigured]);
 
-  // Reset timer when question changes
   useEffect(() => {
     if (!activeMode) return;
     const cfg = getTimerCfg(settings);
@@ -738,7 +733,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           if (prev === null) return null;
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            timeUpRef.current();
             return 0;
           }
           return prev - 1;
@@ -752,7 +746,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     };
   }, [currentIndex, activeMode]);
 
-  // If no active mode, render Exercise selection tabs (Phase 2 requirement)
   if (!activeMode) {
     const modes = Object.keys(EXERCISE_NAMES) as ExerciseMode[];
     const filteredModes = modes.filter(m => EXERCISE_CATEGORIES[m] === exerciseTab);
@@ -764,7 +757,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           <p className="text-slate-600 dark:text-slate-400 text-sm">تمرین دلخواه خود را برای یادگیری و مرور واژگان یا دستور زبان انتخاب کنید</p>
         </div>
 
-        {/* Exercise Category Tabs */}
         <div className="flex border-b border-slate-200 dark:border-slate-800 rtl:space-x-reverse justify-center" role="tablist">
           <button
             role="tab"
@@ -792,7 +784,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </button>
         </div>
 
-        {/* Exercise Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredModes.map(mode => {
             const info = EXERCISE_NAMES[mode];
@@ -818,7 +809,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // Flashcard setup modal if not configured
   if (activeMode === 'flash' && !isFlashConfigured) {
     return (
       <div className="max-w-md mx-auto p-6 bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl space-y-5 text-right mt-10">
@@ -864,7 +854,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // Free review setup modal if not started
   if (activeMode === 'free' && !isFreeStarted) {
     return (
       <div className="max-w-md mx-auto p-6 bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl space-y-5 text-right mt-10">
@@ -902,7 +891,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // Empty queue check
   if (queue.length === 0) {
     return (
       <div className="max-w-md mx-auto p-8 bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl text-center space-y-4 mt-10">
@@ -919,7 +907,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // End of session review check
   if (currentIndex >= queue.length) {
     return (
       <div className="max-w-md mx-auto p-8 bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl text-center space-y-4 mt-10">
@@ -940,9 +927,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   const currentWord = words.find(w => w.id === currentKey) || words[0];
 
+  const handleNextWord = (grade: number) => {
+    record(currentWord, qMode || activeMode, grade);
+    setCurrentIndex(prev => prev + 1);
+    setRevealedCardId(null);
+    setUserInput('');
+    setCasePrepInput('');
+    setCaseArtInput('');
+    setCaseResult(null);
+    setAnswerResult(null);
+    setHintLevel(0);
+    setFaShown(false);
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4 text-right">
-      {/* Standardized Exercise Header with Far-Left Exit and Question Mark Help */}
       <div className="flex items-center justify-between bg-white dark:bg-[#141923] p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
         <button
           onClick={() => onSelectMode(null)}
@@ -964,7 +963,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </button>
       </div>
 
-      {/* Progress & Timer Bar */}
       <div className="flex items-center justify-between px-2 text-xs font-semibold text-slate-500">
         <span>سوال {currentIndex + 1} از {queue.length}</span>
         {timeLeft !== null && (
@@ -974,14 +972,46 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         )}
       </div>
 
-      {/* Active Exercise Content Body */}
       <div className="bg-white dark:bg-[#141923] p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-        <div className="text-center font-sans text-xl font-bold" dir="ltr">
-          {currentWord?.de || '—'}
-        </div>
+        {activeMode === 'sent' ? (
+          <SentencePractice
+            w={currentWord}
+            faVisible={faShown}
+            faButton={
+              <button onClick={() => setFaShown(true)} className="text-xs text-slate-400 hover:text-[#1f5fbf] underline">
+                نمایش ترجمه فارسی
+              </button>
+            }
+            timeUpSignal={sentTimeUp}
+            onGraded={g => record(currentWord, 'sent', g)}
+            onNext={() => handleNextWord(2)}
+          />
+        ) : (
+          <div className="space-y-4 text-center">
+            <div className="text-2xl font-bold font-sans" dir="ltr">
+              {currentWord?.de || '—'}
+            </div>
+            <div className="text-slate-600 dark:text-slate-300 text-base">
+              {currentWord?.fa || ''}
+            </div>
+            <div className="flex gap-2 justify-center pt-4">
+              <button
+                onClick={() => handleNextWord(1)}
+                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-sm"
+              >
+                سخت بود
+              </button>
+              <button
+                onClick={() => handleNextWord(3)}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm"
+              >
+                بلد بودم
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Profile Modal if triggered */}
       {profileModalWord && (
         <WordDetailModal
           word={profileModalWord}
