@@ -1,5 +1,7 @@
+import { fixLexList, fixPlural, isNounEntry, lcFirst, normalizeConj, validateConjTable } from './german';
 import { Word } from '../types';
 import { norm, matchCat } from './storage';
+import { AiError, describeAiError, generateText, getActiveProvider, getModel, hasApiKey } from './aiProvider';
 
 export const BASE_CATEGORIES = [
   'ارتباطات (Kommunikation)',
@@ -453,9 +455,15 @@ export function aiFix(r: any): any {
   }
   // Normalize lexical German fields to lowercase initial letters where appropriate.
   // Keep the headword (de), nouns, sentence beginnings, and formal imperative capitalization intact.
-  for (const k of ['syn', 'ant', 'pl', 'conj', 'prat', 'perf', 'sep', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr']) {
-    if (typeof r[k] === 'string' && r[k]) r[k] = r[k].charAt(0).toLocaleLowerCase('de') + r[k].slice(1);
+  for (const k of ['prat', 'perf', 'sep', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr']) {
+    if (typeof r[k] === 'string' && r[k]) r[k] = lcFirst(r[k]);
   }
+  // Nouns keep their capital letters (also in synonyms, antonyms and the plural); articles stay with the noun
+  const nounWord = isNounEntry(r);
+  if (r.syn) r.syn = fixLexList(r.syn, nounWord);
+  if (r.ant) r.ant = fixLexList(r.ant, nounWord);
+  if (r.pl && nounWord) r.pl = fixPlural(r.pl);
+  if (r.conj) r.conj = normalizeConj(r.conj);
   if (r.cloze) r.cloze = r.cloze.replace(/_{3,}/g, '_____');
   if (!/_____/.test(r.cloze || '')) {
     r.cloze = '';
@@ -506,6 +514,8 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
 
     const w = norm(r);
     if (w) {
+      const cv = validateConjTable(w.conj, w.de, w.sep);
+      if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
       if (suggestedNewCat) {
         w.suggestedNewCat = suggestedNewCat;
       }
@@ -515,56 +525,20 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
   return { ws, errs };
 }
 
+/**
+ * Generates text with the ACTIVE AI provider (Gemini, Groq or OpenRouter, see aiProvider.ts).
+ * The historical name is kept so that every existing caller keeps working.
+ */
 export async function generateWithGemini(
   prompt: string,
   options?: { timeoutMs?: number; model?: string; retries?: number }
 ): Promise<string> {
-  const timeoutMs = options?.timeoutMs || 25000;
-  const maxRetries = options?.retries ?? 1;
-  const model = options?.model || 'gemini-3.1-flash-lite';
-
-  let lastError: any = null;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const res = await fetch('/api/gemini/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          prompt,
-          model,
-          responseMimeType: 'application/json'
-        })
-      });
-
-      clearTimeout(timeoutId);
-
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((j && j.error) || `خطای ارتباط با سرور هوش مصنوعی (${res.status})`);
-      }
-
-      const text = j.text || '';
-      if (!text) throw new Error('پاسخ خالی از هوش مصنوعی دریافت شد.');
-      return text;
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      const isAbort = err.name === 'AbortError' || /aborted/i.test(err.message || '');
-      lastError = isAbort
-        ? new Error('زمان انتظار برای دریافت پاسخ هوش مصنوعی به پایان رسید (تایم‌اوت). لطفاً دوباره تلاش کنید.')
-        : err;
-
-      if (attempt < maxRetries) {
-        // Short pause before retry
-        await new Promise(r => setTimeout(r, 600));
-      }
-    }
-  }
-
-  throw lastError || new Error('خطا در پردازش هوش مصنوعی.');
+  return generateText(prompt, {
+    json: true,
+    timeoutMs: options?.timeoutMs || 25000,
+    retries: options?.retries ?? 1,
+    model: options?.model
+  });
 }
 
 export interface SpellResult {
@@ -616,33 +590,22 @@ ${chunk.map((x, n) => `${n + 1}. ${x}`).join('\n')}`;
 export async function quickTranslateWithGemini(
   text: string
 ): Promise<{ de: string; art?: string; fa: string; pos?: string; lvl?: string }> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
-
-  try {
-    const res = await fetch('/api/gemini/quick-translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({ text })
-    });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j.error || `خطا در ترجمه (${res.status})`);
-    }
-
-    const data = await res.json();
-    return data;
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    const isAbort = err.name === 'AbortError' || /aborted/i.test(err.message || '');
-    if (isAbort) {
-      throw new Error('زمان ترجمهٔ سریع به پایان رسید. دوباره تلاش کنید.');
-    }
-    throw err;
-  }
+  const t = String(text || '').trim();
+  if (!t) throw new Error('کلمه یا عبارت برای ترجمه الزامی است.');
+  const prompt = `You are a German-Persian dictionary assistant. Translate the following German word/phrase into natural, accurate Persian.
+Input: "${t.replace(/"/g, "'")}"
+Return ONLY a JSON object (no Markdown, no commentary) with this exact shape:
+{
+  "de": "the German word",
+  "art": "der" or "die" or "das" or "",
+  "fa": "Persian translation",
+  "pos": "اسم" or "فعل" or "صفت" or "قید" or "اصطلاح",
+  "lvl": "A1" or "A2" or "B1" or "B2" or "C1"
+}`;
+  const out = await generateText(prompt, { json: true, timeoutMs: 15000, retries: 1 });
+  const parsed = parseAI(out)[0];
+  if (!parsed || typeof parsed !== 'object') throw new Error('پاسخ ترجمه معتبر نبود.');
+  return parsed;
 }
 
 export async function processBatchWordsWithGemini(
@@ -679,67 +642,29 @@ export async function processBatchWordsWithGemini(
       allWords.push(...ws);
       allErrs.push(...errs);
     } catch (e: any) {
-      allErrs.push(`خطا در پردازش دسته ${i + 1}: ${e.message || 'ناموفق'}`);
+      if (e instanceof AiError && ['quota', 'auth', 'no_key', 'model'].includes(e.kind)) {
+        // A definitive answer (quota exhausted, bad key, unknown model): do not hammer the provider with the remaining batches
+        allErrs.push(`${describeAiError(e)} (پردازش ${i + 1} تا ${chunks.length} متوقف شد؛ ${allWords.length} واژه تکمیل شده بود)`);
+        break;
+      }
+      allErrs.push(`خطا در پردازش دسته ${i + 1}: ${describeAiError(e)}`);
     }
   }
 
   return { ws: allWords, errs: allErrs };
 }
 
+/** Streaming is not required by the app: the full answer is delivered as one chunk. */
 export async function generateStreamWithGemini(
   prompt: string,
   onChunk: (chunk: string) => void
 ): Promise<string> {
-  const res = await fetch('/api/gemini/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      model: 'gemini-3.8-flash'
-    })
-  });
-
-  if (!res.ok || !res.body) {
-    const j = await res.json().catch(() => ({}));
-    throw new Error((j && j.error) || `خطای استریم هوش مصنوعی (${res.status})`);
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let fullText = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split('\n');
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.text) {
-            fullText += parsed.text;
-            onChunk(parsed.text);
-          }
-          if (parsed.error) {
-            throw new Error(parsed.error);
-          }
-        } catch (e: any) {
-          if (e.message && e.message !== 'Unexpected end of JSON input') {
-            console.error(e);
-          }
-        }
-      }
-    }
-  }
-
-  return fullText;
+  const text = await generateText(prompt, { timeoutMs: 60000 });
+  onChunk(text);
+  return text;
 }
 
 export async function checkServerAiStatus(): Promise<{ ok: boolean; hasKey: boolean; model: string }> {
-  const res = await fetch('/api/gemini/status');
-  if (!res.ok) throw new Error(`خطای بررسی وضعیت سرور (${res.status})`);
-  return res.json();
+  const p = getActiveProvider();
+  return { ok: true, hasKey: hasApiKey(p), model: getModel(p) };
 }
