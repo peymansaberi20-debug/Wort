@@ -287,23 +287,19 @@ lvl
 The CEFR level: A1, A2, B1, B2, C1, or C2.
 
 ex
-def
-A short German definition of the headword written at B1–B2 level, covering the most common everyday meaning first (for polysemous words). Use simple German words. Use "" only if no meaningful definition is possible.
+A short German DEFINITION of the headword itself (Bedeutung) at B1–B2 level, in simple German, covering the most common everyday meaning first for polysemous words. Not an example sentence.
 
-ex
-A natural German example sentence illustrating the intended meaning.
 exFa
-A natural Persian translation of ex.
+A natural Persian translation of the definition in ex.
 
 ex2
-A second German example sentence differing meaningfully from ex.
+One practical A1–A2 everyday example sentence or common spoken expression (Redemittel) that really contains the headword (or a natural inflected form), usable in daily life. Short and natural.
 
 ex2Fa
 A natural Persian translation of ex2.
 
 cloze
-A fill-in-the-blank version of the first German example sentence.
-* Replace the target word or expression with _____.
+A fill-in-the-blank version of ex2 (the practical example), not of the definition.* Replace the target word or expression with _____.
 * For a noun, hide both the article and noun together.
 * For a verb, hide the conjugated form appearing in the sentence.
 
@@ -408,12 +404,11 @@ Output MUST be a JSON array containing exactly one object with these exact field
 9. "pos": "اسم" | "فعل" | "صفت" | "قید" | "حرف اضافه" | "اصطلاح"
 10. "lvl": "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
 11. "cat": ${catRule}
-12. "ex": A natural, grammatically correct German example sentence at CEFR level A1–A2. Use simple sentence structure, common everyday vocabulary, and a clear context that demonstrates the target word's meaning.
-13. "exFa": An accurate, natural Persian translation of ex.
-14. "ex2": A natural, grammatically correct German example sentence at CEFR level B1–B2. Use more varied sentence structures, richer vocabulary, and a realistic context appropriate for an intermediate learner. The sentence must clearly demonstrate the target word's meaning.
-15. "ex2Fa": An accurate, natural Persian translation of ex2.
-16. "cloze": German sentence where target word/expression is replaced with _____
-17. "ans": the exact answer to fill cloze
+12. "ex": a German DEFINITION of the word itself (Bedeutung), written at CEFR B1–B2 level, one or two sentences, in simple German. For polysemous words, define the most common everyday meaning first. Do NOT write an example sentence here.
+13. "exFa": an accurate natural Persian translation of the definition in ex.
+14. "ex2": ONE practical A1–A2 everyday example sentence or common spoken expression (Redemittel) that really contains the word (or a natural conjugated form), so the learner can use it in real life. Keep it short and natural.
+15. "ex2Fa": an accurate natural Persian translation of ex2.
+16. "cloze": the ex2 sentence where the target word/expression is replaced with _____17. "ans": the exact answer to fill cloze
 18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb)
 19. "prat": for verbs, 3rd person singular Präteritum (e.g. "ging") or ""
 20. "perf": for verbs, 3rd person singular Perfekt (e.g. "ist gegangen" / "hat gemacht") or ""
@@ -423,7 +418,6 @@ Output MUST be a JSON array containing exactly one object with these exact field
 24. "imperativIhr": informal plural imperative (e.g. "geht!") for verbs or ""
 25. "imperativSie": formal imperative (e.g. "Gehen Sie!") for verbs or ""
 26. "sep": for separable verbs, prefix (e.g. "auf") or ""
-27. "def": a German definition of the word at CEFR B1–B2 level — define the word IN SIMPLE GERMAN (one or two sentences), most common everyday meaning first for polysemous words. Use "" only if impossible.
 22. "notes": multiline string with exact format:
 خانواده واژگانی: اسم: ... | فعل مرتبط: ... | صفت مرتبط: ...
 ساختار: حرف اضافه یا حالت دستوری...
