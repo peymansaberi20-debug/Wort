@@ -188,6 +188,18 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         return a.due - b.due;
       });
   }, [words, searchQuery, filterArt, filterStatus, sortBy]);
+  // Phase 3: search found nothing → offer the existing creation workflow
+  const noResults = !!searchQuery.trim() && filteredWords.length === 0;
+  const addFromSearch = () => {
+    const q = searchQuery.trim();
+    const m = /^(der|die|das)\s+(.+)$/i.exec(q);
+    resetForm();
+    setFormArt(m ? m[1].toLowerCase() : '');
+    setFormDe(m ? m[2] : q);
+    setIsFormOpen(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    onShowToast('فرم باز شد؛ واژهٔ جستجوشده پیش‌پر شد.', false);
+  };
 
   // Group by category
   const wordsByCategory = useMemo(() => {
