@@ -287,8 +287,11 @@ lvl
 The CEFR level: A1, A2, B1, B2, C1, or C2.
 
 ex
-A natural German example sentence illustrating the intended meaning.
+def
+A short German definition of the headword written at B1–B2 level, covering the most common everyday meaning first (for polysemous words). Use simple German words. Use "" only if no meaningful definition is possible.
 
+ex
+A natural German example sentence illustrating the intended meaning.
 exFa
 A natural Persian translation of ex.
 
@@ -420,6 +423,7 @@ Output MUST be a JSON array containing exactly one object with these exact field
 24. "imperativIhr": informal plural imperative (e.g. "geht!") for verbs or ""
 25. "imperativSie": formal imperative (e.g. "Gehen Sie!") for verbs or ""
 26. "sep": for separable verbs, prefix (e.g. "auf") or ""
+27. "def": a German definition of the word at CEFR B1–B2 level — define the word IN SIMPLE GERMAN (one or two sentences), most common everyday meaning first for polysemous words. Use "" only if impossible.
 22. "notes": multiline string with exact format:
 خانواده واژگانی: اسم: ... | فعل مرتبط: ... | صفت مرتبط: ...
 ساختار: حرف اضافه یا حالت دستوری...
