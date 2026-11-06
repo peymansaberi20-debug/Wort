@@ -519,6 +519,7 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
 
     const w = norm(r);
     if (w) {
+      if (typeof r.def === 'string' && r.def.trim()) w.def = r.def.trim();
       const cv = validateConjTable(w.conj, w.de, w.sep);
       if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
       if (suggestedNewCat) {
