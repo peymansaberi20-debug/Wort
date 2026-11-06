@@ -124,7 +124,7 @@ const storedArt = artM ? artM[1].toLowerCase() : '';
 const plRaw = (artM ? artM[2] : raw).trim();
 const sg = (word.de || '').trim();
 if (!plRaw || !sg) return null;
-const pre = storedArt || 'die';
+const pre = (storedArt || 'die') + '\u00a0';
 
 // plural of a German noun always starts with a capital letter
 const pl = plRaw.charAt(0).toLocaleUpperCase('de') + plRaw.slice(1);
@@ -166,7 +166,7 @@ const seg = pluralSegments2();
     if (!seg) return null;
     return (
       <div className="mt-2 inline-flex items-center gap-2 bg-[#eef2fb] dark:bg-[#182234] border border-[#c9d6f2] dark:border-[#2c3a55] rounded-xl px-3 py-1.5" dir="ltr">
-        <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] uppercase tracking-wide">Pl.</span>
+        <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] uppercase tracking-wide">Pl. </span>
         <span className="font-sans font-extrabold text-lg text-slate-900 dark:text-slate-100">
           {seg.pre && <span className="text-[#5d6676] dark:text-[#a3adbd] font-bold">{seg.pre}</span>}
           {seg.parts.map((p, i) =>
@@ -346,7 +346,6 @@ const seg = pluralSegments2();
 
           {/* Phase 3: plural form shown prominently beneath the word */}
           {renderPluralBlock()}
-
           {/* Translation with toggle or reveal */}
           <div className="mt-2 text-center" dir="rtl">
             {showFa && word.fa ? (
