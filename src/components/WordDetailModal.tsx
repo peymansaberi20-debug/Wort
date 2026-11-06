@@ -73,6 +73,64 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
     );
   };
 
+    // ---------- Phase 3: plural display with highlighted endings ----------
+  const UMLAUT_PAIRS: Record<string, string> = { a: 'ä', o: 'ö', u: 'ü', A: 'Ä', O: 'Ö', U: 'Ü' };
+
+  const pluralSegments = (): { pre: string; parts: { t: 'n' | 'r'; s: string }[] } | null => {
+    if (!word || !word.pl) return null;
+    const raw = word.pl.trim();
+    const m = /^die\s+(.+)$/i.exec(raw);
+    const article = m ? 'die ' : '';
+    const pl = (m ? m[1] : raw).trim();
+    const sg = (word.de || '').trim();
+    if (!pl || !sg) return null;
+
+    if (pl.toLocaleLowerCase('de') === sg.toLocaleLowerCase('de')) {
+      return { pre: article, parts: [{ t: 'n', s: pl }] };
+    }
+    if (pl.length > sg.length && pl.slice(0, sg.length) === sg) {
+      return { pre: article, parts: [{ t: 'n', s: sg }, { t: 'r', s: pl.slice(sg.length) }] };
+    }
+    for (let i = 0; i < Math.min(sg.length, pl.length); i++) {
+      const uml = UMLAUT_PAIRS[sg[i]];
+      if (uml && pl[i] === uml) {
+        const pre = sg.slice(0, i);
+        const post = sg.slice(i + 1);
+        const rest = pl.slice(i + 1);
+        if (pl.slice(0, i) === pre && rest.startsWith(post)) {
+          const ending = rest.slice(post.length);
+          const parts: { t: 'n' | 'r'; s: string }[] = [];
+          if (pre) parts.push({ t: 'n', s: pre });
+          parts.push({ t: 'r', s: uml });
+          if (post) parts.push({ t: 'n', s: post });
+          if (ending) parts.push({ t: 'r', s: ending });
+          return { pre: article, parts };
+        }
+      }
+    }
+    return { pre: article, parts: [{ t: 'n', s: pl }] };
+  };
+
+  const renderPluralBlock = () => {
+    const seg = pluralSegments();
+    if (!seg) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-2 bg-[#eef2fb] dark:bg-[#182234] border border-[#c9d6f2] dark:border-[#2c3a55] rounded-xl px-3 py-1.5" dir="ltr">
+        <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] uppercase tracking-wide">Plural</span>
+        <span className="font-sans font-extrabold text-lg text-slate-900 dark:text-slate-100">
+          {seg.pre && <span className="text-[#5d6676] dark:text-[#a3adbd] font-bold">{seg.pre}</span>}
+          {seg.parts.map((p, i) =>
+            p.t === 'r' ? (
+              <span key={i} className="text-red-600 dark:text-red-400">{p.s}</span>
+            ) : (
+              <span key={i}>{p.s}</span>
+            )
+          )}
+        </span>
+      </div>
+    );
+  };
+
   // Verb tables builder
   const renderVerbTable = () => {
     if (!word.conj && !word.prat && !word.perf && !word.imperativDu && !word.imperativIhr && !word.imperativSie) return null;
@@ -235,6 +293,9 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
               🔊
             </button>
           </div>
+
+          {/* Phase 3: plural form shown prominently beneath the word */}
+          {renderPluralBlock()}
 
           {/* Translation with toggle or reveal */}
           <div className="mt-2 text-center" dir="rtl">
