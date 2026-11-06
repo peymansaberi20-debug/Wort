@@ -1,15 +1,8 @@
-import { applyGermanQuality } from '../utils/german';
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, checkGermanSpelling } from '../utils/ai';
-import type { SpellResult } from '../utils/ai';
+import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
-import { ImportConflictDialog } from '../components/ImportConflictDialog';
-import { copyText } from '../utils/clipboard';
-import { lcFirst, ucFirst } from './../utils/german';
-import { describeAiError } from '../utils/aiProvider';
-import { Conflict } from '../utils/vocabMerge';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -49,8 +42,6 @@ interface VocabularyViewProps {
   onOpenDuplicateDetector?: () => void;
   onOpenHelp: (topic: string) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
-  /** Updates an existing word with imported data (identity, category and progress are kept). */
-  onUpdateExistingWord?: (id: string, incoming: Word, updateCategory?: boolean) => void;
 }
 
 export const VocabularyView: React.FC<VocabularyViewProps> = ({
@@ -65,11 +56,8 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   onOpenWordManager,
   onOpenDuplicateDetector,
   onOpenHelp,
-  onShowToast,
-  onUpdateExistingWord
+  onShowToast
 }) => {
-  // Imported single word that already exists: waits for the user's decision
-  const [importConflict, setImportConflict] = useState<Conflict | null>(null);
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [filterArt, setFilterArt] = useState('');
@@ -200,21 +188,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         return a.due - b.due;
       });
   }, [words, searchQuery, filterArt, filterStatus, sortBy]);
-  
-  // Phase 3: search found nothing → offer the existing creation workflow 
-  const noResults = !!searchQuery.trim() && filteredWords.length === 0; 
-  const addFromSearch = () => {
-const q = searchQuery.trim();
-const m = /^(der|die|das)\s+(.+)$/i.exec(q);
-resetForm();
-setFormArt(m ? m[1].toLowerCase() : '');
-setFormDe(m ? m[2] : q);
-setIsFormOpen(true);
-window.scrollTo({ top: 0, behavior: 'smooth' });
-onShowToast('فرم باز شد؛ واژهٔ جستجوشده پیش‌پر شد — بقیهٔ فیلدها را تکمیل یا با هوش مصنوعی کامل کن.', false);
-};
-    onShowToast('فرم افزودن واژه باز شد؛ واژهٔ جستجوشده را وارد کنید.', false);
-  };
 
   // Group by category
   const wordsByCategory = useMemo(() => {
@@ -275,62 +248,8 @@ onShowToast('فرم باز شد؛ واژهٔ جستجوشده پیش‌پر شد
     setIsFormOpen(false);
   };
 
-  // Persian-first entry: Persian word typed, German field empty -> 3-4 German candidates, the user picks one,
-  // and only then the full profile of that exact word/meaning is completed.
-  const suggestGermanFromPersian = async () => {
-    const fa = formFa.trim();
-    aiOperationRef.current = true;
-    setAiLoading(true);
-    try {
-      const prompt = `You are a careful German-Persian dictionary. The learner knows this Persian word or expression: "${fa.replace(/"/g, "'")}".
-Give 3 or 4 plausible German equivalents, best first. Cover different meanings, registers or word types when they exist. Do not invent words.
-Return ONLY a JSON array (no Markdown, no commentary) of objects:
-{"de":"German headword without article","art":"der|die|das or empty","pos":"اسم|فعل|صفت|قید|اصطلاح","fa":"short Persian meaning of THIS German word","note":"very short Persian note about usage or register"}
-Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs lower-case; keep umlauts and ß.`;
-      const text = await generateWithGemini(prompt, { timeoutMs: 20000, retries: 1 });
-      const seen = new Set<string>();
-      const list = parseAI(text)
-        .filter((c: any) => c && typeof c.de === 'string' && c.de.trim())
-        .map((c: any) => {
-          const art = ['der', 'die', 'das'].includes(String(c.art || '').toLowerCase()) ? String(c.art).toLowerCase() : '';
-          const noun = !!art || /اسم/.test(String(c.pos || ''));
-          const de = noun ? ucFirst(c.de.trim()) : lcFirst(c.de.trim());
-          return { de, art, fa: String(c.fa || '').trim(), note: String(c.note || '').trim() };
-        })
-        .filter((c: any) => {
-          const k = `${c.art} ${c.de}`.toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        })
-        .slice(0, 4);
-      if (list.length === 0) {
-        onShowToast('معادل آلمانی مناسبی پیشنهاد نشد. عبارت فارسی را دقیق‌تر بنویسید یا کلمهٔ آلمانی را خودتان وارد کنید.', true);
-        return;
-      }
-      setAiChoicePrompt({
-        title: 'معادل آلمانی را انتخاب کنید',
-        message: `برای «${fa}» این معادل‌ها پیشنهاد شد. یکی را انتخاب کنید؛ فقط بعد از انتخاب شما مشخصات کامل تکمیل می‌شود.`,
-        options: list.map((c: any) => ({
-          label: `${c.art ? c.art + ' ' : ''}${c.de}${c.fa ? ' — ' + c.fa : ''}${c.note ? ' (' + c.note + ')' : ''}`,
-          target: c.de,
-          instruction: `The learner's Persian input is "${fa}". The selected German equivalent is "${c.art ? c.art + ' ' : ''}${c.de}"${c.fa ? `, in the sense "${c.fa}"` : ''}. Complete the entire vocabulary profile for exactly this word and this meaning; the Persian translation (fa) must express this sense.`
-        }))
-      });
-    } catch (e: any) {
-      onShowToast(describeAiError(e), true);
-    } finally {
-      aiOperationRef.current = false;
-      setAiLoading(false);
-    }
-  };
-
   const handleAiAutoFill = async (choice?: { target: string; instruction: string }) => {
     if (aiOperationRef.current) return;
-    if (!choice && !formDe.trim() && formFa.trim()) {
-      await suggestGermanFromPersian();
-      return;
-    }
     if (!choice) {
       const raw = formDe.trim();
       const lower = raw.toLocaleLowerCase('de').replace(/[.!?]+$/, '');
@@ -384,35 +303,6 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
           option(knownLemma ? `پروفایل فعل پایه «${knownLemma}» را بساز` : 'مصدر فعل را با کمک هوش مصنوعی تشخیص بده', knownLemma || raw, baseInstruction + (knownLemma ? '' : ' پس از دریافت پاسخ، فیلد ورودی را نیز با مصدر خروجی جایگزین کن.'))
         ] });
         return;
-      }
-
-      // Spelling check: suggest the right spelling, or say that no such word exists
-      if (raw && !checkForDuplicate(raw)) {
-        aiOperationRef.current = true;
-        setAiLoading(true);
-        let spell: SpellResult | undefined;
-        try {
-          spell = (await checkGermanSpelling([raw]))[raw];
-        } finally {
-          aiOperationRef.current = false;
-          setAiLoading(false);
-        }
-        if (spell?.status === 'invalid') {
-          onShowToast(`«${raw}» چنین لغتی در زبان آلمانی وجود ندارد؛ املای آن را بررسی کنید.`, true);
-          return;
-        }
-        if (spell?.status === 'corrected' && spell.suggestion && spell.suggestion.toLowerCase() !== raw.toLowerCase()) {
-          const sug = spell.suggestion;
-          setAiChoicePrompt({
-            title: 'املای این واژه احتمالاً اشتباه است',
-            message: `«${raw}» در زبان آلمانی به این شکل نیست. منظور شما «${sug}» است؟`,
-            options: [
-              { label: `✔ بله، «${sug}»`, target: sug, instruction: `املای ورودی کاربر اصلاح شد؛ واژهٔ درست «${sug}» است. فیلد ورودی را نیز با مصدر خروجی جایگزین کن.` },
-              { label: `نه، همین «${raw}» را نگه دار`, target: raw, instruction: `کاربر تأیید کرد که همین املا «${raw}» را می‌خواهد؛ آن را بدون تغییر املا پردازش کن.` }
-            ]
-          });
-          return;
-        }
       }
     }
     if (!formDe.trim()) {
@@ -524,12 +414,6 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
       }
       if (ws.length > 0) {
         const item = ws[0];
-        // The word already exists: ask (update / keep / cancel) instead of refusing
-        const dup = findExistingDuplicate(item.de, item.art || '', wordsRef.current, editingWordId);
-        if (dup) {
-          setImportConflict({ incoming: item, existing: dup });
-          return;
-        }
         if (item.de) setFormDe(item.de);
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
@@ -570,11 +454,11 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
       return;
     }
-    // no network request: the prompt is only built and copied (works without any API key or quota)
-    if (await copyText(AIP(formDe.trim(), words))) {
+    try {
+      await navigator.clipboard.writeText(AIP(formDe.trim(), words));
       onShowToast('دستور با موفقیت کپی شد. می‌توانید در ChatGPT یا Claude بچسبانید.');
-    } else {
-      onShowToast('کپی در کلیپ‌بورد ممکن نشد؛ مرورگر اجازهٔ کپی نمی‌دهد.', true);
+    } catch (e) {
+      onShowToast('کپی در کلیپ‌بورد ممکن نشد.', true);
     }
   };
 
@@ -595,7 +479,7 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
     }
 
     onSaveWord(
-      applyGermanQuality({
+      {
         de: formDe.trim(),
         art: formArt,
         fa: formFa.trim(),
@@ -625,33 +509,15 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
         tags: formTags.trim(),
         notes: formNotes.trim(),
         img: formImg
-      }),
+      },
       isEditing
     );
     setDuplicateWord(null);
     resetForm();
   };
+
   return (
     <div className="space-y-4 text-right">
-      {/* Phase 3: empty-search suggestion — opens the existing creation workflow */}
-{noResults && (
-<div className="mb-3 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-sm">
-<div className="font-bold text-slate-800 dark:text-slate-100 mb-1">
-با این جستجو واژه‌ای یافت نشد.
-</div>
-<div className="text-[#5d6676] dark:text-[#a3adbd] mb-2">
-«{searchQuery.trim()}» در واژگان شما نیست — می‌توانی همین حالا اضافه‌اش کنی (تکمیل دستی یا با هوش مصنوعی در فرم).
-</div>
-<button
-type="button"
-onClick={addFromSearch}
-className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold"
->
-➕ افزودن «{searchQuery.trim()}»
-</button>
-</div>
-)}
-
       {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
         <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4 animate-fadeIn">
@@ -708,33 +574,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             />
           </div>
 
-          <div className="bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 -mt-1">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-extrabold text-slate-800 dark:text-slate-200">ترجمهٔ فارسی (الزامی):</label>
-              <button
-                type="button"
-                onClick={handleQuickTranslate}
-                disabled={translateLoading || !formDe.trim()}
-                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition"
-              >
-                {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
-              </button>
-            </div>
-            <input
-              type="text"
-              dir="rtl"
-              placeholder="معنی دقیق فارسی — اگر کلمهٔ آلمانی را نمی‌دانید، فقط این را بنویسید"
-              value={formFa}
-              onChange={e => setFormFa(e.target.value)}
-              className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none"
-            />
-            {!formDe.trim() && formFa.trim() && (
-              <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] mt-1.5">
-                کلمهٔ آلمانی خالی است: دکمهٔ «پیشنهاد معادل آلمانی» چند معادل نشان می‌دهد و بعد از انتخاب شما، مشخصات کامل تکمیل می‌شود.
-              </p>
-            )}
-          </div>
-
           {duplicateWord && (
             <div role="alert" className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
               <div className="font-extrabold text-amber-900 dark:text-amber-200">
@@ -770,7 +609,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               <button
                 type="button"
                 onClick={() => void handleAiAutoFill()}
-                disabled={aiLoading || translateLoading || (!formDe.trim() && !formFa.trim())}
+                disabled={aiLoading || translateLoading || !formDe.trim()}
                 className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
               >
                 {aiLoading ? (
@@ -779,7 +618,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                     <span>در حال تکمیل ۲۲ فیلد...</span>
                   </>
                 ) : (
-                  <span>{isEditing ? '🔄 بروزرسانی خودکار کل واژه' : !formDe.trim() && formFa.trim() ? '🔎 پیشنهاد معادل آلمانی' : '✨ تکمیل خودکار کل واژه (۲۲ پارامتر)'}</span>
+                  <span>✨ تکمیل خودکار کل واژه (۲۲ پارامتر)</span>
                 )}
               </button>
               <button
@@ -871,6 +710,28 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                   className="mt-1.5 w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-1.5 outline-none"
                 />
               )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold">ترجمهٔ فارسی (الزامی):</label>
+                <button
+                  type="button"
+                  onClick={handleQuickTranslate}
+                  disabled={translateLoading || !formDe.trim()}
+                  className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition flex items-center gap-1"
+                >
+                  {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
+                </button>
+              </div>
+              <input
+                type="text"
+                dir="rtl"
+                placeholder="معنی دقیق فارسی"
+                value={formFa}
+                onChange={e => setFormFa(e.target.value)}
+                className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none"
+              />
             </div>
 
             <div>
@@ -1174,7 +1035,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         </div>
       </div>
 
-{/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
+      {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
       <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
