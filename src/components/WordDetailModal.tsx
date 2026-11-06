@@ -379,7 +379,6 @@ const seg = pluralSegments2();
             )}
             {word.pl && (
               <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium" dir="ltr">
-                
               </span>
             )}
             {isLeech(word) && (
