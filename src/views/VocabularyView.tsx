@@ -530,7 +530,25 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 
   return (
     <div className="space-y-4 text-right">
-      {/* Add / Edit Word Form Accordion */}
+      {/* Phase 3: empty-search suggestion — opens the existing creation workflow */}
+{noResults && (
+<div className="mb-3 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-sm">
+<div className="font-bold text-slate-800 dark:text-slate-100 mb-1">
+با این جستجو واژه‌ای یافت نشد.
+</div>
+<div className="text-[#5d6676] dark:text-[#a3adbd] mb-2">
+«{searchQuery.trim()}» در واژگان شما نیست — می‌توانی همین حالا اضافه‌اش کنی (تکمیل دستی یا با هوش مصنوعی در فرم).
+</div>
+<button
+type="button"
+onClick={addFromSearch}
+className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold"
+>
+➕ افزودن «{searchQuery.trim()}»
+</button>
+</div>
+)}
+{/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
         <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4 animate-fadeIn">
           <div className="flex items-center justify-between border-b pb-3">
