@@ -188,7 +188,35 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         return a.due - b.due;
       });
   }, [words, searchQuery, filterArt, filterStatus, sortBy]);
-  // Phase 3: search found nothing → offer the existing creation workflow
+  // Typo-tolerant suggestions from the user's own library
+const lev = (a: string, b: string): number => {
+const m = a.length, n = b.length;
+const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+for (let j = 0; j <= n; j++) d[0][j] = j;
+for (let i = 1; i <= m; i++)
+for (let j = 1; j <= n; j++)
+d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+return d[m][n];
+};
+const similarWords = useMemo(() => {
+const q = searchQuery.trim().toLowerCase().replace(/^(der|die|das)\s+/i, '');
+if (!q || q.length < 3) return [];
+return words
+.map(w => ({ w, d: lev(q, w.de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) }))
+.filter(x => x.d > 0 && x.d <= (q.length > 6 ? 3 : 2))
+.sort((a, b) => a.d - b.d)
+.slice(0, 5)
+.map(x => x.w);
+}, [words, searchQuery]);
+const addSimilar = (w: Word) => {
+resetForm();
+setFormArt(w.art || '');
+setFormDe(w.de || '');
+setIsFormOpen(true);
+window.scrollTo({ top: 0, behavior: 'smooth' });
+onShowToast('واژهٔ انتخابی در فرم گذاشته شد؛ تکمیل دستی یا با هوش مصنوعی.', false);
+};
+// Phase 3: search found nothing → offer the existing creation workflow
   const noResults = !!searchQuery.trim() && filteredWords.length === 0;
   const addFromSearch = () => {
     const q = searchQuery.trim();
@@ -539,6 +567,24 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 <div className="text-[#5d6676] dark:text-[#a3adbd] mb-2">
 «{searchQuery.trim()}» در واژگان شما نیست — می‌توانی همین حالا اضافه‌اش کنی (تکمیل دستی یا با هوش مصنوعی در فرم).
 </div>
+{similarWords.length > 0 && (
+<div className="mb-2">
+<div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">شاید منظورت یکی از این‌ها بود؟ (کلیک → در فرم گذاشته می‌شود)</div>
+<div className="flex flex-wrap gap-1.5">
+{similarWords.map(sw => (
+<button
+key={sw.id}
+type="button"
+onClick={() => addSimilar(sw)}
+className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl px-2.5 py-1 text-xs font-sans"
+dir="ltr"
+>
+{sw.art ? sw.art + ' ' : ''}{sw.de}
+</button>
+))}
+</div>
+</div>
+)}
 <button
 type="button"
 onClick={addFromSearch}
