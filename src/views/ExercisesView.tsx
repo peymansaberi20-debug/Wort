@@ -55,6 +55,10 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
  * The logic now lives in src/utils/conjugation.ts and is shared with the vocabulary profile.
  * Kept as an export for backward compatibility.
  */
+/** Two exercise-menu tabs: every exercise belongs to exactly one tab — nothing lost, nothing duplicated. */ 
+const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'dict', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
+const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl'];  
+
 export const HighlightedVerbForm: React.FC<{
   verb: string;
   form: string;
@@ -1291,6 +1295,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   };
 
   // ==========================================
+        
+  const [exTab, setExTab] = useState<'wortschatz' | 'grammatik'>('wortschatz');   
   // If NO active mode is selected: Show Menu
   // ==========================================
   if (!activeMode) {
@@ -1306,7 +1312,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </div>
 
         <div className="space-y-2.5">
-          {(Object.keys(EXERCISE_NAMES) as ExerciseMode[]).filter(mode => mode !== 'hard').map(mode => {
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setExTab('wortschatz')}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-xs' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] text-slate-600 dark:text-slate-300'}`}
+              >
+              📚 Wortschatz üben
+            </button>
+            <button
+              onClick={() => setExTab('grammatik')}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-xs' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] text-slate-600 dark:text-slate-300'}`}
+              >
+              🧩 Grammatik üben             
+            </button>
+          </div>
+          {(exTab === 'wortschatz' ? WORTSCHATZ_MODES : GRAMMATIK_MODES).map(mode => {
             const info = EXERCISE_NAMES[mode];
             return (
               <div
