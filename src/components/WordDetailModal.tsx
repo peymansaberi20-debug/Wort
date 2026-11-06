@@ -445,11 +445,11 @@ const seg = pluralSegments2();
           )}
           {(word.ex || word.ex2) && (
             <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 text-right">
-              <h4 className="font-bold text-sm text-[#5d6676] dark:text-[#a3adbd] mb-3">جملات مثال:</h4>
+              <h4 className="font-bold text-sm text-[#5d6676] dark:text-[#a3adbd] mb-3">📖 Bedeutung & Praxisbeispiel — تعریف آلمانی، بعد مثال کاربردی:</h4>
               <div className="space-y-4">
-                {word.ex && (
+                                {word.ex && (
                   <div className="border-b border-dashed border-[#dde1ea] dark:border-[#333b4a] pb-3 last:border-0 last:pb-0">
-                    <div className="flex items-start justify-between gap-2" dir="ltr">
+                    <div className="text-[10px] font-bold text-[#4338ca] dark:text-[#a5b4fc] mb-1">📖 Bedeutung — تعریف</div>                    <div className="flex items-start justify-between gap-2" dir="ltr">
                       <p className="text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 leading-relaxed text-left">
                         {word.ex}
                       </p>
