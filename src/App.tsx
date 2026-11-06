@@ -62,6 +62,7 @@ export default function App() {
   const [editingWordId, setEditingWordId] = useState<string | null>(null);
   // True while a word is edited from inside an exercise: the exercise stays alive (hidden) and is shown again afterwards
   const [exerciseSuspended, setExerciseSuspended] = useState(false);
+  const [exerciseHidden, setExerciseHidden] = useState(false);
   const [exerciseReturnTab, setExerciseReturnTab] = useState<NavTab>('dash');
 
   useEffect(() => {
@@ -139,6 +140,15 @@ export default function App() {
     setIsWordManagerOpen(false);
     setIsDuplicateModalOpen(false);
 
+        if (activeExercise) {
+      // Keep the running exercise alive: hide it instead of destroying it.
+      // Leaving the exercise happens only through the exercise's own exit action.
+      setExerciseHidden(tab !== 'prac');
+      setCurrentTab(tab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setExerciseHidden(false);
     setCurrentTab(tab);
     setActiveExercise(null);
     setPracticeWordIds(null);
@@ -540,15 +550,16 @@ export default function App() {
         {/* Dynamic Tab View */}
         <main className="min-w-0">
           {activeExercise && (
-            <div className={exerciseSuspended ? 'hidden' : ''}>
+            <div className={(exerciseSuspended || exerciseHidden) ? 'hidden' : ''}>
             <ExercisesView
-              paused={exerciseSuspended || !!activeHelpTopic}
+              paused={exerciseSuspended || exerciseHidden || !!activeHelpTopic}
               words={state.words}
               settings={state.set}
               activeMode={activeExercise}
               practiceWordIds={practiceWordIds}
               dailyProgress={state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 }}
               onSelectMode={mode => {
+                setExerciseHidden(false);
                 setActiveExercise(mode);
                 if (mode === null) setPracticeWordIds(null);
               }}
@@ -562,7 +573,7 @@ export default function App() {
             />
             </div>
           )}
-          {(!activeExercise || exerciseSuspended) && (
+          {(!activeExercise || exerciseSuspended || exerciseHidden) && (
             <>
               {currentTab === 'dash' && (
                 <DashboardView
@@ -570,6 +581,7 @@ export default function App() {
                   ignoredQualityIds={extData.ok || {}}
                   onNavigate={tab => {
                     if (tab === 'daily') {
+                      setExerciseHidden(false);
                       setActiveExercise('daily');
                     } else if (tab === 'prac') {
                       navigateToTab('prac');
@@ -584,6 +596,7 @@ export default function App() {
                         return;
                       }
                       setPracticeWordIds(hardIds);
+                      setExerciseHidden(false);
                       setActiveExercise('hard');
                       return;
                     }
@@ -597,6 +610,7 @@ export default function App() {
                         return;
                       }
                       setPracticeWordIds(dueIds);
+                      setExerciseHidden(false);
                       setActiveExercise('review');
                       return;
                     }
