@@ -1251,6 +1251,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
+        {/* Phase 3: German definition above the example */}
+        {w.def && (
+          <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-900 p-2.5 rounded-xl text-sm" dir="ltr">
+            <span className="text-[10px] font-bold text-[#4338ca] dark:text-[#a5b4fc] uppercase">Bedeutung: </span>
+            <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
+          </div>
+        )}
         {/* Example sentences - revealed ONLY when card is revealed (Section 11) */}
         {(w.ex || w.ex2) && (
           <div className="space-y-2 pt-1">
