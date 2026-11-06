@@ -631,7 +631,6 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
     setDuplicateWord(null);
     resetForm();
   };
-
   return (
     <div className="space-y-4 text-right">
       {/* Phase 3: empty-search suggestion — opens the existing creation workflow */}
