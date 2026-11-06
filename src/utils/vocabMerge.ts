@@ -10,7 +10,7 @@ import { findDuplicateWord } from './duplicates';
 const CONTENT_FIELDS: (keyof Word)[] = [
   'de', 'art', 'fa', 'syn', 'synFa', 'ant', 'antFa', 'pl', 'pos', 'lvl', 'ex', 'exFa', 'ex2', 'ex2Fa',
   'conj', 'prat', 'perf', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr', 'imperativSie',
-  'sep', 'cloze', 'ans', 'tags', 'notes'
+  'sep', 'cloze', 'ans', 'tags', 'notes', 'def'
 ];
 
 export const FIELD_LABELS: Record<string, string> = {
@@ -18,7 +18,7 @@ export const FIELD_LABELS: Record<string, string> = {
   antFa: 'ترجمهٔ متضاد', pl: 'جمع', pos: 'نوع کلمه', lvl: 'سطح', ex: 'مثال ۱', exFa: 'ترجمهٔ مثال ۱', ex2: 'مثال ۲',
   ex2Fa: 'ترجمهٔ مثال ۲', conj: 'صرف فعل', prat: 'Präteritum', perf: 'Perfekt', komparativ: 'Komparativ',
   superlativ: 'Superlativ', imperativDu: 'امر (du)', imperativIhr: 'امر (ihr)', imperativSie: 'امر (Sie)',
-  sep: 'پیشوند جداشدنی', cloze: 'جملهٔ جای‌خالی', ans: 'پاسخ جای‌خالی', tags: 'برچسب‌ها', notes: 'یادداشت', cat: 'دسته'
+  sep: 'پیشوند جداشدنی', cloze: 'جملهٔ جای‌خالی', ans: 'پاسخ جای‌خالی', tags: 'برچسب‌ها', notes: 'یادداشت', def: 'تعریف آلمانی', cat: 'دسته'
 };
 
 const PLACEHOLDERS = new Set(['', '-', '—', '–', '...', '…', 'n/a', 'na', 'null', 'undefined', 'none', 'unknown', '?']);
