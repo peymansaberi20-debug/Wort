@@ -433,6 +433,16 @@ const seg = pluralSegments2();
             Fulfills User Request #11:
             "مثالها و ترجمه ها : مثال از چپ به راست هست ولی ترجمه وسط چین هست ، ترجمه راست به چپ بشه"
           */}
+          {/* Phase 3: German definition first, then examples */}
+          {word.def && (
+            <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 rounded-2xl p-4 text-right">
+              <div className="flex items-center justify-between mb-1.5">
+                <h4 className="font-bold text-sm text-[#4338ca] dark:text-[#a5b4fc]">Bedeutung</h4>
+                <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">تعریف آلمانی</span>
+              </div>
+              <p className="font-sans text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 leading-relaxed text-left" dir="ltr">{word.def}</p>
+            </div>
+          )}
           {(word.ex || word.ex2) && (
             <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 text-right">
               <h4 className="font-bold text-sm text-[#5d6676] dark:text-[#a3adbd] mb-3">جملات مثال:</h4>
