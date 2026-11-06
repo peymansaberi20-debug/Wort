@@ -584,7 +584,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   // Fulfills Section 5: Flashcard timer per card
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [timerPopupOpen, setTimerPopupOpen] = useState(false);
+  const [timerPopupOpen, setTimerPopupOpen] = useState(false);   const [timerSecDraft, setTimerSecDraft] = useState<string | null>(null);
   const [sentTimeUp, setSentTimeUp] = useState(0);
   const timeUpRef = useRef<() => void>(() => {});
   const timerRef = useRef<any>(null);
@@ -1516,7 +1516,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         <div className="flex items-center gap-2">
           {activeMode !== 'hard' && qMode && (
             <button
-              onClick={() => setTimerPopupOpen(true)}
+              onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }}
               className={`relative w-8 h-8 rounded-xl border text-sm flex items-center justify-center transition ${
                 timerCfg.on
                   ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900'
@@ -2160,7 +2160,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <input
                 type="checkbox"
                 checked={timerCfg.on}
-                onChange={e => onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: e.target.checked, sec: timerCfg.sec } } })}
+                onChange={e => { const d = parseInt(timerSecDraft ?? '', 10); const sec = Number.isNaN(d) ? timerCfg.sec : Math.max(3, Math.min(600, d)); setTimerSecDraft(null); onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: e.target.checked, sec } } }); }}
                 className="w-4 h-4 accent-[#1f5fbf]"
               />
               <span>تایمر شمارش معکوس فعال باشد</span>
@@ -2171,15 +2171,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 type="number"
                 min={3}
                 max={600}
-                value={timerCfg.sec}
-                onChange={e => onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: timerCfg.on, sec: Math.max(3, Math.min(600, parseInt(e.target.value) || 3)) } } })}
+                value={timerSecDraft ?? String(timerCfg.sec)}
+                onChange={e => setTimerSecDraft(e.target.value.replace(/\D/g, ''))}               
+                onBlur={() => { const n = parseInt(timerSecDraft ?? '', 10); if (Number.isNaN(n)) setTimerSecDraft(null); else onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: timerCfg.on, sec: Math.max(3, Math.min(600, n)) } } }); }}
                 className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-center font-bold text-base outline-none"
               />
               <div className="flex gap-2 mt-2">
                 {[10, 20, 30, 60].map(v => (
                   <button
                     key={v}
-                    onClick={() => onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: true, sec: v } } })}
+                    onClick={() => { setTimerSecDraft(null); onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: true, sec: v } } }); }}
                     className="flex-1 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold"
                   >
                     {v}s
