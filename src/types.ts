@@ -29,6 +29,7 @@ export interface Word {
   acc: string[];
   tags: string;
   notes: string;
+  def?: string; // German definition (B1–B2 wording), shown above examples
   img: string;
   added: number;
   last: number;
