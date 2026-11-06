@@ -111,12 +111,62 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
     return { pre: article, parts: [{ t: 'n', s: pl }] };
   };
 
-  const renderPluralBlock = () => {
-    const seg = pluralSegments();
+  // v2 engine: umlaut-aware, case-insensitive prefix/suffix diff; capitalized display
+const deUmlaut = (s: string): string => s.replace(/[äöüÄÖÜ]/g, c => ({ 'ä': 'a', 'ö': 'o', 'ü': 'u', 'Ä': 'A', 'Ö': 'O', 'Ü': 'U' }[c] || c));
+const isUmlautChar = (c: string): boolean => 'äöüÄÖÜ'.includes(c);
+
+const pluralSegments2 = (): { pre: string; parts: { t: 'n' | 'r'; s: string }[] } | null => {
+if (!word || !word.pl) return null;
+const raw = word.pl.trim();
+if (!raw) return null;
+const artM = /^(der|die|das)\s+(.+)$/i.exec(raw);
+const storedArt = artM ? artM[1].toLowerCase() : '';
+const plRaw = (artM ? artM[2] : raw).trim();
+const sg = (word.de || '').trim();
+if (!plRaw || !sg) return null;
+const pre = storedArt || 'die';
+
+// plural of a German noun always starts with a capital letter
+const pl = plRaw.charAt(0).toLocaleUpperCase('de') + plRaw.slice(1);
+const sgL = sg.toLocaleLowerCase('de');
+const plL = pl.toLocaleLowerCase('de');
+
+const all = (s: string): { t: 'n' | 'r'; s: string }[] => [{ t: 'n', s }];
+
+// 1) identical: nothing changed
+if (plL === sgL) return { pre, parts: all(pl) };
+
+// 2) plural = singular + ending (Bär→Bären, Kind→Kinder, ...)
+if (plL.startsWith(sgL) && pl.length > sg.length) {
+return { pre, parts: [...all(pl.slice(0, sg.length)), { t: 'r', s: pl.slice(sg.length) }] };
+}
+
+// ending notation like "-e" / "-er"
+const endM = /^[-–—]+\s*([a-zäöü]{1,4})$/i.exec(plRaw);
+if (endM) return { pre, parts: [...all(sg), { t: 'r', s: endM[1] }] };
+
+// 3) umlaut-aware general diff (Haus→Häuser, Bad→Bäder, Stadt→Städte, ...)
+const nsg = deUmlaut(sgL);
+const npl = deUmlaut(plL);
+let lcp = 0;
+while (lcp < nsg.length && lcp < npl.length && nsg[lcp] === npl[lcp]) lcp++;
+let lcs = 0;
+while (lcs < nsg.length - lcp && lcs < npl.length - lcp && nsg[nsg.length - 1 - lcs] === npl[npl.length - 1 - lcs]) lcs++;
+const parts: { t: 'n' | 'r'; s: string }[] = [];
+for (let j = 0; j < pl.length; j++) {
+const red = (j >= lcp && j < pl.length - lcs) || isUmlautChar(pl[j]);
+if (parts.length && parts[parts.length - 1].t === (red ? 'r' : 'n')) parts[parts.length - 1].s += pl[j];
+else parts.push({ t: red ? 'r' : 'n', s: pl[j] });
+}
+return { pre, parts };
+};
+
+const renderPluralBlock = () => {
+const seg = pluralSegments2();
     if (!seg) return null;
     return (
       <div className="mt-2 inline-flex items-center gap-2 bg-[#eef2fb] dark:bg-[#182234] border border-[#c9d6f2] dark:border-[#2c3a55] rounded-xl px-3 py-1.5" dir="ltr">
-        <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] uppercase tracking-wide">Plural</span>
+        <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] uppercase tracking-wide">Pl.</span>
         <span className="font-sans font-extrabold text-lg text-slate-900 dark:text-slate-100">
           {seg.pre && <span className="text-[#5d6676] dark:text-[#a3adbd] font-bold">{seg.pre}</span>}
           {seg.parts.map((p, i) =>
@@ -330,7 +380,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
             )}
             {word.pl && (
               <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium" dir="ltr">
-                pl: {word.pl}
+                
               </span>
             )}
             {isLeech(word) && (
