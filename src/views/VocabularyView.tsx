@@ -200,6 +200,21 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         return a.due - b.due;
       });
   }, [words, searchQuery, filterArt, filterStatus, sortBy]);
+  
+  // Phase 3: search found nothing → offer the existing creation workflow 
+  const noResults = !!searchQuery.trim() && filteredWords.length === 0; 
+  const addFromSearch = () => {
+const q = searchQuery.trim();
+const m = /^(der|die|das)\s+(.+)$/i.exec(q);
+resetForm();
+setFormArt(m ? m[1].toLowerCase() : '');
+setFormDe(m ? m[2] : q);
+setIsFormOpen(true);
+window.scrollTo({ top: 0, behavior: 'smooth' });
+onShowToast('فرم باز شد؛ واژهٔ جستجوشده پیش‌پر شد — بقیهٔ فیلدها را تکمیل یا با هوش مصنوعی کامل کن.', false);
+};
+    onShowToast('فرم افزودن واژه باز شد؛ واژهٔ جستجوشده را وارد کنید.', false);
+  };
 
   // Group by category
   const wordsByCategory = useMemo(() => {
@@ -1141,7 +1156,26 @@ Rules: nouns capitalised with the correct article; verbs, adjectives and adverbs
         </div>
       </div>
 
-      {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
+{/* Phase 3: empty-search suggestion — opens the existing creation workflow */}
+{noResults && (
+<div className="mb-3 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-sm">
+<div className="font-bold text-slate-800 dark:text-slate-100 mb-1">
+با این جستجو واژه‌ای یافت نشد.
+</div>
+<div className="text-[#5d6676] dark:text-[#a3adbd] mb-2">
+«{searchQuery.trim()}» در واژگان شما نیست — می‌توانی همین حالا اضافه‌اش کنی (تکمیل دستی یا با هوش مصنوعی در فرم).
+</div>
+<button
+type="button"
+onClick={addFromSearch}
+className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold"
+>
+➕ افزودن «{searchQuery.trim()}»
+</button>
+</div>
+)}
+
+{/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
       <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
