@@ -6,6 +6,7 @@ import { P6 } from '../data/seed';
 import { isLeech } from '../utils/storage';
 import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
+import { IconBtn } from './IconBtn';
 
 interface WordDetailModalProps {
   word: Word | null;
@@ -297,38 +298,28 @@ const seg = pluralSegments2();
           "همون بالا دکمه های : بازگشت ، ویرایش ، حذف و افزودن عکس هست. کمی به هم ریخته هستند .
           مرتب و تمیز هر چهارتا رو در یک خط نمایش بده و ترتیب و منطق اونها بر اساس عرف و روال استاندارد و کاربر پسند نرم افزارها و APP های فارسی باشه"
         */}
-        <div className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2">
-          {/* Back button on right in RTL */}
-          <button
-            onClick={() => { setShowFa(false); onClose(); }}
-            className="flex items-center gap-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs md:text-sm shadow-xs hover:opacity-95 transition"
-          >
-            ↩ بازگشت
-          </button>
-
-          {/* Action buttons neatly grouped on left in standard order: Add/Change Image, Edit, Delete */}
+        <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-start gap-2">          
+          {/* Phase 2 Sec.1: icon strip — close leftmost, then image, edit, delete */}
+          <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </IconBtn>
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={handlePickImage}
-              className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#1d2330] dark:text-[#eef1f6] px-2.5 py-1.5 rounded-xl text-xs md:text-sm font-medium transition"
-              title="افزودن یا تغییر تصویر"
-            >
-              {word.img ? '🖼 تصویر' : '📷 افزودن تصویر'}
-            </button>
-            <button
-              onClick={() => onEdit(word)}
-              className="bg-blue-50 hover:bg-blue-100 text-[#1f5fbf] dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/80 px-2.5 py-1.5 rounded-xl text-xs md:text-sm font-medium transition flex items-center gap-1"
-            >
-              ✏️ ویرایش
-            </button>
-            <button
-              onClick={() => onDelete(word)}
-              className="bg-red-50 hover:bg-red-100 text-[#b3261e] dark:bg-red-950/60 dark:text-red-300 dark:hover:bg-red-900/80 px-2.5 py-1.5 rounded-xl text-xs md:text-sm font-medium transition flex items-center gap-1"
-            >
-              🗑 حذف
-            </button>
+            <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
+              {word.img ? '🖼' : '📷'}
+            </IconBtn>
+            <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+            </IconBtn>
+            <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+                <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </IconBtn>
           </div>
-        </div>
 
         {/* Modal Hero / Word Header */}
         <div className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white p-5 text-center">
