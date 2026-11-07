@@ -1,4 +1,5 @@
 import React from 'react';
+import { IconBtn } from './IconBtn';
 
 interface AboutModalProps {
   onClose: () => void;
@@ -14,16 +15,15 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
     >
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col text-right">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
+        <div dir="ltr" className="px-5 py-4 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
+          <IconBtn onClick={onClose} title="بستن">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </IconBtn>
           <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <span>ℹ️</span> درباره برنامه / About
           </h3>
-          <button
-            onClick={onClose}
-            className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
-          >
-            ×
-          </button>
         </div>
 
         {/* Content */}
