@@ -238,7 +238,8 @@ export default function App() {
     const newWord = isEdit ? null : (norm({ ...wordData, added: Date.now() }) as Word);
 
     setState(prev => {
-      // Recheck against the latest state immediately before insertion to avoid stale-state duplicates.      if (!isEdit && isDuplicateVocabularyEntry(wordData, prev.words)) {
+      // Recheck against the latest state immediately before insertion to avoid stale-state duplicates.
+      if (!isEdit && isDuplicateVocabularyEntry(wordData, prev.words)) {
         showToast('این واژه هم‌زمان به کتابخانه اضافه شده است؛ ثبت تکراری انجام نشد.', true);
         return prev;
       }
