@@ -182,6 +182,12 @@ Rules:
     });
   };
 
+  // select all / deselect all extracted candidates
+  const allSelected = candidates.length > 0 && candidates.every(c => c.on);
+  const toggleAllCandidates = () => {
+    setCandidates(prev => prev.map(c => ({ ...c, on: !allSelected })));
+  };
+
   const updateCandidateSpellInput = (index: number, val: string) => {
     setCandidates(prev => {
       const next = [...prev];
@@ -711,6 +717,16 @@ Rules:
               )}
             </div>
           ) : (
+            <div className="mb-2 flex justify-start">
+              <button
+                type="button"
+                onClick={toggleAllCandidates}
+                disabled={candidates.length === 0 || enriching}
+                className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40"
+              >
+                {allSelected ? '☐ عدم انتخاب همه' : '☑ انتخاب همه'}
+              </button>
+            </div>
             candidates.map((cand, idx) => {
               const canConfirmSpell = !!cand.correctedSpell.trim() && cand.correctedSpell.trim() !== cand.de;
               return (
