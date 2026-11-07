@@ -202,7 +202,7 @@ export function buildExternalPrompt(
     `Every input line starts with an id in square brackets, e.g. [${batch[0]?.cid || 'c1'}]. ` +
     `Add to EACH returned object an extra string field "cid" containing exactly that id (without brackets). ` +
     `Return exactly ${batch.length} objects, one per input line, no duplicates, no extra entries, and do not invent context. ` +
-    `Output strictly valid JSON only: one JSON array, without Markdown code fences and without any commentary before or after it.`
+     `Output exactly one JSON array wrapped in a single json Markdown code block, exactly as the master instructions require, with no text outside the block.`
   );
 }
 
