@@ -462,12 +462,12 @@ Output format rules
 
 The object(s) must contain exactly these fields in this exact order:
 
-1. de: German dictionary form, without an article where applicable.
+1. de: German dictionary form, without an article where applicable. For non-nouns (verbs, adjectives, adverbs, prepositions, expressions) write the word with a LOWERCASE first letter (e.g. "machen", "schön"); only nouns are capitalized.
 2. art: For nouns, exactly der, die, or das. Otherwise, "".
 3. fa: Precise, natural Persian translation. Include the most relevant meanings without listing unnecessary synonyms.
 4. syn: One suitable, commonly used German synonym matching the target's meaning and part of speech, or "" if no reliable synonym is available.
 5. synFa: Accurate Persian translation of syn, matching its intended meaning in context, or "" if syn is empty.
-6. ant: One meaningful German antonym matching the target's part of speech and relevant sense, or "" if no reliable antonym exists.
+6. ant: One meaningful German antonym matching the target's part of speech and relevant sense, or "" if no reliable antonym exists. If the antonym is a noun, include its definite article and capitalize the noun.
 7. antFa: Accurate Persian translation of ant, or "" if ant is empty.
 8. pl: For nouns, the full plural form without an article, e.g. Möglichkeiten. Otherwise, "".
 9. pos: Choose exactly ONE of the following six labels and copy it exactly as written, including the Persian translation in parentheses: Nomen (اسم) | Verb (فعل) | Adjektiv (صفت) | Adverb (قید) | Präposition (حرف اضافه) | Redewendung (اصطلاح). Do not use Persian alone and do not use any other label.
@@ -672,6 +672,10 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
     const w = norm(r);
     if (w) {
       if (typeof r.def === 'string' && r.def.trim()) w.def = r.def.trim();
+      // non-nouns are stored with a lowercase first letter (e.g. verbs "machen")
+      if (w.pos && !['اسم', 'Nomen'].includes(String(w.pos).trim()) && /^[A-ZÄÖÜ]/.test(w.de)) {
+        w.de = w.de.charAt(0).toLocaleLowerCase('de') + w.de.slice(1);
+      }
       const cv = validateConjTable(w.conj, w.de, w.sep);
       if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
       if (suggestedNewCat) {
