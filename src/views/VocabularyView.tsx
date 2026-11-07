@@ -3,7 +3,6 @@ import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
-import { generateWithGemini, parseAI } from '../utils/ai';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
