@@ -223,7 +223,7 @@ return words
     setIsFormOpen(true);
     setFaCandidates([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    onShowToast(`«${c.de}» انتخاب شد؛ حالا تکمیل خودکار یا دستی ادامه بده.`, false);
+    onShowToast(`فرم باز شد؛ واژهٔ جستجوشده پیش‌پر شد.`, false);
   };
 
   // Group by category
@@ -579,8 +579,9 @@ Give the 5 most common German equivalents (different senses if applicable). Answ
     }
   };
   const pickFaCandidate = (c: { de: string; art: string; short: string }) => {
-    resetForm();
-    setFormFa(formFa);
+    // suggestions + typed Persian cleared; picked word lands in the German box; form stays open
+    setFaCandidates([]);
+    setFormFa('');
     setFormArt(c.art);
     setFormDe(c.de);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -777,9 +778,9 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             </div>
           )}
 
-          <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold">ترجمهٔ فارسی (الزامی):</label>
+          <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">معنی فارسی (گام دوم — اختیاری):</label>
                 <button
                   type="button"
                   onClick={handleQuickTranslate}
@@ -792,11 +793,10 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               <input
                 type="text"
                 dir="rtl"
-                placeholder="معنی دقیق فارسی"
+                placeholder="معنی دقیق فارسی — مثلاً: مدرسه"
                 value={formFa}
                 onChange={e => setFormFa(e.target.value)}
-                className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none"
-              />
+                className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none"              />
             </div>
           
                       <div className="mt-2">
