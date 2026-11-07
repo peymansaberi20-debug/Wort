@@ -320,6 +320,7 @@ const seg = pluralSegments2();
               </svg>
             </IconBtn>
           </div>
+        </div>
 
         {/* Modal Hero / Word Header */}
         <div className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white p-5 text-center">
