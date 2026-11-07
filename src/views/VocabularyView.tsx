@@ -797,7 +797,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 value={formFa}
                 onChange={e => setFormFa(e.target.value)}
                 className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none"              />
-            </div> 
             <button
               type="button"
               onClick={handleFaToDe}
@@ -822,9 +821,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 ))}
               </div>
             )}
-          </div>
+            
 
-          {/* AI Helper Bar */}        
           {/* AI Helper Bar */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
