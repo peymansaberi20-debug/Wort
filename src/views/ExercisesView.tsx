@@ -6,6 +6,7 @@ import { EXTRA_CASEQ, adjSourceByCode, adjSources, analyzeMistake, buildAdjItem,
 import { speak, stopSpeaking } from '../utils/audio';
 import { checkConjAnswer, splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
+import { IconBtn } from '../components/IconBtn';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 
@@ -1539,40 +1540,20 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </span>
         </div>
 
-        {/* Full Word Profile button (Section 21) + Exit button */}
-        <div className="flex items-center gap-2">
+        {/* Phase 2 Sec.1: standardized toolbar — exit leftmost, then profile, then timer (LTR row) */}
+        <div className="flex items-center gap-2" dir="ltr">
+          <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </IconBtn>
+          <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه">📖</IconBtn>
           {activeMode !== 'hard' && qMode && (
-            <button
-              onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }}
-              className={`relative w-8 h-8 rounded-xl border text-sm flex items-center justify-center transition ${
-                timerCfg.on
-                  ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900'
-                  : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-              }`}
-              title="تایمر این تمرین"
-              aria-label="تایمر این تمرین"
-            >
-              ⏱
+            <span className="relative">
+              <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}>⏱</IconBtn>
               {timerCfg.on && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />}
-            </button>
+            </span>
           )}
-          <button
-            onClick={handleOpenWordProfile}
-            className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1"
-            title="مشاهده شناسنامه کامل واژه بدون وقفه در تمرین"
-          >
-            <span>📖</span>
-            <span className="hidden sm:inline">شناسنامه واژه</span>
-          </button>
-
-          <button
-            onClick={() => onSelectMode(null)}
-            className="w-9 h-9 bg-white hover:bg-slate-100 dark:bg-white dark:hover:bg-slate-100 text-slate-700 rounded-lg font-bold text-lg transition flex items-center justify-center"
-            title="خروج از تمرین"
-            aria-label="خروج از تمرین"
-          >
-            ×
-          </button>
         </div>
       </div>
 
