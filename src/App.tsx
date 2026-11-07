@@ -234,9 +234,11 @@ export default function App() {
       return;
     }
 
+        // Phase 3: build the new word up front so its profile can be opened after save
+    const newWord = isEdit ? null : (norm({ ...wordData, added: Date.now() }) as Word);
+
     setState(prev => {
-      // Recheck against the latest state immediately before insertion to avoid stale-state duplicates.
-      if (!isEdit && isDuplicateVocabularyEntry(wordData, prev.words)) {
+      // Recheck against the latest state immediately before insertion to avoid stale-state duplicates.      if (!isEdit && isDuplicateVocabularyEntry(wordData, prev.words)) {
         showToast('این واژه هم‌زمان به کتابخانه اضافه شده است؛ ثبت تکراری انجام نشد.', true);
         return prev;
       }
@@ -252,16 +254,14 @@ export default function App() {
             id: old.id
           }) as Word;
         }
-      } else {
-        const newWord = norm({
-          ...wordData,
-          added: Date.now()
-        }) as Word;
+            } else {
         if (newWord) nextWords.push(newWord);
       }
       showToast(isEdit ? 'تغییرات واژه ذخیره شد.' : 'واژه با موفقیت به کتابخانه افزوده شد.');
-      return { ...prev, words: nextWords };
+            return { ...prev, words: nextWords };
     });
+    // Phase 3: after adding a new word, open its profile; closing it returns to the vocabulary view
+    if (newWord) setSelectedWord(newWord);
     setEditingWordId(null);
   };
 
