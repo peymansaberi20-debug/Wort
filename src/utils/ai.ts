@@ -427,12 +427,164 @@ Output MUST be a JSON array containing exactly one object with these exact field
 Return ONLY valid JSON array with 1 object.`;
 }
 
+/* ==================================================================================
+   Phase 3 — new unified master prompt (single + group).
+   The old buildFastSingleWordPrompt / buildMasterPrompt are no longer used.
+   ================================================================================== */
+
+const PROMPT_FENCE = '```';
+
+function buildMasterPromptV2(targetBlock: string, countRule: string, catRule: string): string {
+  return `You are an expert German vocabulary assistant for Persian-speaking learners. Generate a linguistically accurate, pedagogically useful, and structurally valid vocabulary profile for the German word or expression(s) defined in this message.
+
+ ${targetBlock}
+
+ ${countRule}
+
+CRITICAL OUTPUT REQUIREMENTS — FOLLOW EXACTLY
+
+The output is intended to be copied directly into another software application that parses JSON. Correct JSON syntax is mandatory.
+
+Output format rules
+
+1. Put the entire output inside exactly one Markdown code block labelled json (${PROMPT_FENCE}json ... ${PROMPT_FENCE}). This is required so the complete result can be copied as a single block.
+2. The first character inside the code block must be [ and the last character inside it must be ].
+3. Do not put explanations, introductions, headings, comments, notes, or any other text inside or outside the code block.
+4. The JSON itself must contain no Markdown formatting, comments, trailing commas, or explanatory placeholders.
+5. Use standard JSON syntax: double quotes (") around every key and every string value, commas between properties, and square brackets around the array.
+6. Every value must be a string. If a field is inapplicable or no reliable information is available, use an empty string: "". Never use null, undefined, numbers, or Boolean values.
+7. Escape any double quote occurring inside a string as \\". Represent line breaks inside string values using the JSON escape sequence \\n, not literal line breaks.
+8. Use exactly the 27 field names listed below, with identical spelling, capitalization, and order. Do not add, remove, rename, or reorder fields. If the batch instructions later in this message ask for an extra technical id field, add only that one extra field per object.
+9. Do not output multiple alternatives or any JSON beyond what this message requires.
+10. Before responding, silently validate the complete JSON. It must be parseable by a standard JSON parser without manual repair. If any syntax error exists, fix it before returning the answer.
+
+1. Required fields
+
+The object(s) must contain exactly these fields in this exact order:
+
+1. de: German dictionary form, without an article where applicable.
+2. art: For nouns, exactly der, die, or das. Otherwise, "".
+3. fa: Precise, natural Persian translation. Include the most relevant meanings without listing unnecessary synonyms.
+4. syn: One suitable, commonly used German synonym matching the target's meaning and part of speech, or "" if no reliable synonym is available.
+5. synFa: Accurate Persian translation of syn, matching its intended meaning in context, or "" if syn is empty.
+6. ant: One meaningful German antonym matching the target's part of speech and relevant sense, or "" if no reliable antonym exists.
+7. antFa: Accurate Persian translation of ant, or "" if ant is empty.
+8. pl: For nouns, the full plural form without an article, e.g. Möglichkeiten. Otherwise, "".
+9. pos: Choose exactly ONE of the following six labels and copy it exactly as written, including the Persian translation in parentheses: Nomen (اسم) | Verb (فعل) | Adjektiv (صفت) | Adverb (قید) | Präposition (حرف اضافه) | Redewendung (اصطلاح). Do not use Persian alone and do not use any other label.
+10. lvl: One of A1, A2, B1, B2, C1, C2. Choose a reasonable CEFR level for the word's typical use, not merely the difficulty of its definition.
+11. cat: ${catRule}
+12. ex: A German definition of the target word itself, written in simple, natural German at approximately B1–B2 level. Use one or two complete sentences. Explain the most common meaning first. Do not provide an example sentence here. Do not use sentence fragments, unnatural dictionary shorthand, or words from another language.
+13. exFa: A natural and accurate Persian translation of the entire definition in ex.
+14. ex2: Exactly one short, natural, practical A1–A2 German example sentence or common spoken expression that uses the target word in its correct form. Prefer a realistic everyday context. Avoid awkward, vague, or artificially constructed examples.
+15. ex2Fa: An accurate, natural Persian translation of ex2.
+16. cloze: Copy ex2 exactly, replacing only the target word or its relevant inflected form with exactly five underscores: _____. Preserve all remaining words, punctuation, capitalization, and spacing.
+17. ans: The exact removed word or inflected form, preserving its original spelling and capitalization. It must correctly complete cloze.
+18. conj: For verbs, provide all six present-tense forms in this exact person order — ich, du, er/sie/es, wir, ihr, sie/Sie — but write ONLY the verb forms, WITHOUT the subject pronouns, separated by |. Correct format example: gehe|gehst|geht|gehen|geht|gehen. Never include pronouns or labels inside the field. Otherwise, "".
+19. prat: For verbs, the third-person singular Präteritum form. Otherwise, "".
+20. perf: For verbs, the third-person singular Perfekt form, including the correct auxiliary. Otherwise, "".
+21. komparativ: For adjectives, the correct comparative form. Otherwise, "".
+22. superlativ: For adjectives, the correct superlative form, normally in the form am …-sten. Otherwise, "".
+23. imperativDu: For verbs, the standard informal singular imperative. Otherwise, "".
+24. imperativIhr: For verbs, the standard informal plural imperative. Otherwise, "".
+25. imperativSie: For verbs, the standard formal imperative. Otherwise, "".
+26. sep: For separable verbs, provide the separable prefix only. Otherwise, "".
+27. notes: A Persian-language multiline string containing exactly the following four sections, in this order. Separate the sections using the JSON escape sequence \\n within the string. Do not insert literal, unescaped line breaks inside the JSON string.
+
+خانواده واژگانی: اسم: … | فعل مرتبط: … | صفت مرتبط: …
+ساختار: …
+توضیحات کاربردی / کاربرد / تفاوت معنایی: …
+مقایسه با مترادف: …
+
+Replace all ellipses with useful content. Do not leave instructional placeholders in the final result.
+
+2. Part-of-speech-specific rules
+
+Apply the rules for the actual part of speech of the target.
+
+Nouns (Nomen): verify grammatical gender and plural form; in notes, explain common prepositions, case government, and typical constructions when relevant; distinguish the noun's ordinary meaning from related meanings such as opportunity, possibility, option, or solution where applicable; do not treat every possible translation as interchangeable.
+
+Verbs (Verb): verify all conjugations, tense forms, auxiliaries, imperative forms, and separable prefixes; explain whether the verb is transitive or intransitive and identify common complements, cases, or prepositions where relevant; distinguish the target verb from near-synonyms in actual usage; do not invent a direct antonym when the verb has several unrelated senses.
+
+Adjectives (Adjektiv): verify comparative and superlative forms; explain relevant usage patterns, including predicative use with sein or werden and attributive inflection before a noun, when useful; distinguish literal, figurative, emotional, and context-dependent meanings where relevant; select synonyms and antonyms that match the intended sense, rather than words that are merely associated with it.
+
+Adverbs, prepositions, and expressions: explain the relevant grammatical construction, word order, case government, or fixed-expression pattern; leave all inapplicable inflection fields empty.
+
+3. Rules for synonyms and antonyms
+
+Choose a common and semantically appropriate synonym, not merely a related word. Consider the context in which the target is normally used. In the final section of notes, compare the selected synonym with the target, explaining meaningful differences in meaning, register, emotional tone, and typical context. If syn is empty, identify the nearest useful alternative in the comparison section and explicitly state that it is an alternative, not the selected synonym field. Do not claim that two words are interchangeable unless they genuinely are in the relevant context. Choose an antonym only if it expresses a meaningful contrast with the target's intended sense; otherwise set both ant and antFa to "". Do not force an antonym simply to fill the field.
+
+4. Rules for word families and usage notes
+
+Write notes in Persian and preserve the exact four-section format specified above. اسم must contain a genuine noun from the same word family when one is commonly used. فعل مرتبط must contain a genuine related verb when available; distinguish a derived verb from a synonym or a verb that is merely related in meaning. صفت مرتبط must contain a genuine related adjective when available. Include German words and concise Persian meanings where useful. Do not repeat the target word as its own related form unless this is necessary and explicitly informative. Prefer common, pedagogically useful words; do not invent forms or add rare, awkward, or marginally useful derivatives merely to fill a section — use — when no suitable related form is available. In ساختار, explain relevant grammar accurately: gender and plural for nouns, case government and complements for verbs, adjective inflection and comparison for adjectives, or other relevant patterns for the target. In توضیحات کاربردی / کاربرد / تفاوت معنایی, explain common usage, typical collocations, register, and important meaning distinctions. In مقایسه با مترادف, provide an actual comparison based on the selected synonym. Never copy these instructions into the field. Do not include irrelevant information simply to make the notes longer.
+
+5. Translation and naturalness requirements
+
+All German content must be grammatical, idiomatic, and appropriate for the specified CEFR level. All Persian translations must accurately reflect the corresponding German text. Do not introduce meanings that the German sentence does not express. Prefer natural German collocations over literal translations from Persian. Ensure the example is genuinely useful to a learner in a real-life situation. Check that the definition and the example illustrate compatible senses of the target word. Do not use rare or specialized German constructions in an A1–A2 example unless unavoidable. The definition in ex must consist of one or two grammatically complete German sentences, each with a clear sentence structure — never a sentence fragment. Do not accidentally include words from a third language in German definitions or examples. In notes, write explanations in Persian while retaining German vocabulary examples where useful; avoid unnecessary English words.
+
+6. Mandatory final validation
+
+Before returning the output, silently check every requirement below:
+
+1. The JSON parses successfully and the array contains exactly the required number of objects.
+2. Each object contains exactly the 27 required keys, in the specified order, with no missing or extra keys.
+3. Every value is a JSON string; use "" for inapplicable fields.
+4. pos exactly matches one of the six permitted labels with the correct Persian translation in parentheses.
+5. lvl uses only permitted values.
+6. cat exactly matches one complete allowed category label.
+7. de, art, fa, pl, and pos are consistent with one another.
+8. All grammatical forms are correct for the target's actual part of speech.
+9. ex contains one or two complete German sentences and contains no accidental foreign-language words.
+10. exFa faithfully translates ex.
+11. ex2 is natural, grammatically correct, and appropriate for A1–A2.
+12. ex2Fa accurately translates ex2.
+13. cloze is derived directly from ex2, with only the target word or its inflected form replaced by _____.
+14. ans is exactly the removed form and restores the original sentence.
+15. Synonyms, antonyms, and word-family members are linguistically justified.
+16. notes contains the four required Persian sections in the correct order and contains actual explanations, not copied instructions.
+17. The notes value uses valid JSON escaping: each section is separated by \\n, with no literal, unescaped line breaks inside the string.
+18. No field contains contradictory information, unsupported claims, invented forms, or unnecessary repetition.
+19. The JSON code block contains only the JSON array, with no leading or trailing text inside the block.
+20. The final response contains exactly one json code block and nothing else.
+
+If a field cannot be completed reliably, use an empty string where permitted instead of inventing information. Do not weaken the exact schema or omit required fields.
+
+Return only the single json code block containing the completed JSON array. Do not include any explanations or text before or after it.`;
+}
+
+export function buildSinglePromptV2(de: string, existingWords: Word[], targetCategory?: string): string {
+  const dynamicCats = getDynamicCategories(existingWords);
+  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
+  const catRule = targetCategory
+    ? `CRITICAL CATEGORY OVERRIDE: Assign "cat": "${targetCategory}". Ignore the category list.`
+    : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories of the app (do not create any new category name):\n${catListStr}\nSelect the category that best fits the word's typical meaning and learning context. Prefer a basic or everyday category for general vocabulary, and a specialized category only when clearly justified. Never invent, shorten, translate, or modify a category label.`;
+  return buildMasterPromptV2(
+    `TARGET: "${de}"`,
+    `Return exactly ONE JSON array containing exactly ONE object with exactly 27 fields in the required order.`,
+    catRule
+  );
+}
+
+export function buildGroupPromptV2(lines: string[], existingWords: Word[], targetCategory?: string): string {
+  const dynamicCats = getDynamicCategories(existingWords);
+  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
+  const catRule = targetCategory
+    ? `CRITICAL CATEGORY OVERRIDE: Assign "cat": "${targetCategory}" for every object. Ignore the category list.`
+    : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories of the app (do not create any new category name):\n${catListStr}\nSelect the category that best fits each word's typical meaning and learning context. Prefer a basic or everyday category for general vocabulary, and a specialized category only when clearly justified. Never invent, shorten, translate, or modify a category label.`;
+  return (
+    buildMasterPromptV2(
+      `TARGETS: the German words/expressions listed in the === INPUT section at the end of this message (one per line). Process EVERY line; do not skip, merge, or add words.`,
+      `Return exactly ONE JSON array containing exactly ONE object PER INPUT LINE, in the same order as the input lines. Each object contains exactly the 27 fields in the required order. If an input line begins with [A1], [A2], [B1] or [B2], use that exact level for lvl.`,
+      catRule
+    ) +
+    `\n\n=== INPUT (Vocabulary List) ===\n${lines.join('\n')}`
+  );
+}
+
 export const AIP = (de: string, words: Word[], catOverride?: string): string =>
-  buildFastSingleWordPrompt(de, words, catOverride);
+  buildSinglePromptV2(de, words, catOverride);
 
 export const AIPM = (lines: string[], words: Word[], catOverride?: string): string =>
-  buildMasterPrompt(words, catOverride) +
-  `\n\n=== INPUT (Vocabulary List) ===\n${lines.join('\n')}\n\nIf a line begins with [A1], [A2], [B1] or [B2], use that exact level for lvl. Return exactly one JSON array containing exactly one object per item above, in the same order.`;
+  buildGroupPromptV2(lines, words, catOverride);
 
 export function parseAI(t: string): any[] {
   t = t.replace(/```(?:json)?/gi, '').trim();
@@ -481,6 +633,11 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
 
   list.forEach((r, i) => {
     r = aiFix(r);
+    // "Nomen (اسم)" → "اسم": the app stores Persian pos labels
+    if (r && typeof r.pos === 'string') {
+      const pm = /\(([^)]+)\)\s*$/.exec(r.pos.trim());
+      if (pm && pm[1].trim()) r.pos = pm[1].trim();
+    }
     if (!r || !(r.de || '').trim()) {
       errs.push(`مورد ${i + 1}: کلمهٔ آلمانی خالی است`);
       return;
