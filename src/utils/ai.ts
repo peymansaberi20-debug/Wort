@@ -673,9 +673,12 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
     if (w) {
       if (typeof r.def === 'string' && r.def.trim()) w.def = r.def.trim();
       // non-nouns are stored with a lowercase first letter (e.g. verbs "machen")
-      if (w.pos && !['اسم', 'Nomen'].includes(String(w.pos).trim()) && /^[A-ZÄÖÜ]/.test(w.de)) {
+      const posStr = String((w as any).pos || '').trim();
+      const nounLike = !!w.art || ['اسم', 'Nomen'].includes(posStr);
+      if (!nounLike && /^[A-ZÄÖÜ]/.test(w.de)) {
         w.de = w.de.charAt(0).toLocaleLowerCase('de') + w.de.slice(1);
       }
+      // noun synonyms/antonyms keep article + capital letter as AI produced them; never lowercase them
       const cv = validateConjTable(w.conj, w.de, w.sep);
       if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
       if (suggestedNewCat) {
