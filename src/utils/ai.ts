@@ -350,7 +350,7 @@ Line 3 Onward — Additional Learning Notes
 After the first two lines, include useful practical notes (تفاوت معنایی:, کاربرد:, نکته:).
 
 Mandatory Multiline Formatting:
-Separate sections using newline characters in the decoded notes string. In raw JSON, encode each newline as \\n.
+Add one final section "مقایسه با مترادف" inside notes: compare the headword with its German synonym (the one in "syn"; if empty, pick the closest common synonym and name it) — semantic nuances, tone/register (formal, informal, polite, rude) and typical usage contexts of each. Separate sections using newline characters in the decoded notes string. In raw JSON, encode each newline as \\n.
 
 Required formatting example:
 "notes": "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)\\nساختار: der Sieg über + AKK (پیروزی بر کسی/چیزی)؛ siegen über + AKK\\nتفاوت معنایی: Sieg بر پیروزی در رقابت تأکید دارد؛ Erfolg مفهوم گسترده‌تری از موفقیت دارد."
@@ -422,6 +422,7 @@ Output MUST be a JSON array containing exactly one object with these exact field
 خانواده واژگانی: اسم: ... | فعل مرتبط: ... | صفت مرتبط: ...
 ساختار: حرف اضافه یا حالت دستوری...
 توضیحات کاربردی / کاربرد / تفاوت معنایی...
+مقایسه با مترادف: این واژه را با مترادف آلمانیِ فیلد "syn" مقایسه کن — تفاوت معنایی، لحن/ثبت (رسمی، خودمانی، مؤدبانه، خشن) و محل/بافتار کاربرد هرکدام؛ اگر syn خالی بود، نزدیک‌ترین مترادف رایج را خودت انتخاب و ذکر کن.
 
 Return ONLY valid JSON array with 1 object.`;
 }
