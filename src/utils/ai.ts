@@ -266,13 +266,13 @@ A clear, natural Persian translation appropriate to the source context.
 * Avoid unnecessary repetition.
 
 syn
-German synonyms separated by , . Use "" if no suitable synonym exists.
+One suitable German synonym. If it is a noun: include the definite article and keep the noun capitalized (e.g. der Kummer). Otherwise lowercase. Use "" if no suitable synonym exists.
 
 synFa
 Persian translations of the synonyms in syn, in the same order and separated by , . Use "" if syn is empty.
 
 ant
-German antonyms separated by , . Use "" if no suitable antonym exists.
+One meaningful German antonym. If it is a noun: include the definite article and keep the noun capitalized. Otherwise lowercase. Use "" if no suitable antonym exists.
 
 antFa
 Persian translations of the antonyms in ant, in the same order and separated by , . Use "" if ant is empty.
@@ -674,8 +674,10 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
       if (typeof r.def === 'string' && r.def.trim()) w.def = r.def.trim();
       // non-nouns are stored with a lowercase first letter (e.g. verbs "machen")
       const posStr = String((w as any).pos || '').trim();
+      const looksVerb = /(?:en|eln|ern)$/.test(w.de.toLowerCase()) || ['فعل', 'Verb'].includes(posStr);
+      const looksAdjOrAdv = ['صفت', 'قید', 'Adjektiv', 'Adverb'].includes(posStr) || (!!w.komparativ || !!w.superlativ);
       const nounLike = !!w.art || ['اسم', 'Nomen'].includes(posStr);
-      if (!nounLike && /^[A-ZÄÖÜ]/.test(w.de)) {
+      if (!nounLike && (looksVerb || looksAdjOrAdv) && /^[A-ZÄÖÜ]/.test(w.de)) {
         w.de = w.de.charAt(0).toLocaleLowerCase('de') + w.de.slice(1);
       }
       // noun synonyms/antonyms keep article + capital letter as AI produced them; never lowercase them
