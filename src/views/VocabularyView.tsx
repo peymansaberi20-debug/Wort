@@ -456,6 +456,12 @@ return words
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         if (item.cat && !formCat) setFormCat(item.cat);
+        // the user's typed word: lowercase first letter when AI determined a non-noun
+        const finalPos = String(item.pos || formPos || '').trim();
+        if (finalPos && !['اسم', 'Nomen'].includes(finalPos)) {
+          const fd = (item.de && item.de.trim()) || formDe.trim();
+          if (fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
+        }
         onShowToast(`پروفایل کامل ۲۲ پارامتری با هوش مصنوعی تکمیل شد.`);
       } else if (errs.length > 0) {
         onShowToast(errs[0], true);
