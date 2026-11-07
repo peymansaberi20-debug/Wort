@@ -284,11 +284,39 @@ return words
     setIsFormOpen(false);
   };
 
-  const handleAiAutoFill = async (choice?: { target: string; instruction: string }) => {
+    const handleAiAutoFill = async (choice?: { target: string; instruction: string }) => {
     if (aiOperationRef.current) return;
+    // spelling pick: user chose a library word as the correct spelling → open its profile, no AI call
+    if (choice?.instruction.startsWith('SPELLING-PICK:')) {
+      const pick = wordsRef.current.find(w => (w.art ? `${w.art} ${w.de}` : w.de) === choice.target);
+      if (pick) {
+        onSelectWord(pick);
+        onShowToast('پروفایل واژهٔ موجود باز شد.', false);
+      }
+      return;
+    }
     if (!choice) {
-      const raw = formDe.trim();
+            const raw = formDe.trim();
       const lower = raw.toLocaleLowerCase('de').replace(/[.!?]+$/, '');
+      // Phase 3: spelling control BEFORE AI — offer close library matches first
+      const bareTyped = lower.replace(/^(der|die|das)\s+/i, '');
+      if (bareTyped.length >= 3) {
+        const best = wordsRef.current
+          .map(w => ({ w, d: lev(bareTyped, w.de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) }))
+          .sort((a, b) => a.d - b.d)[0];
+        if (best && best.d > 0 && best.d <= (bareTyped.length > 6 ? 2 : 1)) {
+          const full = best.w.art ? `${best.w.art} ${best.w.de}` : best.w.de;
+          setAiChoicePrompt({
+            title: 'کنترل املا',
+            message: `«${raw}» در کتابخانه نیست، اما «${full}» بسیار نزدیک است. منظورت همین بود؟`,
+            options: [
+              { label: `بله، پروفایل «${full}» را باز کن`, target: full, instruction: 'SPELLING-PICK:' },
+              { label: `نه، «${raw}» را با هوش مصنوعی ادامه بده`, target: raw, instruction: '' }
+            ]
+          });
+          return;
+        }
+      }
       const option = (label: string, target: string, instruction: string) => ({ label, target, instruction });
       // High-value ambiguity cases: ask only when a common alternate analysis is genuinely plausible.
       const ambiguityMap: Record<string, { label: string; target: string; instruction: string }[]> = {
@@ -363,8 +391,18 @@ return words
       const parsed = parseAI(resText);
       const { ws, errs } = aiToIMP(parsed, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
       if (choice?.instruction.includes('فیلد ورودی را نیز با مصدر خروجی جایگزین کن') && ws[0]?.de) setFormDe(ws[0].de);
-      if (ws.length > 0) {
+            if (ws.length > 0) {
         const item = ws[0];
+        // Phase 3: AI returned the proper dictionary form for a misspelled input → fix the form word
+        if (item.de) {
+          const typedBare = (choice?.target || formDe.trim()).trim().replace(/^(der|die|das)\s+/i, '');
+          const dTyped = typedBare.toLocaleLowerCase('de');
+          const dAi = item.de.trim().toLocaleLowerCase('de');
+          if (dTyped && dAi && dTyped !== dAi && lev(dTyped, dAi) <= 3) {
+            setFormDe(item.de.trim());
+            onShowToast(`املای واژه اصلاح شد: ${typedBare} → ${item.de.trim()}`);
+          }
+        }
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
         if (item.syn) setFormSyn(item.syn);
