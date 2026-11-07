@@ -15,8 +15,8 @@ const CONTENT_FIELDS: (keyof Word)[] = [
 
 export const FIELD_LABELS: Record<string, string> = {
   de: 'کلمهٔ آلمانی', art: 'آرتیکل', fa: 'ترجمهٔ فارسی', syn: 'مترادف', synFa: 'ترجمهٔ مترادف', ant: 'متضاد',
-  antFa: 'ترجمهٔ متضاد', pl: 'جمع', pos: 'نوع کلمه', lvl: 'سطح', ex: 'مثال ۱', exFa: 'ترجمهٔ مثال ۱', ex2: 'مثال ۲',
-  ex2Fa: 'ترجمهٔ مثال ۲', conj: 'صرف فعل', prat: 'Präteritum', perf: 'Perfekt', komparativ: 'Komparativ',
+  antFa: 'ترجمهٔ متضاد', pl: 'جمع', pos: 'نوع کلمه', lvl: 'سطح', ex: 'تعریف آلمانی (Bedeutung)', exFa: 'ترجمهٔ تعریف', ex2: 'مثال کاربردی',
+  ex2Fa: 'ترجمهٔ مثال کاربردی', conj: 'صرف فعل', prat: 'Präteritum', perf: 'Perfekt', komparativ: 'Komparativ',
   superlativ: 'Superlativ', imperativDu: 'امر (du)', imperativIhr: 'امر (ihr)', imperativSie: 'امر (Sie)',
   sep: 'پیشوند جداشدنی', cloze: 'جملهٔ جای‌خالی', ans: 'پاسخ جای‌خالی', tags: 'برچسب‌ها', notes: 'یادداشت', def: 'تعریف آلمانی', cat: 'دسته'
 };
