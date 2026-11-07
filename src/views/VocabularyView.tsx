@@ -208,14 +208,10 @@ return words
 .slice(0, 5)
 .map(x => x.w);
 }, [words, searchQuery]);
-const addSimilar = (w: Word) => {
-resetForm();
-setFormArt(w.art || '');
-setFormDe(w.de || '');
-setIsFormOpen(true);
-window.scrollTo({ top: 0, behavior: 'smooth' });
-onShowToast('واژهٔ انتخابی در فرم گذاشته شد؛ تکمیل دستی یا با هوش مصنوعی.', false);
-};
+  const addSimilar = (w: Word) => {
+    // chip click = open the word's profile; closing it returns to the same search
+    onSelectWord(w);
+  };
 // Phase 3: search found nothing → offer the existing creation workflow
   const noResults = !!searchQuery.trim() && filteredWords.length === 0;
   const addFromSearch = () => {
@@ -569,7 +565,7 @@ onShowToast('واژهٔ انتخابی در فرم گذاشته شد؛ تکمی�
 </div>
 {similarWords.length > 0 && (
 <div className="mb-2">
-<div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">شاید منظورت یکی از این‌ها بود؟ (کلیک → در فرم گذاشته می‌شود)</div>
+<div className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">شاید منظورت یکی از این‌ها بود؟ (کلیک → پروفایل واژه) </div>
 <div className="flex flex-wrap gap-1.5">
 {similarWords.map(sw => (
 <button
