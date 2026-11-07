@@ -459,8 +459,10 @@ return words
         if (item.notes) setFormNotes(item.notes);
         if (item.cat && !formCat) setFormCat(item.cat);
         // the user's typed word: lowercase first letter when AI determined a non-noun
+        // (pos empty + no article also counts as non-noun)
         const finalPos = String(item.pos || formPos || '').trim();
-        if (finalPos && !['اسم', 'Nomen'].includes(finalPos)) {
+        const isNoun = !!item.art || ['اسم', 'Nomen'].includes(finalPos);
+        if (!isNoun) {
           const fd = (item.de && item.de.trim()) || formDe.trim();
           if (fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
         }
