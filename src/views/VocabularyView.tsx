@@ -287,13 +287,16 @@ return words
     const handleAiAutoFill = async (choice?: { target: string; instruction: string }) => {
     if (aiOperationRef.current) return;
     // spelling pick: user chose a library word as the correct spelling → open its profile, no AI call
-    if (choice?.instruction.startsWith('SPELLING-PICK:')) {
+        if (choice?.instruction.startsWith('SPELLING-PICK:')) {
       const pick = wordsRef.current.find(w => (w.art ? `${w.art} ${w.de}` : w.de) === choice.target);
       if (pick) {
         onSelectWord(pick);
         onShowToast('پروفایل واژهٔ موجود باز شد.', false);
       }
       return;
+    }
+    if (choice?.instruction.startsWith('SPELLING-CORRECT:')) {
+      setFormDe(choice.target);
     }
     if (!choice) {
             const raw = formDe.trim();
@@ -304,7 +307,7 @@ return words
         const best = wordsRef.current
           .map(w => ({ w, d: lev(bareTyped, w.de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) }))
           .sort((a, b) => a.d - b.d)[0];
-        if (best && best.d > 0 && best.d <= (bareTyped.length > 6 ? 2 : 1)) {
+                if (best && best.d > 0 && best.d <= (bareTyped.length >= 6 ? 2 : 1)) {
           const full = best.w.art ? `${best.w.art} ${best.w.de}` : best.w.de;
           setAiChoicePrompt({
             title: 'کنترل املا',
@@ -345,9 +348,26 @@ return words
         umfahren: [option('umfahren = دور زدن', 'umfahren', 'منظور فعل جداشدنی um|fahren به معنی دور زدن است.'), option('umfahren = زیر گرفتن', 'umfahren', 'منظور فعل جدا‌نشدنی umfahren به معنی زیر گرفتن است؛ تفاوت تکیه و Partizip را توضیح بده.')]
       };
       if (ambiguityMap[lower]) {
-        setAiChoicePrompt({ title: 'این واژه چند معنی یا نقش دارد', message: `برای «${raw}» چند برداشت محتمل وجود دارد. معنی یا نقش موردنظر را انتخاب کنید.`, options: ambiguityMap[lower] });
+                setAiChoicePrompt({ title: 'این واژه چند معنی یا نقش دارد', message: `برای «${raw}» چند برداشت محتمل وجود دارد. معنی یا نقش موردنظر را انتخاب کنید.`, options: ambiguityMap[lower] });
         return;
       }
+      // spelling control with AI for words not found in the library
+      try {
+        const chkText = await generateWithGemini(`You are a German spelling checker. Is "${raw}" a correctly spelled standard German dictionary word (ignore a leading der/die/das)? Answer ONLY a JSON array: if correct [{"ok":true,"word":"${raw}"}] — if misspelled or not a real German word [{"ok":false,"word":"the closest correctly spelled German dictionary word"}].`, { timeoutMs: 12000, retries: 0 });
+        const chk = parseAI(chkText)[0];
+        const sug = String(chk?.word || '').trim();
+        if (chk && chk.ok === false && sug && sug.toLocaleLowerCase('de') !== lower) {
+          setAiChoicePrompt({
+            title: 'کنترل املا با هوش مصنوعی',
+            message: `«${raw}» به‌نظر واژهٔ درست آلمانی نیست. منظورت «${sug}» بود؟`,
+            options: [
+              { label: `بله، «${sug}» را تکمیل کن`, target: sug, instruction: 'SPELLING-CORRECT:' },
+              { label: `نه، همان «${raw}» را ادامه بده`, target: raw, instruction: 'SPELLING-KEEP:' }
+            ]
+          });
+          return;
+        }
+      } catch { /* چک املا در دسترس نبود → ادامهٔ عادی */ }
 
       // German Partizip-II lookup: irregular verbs, common regular verbs and separable-prefix forms.
       const participleMap: Record<string, string> = {};
@@ -390,7 +410,12 @@ return words
       }
       const parsed = parseAI(resText);
       const { ws, errs } = aiToIMP(parsed, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
-      if (choice?.instruction.includes('فیلد ورودی را نیز با مصدر خروجی جایگزین کن') && ws[0]?.de) setFormDe(ws[0].de);
+            if (choice?.instruction.includes('فیلد ورودی را نیز با مصدر خروجی جایگزین کن') && ws[0]?.de) setFormDe(ws[0].de);
+      // user typed a misspelling and let AI continue: keep the AI's correct dictionary form
+      if (!choice && ws[0]?.de && lev(lower.replace(/^(der|die|das)\s+/i, ''), ws[0].de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) <= 3 && lower.replace(/^(der|die|das)\s+/i, '') !== ws[0].de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) {
+        setFormDe(ws[0].de);
+        onShowToast(`املای واژه اصلاح شد: ${formDe.trim()} → ${ws[0].de}`);
+      }
             if (ws.length > 0) {
         const item = ws[0];
         // Phase 3: AI returned the proper dictionary form for a misspelled input → fix the form word
