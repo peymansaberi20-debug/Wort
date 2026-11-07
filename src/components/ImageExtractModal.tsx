@@ -728,7 +728,7 @@ Rules:
                 {allSelected ? '☐ عدم انتخاب همه' : '☑ انتخاب همه'}
               </button>
             </div>
-            candidates.map((cand, idx) => {
+            {candidates.map((cand, idx) => {
               const canConfirmSpell = !!cand.correctedSpell.trim() && cand.correctedSpell.trim() !== cand.de;
               return (
                 <div
@@ -808,8 +808,8 @@ Rules:
                   </div>
                 </div>
               );
-              })
-            )}
+              })}
+            </>)}
         </div>
 
         {/* Footer actions with explicit AI Completion Workflow (Task 1) */}
