@@ -6,6 +6,7 @@ import { EXTRA_CASEQ, adjSourceByCode, adjSources, analyzeMistake, buildAdjItem,
 import { speak, stopSpeaking } from '../utils/audio';
 import { checkConjAnswer, splitConj } from '../utils/conjugation';
 import { WordDetailModal } from '../components/WordDetailModal';
+import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { IconBtn } from '../components/IconBtn';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
@@ -585,8 +586,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   // Fulfills Section 21: View Full Word Profile modal accessible from EVERY exercise
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
-  pausedRef.current = !!paused || !!profileModalWord;
-
+  const [sentenceModalWord, setSentenceModalWord] = useState<Word | null>(null);
+  pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord;
+    
   // Fulfills Section 5: Flashcard timer per card
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [timerPopupOpen, setTimerPopupOpen] = useState(false);   const [timerSecDraft, setTimerSecDraft] = useState<string | null>(null);
@@ -1542,6 +1544,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </svg>
           </IconBtn>
           <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه">📖</IconBtn>
+          {activeMode !== 'case' && qMode !== 'sent' && currentItem && (
+            <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه">✍️</IconBtn>
+          )}
           <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین">❓</IconBtn>
           {activeMode !== 'hard' && qMode && (
             <span className="relative">
@@ -1551,6 +1556,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           )}
         </div>
       </div>
+
+      {sentenceModalWord && (
+        <SentenceBuilderModal
+          word={sentenceModalWord}
+          onClose={() => setSentenceModalWord(null)}
+          onShowToast={onShowToast}
+        />
+      )}
 
       {/* Progress & Subtitle */}
       <div className="space-y-1.5">
