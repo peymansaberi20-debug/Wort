@@ -3,6 +3,7 @@ import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
+import { IconBtn } from '../components/IconBtn';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -703,30 +704,22 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 {isEditing ? `ویرایش واژه: ${editingWord?.de}` : 'افزودن واژهٔ جدید'}
               </h3>
             </div>
-            <div className="flex items-center gap-2">
-              {/* Fulfills Request #20: Help button for Add Word */}
-              <button
-                onClick={() => onOpenHelp('add_word')}
-                className="text-xs bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2.5 py-1 rounded-xl font-bold transition flex items-center gap-1"
-              >
-                ❓ راهنما
-              </button>
-              <button
-                type="button"
-                onClick={() => { resetForm(); setFaCandidates([]); }}
-                className="w-8 h-8 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-lg font-bold transition flex items-center justify-center"
-                title="انصراف"
-                aria-label="انصراف"
-              >
-                ×
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-2 rounded-xl text-xs font-bold shadow-xs hover:opacity-95 transition"
-              >
-                {isEditing ? 'ذخیره' : 'افزودن'}
-              </button>
+            <div className="flex items-center gap-2" dir="ltr">
+              <IconBtn onClick={() => { resetForm(); setFaCandidates([]); }} title="انصراف">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </IconBtn>
+              <IconBtn onClick={() => onOpenHelp('add_word')} title="راهنمای افزودن واژه">❓</IconBtn>
+              <span className="rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-xs font-bold shadow-xs">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="h-9 px-4 flex items-center justify-center rounded-xl transition hover:opacity-95"
+                >
+                  {isEditing ? '💾 ذخیره' : '➕ افزودن'}
+                </button>
+              </span>
             </div>
           </div>
 
