@@ -798,34 +798,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 onChange={e => setFormFa(e.target.value)}
                 className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none"              />
             </div>
-          
-                      <div className="mt-2">
-              <button
-                type="button"
-                onClick={handleFaToDe}
-                disabled={faLoading || !formFa.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
-              >
-                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
-              </button>
-              {faCandidates.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">معادل‌های پیشنهادی — یکی را انتخاب کن (کلیک → در کادر واژه می‌نشیند):</div>
-                  {faCandidates.map((c, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => pickFaCandidate(c)}
-                      className="w-full text-right bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl px-3 py-2 transition flex items-center justify-between gap-2"
-                    >
-                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{c.short}</span>
-                      <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100">{c.art ? c.art + ' ' : ''}{c.de}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          
+                    
           {/* AI Helper Bar */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
