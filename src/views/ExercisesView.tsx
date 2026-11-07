@@ -1527,14 +1527,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
       {/* Exercise Top Bar */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
-        {/* Help + Title */}
+        {/* Title (help icon moved into the standardized toolbar) */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onOpenHelp(activeMode)}
-            className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1"
-          >
-            ❓ راهنما
-          </button>
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
@@ -1548,6 +1542,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </svg>
           </IconBtn>
           <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه">📖</IconBtn>
+          <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین">❓</IconBtn>
           {activeMode !== 'hard' && qMode && (
             <span className="relative">
               <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}>⏱</IconBtn>
