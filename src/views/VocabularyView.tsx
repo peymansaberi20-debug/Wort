@@ -221,8 +221,9 @@ return words
     setFormArt(m ? m[1].toLowerCase() : '');
     setFormDe(m ? m[2] : q);
     setIsFormOpen(true);
+    setFaCandidates([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    onShowToast('فرم باز شد؛ واژهٔ جستجوشده پیش‌پر شد.', false);
+    onShowToast(`«${c.de}» انتخاب شد؛ حالا تکمیل خودکار یا دستی ادامه بده.`, false);
   };
 
   // Group by category
@@ -551,6 +552,10 @@ return words
   // Phase 3: Persian → German equivalents (find candidates from a Persian meaning)
   const [faCandidates, setFaCandidates] = useState<{ de: string; art: string; short: string }[]>([]);
   const [faLoading, setFaLoading] = useState(false);
+  // suggestions must vanish whenever the form closes (× / save / tab switch)
+  React.useEffect(() => {
+    if (!isFormOpen) { setFaCandidates([]); setFaLoading(false); }
+  }, [isFormOpen]);
   const handleFaToDe = async () => {
     const fa = formFa.trim();
     if (!fa || faLoading) return;
@@ -707,7 +712,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               </button>
               <button
                 type="button"
-                onClick={resetForm}
+                onClick={() => { resetForm(); setFaCandidates([]); }}
                 className="w-8 h-8 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-lg font-bold transition flex items-center justify-center"
                 title="انصراف"
                 aria-label="انصراف"
@@ -772,6 +777,55 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             </div>
           )}
 
+          <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold">ترجمهٔ فارسی (الزامی):</label>
+                <button
+                  type="button"
+                  onClick={handleQuickTranslate}
+                  disabled={translateLoading || !formDe.trim()}
+                  className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition flex items-center gap-1"
+                >
+                  {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
+                </button>
+              </div>
+              <input
+                type="text"
+                dir="rtl"
+                placeholder="معنی دقیق فارسی"
+                value={formFa}
+                onChange={e => setFormFa(e.target.value)}
+                className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none"
+              />
+            </div>
+          
+                      <div className="mt-2">
+              <button
+                type="button"
+                onClick={handleFaToDe}
+                disabled={faLoading || !formFa.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
+              >
+                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
+              </button>
+              {faCandidates.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">معادل‌های پیشنهادی — یکی را انتخاب کن (کلیک → در کادر واژه می‌نشیند):</div>
+                  {faCandidates.map((c, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickFaCandidate(c)}
+                      className="w-full text-right bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl px-3 py-2 transition flex items-center justify-between gap-2"
+                    >
+                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{c.short}</span>
+                      <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100">{c.art ? c.art + ' ' : ''}{c.de}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          
           {/* AI Helper Bar */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
@@ -881,27 +935,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               )}
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold">ترجمهٔ فارسی (الزامی):</label>
-                <button
-                  type="button"
-                  onClick={handleQuickTranslate}
-                  disabled={translateLoading || !formDe.trim()}
-                  className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition flex items-center gap-1"
-                >
-                  {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
-                </button>
-              </div>
-              <input
-                type="text"
-                dir="rtl"
-                placeholder="معنی دقیق فارسی"
-                value={formFa}
-                onChange={e => setFormFa(e.target.value)}
-                className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none"
-              />
-            </div>
             <div className="mt-2">
               <button
                 type="button"
