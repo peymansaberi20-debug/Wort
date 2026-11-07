@@ -1152,6 +1152,29 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // Open Full Word Profile Modal from ANY exercise (Section 21)
   const handleOpenWordProfile = () => {
     if (!currentItem) return;
+    // adjdecl: show the adjective actually used in the blank, not the training word
+    if (qMode === 'adjdecl' && adjInfo) {
+      const base = String(adjInfo.item.base || adjInfo.src.base || '').trim().toLowerCase();
+      if (base) {
+        const matched = words.find(w => nz(w.de) === nz(base));
+        if (matched) { setProfileModalWord(matched); return; }
+        setProfileModalWord({
+          id: `adj-${base}`,
+          de: base,
+          art: '',
+          fa: adjInfo.src.fa || '',
+          pos: 'صفت',
+          lvl: (currentItem as Word).lvl || 'A2',
+          cat: (currentItem as Word).cat || 'گرامر',
+          ex: '', exFa: '', ex2: '', ex2Fa: '',
+          notes: '',
+          syn: '', synFa: '', ant: '', antFa: '', pl: '', conj: '', prat: '', perf: '', sep: '',
+          cloze: '', ans: '', acc: [], tags: '', img: '',
+          added: Date.now(), last: 0, due: 0, ivl: 0, ease: 2.5, stage: 0, ok: 0, bad: 0, res: ''
+        } as Word);
+        return;
+      }
+    }
     if (qMode === 'case') {
       const q = currentItem as CaseQuestion;
       const cleanNoun = q.n.replace(/^(der|die|das)\s+/i, '').trim();
