@@ -818,8 +818,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review';
 
-    // Automatic TTS for question if German is shown (Section 6.1)
-    if (isFlashType && settings?.auto && currentCardDir === 'de') {
+    // Automatic TTS for question if German is SHOWN (Section 6.1).
+    // Never auto-play when only the Persian side is visible: audio would reveal the hidden German word.
+    if (isFlashType && settings?.auto && currentCardDir === 'de' && revealedCardId !== currentItem.id) {
       const w = currentItem as Word;
       speak(fullWord(w), {
         rate: settings.rate,
@@ -920,9 +921,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setRevealedCardId(currentItem.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Audio on reveal (Section 6.1 & 6.2)
+    // Audio on reveal (Section 6.1 & 6.2) — only if the German side is the newly revealed one
     const w = currentItem as Word;
-    if (settings?.auto || settings?.autoEx) {
+    if ((settings?.auto || settings?.autoEx) && currentCardDir === 'de') {
       stopSpeaking();
       speak(fullWord(w), {
         rate: settings?.rate,
