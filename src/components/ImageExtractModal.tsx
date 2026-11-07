@@ -717,6 +717,7 @@ Rules:
               )}
             </div>
           ) : (
+          <>
             <div className="mb-2 flex justify-start">
               <button
                 type="button"
@@ -807,8 +808,8 @@ Rules:
                   </div>
                 </div>
               );
-            })
-          )}
+              })
+            )}
         </div>
 
         {/* Footer actions with explicit AI Completion Workflow (Task 1) */}
