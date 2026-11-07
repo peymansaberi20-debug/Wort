@@ -5,6 +5,10 @@ import { checkSynAnt, checkWord, familyCands, fullWord, getCategories, intervalP
 import { EXTRA_CASEQ, adjSourceByCode, adjSources, analyzeMistake, buildAdjItem, closestAnswer, parseSpec, randomSpec, specToString } from '../utils/grammar';
 import { speak, stopSpeaking } from '../utils/audio';
 import { checkConjAnswer, splitConj } from '../utils/conjugation';
+
+/** Splits the six forms into two rows of three: [1..3] left column, [4..6] right column. */
+const splitConjColumns = (forms: string[]): [string[], string[]] =>
+  [forms.slice(0, 3), forms.slice(3, 6)];
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { IconBtn } from '../components/IconBtn';
@@ -1306,18 +1310,35 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
-        {/* Verb table with regular endings (blue) and irregular stem changes (red) - shared logic */}
+        {/* Verb table: two columns LTR — ich/du/er left, wir/ihr/sie right */}
         {w.conj && !opts?.hideConj && (
-          <div className="text-sm md:text-base bg-white dark:bg-[#1b2029] p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800 flex flex-wrap gap-2 justify-between">
-            {splitConj(w.conj).map((f, i) => (
-              <span key={i} dir="ltr" className="text-slate-600 dark:text-slate-300">
-                <b className="text-slate-400">{P6[i]}:</b>{' '}
-                <HighlightedVerbForm verb={w.de} form={f} pronounIndex={i} sep={w.sep} />
-              </span>
-            ))}
-          </div>
+          (() => {
+            const forms = splitConj(w.conj);
+            const [colL, colR] = splitConjColumns(forms);
+            const renderCol = (col: string[], offset: number) => (
+              <div className="flex-1 min-w-[140px] space-y-1.5">
+                {col.map((f, i) => (
+                  <div key={offset + i} className="flex items-baseline justify-between gap-2" dir="ltr">
+                    <span className="text-xs font-bold text-slate-400 flex-shrink-0">{P6[offset + i]}</span>
+                    <span className="min-w-0 text-right">
+                      <HighlightedVerbForm verb={w.de} form={f} pronounIndex={offset + i} sep={w.sep} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+            return (
+              <div className="text-sm md:text-base bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                <div className="flex gap-4" dir="ltr">
+                  {renderCol(colL, 0)}
+                  <div className="w-px bg-slate-200 dark:border-slate-800 self-stretch" />
+                  {renderCol(colR, 3)}
+                </div>
+              </div>
+            );
+          })()
         )}
-
+        
         {/* Image if available */}
         {w.img && (
           <div className="text-center pt-1">
