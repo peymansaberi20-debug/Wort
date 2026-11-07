@@ -4,6 +4,7 @@ import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
+import { WordCompareModal } from '../components/WordCompareModal';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -68,6 +69,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   // Category open accordion
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [collapsedInSearch, setCollapsedInSearch] = useState<Set<string>>(new Set());
 
   // Translation visibility map for compact word previews
@@ -1231,7 +1233,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       </div>
 
       {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <button
           type="button"
           onClick={() => {
@@ -1242,6 +1244,14 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         >
           <span aria-hidden="true">{isFormOpen ? '▲' : '➕'}</span>
           <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن واژهٔ جدید'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCompareOpen(true)}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">⚖️</span>
+          <span className="truncate">مقایسه لغت‌ها</span>
         </button>
         <button
           type="button"
@@ -1509,6 +1519,14 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           })
         )}
       </div>
+      <WordCompareModal
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        words={words}
+        onSaveWord={onSaveWord}
+        onSelectWord={onSelectWord}
+        onShowToast={onShowToast}
+      />
       {aiChoicePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-4">
