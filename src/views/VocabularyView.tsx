@@ -3,6 +3,7 @@ import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
+import { generateWithGemini, parseAI } from '../utils/ai';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -548,6 +549,40 @@ return words
     }
   };
 
+  // Phase 3: Persian → German equivalents (find candidates from a Persian meaning)
+  const [faCandidates, setFaCandidates] = useState<{ de: string; art: string; short: string }[]>([]);
+  const [faLoading, setFaLoading] = useState(false);
+  const handleFaToDe = async () => {
+    const fa = formFa.trim();
+    if (!fa || faLoading) return;
+    setFaLoading(true);
+    setFaCandidates([]);
+    try {
+      const prompt = `You are a German vocabulary assistant. A Persian-speaking learner knows the meaning "${fa}" and wants the German word.
+Give the 5 most common German equivalents (different senses if applicable). Answer ONLY a JSON array, no code fence, no commentary:
+[{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)"}]`;
+      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
+      const list = parseAI(out)
+        .filter((x: any) => x && typeof x.de === 'string' && x.de.trim())
+        .slice(0, 5)
+        .map((x: any) => ({ de: String(x.de).trim(), art: ['der', 'die', 'das'].includes(String(x.art || '')) ? String(x.art) : '', short: String(x.short || '').trim() }));
+      setFaCandidates(list);
+      if (list.length === 0) onShowToast('معادلی پیدا نشد؛ عبارت را دقیق‌تر بنویس.', true);
+    } catch (e: any) {
+      onShowToast(e?.message || 'یافتن معادل ممکن نشد.', true);
+    } finally {
+      setFaLoading(false);
+    }
+  };
+  const pickFaCandidate = (c: { de: string; art: string; short: string }) => {
+    resetForm();
+    setFormFa(formFa);
+    setFormArt(c.art);
+    setFormDe(c.de);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    onShowToast(`«${c.de}» انتخاب شد؛ حالا تکمیل خودکار یا دستی ادامه بده.`, false);
+  };
+
   const handleCopyPrompt = async () => {
     if (!formDe.trim()) {
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
@@ -868,7 +903,32 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 outline-none"
               />
             </div>
-
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={handleFaToDe}
+                disabled={faLoading || !formFa.trim()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
+              >
+                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
+              </button>
+              {faCandidates.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">معادل‌های پیشنهادی — یکی را انتخاب کن (کلیک → در کادر واژه می‌نشیند):</div>
+                  {faCandidates.map((c, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickFaCandidate(c)}
+                      className="w-full text-right bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl px-3 py-2 transition flex items-center justify-between gap-2"
+                    >
+                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{c.short}</span>
+                      <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100">{c.art ? c.art + ' ' : ''}{c.de}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div>
               <label className="block font-bold mb-1">مترادف آلمانی:</label>
               <input
