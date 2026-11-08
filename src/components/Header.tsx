@@ -3,7 +3,7 @@ import React from 'react';
 interface HeaderProps {
   onBack: () => void;
   onAbout: () => void;
-  theme: 'light' | 'dark';
+  theme: 'light' | 'dark' | 'green';
   onToggleTheme: () => void;
   onSaveAndExit: () => void;
   canGoBack: boolean;
@@ -43,11 +43,11 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onToggleTheme}
           className="w-9 h-9 bg-white hover:bg-slate-100 text-[#1f5fbf] rounded-lg text-base transition flex items-center justify-center shadow-sm"
-          title="تغییر پوسته"
-          aria-label="تغییر پوسته"
-        >
-          {theme === 'dark' ? '☀️' : '🌓'}
-        </button>
+        title={theme === 'light' ? 'حالت تیره' : theme === 'dark' ? 'حالت مطالعهٔ سبز' : 'حالت روشن'}
+        aria-label="تغییر پوسته"
+      >
+        {theme === 'light' ? '🌓' : theme === 'dark' ? '🌿' : '☀️'}
+      </button>
         <button
           onClick={onSaveAndExit}
           className="w-9 h-9 bg-white text-[#1f5fbf] hover:bg-slate-100 font-bold rounded-lg text-xs md:text-sm shadow-sm transition flex items-center justify-center"
