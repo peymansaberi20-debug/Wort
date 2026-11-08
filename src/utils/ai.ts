@@ -501,21 +501,14 @@ The object(s) must contain exactly these fields in this exact order:
 
 Replace all ellipses with useful content. Do not leave instructional placeholders in the final result.
 
-2. Part-of-speech-specific rules
+2. Part-of-speech rules (apply to the actual POS)
 
-Apply the rules for the actual part of speech of the target.
+Nomen: verify gender + plural; in notes give common prepositions/case government/typical constructions; separate the core meaning from related senses; never treat all translations as interchangeable.
+Verb: verify conjugations, tenses, auxiliaries, imperatives, separable prefixes; state transitivity + required complements/case/prepositions; distinguish from near-synonyms in real usage; no invented antonym for multi-sense verbs.
+Adjektiv: verify comparative/superlative; note predicative (sein/werden) vs attributive inflection; separate literal/figurative senses; syn/ant must match the intended sense.
+Adverb/Präposition/Redewendung: explain the fixed pattern, word order, or case government; leave inapplicable inflection fields "".
 
-Nouns (Nomen): verify grammatical gender and plural form; in notes, explain common prepositions, case government, and typical constructions when relevant; distinguish the noun's ordinary meaning from related meanings such as opportunity, possibility, option, or solution where applicable; do not treat every possible translation as interchangeable.
-
-Verbs (Verb): verify all conjugations, tense forms, auxiliaries, imperative forms, and separable prefixes; explain whether the verb is transitive or intransitive and identify common complements, cases, or prepositions where relevant; distinguish the target verb from near-synonyms in actual usage; do not invent a direct antonym when the verb has several unrelated senses.
-
-Adjectives (Adjektiv): verify comparative and superlative forms; explain relevant usage patterns, including predicative use with sein or werden and attributive inflection before a noun, when useful; distinguish literal, figurative, emotional, and context-dependent meanings where relevant; select synonyms and antonyms that match the intended sense, rather than words that are merely associated with it.
-
-Adverbs, prepositions, and expressions: explain the relevant grammatical construction, word order, case government, or fixed-expression pattern; leave all inapplicable inflection fields empty.
-
-3. Rules for synonyms and antonyms
-
-Choose a common and semantically appropriate synonym, not merely a related word. Consider the context in which the target is normally used. In the final section of notes, compare the selected synonym with the target, explaining meaningful differences in meaning, register, emotional tone, and typical context. If syn is empty, identify the nearest useful alternative in the comparison section and explicitly state that it is an alternative, not the selected synonym field. Do not claim that two words are interchangeable unless they genuinely are in the relevant context. Choose an antonym only if it expresses a meaningful contrast with the target's intended sense; otherwise set both ant and antFa to "". Do not force an antonym simply to fill the field.
+3. Synonyms/antonyms: pick a common, context-fitting equivalent — not merely a related word. The notes' final section compares the chosen synonym with the target (meaning, register, tone, context); if syn = "", name the nearest alternative there and mark it as such. Never claim interchangeability unless true; antonym only for a genuine contrast — otherwise ant/antFa = "".
 
 4. Rules for word families and usage notes
 
@@ -525,30 +518,15 @@ Write notes in Persian and preserve the exact four-section format specified abov
 
 All German content must be grammatical, idiomatic, and appropriate for the specified CEFR level. All Persian translations must accurately reflect the corresponding German text. Do not introduce meanings that the German sentence does not express. Prefer natural German collocations over literal translations from Persian. Ensure the example is genuinely useful to a learner in a real-life situation. Check that the definition and the example illustrate compatible senses of the target word. Do not use rare or specialized German constructions in an A1–A2 example unless unavoidable. The definition in ex must consist of one or two grammatically complete German sentences, each with a clear sentence structure — never a sentence fragment. Do not accidentally include words from a third language in German definitions or examples. In notes, write explanations in Persian while retaining German vocabulary examples where useful; avoid unnecessary English words.
 
-6. Mandatory final validation
+6. Final self-check (fix any violation before answering)
 
-Before returning the output, silently check every requirement below:
-
-1. The JSON parses successfully and the array contains exactly the required number of objects.
-2. Each object contains exactly the 27 required keys, in the specified order, with no missing or extra keys.
-3. Every value is a JSON string; use "" for inapplicable fields.
-4. pos exactly matches one of the six permitted labels with the correct Persian translation in parentheses.
-5. lvl uses only permitted values.
-6. cat exactly matches one complete allowed category label.
-7. de, art, fa, pl, and pos are consistent with one another.
-8. All grammatical forms are correct for the target's actual part of speech.
-9. ex contains one or two complete German sentences and contains no accidental foreign-language words.
-10. exFa faithfully translates ex.
-11. ex2 is natural, grammatically correct, and appropriate for A1–A2.
-12. ex2Fa accurately translates ex2.
-13. cloze is derived directly from ex2, with only the target word or its inflected form replaced by _____.
-14. ans is exactly the removed form and restores the original sentence.
-15. Synonyms, antonyms, and word-family members are linguistically justified.
-16. notes contains the four required Persian sections in the correct order and contains actual explanations, not copied instructions.
-17. The notes value uses valid JSON escaping: each section is separated by \\n, with no literal, unescaped line breaks inside the string.
-18. No field contains contradictory information, unsupported claims, invented forms, or unnecessary repetition.
-19. The JSON code block contains only the JSON array, with no leading or trailing text inside the block.
-20. The final response contains exactly one json code block and nothing else.
+- JSON parses; one array; exactly one object per target; only the required keys.
+- All values strings ("" when inapplicable); pos/lvl/cat exactly from the allowed lists.
+- de/art/fa/pl/pos mutually consistent; all forms correct for the actual POS.
+- ex = 1–2 complete German sentences, no foreign-language words; exFa translates ex exactly.
+- ex2 natural and A1–A2; ex2Fa translates it; cloze = ex2 with only the target replaced by _____; ans = the exact removed form.
+- syn/ant/word-family justified; notes = the 4 Persian sections joined with \\n, real content only.
+- No contradictions, invented forms, or padding; the code block contains ONLY the JSON array.
 
 If a field cannot be completed reliably, use an empty string where permitted instead of inventing information. Do not weaken the exact schema or omit required fields.
 
