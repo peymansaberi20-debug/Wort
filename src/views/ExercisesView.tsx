@@ -12,6 +12,7 @@ const splitConjColumns = (forms: string[]): [string[], string[]] =>
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { IconBtn } from '../components/IconBtn';
+import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon } from 'lucide-react';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 
@@ -1583,19 +1584,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
         {/* Phase 2 Sec.1: standardized toolbar — exit leftmost, then profile, then timer (LTR row) */}
         <div className="flex items-center gap-2" dir="ltr">
-          <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </IconBtn>
-          <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه">📖</IconBtn>
+          <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
+          <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
           {activeMode !== 'case' && qMode !== 'sent' && currentItem && (
-            <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه">✍️</IconBtn>
+            <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
           )}
-          <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین">❓</IconBtn>
+          <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
           {activeMode !== 'hard' && qMode && (
             <span className="relative">
-              <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}>⏱</IconBtn>
+              <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}><TimerIcon size={18} className={timerCfg.on ? 'text-orange-500' : 'text-slate-500'} /></IconBtn>
               {timerCfg.on && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />}
             </span>
           )}
