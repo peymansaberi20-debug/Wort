@@ -93,3 +93,13 @@
 }
 
 .safe-bottom-nav-space { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+
+/* ── Green night-reading tint (third theme state) ── */
+body.green-tint::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(24, 120, 66, 0.16);
+}
