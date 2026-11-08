@@ -427,9 +427,15 @@ return words
           const typedBare = (choice?.target || formDe.trim()).trim().replace(/^(der|die|das)\s+/i, '');
           const dTyped = typedBare.toLocaleLowerCase('de');
           const dAi = item.de.trim().toLocaleLowerCase('de');
-          if (dTyped && dAi && dTyped !== dAi && lev(dTyped, dAi) <= 3) {
-            setFormDe(item.de.trim());
-            onShowToast(`املای واژه اصلاح شد: ${typedBare} → ${item.de.trim()}`);
+          if (dTyped && dAi) {
+            if (dTyped === dAi && typedBare !== item.de.trim()) {
+              // case-only difference: adopt the AI's dictionary casing (e.g. Machen → machen)
+              setFormDe(item.de.trim());
+              onShowToast(`شکل واژه اصلاح شد: ${typedBare} → ${item.de.trim()}`);
+            } else if (dTyped !== dAi && lev(dTyped, dAi) <= 3) {
+              setFormDe(item.de.trim());
+              onShowToast(`املای واژه اصلاح شد: ${typedBare} → ${item.de.trim()}`);
+            }
           }
         }
         if (item.art) setFormArt(item.art);
