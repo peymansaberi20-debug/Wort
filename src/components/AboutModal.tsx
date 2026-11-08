@@ -19,51 +19,49 @@ export const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
         <div dir="ltr" className="px-5 py-4 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
           <IconBtn onClick={onClose} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
           <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <span>ℹ️</span> درباره برنامه / About
+            <span>ℹ️</span> درباره WörterBuch
           </h3>
         </div>
 
         {/* Content */}
         <div className="p-5 overflow-y-auto space-y-4 text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-          <div>
-            <h4 className="font-extrabold text-base text-[#1f5fbf] dark:text-[#7fb0ff]">
-              WörterBuch: واژه‌نامه آلمانی و فلش کارت
-            </h4>
-            <p className="mt-1 text-xs text-[#5d6676] dark:text-[#a3adbd]">
-              سامانهٔ تخصصی یادگیری، تثبیت و مرور واژگان زبان آلمانی با سیستم تکرار فاصله‌دار لایتنر، استخراج هوشمند لغات و پشتیبانی از دستورزبان و حروف اضافه.
-            </p>
+          <div className="text-center pb-3 border-b border-slate-100 dark:border-slate-800">
+            <h4 dir="ltr" className="font-extrabold text-lg text-[#1f5fbf] dark:text-[#7fb0ff] font-sans">WörterBuch</h4>
+            <p className="mt-1 text-xs text-[#5d6676] dark:text-[#a3adbd]">پلتفرم هوشمند یادگیری، تثبیت و مرور واژگان زبان آلمانی</p>
           </div>
 
-          <div className="bg-slate-50 dark:bg-[#141923] p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2">
-            <p>
-              <b>طراحی و برنامه‌نویسی: </b>
-              <span>پیمان صابری (</span>
-              <span dir="ltr" className="font-sans font-bold">Peyman Saberi</span>
-              <span>)</span>
-            </p>
-            <p>
-              <b>ایمیل و ارتباط: </b>
-              <a
-                href="mailto:peymansaberi20@gmail.com"
-                dir="ltr"
-                className="text-[#1f5fbf] dark:text-[#7fb0ff] font-sans font-semibold underline"
-              >
-                peymansaberi20@gmail.com
-              </a>
-            </p>
+          <div>
+            <b className="block mb-1.5 text-slate-900 dark:text-slate-100">✨ قابلیت‌ها</b>
+            <ul className="space-y-1">
+              <li>• تکمیل خودکار واژگان با هوش مصنوعی (Gemini / Groq / OpenRouter)</li>
+              <li>• استخراج واژه از تصویر و متن + تکمیل گروهی ادامه‌پذیر</li>
+              <li>• سیستم تکرار فاصله‌دار لایتنر با تحلیل هوشمند یادگیری</li>
+              <li>• ۱۸ نوع تمرین تعاملی + ساخت جمله با بازخورد هوش مصنوعی</li>
+              <li>• مقایسهٔ تا ۴ واژهٔ مشابه + کنترل املا هوشمند</li>
+              <li>• تعریف آلمانی، مثال کاربردی، مقایسهٔ مترادف و معادل انگلیسی</li>
+              <li>• سه پوسته (روشن / تیره / مطالعهٔ سبز) + کارکرد کامل آفلاین</li>
+            </ul>
+          </div>
+
+          <div className="bg-slate-50 dark:bg-[#141923] p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+            <p><b>حریم خصوصی:</b> تمام داده‌های شما فقط روی مرورگر خودتان ذخیره می‌شود و به هیچ سروری ارسال نمی‌گردد.</p>
+            <p><b>هوش مصنوعی:</b> کلیدهای API فقط روی دستگاه شما نگهداری و مستقیماً به ارائه‌دهندهٔ انتخابی ارسال می‌شوند.</p>
           </div>
 
           <div className="space-y-1.5 text-xs text-[#5d6676] dark:text-[#a3adbd]">
             <p>
-              <b>قابلیت آفلاین:</b> تمامی اطلاعات و رکوردهای یادگیری به طور مستقیم روی مرورگر شما در این دستگاه ذخیره می‌شوند.
+              <b className="text-slate-900 dark:text-slate-100">طراحی و توسعه:</b>{' '}
+              پیمان صابری (<span dir="ltr" className="font-sans font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">Peyman Saberi</span>)
             </p>
             <p>
-              <b>هوش مصنوعی:</b> مجهز به دستیار استخراج و طبقه‌بندی خودکار بر پایه Google Gemini.
+              <b>ارتباط:</b>{' '}
+              <a href="mailto:peymansaberi20@gmail.com" dir="ltr" className="text-[#1f5fbf] dark:text-[#7fb0ff] font-sans font-semibold underline">peymansaberi20@gmail.com</a>
             </p>
           </div>
         </div>
 
-        <div className="p-3.5 border-t border-[#dde1ea] dark:border-[#333b4a] bg-slate-50/50 dark:bg-slate-900/30 flex justify-end">
+        <div className="p-3.5 border-t border-[#dde1ea] dark:border-[#333b4a] bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">© 2025 Peyman Saberi — تمام حقوق محفوظ است.</span>
           <button
             onClick={onClose}
             className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-1.5 rounded-xl font-bold text-xs md:text-sm shadow-xs transition"
