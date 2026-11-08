@@ -62,7 +62,7 @@ export interface ExerciseTimerCfg {
 }
 
 export interface AppSettings {
-  theme: 'light' | 'dark';
+  theme: 'light' | 'dark' | 'green'; // 'green' = night reading (dark + green tint)
   dir: 'de' | 'fa' | 'rand';
   nw: number; // new words per day 0-500
   rv: number; // reviews per day 0-500
