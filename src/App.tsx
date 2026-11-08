@@ -4,6 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { onCloudUserChanged } from './utils/cloud';
+import { CloudAccountModal } from './components/CloudAccountModal';
 import { AppState, Word, CaseQuestion } from './types';
 import {
   loadState,
@@ -77,6 +79,9 @@ export default function App() {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [isImageExtractOpen, setIsImageExtractOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [cloudUser, setCloudUser] = useState<any>(null);
+  const [cloudOpen, setCloudOpen] = useState(false);
+  useEffect(() => onCloudUserChanged((u: any) => setCloudUser(u)), []);
   const [activeHelpTopic, setActiveHelpTopic] = useState<string | null>(null);
 
   // Toast
