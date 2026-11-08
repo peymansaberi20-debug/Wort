@@ -1,6 +1,5 @@
 import React from 'react';
 import { IconBtn } from './IconBtn';
-import { X, Save, HelpCircle } from 'lucide-react';
 import { X } from 'lucide-react';
 
 interface AboutModalProps {
