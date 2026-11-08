@@ -111,15 +111,16 @@ export default function App() {
       meta.setAttribute('name', 'color-scheme');
       document.head.appendChild(meta);
     }
-    meta.setAttribute('content', t);
-
-    if (t === 'dark') {
+    meta.setAttribute('content', t === 'green' ? 'dark' : t);
+    
+    if (t === 'dark' || t === 'green') {
       document.documentElement.classList.add('dark');
       document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
       document.body.classList.remove('dark');
     }
+    document.body.classList.toggle('green-tint', t === 'green');
   }, [state.set.theme]);
 
   // Handle Tab Navigation with bugfix for Request #5
@@ -215,13 +216,16 @@ export default function App() {
   };
 
   const handleToggleTheme = () => {
-    const nextTheme = state.set.theme === 'dark' ? 'light' : 'dark';
+    // cycle: light → dark → green (night reading) → light
+    const nextTheme: 'light' | 'dark' | 'green' =
+      state.set.theme === 'light' ? 'dark' :
+      state.set.theme === 'dark' ? 'green' : 'light';
     setState(prev => ({
       ...prev,
       set: { ...prev.set, theme: nextTheme }
     }));
   };
-
+  
   const handleSaveAndExit = () => {
     saveState(state);
     showToast('همه اطلاعات با موفقیت ذخیره شد. می‌توانید با آسودگی خارج شوید.');
