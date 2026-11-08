@@ -4,8 +4,8 @@ import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
-import { X, Save } from 'lucide-react';
 import { WordCompareModal } from '../components/WordCompareModal';
+import { X, Save, HelpCircle } from 'lucide-react';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
