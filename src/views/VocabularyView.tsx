@@ -475,14 +475,6 @@ return words
           const fd = (item.de && item.de.trim()) || formDe.trim();
           if (!nounLike && fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
         }
-        // the user's typed word: lowercase first letter when AI determined a non-noun
-        // (pos empty + no article also counts as non-noun)
-        const finalPos = String(item.pos || formPos || '').trim();
-        const isNoun = !!item.art || ['اسم', 'Nomen'].includes(finalPos);
-        if (!isNoun) {
-          const fd = (item.de && item.de.trim()) || formDe.trim();
-          if (fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
-        }
         onShowToast(`پروفایل کامل ۲۲ پارامتری با هوش مصنوعی تکمیل شد.`);
       } else if (errs.length > 0) {
         onShowToast(errs[0], true);
@@ -627,6 +619,7 @@ Answer ONLY a JSON array, no code fence, no commentary:
       const prompt = `You are a German vocabulary assistant. ${sourceLine}
 Give the 5 most common German equivalents (different senses if applicable). Answer ONLY a JSON array, no code fence, no commentary:
 [{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)","en":"closest English equivalent, lowercase"}]`;
+      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
       const list = parseAI(out)
         .filter((x: any) => x && typeof x.de === 'string' && x.de.trim())
         .slice(0, 5)
