@@ -343,11 +343,6 @@ const seg = pluralSegments2();
             {showFa && word.fa ? (
               <p className="text-xl md:text-2xl font-bold text-amber-200">{word.fa}</p>
             ) : null}
-            {word.en && (
-              <p className="text-sm md:text-base font-semibold text-sky-200 font-sans" dir="ltr">
-                {word.en}
-              </p>
-            )}
             <button
               onClick={() => setShowFa(value => !value)}
               className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-4 py-1.5 text-sm font-medium transition"
@@ -389,6 +384,13 @@ const seg = pluralSegments2();
 
         {/* Modal Body */}
         <div className="p-4 md:p-6 space-y-4">
+          {/* English equivalent — revealed with the translations toggle */}
+          {word.en && showFa && (
+            <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 rounded-2xl p-3.5 text-sm flex items-center justify-between gap-2">
+              <span className="font-bold text-sky-700 dark:text-sky-300">🇬🇧 معادل انگلیسی:</span>
+              <span dir="ltr" className="font-sans font-bold text-slate-900 dark:text-slate-100">{word.en}</span>
+            </div>
+          )}
           {/* Synonyms & Antonyms */}
           {(word.syn || word.ant) && (
             <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 text-sm space-y-2">
