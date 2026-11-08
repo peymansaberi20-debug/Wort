@@ -44,8 +44,8 @@ export const ConjugationLegend: React.FC = () => (
       {' '}آبی: پایانهٔ منظم
     </span>
     <span>
-      <b className="text-red-700 dark:text-red-400 font-extrabold underline decoration-red-500 decoration-2 underline-offset-2" dir="ltr">ä</b>
-      {' '}قرمز (زیرخط‌دار): تغییر ریشه
+      <b className="text-red-700 dark:text-red-400 font-extrabold underline decoration-red-500 decoration-2 underline-offset-2" dir="ltr">ä / e / ß</b>
+      {' '}قرمز (زیرخط‌دار): تغییر ریشه، «e» واسط (du leistest / er arbeitet) یا صوت اشتراکی با پایانهٔ کوتاه du (du heißt)
     </span>
   </div>
 );
