@@ -84,6 +84,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [formDe, setFormDe] = useState(editingWord?.de || '');
   const [formArt, setFormArt] = useState(editingWord?.art || '');
   const [formFa, setFormFa] = useState(editingWord?.fa || '');
+  const [formEn, setFormEn] = useState(editingWord?.en || '');
   const [formCat, setFormCat] = useState(editingWord?.cat || '');
   const [newCatInput, setNewCatInput] = useState('');
   const [formSyn, setFormSyn] = useState(editingWord?.syn || '');
@@ -137,6 +138,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       setFormDe(editingWord.de || '');
       setFormArt(editingWord.art || '');
       setFormFa(editingWord.fa || '');
+      setFormEn(editingWord.en || '');
       setFormCat(editingWord.cat || '');
       setFormSyn(editingWord.syn || '');
       setFormSynFa(editingWord.synFa || '');
@@ -258,6 +260,7 @@ return words
     setFormDe('');
     setFormArt('');
     setFormFa('');
+    setFormEn('');
     setFormCat('');
     setNewCatInput('');
     setFormSyn('');
@@ -440,6 +443,7 @@ return words
         }
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
+        if (item.en) setFormEn(item.en);
         if (item.syn) setFormSyn(item.syn);
         if (item.synFa) setFormSynFa(item.synFa);
         if (item.ant) setFormAnt(item.ant);
@@ -646,6 +650,7 @@ Give the 5 most common German equivalents (different senses if applicable). Answ
         de: formDe.trim(),
         art: formArt,
         fa: formFa.trim(),
+        en: formEn.trim(),
         cat: finalCat,
         syn: formSyn.trim(),
         synFa: formSynFa.trim(),
@@ -809,35 +814,45 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               <input
                 type="text"
                 dir="rtl"
-                placeholder="معنی دقیق فارسی — مثلاً: مدرسه"
+                placeholder="معنی دقیق فارسی — مثلاً: کار کردن"
                 value={formFa}
                 onChange={e => setFormFa(e.target.value)}
                 className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none"              />
             <button
-              type="button"
-              onClick={handleFaToDe}
-              disabled={faLoading || !formFa.trim()}
-              className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
-            >
-              {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
-            </button>
-            {faCandidates.length > 0 && (
-              <div className="mt-2.5 space-y-1.5">
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-200">معادل‌های پیشنهادی — یکی را انتخاب کن (کلیک → در کادر واژه می‌نشیند):</div>
-                {faCandidates.map((c, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => pickFaCandidate(c)}
-                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl px-3 py-2 transition flex items-center justify-between gap-2"
-                  >
-                    <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{c.short}</span>
-                    <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100">{c.art ? c.art + ' ' : ''}{c.de}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                            />
+              <input
+                type="text"
+                dir="ltr"
+                placeholder="English equivalent (from German)"
+                value={formEn}
+                onChange={e => setFormEn(e.target.value)}
+                className="mt-2 w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
+              />
+              <button
+                type="button"
+                onClick={handleFaToDe}
+                disabled={faLoading || !formFa.trim()}
+                className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
+              >
+                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
+              </button>
+              {faCandidates.length > 0 && (
+                <div className="mt-2.5 space-y-1.5">
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">معادل‌های پیشنهادی — یکی را انتخاب کن (کلیک → در کادر واژه می‌نشیند):</div>
+                  {faCandidates.map((c, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickFaCandidate(c)}
+                      className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl px-3 py-2 transition flex items-center justify-between gap-2"
+                    >
+                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{c.short}</span>
+                      <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100">{c.art ? c.art + ' ' : ''}{c.de}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           {/* AI Helper Bar */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
