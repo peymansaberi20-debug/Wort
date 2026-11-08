@@ -458,6 +458,13 @@ return words
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         if (item.cat && !formCat) setFormCat(item.cat);
+        // hard guarantee: non-noun headword is lowercase in the form (e.g. Machen → machen)
+        {
+          const posStr = String(item.pos || formPos || '').trim();
+          const nounLike = !!item.art || ['اسم', 'Nomen'].includes(posStr);
+          const fd = (item.de && item.de.trim()) || formDe.trim();
+          if (!nounLike && fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
+        }
         // the user's typed word: lowercase first letter when AI determined a non-noun
         // (pos empty + no article also counts as non-noun)
         const finalPos = String(item.pos || formPos || '').trim();
