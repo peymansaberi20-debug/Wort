@@ -839,7 +839,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 disabled={faLoading || (!formFa.trim() && !formEn.trim())}
                 className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
               >
-                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
+                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی</span>}
               </button>
               <button
                 type="button"
