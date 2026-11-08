@@ -497,8 +497,36 @@ return words
 
   const handleQuickTranslate = async () => {
     if (aiOperationRef.current) return;
+    // Reverse lookup: Persian or English meaning → closest German word; fills Fa and En boxes too
     if (!formDe.trim()) {
-      onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
+      const fa = formFa.trim();
+      const en = formEn.trim();
+      if (!fa && !en) {
+        onShowToast('ابتدا واژهٔ آلمانی یا معنی فارسی/انگلیسی را بنویسید.', true);
+        return;
+      }
+      aiOperationRef.current = true;
+      setTranslateLoading(true);
+      try {
+        const src = fa ? `Persian meaning: "${fa}"` : `English word or phrase: "${en}"`;
+        const out = await generateWithGemini(`You are a German vocabulary assistant. Given the input, find the single closest standard German dictionary word.
+ ${src}
+Answer ONLY a JSON array, no code fence, no commentary:
+[{"de":"German word without article","art":"der|die|das|","fa":"natural Persian translation","en":"closest English equivalent, lowercase"}]`, { timeoutMs: 15000, retries: 0 });
+        const r = parseAI(out)[0];
+        if (!r || !r.de) throw new Error('معادلی پیدا نشد.');
+        const m = /^(der|die|das)\s+(.+)$/i.exec(String(r.de).trim());
+        setFormDe(m ? m[2] : String(r.de).trim());
+        if (m && !formArt) setFormArt(m[1].toLowerCase());
+        if (r.fa) setFormFa(String(r.fa).trim());
+        if (r.en) setFormEn(String(r.en).trim());
+        onShowToast('واژهٔ آلمانی و ترجمه‌ها تکمیل شد.');
+      } catch (e: any) {
+        onShowToast(e?.message || 'ترجمه سریع ناموفق بود.', true);
+      } finally {
+        aiOperationRef.current = false;
+        setTranslateLoading(false);
+      }
       return;
     }
     if (checkForDuplicate()) {
@@ -579,7 +607,7 @@ return words
   };
 
   // Phase 3: Persian → German equivalents (find candidates from a Persian meaning)
-  const [faCandidates, setFaCandidates] = useState<{ de: string; art: string; short: string }[]>([]);
+  const [faCandidates, setFaCandidates] = useState<{ de: string; art: string; short: string; en?: string }[]>([]);
   const [faLoading, setFaLoading] = useState(false);
   // suggestions must vanish whenever the form closes (× / save / tab switch)
   React.useEffect(() => {
@@ -598,11 +626,11 @@ return words
       const hintLang = fa ? 'Persian hint' : 'short Persian hint';
       const prompt = `You are a German vocabulary assistant. ${sourceLine}
 Give the 5 most common German equivalents (different senses if applicable). Answer ONLY a JSON array, no code fence, no commentary:
-[{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)"}]`;      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
+[{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)","en":"closest English equivalent, lowercase"}]`;
       const list = parseAI(out)
         .filter((x: any) => x && typeof x.de === 'string' && x.de.trim())
         .slice(0, 5)
-        .map((x: any) => ({ de: String(x.de).trim(), art: ['der', 'die', 'das'].includes(String(x.art || '')) ? String(x.art) : '', short: String(x.short || '').trim() }));
+        .map((x: any) => ({ de: String(x.de).trim(), art: ['der', 'die', 'das'].includes(String(x.art || '')) ? String(x.art) : '', short: String(x.short || '').trim(), en: String(x.en || '').trim() }));
       setFaCandidates(list);
       if (list.length === 0) onShowToast('معادلی پیدا نشد؛ عبارت را دقیق‌تر بنویس.', true);
     } catch (e: any) {
@@ -611,7 +639,7 @@ Give the 5 most common German equivalents (different senses if applicable). Answ
       setFaLoading(false);
     }
   };
-  const pickFaCandidate = (c: { de: string; art: string; short: string }) => {
+  const pickFaCandidate = (c: { de: string; art: string; short: string; en?: string }) => {
     // suggestions + typed Persian cleared; picked word lands in the German box; form stays open
     setFaCandidates([]);
     setFormFa('');
@@ -744,15 +772,13 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 </svg>
               </IconBtn>
               <IconBtn onClick={() => onOpenHelp('add_word')} title="راهنمای افزودن واژه">❓</IconBtn>
-              <span className="rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-xs font-bold shadow-xs">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  className="h-9 px-4 flex items-center justify-center rounded-xl transition hover:opacity-95"
-                >
-                  {isEditing ? '💾 ذخیره' : '➕ افزودن'}
-                </button>
-              </span>
+              <IconBtn onClick={handleSave} title={isEditing ? 'ذخیره' : 'افزودن'}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+              </IconBtn>
             </div>
           </div>
 
@@ -810,8 +836,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 <button
                   type="button"
                   onClick={handleQuickTranslate}
-                  disabled={translateLoading || !formDe.trim()}
-                  className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition flex items-center gap-1"
+                  disabled={translateLoading || (!formDe.trim() && !formFa.trim() && !formEn.trim())}
+                  className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition flex items-center gap-1 flex-shrink-0 whitespace-nowrap"
                 >
                   {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
                 </button>
@@ -833,22 +859,24 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 onChange={e => setFormEn(e.target.value)}
                 className="mt-2 w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
               />
-              <button
-                type="button"
-                onClick={handleFaToDe}
-                disabled={faLoading || (!formFa.trim() && !formEn.trim())}
-                className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
-              >
-                {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => setFaCandidates([])}
-                disabled={faCandidates.length === 0}
-                className="mt-2.5 border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs md:text-sm font-bold disabled:opacity-40 transition flex items-center gap-1"
-              >
-                🗑 پاک کردن لیست
-              </button>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleFaToDe}
+                  disabled={faLoading || (!formFa.trim() && !formEn.trim())}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5 flex-shrink-0"
+                >
+                  {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFaCandidates([])}
+                  disabled={faCandidates.length === 0}
+                  className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs md:text-sm font-bold disabled:opacity-40 transition flex items-center gap-1 flex-shrink-0"
+                >
+                  🗑 پاک کردن لیست
+                </button>
+              </div>
               {faCandidates.length > 0 && (
                 <div className="mt-2.5 space-y-1.5">
                   <div className="text-xs font-bold text-slate-700 dark:text-slate-200">معادل‌های پیشنهادی — یکی را انتخاب کن (کلیک → در کادر واژه می‌نشیند):</div>
@@ -859,8 +887,11 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                       onClick={() => pickFaCandidate(c)}
                       className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-xl px-3 py-2 transition flex items-center justify-between gap-2"
                     >
+                    <span className="flex flex-col items-start leading-tight min-w-0">
                       <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{c.short}</span>
-                      <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100">{c.art ? c.art + ' ' : ''}{c.de}</span>
+                      {c.en && <span dir="ltr" className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">{c.en}</span>}
+                    </span>
+                    <span dir="ltr" className="font-sans font-bold text-sm text-slate-900 dark:text-slate-100 flex-shrink-0">{c.art ? c.art + ' ' : ''}{c.de}</span>
                     </button>
                   ))}
                 </div>
@@ -913,31 +944,33 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               Fulfills User Request #26:
               "باکس «خروجی هوش مصنوعی را اینجا بچسبانید رو کوچیک کن الکی فضا گرفته یک خطش کن"
             */}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="space-y-2 pt-1">
               <input
                 type="text"
                 dir="ltr"
-                placeholder="خروجی JSON هوش مصنوعی را اینجا بچسبانید (یک خط)..."
+                placeholder="خروجی JSON هوش مصنوعی را اینجا بچسبانید..."
                 value={pasteAiJson}
                 onChange={e => setPasteAiJson(e.target.value)}
-                className="flex-1 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-1.5 text-xs outline-none font-mono"
+                className="w-full bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-1.5 text-xs outline-none font-mono"
               />
-              <button
-                type="button"
-                onClick={handleApplyPastedJson}
-                disabled={!pasteAiJson.trim()}
-                className="bg-[#1f5fbf] text-white px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40 transition flex-shrink-0"
-              >
-                اعمال JSON
-              </button>
-              <button
-                type="button"
-                onClick={() => setPasteAiJson('')}
-                disabled={!pasteAiJson.trim()}
-                className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40 transition flex-shrink-0"
-              >
-                🗑 حذف JSON
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleApplyPastedJson}
+                  disabled={!pasteAiJson.trim()}
+                  className="bg-[#1f5fbf] hover:bg-[#194ea0] text-white px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 transition flex items-center justify-center gap-1.5"
+                >
+                  📥 اعمال JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPasteAiJson('')}
+                  disabled={!pasteAiJson.trim()}
+                  className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 transition flex items-center justify-center gap-1.5"
+                >
+                  🗑 حذف JSON
+                </button>
+              </div>
             </div>
           </div>
 
