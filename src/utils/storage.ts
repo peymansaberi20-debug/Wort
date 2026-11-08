@@ -52,6 +52,8 @@ export function norm(w: any): Word | null {
     acc: Array.isArray(w.acc) ? w.acc.map(String) : [],
     tags: s('tags'),
     notes: s('notes'),
+    def: s('def'),
+    en: s('en'),
     img: IMGOK.test(s('img')) && s('img').length < 600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,
