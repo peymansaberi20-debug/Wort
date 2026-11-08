@@ -731,16 +731,15 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[#dde1ea] dark:border-[#333b4a] pt-5 pb-[calc(6.25rem+env(safe-area-inset-bottom))] md:pb-6 px-4 text-center text-xs text-[#475569] dark:text-[#c0c8d5] space-y-1 mt-auto">
-        <p>
-          نام محصول: <b>WörterBuch: واژه‌نامه آلمانی و فلش کارت</b>
+      <footer className="border-t border-[#dde1ea] dark:border-[#333b4a] pt-5 pb-[calc(6.25rem+env(safe-area-inset-bottom))] md:pb-6 px-4 text-center text-xs text-[#475569] dark:text-[#c0c8d5] space-y-1.5 mt-auto">
+        <p dir="ltr" className="font-sans font-extrabold text-sm text-[#1f5fbf] dark:text-[#7fb0ff] tracking-wide">WörterBuch</p>
+        <p>پلتفرم هوشمند یادگیری، تثبیت و مرور واژگان زبان آلمانی</p>
+        <p className="flex items-center justify-center gap-3 flex-wrap">
+          <span>طراحی و توسعه: <b>پیمان صابری</b></span>
+          <span aria-hidden="true">•</span>
+          <a href="mailto:peymansaberi20@gmail.com" dir="ltr" className="text-[#1f5fbf] dark:text-[#7fb0ff] font-sans hover:underline">peymansaberi20@gmail.com</a>
         </p>
-        <p>
-          طراحی و برنامه‌نویسی: <b>پیمان صابری (Peyman Saberi)</b>
-        </p>
-        <p>
-          تماس: <a href="mailto:peymansaberi20@gmail.com" dir="ltr" className="text-[#1f5fbf] dark:text-[#7fb0ff]">peymansaberi20@gmail.com</a>
-        </p>
+        <p className="text-[11px] opacity-80">© 2025 Peyman Saberi — تمام حقوق این برنامه محفوظ است. استفادهٔ تجاری بدون اجازهٔ کتبی مجاز نیست.</p>
       </footer>
 
       {/* Modals */}
