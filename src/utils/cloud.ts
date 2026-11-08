@@ -36,6 +36,7 @@ export function onCloudUserChanged(cb: (u: User | null) => void): () => void {
 
 function friendly(e: any): string {
   const c = String(e?.code || '');
+  if (c.includes('permission-denied')) return 'دسترسی توسط قوانین امنیتی Firestore رد شد: کنسول ← Firestore Database ← تب Regeln ← متن قوانین را کامل بگذار و Veröffentlichen بزن.';
   if (c.includes('popup-closed') || c.includes('cancelled-popup')) return 'پنجرهٔ ورود گوگل بسته شد.';
   if (c.includes('unauthorized-domain')) return 'دامنهٔ این سایت در Firebase مجاز نیست (Authentication ← Settings ← Authorized domains).';
   if (c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found') || c.includes('invalid-login-credentials')) return 'ایمیل یا رمز عبور درست نیست.';
