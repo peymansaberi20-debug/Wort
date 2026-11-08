@@ -4,6 +4,7 @@ import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
+import { X, Save } from 'lucide-react';
 import { WordCompareModal } from '../components/WordCompareModal';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
@@ -763,19 +764,9 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               </h3>
             </div>
             <div className="flex items-center gap-2" dir="ltr">
-              <IconBtn onClick={() => { resetForm(); setFaCandidates([]); }} title="انصراف">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </IconBtn>
-              <IconBtn onClick={() => onOpenHelp('add_word')} title="راهنمای افزودن واژه">❓</IconBtn>
-              <IconBtn onClick={handleSave} title={isEditing ? 'ذخیره' : 'افزودن'}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-              </IconBtn>
+              <IconBtn onClick={() => { resetForm(); setFaCandidates([]); }} title="انصراف"><X size={18} className="text-red-500" /></IconBtn>
+              <IconBtn onClick={() => onOpenHelp('add_word')} title="راهنمای افزودن واژه"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
+              <IconBtn onClick={handleSave} title={isEditing ? 'ذخیره' : 'افزودن'}><Save size={18} className="text-[#1f5fbf]" /></IconBtn>
             </div>
           </div>
 
