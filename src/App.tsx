@@ -555,6 +555,16 @@ export default function App() {
           isDuplicateModalOpen ||
           isWordManagerOpen
         }
+        onOpenCloud={() => setCloudOpen(true)}
+        cloudEmail={cloudUser?.email || null}
+      />
+      <CloudAccountModal
+        open={cloudOpen}
+        onClose={() => setCloudOpen(false)}
+        user={cloudUser}
+        state={state}
+        onApplyState={s => setState(s)}
+        onShowToast={showToast}
       />
 
       {/* Main Container */}
