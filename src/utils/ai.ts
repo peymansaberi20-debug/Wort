@@ -289,6 +289,9 @@ The CEFR level: A1, A2, B1, B2, C1, or C2.
 ex
 A short German DEFINITION of the headword itself (Bedeutung) at B1–B2 level, in simple German, covering the most common everyday meaning first for polysemous words. Not an example sentence.
 
+en
+The closest English equivalent of the German headword — translated from the German meaning directly (never via the Persian translation). One natural English word or short expression, lowercase. Use "" only if no meaningful equivalent exists.
+
 exFa
 A natural Persian translation of the definition in ex.
 
@@ -488,6 +491,7 @@ The object(s) must contain exactly these fields in this exact order:
 24. imperativIhr: For verbs, the standard informal plural imperative. Otherwise, "".
 25. imperativSie: For verbs, the standard formal imperative. Otherwise, "".
 26. sep: For separable verbs, provide the separable prefix only. Otherwise, "".
+28. "en": the closest English equivalent of the German word — translate FROM THE GERMAN sense directly (not via Persian). One natural English word or short expression, lowercase. If none exists, use "".
 27. notes: A Persian-language multiline string containing exactly the following four sections, in this order. Separate the sections using the JSON escape sequence \\n within the string. Do not insert literal, unescaped line breaks inside the JSON string.
 
 خانواده واژگانی: اسم: … | فعل مرتبط: … | صفت مرتبط: …
@@ -672,6 +676,7 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
     const w = norm(r);
     if (w) {
       if (typeof r.def === 'string' && r.def.trim()) w.def = r.def.trim();
+      if (typeof r.en === 'string' && r.en.trim()) w.en = r.en.trim();
       // non-nouns are stored with a lowercase first letter (e.g. verbs "machen")
       const posStr = String((w as any).pos || '').trim();
       const looksVerb = /(?:en|eln|ern)$/.test(w.de.toLowerCase()) || ['فعل', 'Verb'].includes(posStr);
