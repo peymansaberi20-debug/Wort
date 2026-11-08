@@ -261,8 +261,13 @@ export default function App() {
       showToast(isEdit ? 'تغییرات واژه ذخیره شد.' : 'واژه با موفقیت به کتابخانه افزوده شد.');
             return { ...prev, words: nextWords };
     });
-    // Phase 3: after adding a new word, open its profile; closing it returns to the vocabulary view
-    if (newWord) setSelectedWord(newWord);
+    // Phase 3: after adding or editing a word, open its profile; closing it returns to the vocabulary view
+    if (newWord) {
+      setSelectedWord(newWord);
+    } else if (isEdit) {
+      const updated = state.words.find(w => w.id === editingWordId);
+      if (updated) setSelectedWord(norm({ ...updated, ...wordData, id: updated.id }) as Word);
+    }
     setEditingWordId(null);
   };
 
