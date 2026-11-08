@@ -237,11 +237,22 @@ export function segmentConjugation(
     }
   }
 
-  // du liest / du heißt / du tanzt: the stem's final s-sound is shared with the "-st" ending
+  // du heißt / du liest / du tanzt: the stem's final s-sound meets the short "-t" ending
+  // (regular du would be "-st"). The shared letter stays in the stem and is marked red
+  // so the shortened ending is visible.
   if (pronounIndex === 1 && ending === 't' && /[sßxz]$/i.test(stem) && !red[stem.length - 1]) {
-    ending = stem[stem.length - 1] + ending;
-    stem = stem.slice(0, -1);
-    red.pop();
+    red[stem.length - 1] = true;
+  }
+
+  // Connecting vowel after stems that cannot take -st/-t directly (leist-en, atm-en, öffn-en):
+  // du leistest (est → e + st), er/ihr arbeitet (et → e + t). The "e" is marked red.
+  let connectingE = false;
+  if (pronounIndex === 1 && ending === 'est') {
+    ending = ending.slice(1);
+    connectingE = true;
+  } else if ((pronounIndex === 2 || pronounIndex === 4) && ending === 'et') {
+    ending = ending.slice(1);
+    connectingE = true;
   }
 
   // er hält / ihr ... : the stem's final t is shared with the "-t" ending (halten, raten, gelten)
@@ -258,6 +269,7 @@ export function segmentConjugation(
   }
 
   for (let i = 0; i < stem.length; i++) pushSeg(out, stem[i], red[i] ? 'change' : 'stem');
+  if (connectingE) pushSeg(out, 'e', 'change');
   pushSeg(out, ending, 'ending');
   return finish();
 }
