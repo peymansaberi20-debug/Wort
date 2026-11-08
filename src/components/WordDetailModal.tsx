@@ -343,6 +343,11 @@ const seg = pluralSegments2();
             {showFa && word.fa ? (
               <p className="text-xl md:text-2xl font-bold text-amber-200">{word.fa}</p>
             ) : null}
+            {word.en && (
+              <p className="text-sm md:text-base font-semibold text-sky-200 font-sans" dir="ltr">
+                {word.en}
+              </p>
+            )}
             <button
               onClick={() => setShowFa(value => !value)}
               className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-4 py-1.5 text-sm font-medium transition"
