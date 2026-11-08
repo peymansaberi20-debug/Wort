@@ -786,8 +786,9 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           */}
           <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4">
             <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">
+              <label className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">
               کلمهٔ آلمانی (گام اول - الزامی):
+              </label>
               <button
                 type="button"
                 onClick={handleQuickTranslate}
@@ -796,16 +797,15 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               >
                 {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
               </button>
-            </label>
-            <input
-              type="text"
-              dir="ltr"
-              placeholder="z.B. Entscheidung یا gehen یا schön"
-              value={formDe}
-              onChange={e => { setFormDe(e.target.value); setDuplicateWord(null); }}
-              className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
-            />
             </div>
+              <input
+                type="text"
+                dir="ltr"
+                placeholder="z.B. Entscheidung یا gehen یا schön"
+                value={formDe}
+                onChange={e => { setFormDe(e.target.value); setDuplicateWord(null); }}
+                className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
+              />
           </div>
           {duplicateWord && (
             <div role="alert" className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
