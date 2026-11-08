@@ -545,6 +545,7 @@ return words
         if (item.de) setFormDe(item.de);
         if (item.art) setFormArt(item.art);
         if (item.fa) setFormFa(item.fa);
+        if (item.en) setFormEn(item.en);
         if (item.cat) setFormCat(item.cat);
         if (item.syn) setFormSyn(item.syn);
         if (item.synFa) setFormSynFa(item.synFa);
@@ -586,14 +587,18 @@ return words
   }, [isFormOpen]);
   const handleFaToDe = async () => {
     const fa = formFa.trim();
-    if (!fa || faLoading) return;
+    const en = formEn.trim();
+    if ((!fa && !en) || faLoading) return;
     setFaLoading(true);
     setFaCandidates([]);
     try {
-      const prompt = `You are a German vocabulary assistant. A Persian-speaking learner knows the meaning "${fa}" and wants the German word.
+      const sourceLine = fa
+        ? `A Persian-speaking learner knows the meaning "${fa}" and wants the German word.`
+        : `An English-speaking learner knows the English word/phrase "${en}" and wants the German word. Translate from ENGLISH to German directly.`;
+      const hintLang = fa ? 'Persian hint' : 'short Persian hint';
+      const prompt = `You are a German vocabulary assistant. ${sourceLine}
 Give the 5 most common German equivalents (different senses if applicable). Answer ONLY a JSON array, no code fence, no commentary:
-[{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)"}]`;
-      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
+[{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)"}]`;      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
       const list = parseAI(out)
         .filter((x: any) => x && typeof x.de === 'string' && x.de.trim())
         .slice(0, 5)
@@ -801,7 +806,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
 
           <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">معنی فارسی (گام دوم — اختیاری):</label>
+                <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">معنی فارسی/انگلیسی (گام دوم—اختیاری):</label>
                 <button
                   type="button"
                   onClick={handleQuickTranslate}
@@ -831,10 +836,18 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               <button
                 type="button"
                 onClick={handleFaToDe}
-                disabled={faLoading || !formFa.trim()}
+                disabled={faLoading || (!formFa.trim() && !formEn.trim())}
                 className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5"
               >
                 {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFaCandidates([])}
+                disabled={faCandidates.length === 0}
+                className="mt-2.5 border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs md:text-sm font-bold disabled:opacity-40 transition flex items-center gap-1"
+              >
+                🗑 پاک کردن لیست
               </button>
               {faCandidates.length > 0 && (
                 <div className="mt-2.5 space-y-1.5">
@@ -860,7 +873,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 type="button"
                 onClick={() => void handleAiAutoFill()}
                 disabled={aiLoading || translateLoading || !formDe.trim()}
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
+                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center justify-center gap-1.5 flex-1 min-w-[180px]"
               >
                 {aiLoading ? (
                   <>
@@ -875,7 +888,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 type="button"
                 onClick={handleQuickTranslate}
                 disabled={translateLoading || aiLoading || !formDe.trim()}
-                className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1"
+                className="bg-[#b45309] hover:bg-[#92400e] text-white px-4 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5 flex-1 min-w-[180px]"
               >
                 {translateLoading ? (
                   <>
@@ -890,7 +903,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 type="button"
                 onClick={handleCopyPrompt}
                 disabled={!formDe.trim()}
-                className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-xl text-xs font-medium transition disabled:opacity-40"
+                className="bg-[#0f766e] hover:bg-[#115e59] text-white px-4 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5 flex-1 min-w-[180px]"
               >
                 📋 کپی دستور هوش مصنوعی
               </button>
@@ -916,6 +929,14 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 className="bg-[#1f5fbf] text-white px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40 transition flex-shrink-0"
               >
                 اعمال JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => setPasteAiJson('')}
+                disabled={!pasteAiJson.trim()}
+                className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40 transition flex-shrink-0"
+              >
+                🗑 حذف JSON
               </button>
             </div>
           </div>
