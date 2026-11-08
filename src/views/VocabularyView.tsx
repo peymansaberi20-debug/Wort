@@ -619,11 +619,11 @@ Answer ONLY a JSON array, no code fence, no commentary:
       const sourceLine = fa
         ? `A Persian-speaking learner knows the meaning "${fa}" and wants the German word.`
         : `An English-speaking learner knows the English word/phrase "${en}" and wants the German word. Translate from ENGLISH to German directly.`;
-      const hintLang = fa ? 'Persian hint' : 'short Persian hint';
       const prompt = `You are a German vocabulary assistant. ${sourceLine}
-Give the 5 most common German equivalents (different senses if applicable). Answer ONLY a JSON array, no code fence, no commentary:
-[{"de":"German word without article","art":"der|die|das|","short":"very short Persian hint (2-5 words)","en":"closest English equivalent, lowercase"}]`;
-      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
+Give the 5 most common German equivalents (different senses if applicable).
+Every "short" value MUST be in PERSIAN (2-5 words), regardless of the input language.
+Answer ONLY a JSON array, no code fence, no commentary:
+[{"de":"German word without article","art":"der|die|das|","short":"Persian hint (2-5 words)","en":"closest English equivalent, lowercase"}]`;      const out = await generateWithGemini(prompt, { timeoutMs: 15000, retries: 0 });
       const list = parseAI(out)
         .filter((x: any) => x && typeof x.de === 'string' && x.de.trim())
         .slice(0, 5)
