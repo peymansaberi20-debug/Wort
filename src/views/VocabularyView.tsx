@@ -856,7 +856,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 onChange={e => setFormEn(e.target.value)}
                 className="mt-2 w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
               />
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <div className="mt-2.5 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={handleFaToDe}
