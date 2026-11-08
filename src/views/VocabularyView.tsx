@@ -419,9 +419,13 @@ return words
       const { ws, errs } = aiToIMP(parsed, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined);
             if (choice?.instruction.includes('فیلد ورودی را نیز با مصدر خروجی جایگزین کن') && ws[0]?.de) setFormDe(ws[0].de);
       // user typed a misspelling and let AI continue: keep the AI's correct dictionary form
-      if (!choice && ws[0]?.de && lev(lower.replace(/^(der|die|das)\s+/i, ''), ws[0].de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) <= 3 && lower.replace(/^(der|die|das)\s+/i, '') !== ws[0].de.toLowerCase().replace(/^(der|die|das)\s+/i, '')) {
-        setFormDe(ws[0].de);
-        onShowToast(`املای واژه اصلاح شد: ${formDe.trim()} → ${ws[0].de}`);
+      if (!choice && ws[0]?.de) {
+        const typedLower = formDe.trim().toLocaleLowerCase('de');
+        const aiLower = ws[0].de.trim().toLocaleLowerCase('de');
+        if (typedLower && typedLower !== aiLower && lev(typedLower, aiLower) <= 3) {
+          setFormDe(ws[0].de);
+          onShowToast(`املای واژه اصلاح شد: ${formDe.trim()} → ${ws[0].de}`);
+        }
       }
             if (ws.length > 0) {
         const item = ws[0];
@@ -781,8 +785,17 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             که کاربر وارد ک شد سردرگم نباشه و بدونه اول باید کلمه رو اونجا بزنه ."
           */}
           <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4">
-            <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff] mb-1.5">
+            <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">
               کلمهٔ آلمانی (گام اول - الزامی):
+              <button
+                type="button"
+                onClick={handleQuickTranslate}
+                disabled={translateLoading || !formDe.trim()}
+                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800 disabled:opacity-40 transition flex items-center gap-1 flex-shrink-0 whitespace-nowrap"
+              >
+                {translateLoading ? '⏳...' : '⚡ ترجمه سریع'}
+              </button>
             </label>
             <input
               type="text"
@@ -792,8 +805,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               onChange={e => { setFormDe(e.target.value); setDuplicateWord(null); }}
               className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none font-sans"
             />
+            </div>
           </div>
-
           {duplicateWord && (
             <div role="alert" className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
               <div className="font-extrabold text-amber-900 dark:text-amber-200">
@@ -908,21 +921,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                   <span>✨ تکمیل خودکار کل واژه (۲۲ پارامتر)</span>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={handleQuickTranslate}
-                disabled={translateLoading || aiLoading || !formDe.trim()}
-                className="bg-[#b45309] hover:bg-[#92400e] text-white px-4 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5 flex-1 min-w-[180px]"
-              >
-                {translateLoading ? (
-                  <>
-                    <span className="inline-block animate-spin">⚡</span>
-                    <span>در حال ترجمه...</span>
-                  </>
-                ) : (
-                  <span>⚡ ترجمه و آرتیکل سریع (~۱ ثانیه)</span>
-                )}
-              </button>
+
               <button
                 type="button"
                 onClick={handleCopyPrompt}
