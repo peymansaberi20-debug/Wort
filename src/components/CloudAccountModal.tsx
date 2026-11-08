@@ -174,28 +174,43 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
                 )}
               </div>
 
-              {confirmUpload ? (
-                <button type="button" onClick={doUpload} disabled={!!busy}
-                  className="w-full h-11 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition disabled:opacity-50">
-                  ⚠️ مطمئنی؟ محتوای ابر با این دستگاه جایگزین شود؟ (کلیک دوباره = تأیید)
-                </button>
+              {confirmUpload || confirmDownload ? (
+                <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2.5">
+                  <div className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-6">
+                    {confirmUpload
+                      ? <>تأیید آپلود به ابر: <b dir="ltr">{state.words.length}</b> واژه از این دستگاه <b dir="ltr">→</b> ابر. محتوای قبلیِ ابر پاک می‌شود؛ داده‌های این دستگاه دست‌نخورده می‌ماند.</>
+                      : <>تأیید دریافت از ابر: <b dir="ltr">{meta ? meta.words : 0}</b> واژه از ابر <b dir="ltr">→</b> این دستگاه. داده‌های فعلی این دستگاه جایگزین می‌شوند (پشتیبان خودکار می‌گیرد).</>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={confirmUpload ? doUpload : doDownload}
+                      disabled={!!busy}
+                      className="h-11 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition disabled:opacity-50"
+                    >
+                      {busy ? '⏳ در حال اجرا…' : 'بله، اجرا کن'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setConfirmUpload(false); setConfirmDownload(false); }}
+                      disabled={!!busy}
+                      className="h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold transition"
+                    >
+                      انصراف
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <button type="button" onClick={() => { setConfirmDownload(false); setConfirmUpload(true); }} disabled={!!busy}
-                  className="w-full h-11 rounded-xl bg-[#1f5fbf] hover:bg-[#194ea0] text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">
-                  <Upload size={16} /> آپلود کتابخانهٔ این دستگاه به ابر
-                </button>
-              )}
-
-              {confirmDownload ? (
-                <button type="button" onClick={doDownload} disabled={!!busy}
-                  className="w-full h-11 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold transition disabled:opacity-50">
-                  ⚠️ مطمئنی؟ داده‌های این دستگاه با ابر جایگزین شود؟ (کلیک دوباره = تأیید؛ پشتیبان خودکار می‌گیرد)
-                </button>
-              ) : (
-                <button type="button" onClick={() => { setConfirmUpload(false); setConfirmDownload(true); }} disabled={!!busy}
-                  className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">
-                  <Download size={16} /> دریافت از ابر روی این دستگاه
-                </button>
+                <>
+                  <button type="button" onClick={() => { setConfirmDownload(false); setConfirmUpload(true); }} disabled={!!busy}
+                    className="w-full h-11 rounded-xl bg-[#1f5fbf] hover:bg-[#194ea0] text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">
+                    <Upload size={16} /> آپلود کتابخانهٔ این دستگاه به ابر
+                  </button>
+                  <button type="button" onClick={() => { setConfirmUpload(false); setConfirmDownload(true); }} disabled={!!busy}
+                    className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">
+                    <Download size={16} /> دریافت از ابر روی این دستگاه
+                  </button>
+                </>
               )}
 
               <button type="button" onClick={() => run('out', async () => { await signOutCloud(); })}
