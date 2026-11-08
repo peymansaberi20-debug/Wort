@@ -806,7 +806,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
 
           <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">معنی فارسی/انگلیسی (گام دوم—اختیاری):</label>
+                <label className="block text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">معنی فارسی/انگلیسی (اختیاری):</label>
                 <button
                   type="button"
                   onClick={handleQuickTranslate}
