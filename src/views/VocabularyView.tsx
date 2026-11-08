@@ -870,15 +870,15 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                   type="button"
                   onClick={handleFaToDe}
                   disabled={faLoading || (!formFa.trim() && !formEn.trim())}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center gap-1.5 flex-shrink-0"
+                  className="bg-[#1f5fbf] hover:bg-[#194ea0] text-white px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 transition flex items-center justify-center gap-1.5"
                 >
-                  {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>پیدا کردن معادل‌های آلمانی</span>}
+                  {faLoading ? <><span className="inline-block animate-spin">⏳</span><span>در حال یافتن معادل‌ها…</span></> : <span>🇩🇪 معادل‌های آلمانی این معنی را بیاب</span>}
                 </button>
                 <button
                   type="button"
                   onClick={() => setFaCandidates([])}
                   disabled={faCandidates.length === 0}
-                  className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs md:text-sm font-bold disabled:opacity-40 transition flex items-center gap-1 flex-shrink-0"
+                  className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 transition flex items-center justify-center gap-1.5"
                 >
                   🗑 پاک کردن لیست
                 </button>
