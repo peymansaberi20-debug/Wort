@@ -71,6 +71,22 @@ export async function signOutCloud(): Promise<void> {
   await signOut(getAuth());
 }
 
+/** Firestore rejects undefined values — strip them recursively (keeps null as ""). */
+function sanitize<T>(value: T): T {
+  if (value === undefined) return undefined as unknown as T;
+  if (value === null) return value;
+  if (Array.isArray(value)) return value.map(v => sanitize(v)) as unknown as T;
+  if (typeof value === 'object') {
+    const out: any = {};
+    for (const [k, v] of Object.entries(value as any)) {
+      const clean = sanitize(v);
+      if (clean !== undefined) out[k] = clean === null ? '' : clean;
+    }
+    return out;
+  }
+  return value;
+}
+
 function chunkBySize<T>(items: T[], maxBytes = 550000): T[][] {
   const chunks: T[][] = [];
   let cur: T[] = [];
@@ -109,14 +125,14 @@ export async function uploadStateToCloud(user: User, state: AppState): Promise<v
   let batch = writeBatch(db);
   let ops = 0;
   const flush = async () => { if (ops > 0) { await batch.commit(); batch = writeBatch(db); ops = 0; } };
-  chunkBySize(state.words).forEach((items, i) => { batch.set(doc(db, 'users', user.uid, 'words', `c${i}`), { i, items }); ops++; });
-  chunkBySize(state.hist).forEach((items, i) => { batch.set(doc(db, 'users', user.uid, 'hist', `c${i}`), { i, items }); ops++; });
+  chunkBySize(sanitize(state.words)).forEach((items, i) => { batch.set(doc(db, 'users', user.uid, 'words', `c${i}`), { i, items }); ops++; });
+  chunkBySize(sanitize(state.hist)).forEach((items, i) => { batch.set(doc(db, 'users', user.uid, 'hist', `c${i}`), { i, items }); ops++; });
   await flush();
 
-  await setDoc(doc(db, 'users', user.uid, 'meta', 'main'), {
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'main'), sanitize({
     v: state.v, sv: state.sv, set: state.set, daily: state.daily,
     words: state.words.length, hist: state.hist.length, updatedAt: Date.now()
-  });
+  }));
 }
 
 /** Metadata of the cloud mirror (null = cloud is empty). */
