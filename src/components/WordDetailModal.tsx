@@ -7,6 +7,7 @@ import { isLeech } from '../utils/storage';
 import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
+import { X, Pencil, Trash2 } from 'lucide-react';
 
 interface WordDetailModalProps {
   word: Word | null;
@@ -300,25 +301,13 @@ const seg = pluralSegments2();
         */}
         <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-start gap-2">          
           {/* Phase 2 Sec.1: icon strip — close leftmost, then image, edit, delete */}
-          <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="w-4 h-4" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </IconBtn>
+          <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
           <div className="flex items-center gap-1.5">
             <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
-              {word.img ? '🖼' : '📷'}
+              {word.img ? '🖼️' : '📷'}
             </IconBtn>
-            <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-              </svg>
-            </IconBtn>
-            <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
-                <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-            </IconBtn>
+            <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
+            <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
           </div>
         </div>
 
