@@ -23,10 +23,10 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex flex-col min-w-0 overflow-hidden">
           <h1 className="text-sm md:text-base font-bold truncate flex items-center gap-1.5 leading-tight">
             <span dir="ltr" className="font-sans font-extrabold tracking-wide">WörterBuch</span>
-            <span className="opacity-90 font-medium text-xs md:text-sm">: واژه‌نامه آلمانی و فلش کارت</span>
+          <span className="opacity-90 font-medium text-xs md:text-sm">— پلتفرم هوشمند یادگیری واژگان آلمانی</span>
           </h1>
-          <span className="text-[11px] md:text-xs text-white/80 font-normal truncate">
-            طراحی و برنامه‌نویسی: پیمان صابری (<span dir="ltr">Peyman Saberi</span>)
+          <span className="text-[11px] md:text-xs text-white/70 font-normal truncate">
+            طراحی و توسعه: <span dir="ltr" className="font-medium">Peyman Saberi</span> • © 2025 تمام حقوق محفوظ است
           </span>
         </div>
       </div>
