@@ -869,7 +869,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                   type="button"
                   onClick={() => setFaCandidates([])}
                   disabled={faCandidates.length === 0}
-                  className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 transition flex items-center justify-center gap-1.5"
+                  className="border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 px-2 py-2 rounded-xl text-xs font-bold disabled:opacity-40 transition flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   🗑 پاک کردن لیست
                 </button>
