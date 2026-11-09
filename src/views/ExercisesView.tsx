@@ -587,7 +587,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
               <textarea
                 dir="rtl" rows={2} value={chatQ}
                 onChange={e => setChatQ(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void askChat(); } }}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); void askChat(); } }}
                 placeholder="سوالت را اینجا بنویس…"
                 className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none resize-none"
               />
