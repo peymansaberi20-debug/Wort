@@ -15,10 +15,11 @@ interface CloudAccountModalProps {
   state: AppState;
   onApplyState: (s: AppState) => void;
   onShowToast?: (msg: string, isErr?: boolean) => void;
+  onSyncEnabled?: (uid: string) => void;
 }
 
 export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
-  open, onClose, user, state, onApplyState, onShowToast
+  open, onClose, user, state, onApplyState, onShowToast, onSyncEnabled
 }) => {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -66,8 +67,9 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
     await uploadStateToCloud(user, state);
     setMeta(await fetchCloudMeta(user));
     setConfirmUpload(false);
-    setMsg({ text: `☁️ آپلود کامل شد (${state.words.length} واژه).`, err: false });
-    onShowToast?.('کتابخانه به فضای ابری آپلود شد.', false);
+        if (onSyncEnabled) onSyncEnabled(user.uid);
+    setMsg({ text: `☁️ آپلود کامل شد (${state.words.length} واژه). از این به بعد تغییرات خودکار همگام می‌شوند.`, err: false });
+    onShowToast?.('کتابخانه به فضای ابری آپلود شد؛ sync خودکار فعال شد.', false);
   });
 
   const doDownload = () => run('download', async () => {
