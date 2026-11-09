@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { onCloudUserChanged, isSyncEnabled, enableSync, uploadStateToCloud } from './utils/cloud';
+import { onCloudUserChanged, uploadStateToCloud } from './utils/cloud';
 import { type User } from 'firebase/auth';
 import { CloudAccountModal } from './components/CloudAccountModal';
 import { AppState, Word, CaseQuestion } from './types';
@@ -567,7 +567,6 @@ export default function App() {
         state={state}
         onApplyState={s => setState(s)}
         onShowToast={showToast}
-        onSyncEnabled={(uid) => enableSync(uid)}
       />
       <AutoCloudSync
         user={cloudUser}
@@ -876,42 +875,20 @@ export default function App() {
 
 /** Silent background sync: after data changes, uploads to the cloud when enabled. */
 function AutoCloudSync({ user, state, showToast }: { user: any; state: any; showToast: (m: string, e?: boolean) => void }) {
-  const [enabled, setEnabled] = useState(false);
   const timerRef = useRef<any>(null);
   const savingRef = useRef(false);
   const lastSigRef = useRef<string>('');
-  const lastUploadRef = useRef<number>(0);
 
-  // follow auth state + sync-permission flag (poll is cheap; flag lives in localStorage)
+  // debounced auto-sync: whenever signed-in AND data changed, upload the latest snapshot
   useEffect(() => {
-    if (!user) { setEnabled(false); return; }
-    setEnabled(isSyncEnabled(user.uid));
-    lastSigRef.current = JSON.stringify([state.words.length, state.hist.length, state.daily]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  // react to explicit upload from the modal: refresh signature + enable flag
-  useEffect(() => {
-    const onSynced = () => {
-      if (!user) return;
-      setEnabled(isSyncEnabled(user.uid));
-      lastSigRef.current = JSON.stringify([state.words.length, state.hist.length, state.daily]);
-    };
-    window.addEventListener('wort-cloud-synced', onSynced);
-    return () => window.removeEventListener('wort-cloud-synced', onSynced);
-  }, [user, state]);
-
-  // debounced auto-sync on any data change
-  useEffect(() => {
-    if (!user || !enabled) return;
+    if (!user) return;
     const sig = JSON.stringify([state.words.length, state.hist.length, state.daily]);
     if (sig === lastSigRef.current) return;
     if (savingRef.current) return;
-    if (Date.now() - lastUploadRef.current < 2000) return;
+    if (state.words.length === 0) return; // never auto-push an empty library
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       savingRef.current = true;
-      lastUploadRef.current = Date.now();
       try {
         await uploadStateToCloud(user, state);
         lastSigRef.current = sig;
@@ -923,7 +900,7 @@ function AutoCloudSync({ user, state, showToast }: { user: any; state: any; show
       }
     }, 3000);
     return () => clearTimeout(timerRef.current);
-  }, [state, user, enabled]);
+  }, [state, user]);
 
   return null;
 }
