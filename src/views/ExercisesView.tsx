@@ -1854,7 +1854,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const isFaDir = currentCardDir === 'fa';
 
           return (
-            <div className="space-y-4 text-center">
+            <div className="flip-scene">
+            <div key={currentKey + (isCardRevealed ? '::back' : '::front')} className={'space-y-4 text-center ' + (isCardRevealed ? 'card-flip-in' : 'card-enter')}>
               {/* Question Face */}
               {!isFaDir ? (
                 <div className="py-4 space-y-2">
@@ -1949,6 +1950,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   )}
                 </>
               )}
+            </div>
             </div>
           );
         })()}
