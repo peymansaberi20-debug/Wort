@@ -12,6 +12,13 @@ interface HeaderProps {
   cloudEmail?: string | null;
 }
 
+/** Detects installed/standalone PWA mode (iOS & Android/desktop). */
+const isStandalone = (): boolean =>
+  typeof window !== 'undefined' && (
+    (window as any).matchMedia?.('(display-mode: standalone)').matches ||
+    (window as any).navigator?.standalone === true
+  );
+
 export const Header: React.FC<HeaderProps> = ({
   onBack,
   onAbout,
@@ -105,15 +112,54 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Info size={16} className="text-[#1f5fbf]" /> درباره برنامه
             </button>
-            <button
-              onClick={() => { setMenuOpen(false); onSaveAndExit(); }}
-              className="w-full h-11 px-3 flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition border-t border-slate-100 dark:border-slate-800"
-            >
-              <Save size={16} className="text-[#1f5fbf]" /> ذخیره و خروج
-            </button>
-          </div>
-        )}
+        <button
+          onClick={() => {
+            if (!isStandalone()) { onSaveAndExit(); return; }
+            setConfirmExit(true);
+          }}
+          className="w-9 h-9 bg-white text-[#1f5fbf] hover:bg-slate-100 font-bold rounded-lg text-xs md:text-sm shadow-sm transition flex items-center justify-center"
+          title="ذخیره و خروج / Save and Exit"
+          aria-label="ذخیره و خروج"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
       </div>
+
+      {confirmExit && (
+        <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" dir="rtl" role="alertdialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-2xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-3">
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">خروج از برنامه</h2>
+            <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">
+              داده‌های شما ذخیره شده است. آیا می‌خواهید از برنامه خارج شوید؟
+            </p>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setConfirmExit(false);
+                  try { window.close(); } catch { /* ignore */ }
+                  setTimeout(() => { if (!window.closed) onSaveAndExit(); }, 150);
+                }}
+                className="h-11 rounded-xl bg-[#1f5fbf] hover:bg-[#194ea0] text-white text-sm font-bold transition"
+              >
+                تأیید خروج
+              </button>
+              <button
+                onClick={() => setConfirmExit(false)}
+                className="h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold transition"
+              >
+                انصراف
+              </button>
+            </div>
+            <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+              این خروج فقط بستن برنامه است — حساب ابری شما فعال می‌ماند.
+            </p>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
