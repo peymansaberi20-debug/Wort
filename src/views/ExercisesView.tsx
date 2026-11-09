@@ -2082,7 +2082,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* ========================================================= */}
         {/* OTHER INTERACTIVE EXERCISES */}
         {/* ========================================================= */}
-        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl' || qMode === 'sent') && (() => {
+        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl'  || qMode === 'sent' || qMode === 'freesent') && (() => {
           const w = currentItem as Word;
           const remainingHints = Math.max(0, 2 - hintLevel);
 
