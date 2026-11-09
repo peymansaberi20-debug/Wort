@@ -31,6 +31,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [confirmDownload, setConfirmDownload] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -234,10 +235,42 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
                 </>
               )}
 
-              <button type="button" onClick={() => run('out', async () => { await signOutCloud(); })}
-                disabled={!!busy}
-                className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50">
-                <LogOut size={14} /> خروج از حساب
+                            {confirmSignOut ? (
+                <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2.5">
+                  <div className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-6">
+                    ⚠️ مطمئنی که می‌خواهی خارج شوی؟ (داده‌های این دستگاه محلی می‌مانند؛ فقط ارتباط با حساب ابری قطع می‌شود — با ورود دوباره همه‌چیز برمی‌گردد.)
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => run('out', async () => { await signOutCloud(); setConfirmSignOut(false); })}
+                      disabled={!!busy}
+                      className="h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition disabled:opacity-50"
+                    >
+                      {busy === 'out' ? '⏳ …' : 'بله، خارج شو'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmSignOut(false)}
+                      disabled={!!busy}
+                      className="h-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold transition"
+                    >
+                      انصراف
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setConfirmSignOut(true)}
+                  className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-1.5">
+                  <LogOut size={14} /> خروج از حساب
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setConfirmSignOut(false); onClose(); }}
+                className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition flex items-center justify-center gap-1.5"
+              >
+                ✓ بازگشت
               </button>
             </>
           )}
