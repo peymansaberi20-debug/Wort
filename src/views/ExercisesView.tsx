@@ -449,6 +449,9 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
   const [report, setReport] = useState<FreeReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState('');
+  const [chat, setChat] = useState<{ q: string; a: string; err?: boolean }[]>([]);
+  const [chatQ, setChatQ] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
 
   const runCheck = async () => {
     const s = text.trim();
@@ -472,6 +475,21 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
     } finally { setBusy(false); }
   };
 
+  const askChat = async () => {
+    const q = chatQ.trim();
+    if (!q || chatBusy || !report) return;
+    setChatBusy(true);
+    const ctx = `Sentence: "${text.trim()}" | Score: ${report.score}/100 | Corrected: "${report.corrected_de}" | Issues: ${report.issues.map(i => `${i.type}: "${i.wrong}" -> "${i.correct}"`).join('; ') || 'none'}`;
+    setChat(prev => [...prev, { q, a: '…' }]);
+    setChatQ('');
+    try {
+      const out = await generateWithGemini(`You are an expert German teacher. A learner's sentence was just proofread.\n${ctx}\nThe learner asks (in Persian): "${q}"\nAnswer in Persian (German words and examples stay German). Be concise — max ~6 short lines. Plain text only, no JSON, no Markdown headers.`, { timeoutMs: 30000, retries: 1 });
+      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: out.trim() || 'پاسخی دریافت نشد.' }; return next; });
+    } catch (e: any) {
+      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: e?.friendly || e?.message || 'پاسخی دریافت نشد.', err: true }; return next; });
+    } finally { setChatBusy(false); }
+  };
+
   return (
     <div className="space-y-3 text-right">
       <p className="text-sm font-semibold text-[#5d6676] dark:text-[#a3adbd] text-center">
@@ -491,7 +509,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
           {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال تصحیح…</span></> : <span>🤖 تصحیح و نمره‌دهی</span>}
         </button>
         {report && (
-          <button onClick={() => { setReport(null); setText(''); }} className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold">
+          <button onClick={() => { setReport(null); setText(''); setChat([]); setChatQ(''); }} className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold">
             🔄 جملهٔ جدید
           </button>
         )}
@@ -546,6 +564,37 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
               <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
             </div>
           )}
+
+          {/* Follow-up chat about this sentence and its correction */}
+          <div className="pt-1 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی دربارهٔ این جمله یا تصحیحش داری؟ بپرس:</div>
+            {chat.map((m, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl rounded-se-sm px-3 py-2 text-sm text-slate-800 dark:text-slate-100">{m.q}</div>
+                </div>
+                <div className="flex justify-end">
+                  <div className={`max-w-[92%] rounded-2xl rounded-ss-sm px-3 py-2 text-sm leading-7 whitespace-pre-wrap border ${m.err ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300' : 'bg-white dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-slate-800 dark:text-slate-100'}`}>{m.a}</div>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-end gap-2">
+              <textarea
+                dir="rtl" rows={2} value={chatQ}
+                onChange={e => setChatQ(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void askChat(); } }}
+                placeholder="سوالت را اینجا بنویس…"
+                className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none resize-none"
+              />
+              <button
+                onClick={() => void askChat()}
+                disabled={chatBusy || !chatQ.trim()}
+                className="bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-40 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition"
+              >
+                {chatBusy ? '⏳' : '➤ ارسال'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1734,7 +1783,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
          {activeMode !== 'case' && qMode !== 'sent' && qMode !== 'freesent' && currentItem && (
             <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
           )}
-          <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
+          {qMode !== 'freesent' && (
+            <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
+          )}
           {activeMode !== 'hard' && qMode && (
             <span className="relative">
               <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}><TimerIcon size={18} className={timerCfg.on ? 'text-orange-500' : 'text-slate-500'} /></IconBtn>
@@ -1752,7 +1803,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         />
       )}
 
-      {/* Progress & Subtitle */}
+      {/* Progress & Subtitle (hidden for free-sentence exercise) */}
+      {qMode !== 'freesent' && (
       <div className="space-y-1.5">
         <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
           <div
@@ -1772,6 +1824,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           <span>{progressPercent}٪ تکمیل</span>
         </div>
       </div>
+      )}
 
       {/* Active Card Body */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
@@ -2258,7 +2311,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               )}
 
               {/* Input Box and Action Bar */}
-              {qMode === 'sent' ? null : !answerResult ? (
+              {(qMode === 'sent' || qMode === 'freesent') ? null : !answerResult ? (
                 <div className="space-y-3 pt-2 max-w-sm mx-auto">
                   <input
                     type="text"
