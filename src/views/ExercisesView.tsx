@@ -922,8 +922,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       return FREE_SENT_WORD;
     }
     return words.find(w => w.id === id) || null;
-    }
-    return words.find(w => w.id === id) || null;
   }, [queue, currentIndex, activeMode, words]);
 
   // Adjective-declension question of the current queue entry
