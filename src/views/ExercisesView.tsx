@@ -34,7 +34,8 @@ export type ExerciseMode =
   | 'n2v'
   | 'v2n'
   | 'hard'
-  | 'sent';
+  | 'sent'
+  | 'freesent';
 
 export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string; desc: string }> = {
   flash: { title: 'فلش‌کارت', icon: '🃏', desc: 'کارت واژه با الگوریتم تکرار فاصله‌دار لایتنر' },
@@ -54,7 +55,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   n2v: { title: 'اسم ← فعل', icon: '🔁', desc: 'از روی اسم، فعل هم‌خانواده را بنویسید' },
   v2n: { title: 'فعل ← اسم', icon: '🔂', desc: 'از روی فعل، اسم هم‌خانواده را (با آرتیکل) بنویسید' },
   hard: { title: 'تمرین ترکیبی واژه‌های سخت', icon: '🩸', desc: 'هر واژهٔ سخت در قالب‌های مختلف و با چیدمان تصادفی' },
-  sent: { title: 'تولید جمله', icon: '🗣', desc: 'جمله‌سازی با واژه و بررسی ساختار' }
+  sent: { title: 'تولید جمله', icon: '🗣', desc: 'جمله‌سازی با واژه و بررسی ساختار' },
+  freesent: { title: 'تولید جملهٔ آزاد', icon: '✒️', desc: 'هر جمله‌ای بساز؛ تصحیح کامل گرامر، حروف ربط، حرف اضافه و حالت، آرتیکل و صرف صفت با نمره' }
 };
 
 /**
@@ -64,7 +66,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
  */
 /** Two exercise-menu tabs: every exercise belongs to exactly one tab — nothing lost, nothing duplicated. */ 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'dict', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl'];  
+const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent'];  
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -424,6 +426,132 @@ Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentenc
   );
 };
 
+// ---- Free sentence practice (write ANY German sentence; AI proofreads it) ----
+interface FreeReport {
+  understood_fa: string;
+  score: number;
+  corrected_de: string;
+  issues: { type: string; wrong: string; correct: string; why_fa: string }[];
+  tip_fa: string;
+}
+
+const FREE_ISSUE_BADGE: Record<string, string> = {
+  'گرامر': 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
+  'املا': 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+  'حرف اضافه و حالت دستوری': 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
+  'واژه‌گزینی': 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300',
+  'حروف ربط و ترتیب جمله': 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300',
+  'آرتیکل و صرف صفت': 'bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300'
+};
+
+const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => void }> = ({ onShowToast }) => {
+  const [text, setText] = useState('');
+  const [report, setReport] = useState<FreeReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [errMsg, setErrMsg] = useState('');
+
+  const runCheck = async () => {
+    const s = text.trim();
+    if (!s || busy) return;
+    setBusy(true); setErrMsg(''); setReport(null);
+    const prompt = `You are an expert German proofreader for Persian-speaking learners. Evaluate the learner's German sentence.\n\nINPUT: "${s}"\n\nCHECK: grammar and verb conjugation; connectors (weil, dass, wenn, deshalb, ...) and clause order; prepositions and required cases; articles, gender and adjective endings; word order; spelling and capitalization; naturalness.\n\nRULES:\n- Correct genuine errors only; preserve meaning and wording as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت".\n- Score 0-100 (integer) on correctness and naturalness; ignore non-applicable criteria and redistribute weights proportionally; be consistent.\n- Explanations and the tip: concise Persian, no repetition.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
+    try {
+      const out = await generateWithGemini(prompt, { json: true, timeoutMs: 45000, retries: 1 });
+      const r: any = parseAI(out)[0] || {};
+      if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
+      setReport({
+        understood_fa: String(r.understood_fa || ''),
+        score: Math.max(0, Math.min(100, Math.round(Number(r.score)))),
+        corrected_de: String(r.corrected_de || ''),
+        issues: Array.isArray(r.issues) ? r.issues : [],
+        tip_fa: String(r.tip_fa || '')
+      });
+    } catch (e: any) {
+      setErrMsg(e?.message || 'تصحیح با هوش مصنوعی ناموفق بود.');
+      onShowToast(e?.message || 'تصحیح ناموفق بود.', true);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-3 text-right">
+      <p className="text-sm font-semibold text-[#5d6676] dark:text-[#a3adbd] text-center">
+        هر جملهٔ آلمانی که می‌خواهی بنویس — گرامر، حروف ربط، حرف اضافه و حالت، آرتیکل و صرف صفت بررسی می‌شود:
+      </p>
+      <textarea
+        dir="ltr" rows={4} value={text} onChange={e => setText(e.target.value)}
+        placeholder="Schreiben Sie einen beliebigen deutschen Satz …"
+        className="w-full bg-slate-50 dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-sans text-base outline-none"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => void runCheck()}
+          disabled={busy || !text.trim()}
+          className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-1.5"
+        >
+          {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال تصحیح…</span></> : <span>🤖 تصحیح و نمره‌دهی</span>}
+        </button>
+        {report && (
+          <button onClick={() => { setReport(null); setText(''); }} className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold">
+            🔄 جملهٔ جدید
+          </button>
+        )}
+      </div>
+
+      {errMsg && (
+        <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{errMsg}</div>
+      )}
+
+      {report && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className={`px-3 py-1 rounded-xl text-sm font-extrabold ${report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'}`}>
+              نمره: {report.score}/100
+            </span>
+            {report.issues.length === 0 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
+          </div>
+
+          {report.understood_fa && (
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-sm leading-7">
+              <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت آلمانی‌زبان: </b>{report.understood_fa}
+            </div>
+          )}
+
+          {report.issues.length > 0 && (
+            <div className="space-y-2">
+              {report.issues.map((it, i) => (
+                <div key={i} className="p-3 rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
+                  <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold ${FREE_ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
+                  {(it.wrong || it.correct) && (
+                    <div className="flex flex-wrap items-baseline gap-2 text-sm" dir="ltr">
+                      {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
+                      {it.wrong && it.correct && <span className="text-slate-400">→</span>}
+                      {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
+                    </div>
+                  )}
+                  {it.why_fa && <div className="text-xs leading-6 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {report.tip_fa && (
+            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm leading-7">
+              <b className="text-indigo-700 dark:text-indigo-300">💡 نکته: </b>{report.tip_fa}
+            </div>
+          )}
+
+          {report.corrected_de && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
+              <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
+              <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export { getTimerCfg };
 
 const shuffleArr = <T,>(arr: T[]): T[] => {
@@ -441,6 +569,14 @@ const splitList = (s: string): string[] =>
 
 /** All case / preposition questions (seed list + extra, harder questions). */
 const ALL_CASEQ: CaseQuestion[] = [...CASEQ, ...EXTRA_CASEQ];
+
+/** Synthetic target for the free-sentence exercise (no vocabulary item involved). */
+const FREE_SENT_WORD: Word = {
+  id: 'freesent-self', de: '', art: '', fa: '', syn: '', synFa: '', ant: '', antFa: '',
+  pl: '', pos: '', lvl: 'A2', ex: '', exFa: '', ex2: '', ex2Fa: '', conj: '', prat: '',
+  perf: '', sep: '', cat: 'گرامر', cloze: '', ans: '', acc: [], tags: '', img: '',
+  notes: '', added: 0, last: 0, due: 0, ivl: 0, ease: 2.5, stage: 0, ok: 0, bad: 0, res: ''
+};
 
 /** Progressive session: a few questions of every difficulty level, easiest first. */
 const pickCaseQueue = (): string[] => {
@@ -758,6 +894,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       qIds = pool.slice().sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'sent') {
       qIds = shuffleArr<Word>(pool).slice(0, 10).map(w => w.id);
+    } else if (activeMode === 'freesent') {
+      qIds = ['freesent-self'];
     }
 
     setQueue(qIds);
@@ -779,6 +917,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const id = queue[currentIndex].split('::')[0];
     if (activeMode === 'case') {
       return ALL_CASEQ.find(q => q.id === id) || null;
+    }
+    if (activeMode === 'freesent') {
+      return FREE_SENT_WORD;
+    }
+    return words.find(w => w.id === id) || null;
     }
     return words.find(w => w.id === id) || null;
   }, [queue, currentIndex, activeMode, words]);
@@ -1145,6 +1288,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setRevealedCardId(currentItem.id);
     } else if (qMode === 'sent') {
       setSentTimeUp(n => n + 1);
+    } else if (qMode === 'freesent') {
+      // free writing: timer expiry has no automatic action
     } else if (qMode === 'art') {
       answerArt('');
     } else if (qMode === 'case') {
@@ -1585,8 +1730,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* Phase 2 Sec.1: standardized toolbar — exit leftmost, then profile, then timer (LTR row) */}
         <div className="flex items-center gap-2" dir="ltr">
           <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
-          <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
-          {activeMode !== 'case' && qMode !== 'sent' && currentItem && (
+          {qMode !== 'freesent' && (
+           <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
+          )}
+         {activeMode !== 'case' && qMode !== 'sent' && qMode !== 'freesent' && currentItem && (
             <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
           )}
           <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
@@ -2080,7 +2227,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {qMode === 'sent' && (
+                            {qMode === 'sent' && (
                 <SentencePractice
                   key={currentKey}
                   w={w}
@@ -2092,6 +2239,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     record(w, 'sent', grade);
                   }}
                   onNext={advanceQuestion}
+                />
+              )}
+
+              {qMode === 'freesent' && (
+                <FreeSentencePractice
+                  key={currentKey}
+                  onShowToast={onShowToast}
                 />
               )}
 
