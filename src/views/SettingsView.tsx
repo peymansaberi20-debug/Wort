@@ -4,6 +4,7 @@ import { getCategories } from '../utils/storage';
 import { getGermanVoices, speak, stopSpeaking } from '../utils/audio';
 import { GeminiKeyCard } from '../components/GeminiKeyCard';
 import { PROVIDERS, describeAiError, getActiveProvider, getApiKey, getModel, testConnection } from '../utils/aiProvider';
+import { speak, stopSpeaking, getTtsWorkerBase, setTtsWorkerBase, prewarmTts } from '../utils/audio';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -31,6 +32,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Destructive delete confirmation step
   const [deleteStep, setDeleteStep] = useState<number>(0);
+  // Cloud TTS worker settings
+  const [ttsWorkerDraft, setTtsWorkerDraft] = useState<string>(() => getTtsWorkerBase() || '');
+  const [prewarmBusy, setPrewarmBusy] = useState(false);
+  const [prewarmDone, setPrewarmDone] = useState(0);
+  const [prewarmTotal, setPrewarmTotal] = useState(0);
+  const [prewarmError, setPrewarmError] = useState('');
+
+  const handlePrewarmAll = async () => {
+    if (prewarmBusy) return;
+    setPrewarmBusy(true); setPrewarmError('');
+    try {
+      const texts: string[] = [];
+      words.forEach(w => {
+        texts.push(fullWord(w));
+        if (w.ex) texts.push(w.ex);
+        if (w.ex2) texts.push(w.ex2);
+      });
+      setPrewarmTotal(texts.length);
+      await prewarmTts(texts, (d, t) => setPrewarmDone(d));
+      onShowToast?.(`🎙 پیش‌تولید صدا برای ${texts.length} مورد کامل شد.`);
+    } catch (e: any) {
+      setPrewarmError(e?.message || 'پیش‌تولید ناموفق بود.');
+    } finally { setPrewarmBusy(false); }
+  };
   const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
 
   // Load voices asynchronously
@@ -329,6 +354,54 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <h3 className="font-bold text-base md:text-lg flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 text-slate-900 dark:text-slate-100">
           <span>🔊</span> تلفظ و تنظیمات صوتی آلمانی
         </h3>
+
+        <div className="rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/30 p-3.5 space-y-2.5">
+          <div className="flex items-center gap-2">
+            <b className="text-sm text-sky-800 dark:text-sky-200">☁️ صدای ابری باکیفیت (پیشنهادی — مخصوصاً برای iOS)</b>
+          </div>
+          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] leading-6">
+            آدرس سرویس TTS خودت را وارد کن؛ در صورت فعال بودن، همهٔ تلفظ‌ها با کیفیت یکسان و طبیعی از CDN پخش می‌شوند (حتی روی آیفون). اگر خالی بماند، صدای مرورگر استفاده می‌شود.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="url"
+              dir="ltr"
+              placeholder="https://wort-tts.peymansaberi20.workers.dev"
+              value={ttsWorkerDraft}
+              onChange={e => setTtsWorkerDraft(e.target.value)}
+              className="flex-1 min-w-[240px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-xs outline-none font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setTtsWorkerBase(ttsWorkerDraft);
+                onShowToast?.(ttsWorkerDraft.trim() ? 'آدرس صوت ابری ذخیره شد.' : 'صدای ابری خاموش شد؛ صدای مرورگر فعال است.');
+              }}
+              className="bg-[#1f5fbf] hover:bg-[#194ea0] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition"
+            >
+              ذخیره
+            </button>
+            <button
+              type="button"
+              onClick={handleTestVoice}
+              className="border border-slate-300 dark:border-slate-700 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200"
+            >
+              🔊 تست با این آدرس
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handlePrewarmAll()}
+            disabled={prewarmBusy || !getTtsWorkerBase()}
+            className="w-full bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/60 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800 py-2 rounded-xl text-xs font-bold transition disabled:opacity-40 flex items-center justify-center gap-2"
+            title="تمام واژه‌ها و مثال‌ها را یک‌بار از Worker می‌گیرد تا کش CDN داغ شود"
+          >
+            {prewarmBusy
+              ? <span>⏳ پیش‌تولید… {prewarmDone}/{prewarmTotal}</span>
+              : <span>🎙 پیش‌تولید صدا برای همهٔ واژه‌ها (یک‌بار)</span>}
+          </button>
+          {prewarmError && <div className="text-[11px] text-red-600 dark:text-red-400">{prewarmError}</div>}
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
           <div>
