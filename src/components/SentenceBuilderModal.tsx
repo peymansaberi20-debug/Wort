@@ -34,7 +34,8 @@ const ISSUE_BADGE: Record<string, string> = {
   'املا': 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
   'حرف اضافه و حالت دستوری': 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
   'واژه‌گزینی': 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300',
-  'ساختار و ترتیب': 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300'
+  'ساختار و ترتیب': 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300',
+  'معنا و منطق جمله': 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
 };
 
 export const SentenceBuilderModal: React.FC<SentenceBuilderModalProps> = ({ word, onClose, onShowToast }) => {
@@ -63,7 +64,8 @@ Persian meaning: "${word.fa || '—'}"
 Learner's sentence: "${sentence}"
 
 TASK
-Check grammar, verb conjugation, spelling, capitalization, punctuation, prepositions and required cases (Akkusativ/Dativ/Genitiv), word order, verb position, vocabulary, meaning, naturalness, and correct use of the target word.
+Check MEANING and logic first: does the sentence make sense; is the connector logically correct for the intended meaning (obwohl = concession AGAINST expectation, trotzdem = nevertheless, weil = reason)? A logic/connector mismatch is a serious error.
+Then check grammar, verb conjugation, spelling, capitalization, punctuation, prepositions and required cases (Akkusativ/Dativ/Genitiv), word order, verb position, vocabulary, naturalness, and correct use of the target word.
 
 RULES
 - Correct only genuine errors. Preserve the original meaning and change as little as possible.
@@ -71,7 +73,7 @@ RULES
 - Never invent errors or rewrite solely for stylistic preference.
 - The target word or a natural inflected form must be used in the corrected sentence when possible. If missing or misused, report it explicitly as an issue.
 - Every non-empty "wrong" value must be an exact substring of the original sentence. If the target word is missing, use "" for that issue's "wrong".
-- Use only these issue types: "گرامر", "املا", "حرف اضافه و حالت دستوری", "واژه‌گزینی", "ساختار و ترتیب".
+- Use only these issue types: "گرامر", "املا", "حرف اضافه و حالت دستوری", "واژه‌گزینی", "ساختار و ترتیب", "معنا و منطق جمله".
 - Each issue must explain one genuine error in one short Persian sentence. Avoid duplicate issues.
 - "understood_fa": translate what a native speaker would actually understand from the ORIGINAL sentence. If unclear, explain its actual meaning or ambiguity in Persian.
 - "corrected_de": give the minimally corrected, natural German sentence. If already correct, preserve it exactly.
@@ -201,13 +203,16 @@ JSON REQUIREMENTS
 
           {report && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className={`px-3 py-1 rounded-xl text-sm font-extrabold ${scoreBadge(report.score)}`}>
-                  نمره: {report.score}/100
-                </span>
-                {report.issues.length === 0 && (
-                  <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>
-                )}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className={`px-3 py-1 rounded-xl text-sm font-extrabold ${scoreBadge(report.score)}`}>
+                    نمره: {report.score}/100
+                  </span>
+                  {report.issues.length === 0 && (
+                    <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>
+                   )}
+                 </div>
+                 <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
               </div>
 
               {report.understood_fa && (
@@ -251,6 +256,7 @@ JSON REQUIREMENTS
                 </div>
               )}
 
+              <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
               {report.tip_fa && (
                 <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm leading-7">
                   <b className="text-indigo-700 dark:text-indigo-300">💡 نکته: </b>
