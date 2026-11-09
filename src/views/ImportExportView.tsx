@@ -55,12 +55,13 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         'german',
         'article',
         'persian',
+        'english',
         'plural',
         'partOfSpeech',
         'level',
-        'example',
-        'exampleTranslation',
-        'example2',
+        'definition (Bedeutung)',
+        'definitionTranslation',
+        'example (Redemittel)',
         'example2Translation',
         'synonym',
         'synonymTranslation',
@@ -79,13 +80,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           german: 'Entscheidung',
           article: 'die',
           persian: 'تصمیم',
+          english: 'decision',
           plural: 'die Entscheidungen',
           partOfSpeech: 'اسم',
           level: 'B1',
-          example: 'Wir müssen eine wichtige Entscheidung treffen.',
-          exampleTranslation: 'ما باید یک تصمیم مهم بگیریم.',
-          example2: 'Die Entscheidung fiel mir nicht leicht.',
-          example2Translation: 'تصمیم‌گیری برایم آسان نبود.',
+          'definition (Bedeutung)': 'Eine Entscheidung ist die Wahl zwischen mehreren Möglichkeiten, die man nach dem Denken trifft.',
+          definitionTranslation: 'تصمیم، انتخاب بین چند امکان پس از فکر کردن است.',
+          'example (Redemittel)': 'Wir müssen eine wichtige Entscheidung treffen.',
+          example2Translation: 'ما باید یک تصمیم مهم بگیریم.',
           synonym: 'der Beschluss',
           synonymTranslation: 'مصوبه، تصمیم',
           antonym: 'die Unentschlossenheit',
@@ -101,13 +103,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           german: 'Tisch',
           article: 'der',
           persian: 'میز',
+          english: 'table',
           plural: 'die Tische',
           partOfSpeech: 'اسم',
           level: 'A1',
-          example: 'Das Buch liegt auf dem Tisch.',
-          exampleTranslation: 'کتاب روی میز قرار دارد.',
-          example2: '',
-          example2Translation: '',
+          'definition (Bedeutung)': 'Ein Tisch ist ein Möbel mit einer flachen Platte und Beinen, an dem man sitzt und arbeitet oder isst.',
+          definitionTranslation: 'میز، مبله‌ای با صفحهٔ صاف و پایه‌هاست که کنارش می‌نشینیم و کار یا غذا خوردن انجام می‌دهیم.',
+          'example (Redemittel)': 'Das Buch liegt auf dem Tisch.',
+          example2Translation: 'کتاب روی میز قرار دارد.',
           synonym: '',
           synonymTranslation: '',
           antonym: '',
@@ -123,13 +126,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           german: 'Haus',
           article: 'das',
           persian: 'خانه',
+          english: 'house',
           plural: 'die Häuser',
           partOfSpeech: 'اسم',
           level: 'A1',
-          example: 'Mein Haus hat einen schönen Garten.',
-          exampleTranslation: 'خانه من یک باغچه زیبا دارد.',
-          example2: '',
-          example2Translation: '',
+          'definition (Bedeutung)': 'Ein Haus ist ein Gebäude, in dem Menschen wohnen und leben.',
+          definitionTranslation: 'خانه، بنایی است که آدم‌ها در آن ساکن می‌شوند و زندگی می‌کنند.',
+          'example (Redemittel)': 'Mein Haus hat einen schönen Garten.',
+          example2Translation: 'خانه من یک باغچه زیبا دارد.',
           synonym: 'das Gebäude',
           synonymTranslation: 'ساختمان',
           antonym: '',
@@ -145,13 +149,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           german: 'freuen',
           article: '',
           persian: 'خوشحال شدن، منتظر بودن',
+          english: 'to be glad, to look forward to',
           plural: '',
           partOfSpeech: 'فعل',
           level: 'A2',
-          example: 'Ich freue mich auf den Urlaub.',
-          exampleTranslation: 'من مشتاقانه منتظر تعطیلات هستم.',
-          example2: 'Er freut sich über das Geschenk.',
-          example2Translation: 'او از بابت هدیه خوشحال است.',
+          'definition (Bedeutung)': 'Sich freuen bedeutet, eine positive, glückliche Emotion zu haben und sich auf etwas Schönes zu freuen.',
+          definitionTranslation: 'خوشحال شدن یعنی داشتن احساس مثبت و شاد، و مشتاق چیزی زیبا بودن.',
+          'example (Redemittel)': 'Ich freue mich auf den Urlaub.',
+          example2Translation: 'من مشتاقانه منتظر تعطیلات هستم.',
           synonym: '',
           synonymTranslation: '',
           antonym: '',
@@ -167,13 +172,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           german: 'anrufen',
           article: '',
           persian: 'تلفن زدن، تماس گرفتن',
+          english: 'to call (by phone)',
           plural: '',
           partOfSpeech: 'فعل',
           level: 'A1',
-          example: 'Ich rufe dich morgen an.',
-          exampleTranslation: 'من فردا به تو زنگ می‌زنم.',
-          example2: '',
-          example2Translation: '',
+          'definition (Bedeutung)': 'Anrufen bedeutet, mit dem Telefon jemanden zu kontaktieren und mit ihm zu sprechen.',
+          definitionTranslation: 'تلفن زدن یعنی با تلفن با کسی تماس گرفته و صحبت کردن.',
+          'example (Redemittel)': 'Ich rufe dich morgen an.',
+          example2Translation: 'من فردا به تو زنگ می‌زنم.',
           synonym: 'telefonieren',
           synonymTranslation: 'تلفنی صحبت کردن',
           antonym: '',
@@ -189,13 +195,14 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           german: 'schnell',
           article: '',
           persian: 'سریع، تند',
+          english: 'fast, quick',
           plural: '',
           partOfSpeech: 'صفت',
           level: 'A1',
-          example: 'Der Zug fährt sehr schnell.',
-          exampleTranslation: 'قطار خیلی سریع حرکت می‌کند.',
-          example2: '',
-          example2Translation: '',
+          'definition (Bedeutung)': 'Schnell bedeutet mit hoher Geschwindigkeit, in kurzer Zeit.',
+          definitionTranslation: 'سریع یعنی با سرعت زیاد و در زمان کوتاه.',
+          'example (Redemittel)': 'Der Zug fährt sehr schnell.',
+          example2Translation: 'قطار خیلی سریع حرکت می‌کند.',
           synonym: 'rasch',
           synonymTranslation: 'شتابان، سریع',
           antonym: 'langsam',
@@ -520,8 +527,9 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
           const lvl = getVal(['level', 'lvl', 'سطح']);
           const ex = getVal(['example', 'ex', 'مثال']);
           const exFa = getVal(['exampletranslation', 'exfa', 'ترجمهمثال']);
-          const ex2 = getVal(['example2', 'ex2']);
-          const ex2Fa = getVal(['example2translation', 'ex2fa']);
+          const ex2 = getVal(['example2', 'ex2', 'مثالکاربردی']);
+          const ex2Fa = getVal(['example2translation', 'ex2fa', 'ترجمهمثالکاربردی']);
+          const en = getVal(['english', 'en', 'معادلانگلیسی', 'انگلیسی']);
           const syn = getVal(['synonym', 'syn', 'مترادف']);
           const synFa = getVal(['synonymtranslation', 'synfa']);
           const ant = getVal(['antonym', 'ant', 'متضاد']);
@@ -545,6 +553,7 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             exFa,
             ex2,
             ex2Fa,
+            en,
             syn,
             synFa,
             ant,
@@ -585,8 +594,11 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
         const plIdx = headers.findIndex(h => ['plural', 'pl', 'جمع'].includes(h));
         const posIdx = headers.findIndex(h => ['partofspeech', 'pos', 'نقش'].includes(h));
         const lvlIdx = headers.findIndex(h => ['level', 'lvl', 'سطح'].includes(h));
-        const exIdx = headers.findIndex(h => ['example', 'ex', 'مثال'].includes(h));
-        const exFaIdx = headers.findIndex(h => ['exampletranslation', 'exfa', 'ترجمهمثال'].includes(h));
+        const exIdx = headers.findIndex(h => ['example', 'ex', 'مثال', 'definition', 'bedeutung', 'تعریف'].includes(h));
+        const exFaIdx = headers.findIndex(h => ['exampletranslation', 'exfa', 'ترجمهمثال', 'ترجمهتعریف'].includes(h));
+        const ex2Idx = headers.findIndex(h => ['example2', 'ex2', 'مثال2', 'مثالکاربردی'].includes(h));
+        const ex2FaIdx = headers.findIndex(h => ['example2translation', 'ex2fa', 'ترجمهمثال2'].includes(h));
+        const enIdx = headers.findIndex(h => ['english', 'en', 'معادلانگلیسی', 'انگلیسی'].includes(h));
         const catIdx = headers.findIndex(h => ['category', 'cat', 'دسته'].includes(h));
 
         const ws: Word[] = [];
@@ -614,6 +626,9 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             lvl: lvlIdx >= 0 ? cols[lvlIdx] : '',
             ex: exIdx >= 0 ? cols[exIdx] : '',
             exFa: exFaIdx >= 0 ? cols[exFaIdx] : '',
+            ex2: ex2Idx >= 0 ? cols[ex2Idx] : '',
+            ex2Fa: ex2FaIdx >= 0 ? cols[ex2FaIdx] : '',
+            en: enIdx >= 0 ? cols[enIdx] : '',
             cat: catIdx >= 0 ? cols[catIdx] : ''
           });
           if (w) ws.push(applyGermanQuality(w));
