@@ -859,17 +859,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating Back Button at bottom-left */}
-      {(historyStack.length > 0 || !!activeExercise) && (
-        <button
-          onClick={handleBack}
-          aria-label="بازگشت"
-          className="fixed left-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-6 z-40 min-h-10 px-3 py-2 rounded-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-xs shadow-lg flex items-center gap-1 hover:scale-105 active:scale-95 transition-all border border-white/20"
-        >
-          <span className="text-sm leading-none" aria-hidden="true">↩</span>
-          <span>بازگشت</span>
-        </button>
-      )}
 
       {/* Floating Notification Toast */}
       <Toast message={toastMsg} isError={toastIsError} />
