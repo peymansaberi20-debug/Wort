@@ -6,7 +6,7 @@ import {
   uploadStateToCloud, fetchCloudMeta, downloadStateFromCloud, type CloudMeta
 } from '../utils/cloud';
 import { IconBtn } from './IconBtn';
-import { X, Cloud, Upload, Download, LogOut } from 'lucide-react';
+import { X, Cloud, Upload, Download, LogOut, HelpCircle } from 'lucide-react';
 
 interface CloudAccountModalProps {
   open: boolean;
@@ -29,6 +29,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
   const [metaLoading, setMetaLoading] = useState(false);
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [confirmDownload, setConfirmDownload] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -97,9 +98,27 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-md max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col" dir="rtl">
         <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center gap-2">
           <IconBtn onClick={onClose} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
+          <IconBtn onClick={() => setHelpOpen(v => !v)} title="این بخش چیست؟"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
           <h3 className="flex-1 text-right font-bold text-base text-slate-900 dark:text-slate-100">☁️ حساب ابری</h3>
         </div>
 
+       {helpOpen && (
+          <div className="px-4 md:px-5 pt-4">
+            <div className="rounded-2xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/30 p-3.5 text-xs md:text-sm leading-7 text-slate-700 dark:text-slate-200 space-y-2">
+              <div className="font-extrabold text-sky-700 dark:text-sky-300">☁️ این بخش چیست؟</div>
+              <p>اینجا می‌توانی کتابخانهٔ واژگان و کل سابقهٔ یادگیری‌ات را در فضای ابری امن ذخیره کنی — تا از هر دستگاهی که وارد حساب‌ات شوی، همان داده‌ها را داشته باشی و اگر مرورگر یا گوشی عوض شد، هیچ‌چیز از دست نرود.</p>
+              <ul className="space-y-1">
+                <li>• <b>آپلود به ابر:</b> نسخهٔ فعلی این دستگاه در ابر ذخیره می‌شود (محتوای قبلی ابر جایگزین می‌شود؛ داده‌های دستگاه دست‌نخورده می‌ماند).</li>
+                <li>• <b>دریافت از ابر:</b> نسخهٔ ابری روی این دستگاه بازیابی می‌شود؛ قبل از جایگزینی، به‌طور خودکار از داده‌های فعلی پشتیبان می‌گیرد.</li>
+                <li>• <b>حریم خصوصی:</b> هر حساب فقط به دیتای خودش دسترسی دارد — هیچ‌کس دیگر، حتی ما.</li>
+                <li>• <b>بدون اینترنت / بدون حساب:</b> برنامه کامل کار می‌کند؛ ابر فقط یک کپی امنِ اضافه است.</li>
+              </ul>
+              <button type="button" onClick={() => setHelpOpen(false)} className="text-[11px] font-bold text-sky-700 dark:text-sky-300 underline">
+                   فهمیدم، بستن    
+              </button>
+            </div>
+          </div>
+        )}
         <div className="p-4 md:p-5 space-y-4">
           {msg && (
             <div className={`p-3 rounded-xl text-sm border ${msg.err ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300' : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300'}`}>
