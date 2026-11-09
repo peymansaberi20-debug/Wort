@@ -39,6 +39,7 @@ import { SettingsView } from './views/SettingsView';
 import { today } from './utils/dates';
 import { isDuplicateEntry } from './utils/duplicates';
 import { ImportDecision, applyImportPlan, mergeWordUpdate } from './utils/vocabMerge';
+import { getTtsWorkerBase } from './utils/audio';
 
 const isDuplicateVocabularyEntry = isDuplicateEntry;
 
@@ -275,6 +276,11 @@ export default function App() {
     // Phase 3: after adding or editing a word, open its profile; closing it returns to the vocabulary view
     if (newWord) {
       setSelectedWord(newWord);
+      // Pre-warm cloud TTS for the new word in the background (no user wait)
+      if (getTtsWorkerBase()) {
+        const texts = [fullWord(newWord), newWord.ex, newWord.ex2].filter(Boolean) as string[];
+        void Promise.all(texts.map(t => fetch(`https://${getTtsWorkerBase()!.replace(/^https?:\/\//, '')}/?lang=de&text=${encodeURIComponent(t)}`).catch(() => null)));
+      }
     } else if (isEdit) {
       const updated = state.words.find(w => w.id === editingWordId);
       if (updated) setSelectedWord(norm({ ...updated, ...wordData, id: updated.id }) as Word);
