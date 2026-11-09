@@ -268,9 +268,9 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({
               <button
                 type="button"
                 onClick={() => { setConfirmSignOut(false); onClose(); }}
-                className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition flex items-center justify-center gap-1.5"
+                className="w-full h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold transition"
               >
-                ✓ بازگشت
+                بازگشت
               </button>
             </>
           )}
