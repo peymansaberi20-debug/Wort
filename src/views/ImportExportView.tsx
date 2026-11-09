@@ -47,6 +47,29 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
   const categories = useMemo(() => getCategories(words), [words]);
 
   // Fulfills Task 3.2: Generate genuine Excel-compatible workbook (.xlsx) with 2 sheets
+/** Builds an Anki-importable TSV file (UTF-8 with BOM for correct Persian display). */
+const buildAnkiText = (ws: Word[]): string => {
+  const rows = ws.map(w => {
+    const front = fullWord(w);
+    const backParts: string[] = [];
+    if (w.fa) backParts.push(`<b>${w.fa}</b>`);
+    if (w.en) backParts.push(`🇬🇧 ${w.en}`);
+    if (w.pl) backParts.push(`📐 Plural: ${w.pl}`);
+    if (w.ex2) backParts.push(`💬 ${w.ex2}`);
+    if (w.ex) backParts.push(`📖 ${w.ex}`);
+    const grammar: string[] = [];
+    if (w.conj) grammar.push(`Präsens: ${w.conj.split('|').join(', ')}`);
+    if (w.prat) grammar.push(`Präteritum: ${w.prat}`);
+    if (w.perf) grammar.push(`Perfekt: ${w.perf}`);
+    if (w.sep) grammar.push(`trennbar: ${w.sep}-`);
+    if (grammar.length) backParts.push(`🔧 ${grammar.join(' • ')}`);
+    if (w.notes) backParts.push(`📝 ${w.notes.split('\n').join('<br>')}`);
+    const tags = [w.cat, w.lvl].filter(Boolean).join(' ');
+    const esc = (s: string) => s.replace(/\t/g, ' ').replace(/\n/g, '<br>');
+    return `${esc(front)}\t${esc(backParts.join('<br>'))}\t${esc(tags)}`;
+  });
+  return '\ufeff' + ['#separator:tab', '#html:true', ...rows].join('\n');
+};  
   const generateExcelTemplate = () => {
     try {
       const wb = XLSX.utils.book_new();
@@ -1025,6 +1048,18 @@ export const ImportExportView: React.FC<ImportExportViewProps> = ({
             <span>📈 تاریخچهٔ مرور (JSON)</span>
           </button>
         </div>
+
+        <button
+          onClick={() => {
+            downloadFile('worterbuch_anki_deck.txt', buildAnkiText(words), 'text/plain;charset=utf-8');
+            onShowToast(`${words.length} کارت Anki ساخته شد — در Anki: File ← Import.`);
+          }}
+          className="w-full bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/60 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800 py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-2"
+          title="خروجی استاندارد Anki (TSV) برای درون‌ریزی مستقیم"
+        >
+          <span>🃏 خروجی Anki — {words.length} کارت آماده</span>
+          <span className="text-[10px] font-normal opacity-70 hidden sm:inline">(در Anki: File ← Import)</span>
+        </button>
       </div>
 
       {/* Import Help Modal (Task 3.1) */}
