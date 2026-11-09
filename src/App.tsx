@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { onCloudUserChanged, isSyncEnabled, enableSync, uploadStateToCloud, isCloudEmpty } from './utils/cloud';
+import { onCloudUserChanged, isSyncEnabled, enableSync, uploadStateToCloud } from './utils/cloud';
 import { type User } from 'firebase/auth';
 import { CloudAccountModal } from './components/CloudAccountModal';
 import { AppState, Word, CaseQuestion } from './types';
@@ -876,37 +876,54 @@ export default function App() {
 
 /** Silent background sync: after data changes, uploads to the cloud when enabled. */
 function AutoCloudSync({ user, state, showToast }: { user: any; state: any; showToast: (m: string, e?: boolean) => void }) {
-  const [savedUser, setSavedUser] = useState<User | null>(null);
+  const [enabled, setEnabled] = useState(false);
   const timerRef = useRef<any>(null);
   const savingRef = useRef(false);
-  const [lastCount, setLastCount] = useState(0);
+  const lastSigRef = useRef<string>('');
+  const lastUploadRef = useRef<number>(0);
 
+  // follow auth state + sync-permission flag (poll is cheap; flag lives in localStorage)
   useEffect(() => {
-    if (!user) return;
-    setSavedUser(user);
-    setLastCount(state.words.length);
+    if (!user) { setEnabled(false); return; }
+    setEnabled(isSyncEnabled(user.uid));
+    lastSigRef.current = JSON.stringify([state.words.length, state.hist.length, state.daily]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // react to explicit upload from the modal: refresh signature + enable flag
   useEffect(() => {
-    if (!savedUser || !isSyncEnabled(savedUser.uid)) return;
-    if (state.words.length === lastCount) return; // nothing changed (word-count proxy is cheap and sufficient here)
+    const onSynced = () => {
+      if (!user) return;
+      setEnabled(isSyncEnabled(user.uid));
+      lastSigRef.current = JSON.stringify([state.words.length, state.hist.length, state.daily]);
+    };
+    window.addEventListener('wort-cloud-synced', onSynced);
+    return () => window.removeEventListener('wort-cloud-synced', onSynced);
+  }, [user, state]);
+
+  // debounced auto-sync on any data change
+  useEffect(() => {
+    if (!user || !enabled) return;
+    const sig = JSON.stringify([state.words.length, state.hist.length, state.daily]);
+    if (sig === lastSigRef.current) return;
     if (savingRef.current) return;
+    if (Date.now() - lastUploadRef.current < 2000) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       savingRef.current = true;
+      lastUploadRef.current = Date.now();
       try {
-        await uploadStateToCloud(savedUser, state);
-        setLastCount(state.words.length);
+        await uploadStateToCloud(user, state);
+        lastSigRef.current = sig;
         showToast('☁️ همگام‌سازی ابری انجام شد.', false);
       } catch (e: any) {
-        showToast(e?.message || 'خطا در همگام‌سازی ابری.', true);
+        showToast(e?.friendly || e?.message || 'خطا در همگام‌سازی ابری.', true);
       } finally {
         savingRef.current = false;
       }
     }, 3000);
     return () => clearTimeout(timerRef.current);
-  }, [state, savedUser, lastCount]);
+  }, [state, user, enabled]);
 
   return null;
 }
