@@ -123,14 +123,14 @@ export const ImportHelpModal: React.FC<ImportHelpModalProps> = ({
                     <td className="p-2">سطح CEFR: مقادیر A1, A2, B1, B2, C1, C2</td>
                   </tr>
                   <tr>
-                    <td className="p-2 font-mono" dir="ltr">example / ex / مثال</td>
+                    <td className="p-2 font-mono" dir="ltr">example / ex / تعریف / bedeutung</td>
                     <td className="p-2 text-slate-500">اختیاری</td>
-                    <td className="p-2">جمله کاربردی آلمانی حاوی واژه</td>
+                    <td className="p-2"><b>تعریف آلمانی واژه (Bedeutung)</b> در سطح B1–B2 — یک یا دو جملهٔ کامل، رایج‌ترین معنی روزمره اول. مثال جمله نیست.</td>
                   </tr>
                   <tr>
-                    <td className="p-2 font-mono" dir="ltr">exampleTranslation / exFa</td>
+                    <td className="p-2 font-mono" dir="ltr">exampleTranslation / exFa / ترجمهتعریف</td>
                     <td className="p-2 text-slate-500">اختیاری</td>
-                    <td className="p-2">ترجمه فارسی جمله مثال اول</td>
+                    <td className="p-2">ترجمهٔ فارسی تعریف آلمانی بالا</td>
                   </tr>
                   <tr>
                     <td className="p-2 font-mono" dir="ltr">category / cat / دسته</td>
@@ -138,14 +138,19 @@ export const ImportHelpModal: React.FC<ImportHelpModalProps> = ({
                     <td className="p-2">نام دسته موضوعی (در صورت خالی بودن، دسته عمومی لحاظ می‌شود)</td>
                   </tr>
                   <tr>
-                    <td className="p-2 font-mono" dir="ltr">example2 / ex2</td>
+                    <td className="p-2 font-mono" dir="ltr">example2 / ex2 / مثالکاربردی</td>
                     <td className="p-2 text-slate-500">اختیاری</td>
-                    <td className="p-2">جملهٔ مثال دوم (آلمانی)</td>
+                    <td className="p-2"><b>مثال کاربردی (Redemittel)</b> — یک جملهٔ کوتاه روزمرهٔ A1–A2 که واژه (یا شکل صرف‌شدهٔ آن) واقعاً در آن به کار رفته باشد</td>
                   </tr>
                   <tr>
                     <td className="p-2 font-mono" dir="ltr">example2Translation / ex2Fa</td>
                     <td className="p-2 text-slate-500">اختیاری</td>
-                    <td className="p-2">ترجمهٔ فارسی مثال دوم</td>
+                    <td className="p-2">ترجمهٔ فارسی مثال کاربردی</td>
+                  </tr>
+                  <tr className="bg-sky-50/40 dark:bg-sky-950/20">
+                    <td className="p-2 font-mono" dir="ltr">english / en / معادل انگلیسی</td>
+                    <td className="p-2 text-slate-500">اختیاری</td>
+                    <td className="p-2">نزدیک‌ترین معادل انگلیسی — ترجمه <b>از آلمانی</b> (نه از فارسی)، با حروف کوچک؛ مثل <code>to decide</code></td>
                   </tr>
                   <tr>
                     <td className="p-2 font-mono" dir="ltr">synonym / syn / مترادف</td>
