@@ -283,7 +283,15 @@ export default function App() {
       }
     } else if (isEdit) {
       const updated = state.words.find(w => w.id === editingWordId);
-      if (updated) setSelectedWord(norm({ ...updated, ...wordData, id: updated.id }) as Word);
+      if (updated) {
+        const merged = norm({ ...updated, ...wordData, id: updated.id }) as Word;
+        setSelectedWord(merged);
+        // Pre-warm cloud TTS for edited words too (only what is missing)
+        if (getTtsWorkerBase()) {
+          const texts = [fullWord(merged), merged.ex, merged.ex2].filter(Boolean) as string[];
+          void Promise.all(texts.map(t => fetch(`https://${getTtsWorkerBase()!.replace(/^https?:\/\//, '')}/?lang=de&text=${encodeURIComponent(t)}`).catch(() => null)));
+        }
+      }
     }
     setEditingWordId(null);
   };
