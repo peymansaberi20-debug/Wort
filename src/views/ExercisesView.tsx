@@ -483,8 +483,13 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
     setChat(prev => [...prev, { q, a: '…' }]);
     setChatQ('');
     try {
-      const out = await generateWithGemini(`You are an expert German teacher. A learner's sentence was just proofread.\n${ctx}\nThe learner asks (in Persian): "${q}"\nAnswer in Persian (German words and examples stay German). Be concise — max ~6 short lines. Plain text only, no JSON, no Markdown headers.`, { timeoutMs: 30000, retries: 1 });
-      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: out.trim() || 'پاسخی دریافت نشد.' }; return next; });
+      const out = await generateWithGemini(`You are an expert German teacher. A learner's sentence was just proofread.\n${ctx}\nThe learner asks (in Persian): "${q}"\nAnswer ONLY a JSON array with one object — nothing outside it:\n[{"answer":"پاسخ کوتاه فارسی (۳ تا ۶ خط). واژه‌ها و مثال‌های آلمانی به آلمانی بمانند."}]`, { json: true, timeoutMs: 30000, retries: 1 });
+      let answer = out.trim();
+      try {
+        const parsed = parseAI(out)[0];
+        if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) answer = parsed.answer.trim();
+      } catch { /* مدل متن خام داد؛ همان نمایش داده می‌شود */ }
+      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: answer || 'پاسخی دریافت نشد.' }; return next; });
     } catch (e: any) {
       setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: e?.friendly || e?.message || 'پاسخی دریافت نشد.', err: true }; return next; });
     } finally { setChatBusy(false); }
