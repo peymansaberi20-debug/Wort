@@ -80,11 +80,50 @@ export function stopSpeaking(): void {
   }
 }
 
+/** Worker address for cloud TTS (set in Settings); cached per session. */
+let ttsWorkerBase: string | null | undefined;
+export function getTtsWorkerBase(): string | null {
+  if (ttsWorkerBase !== undefined) return ttsWorkerBase;
+  try { ttsWorkerBase = (localStorage.getItem('wort.ttsWorker') || '').trim().replace(/\/+$/, '') || null; }
+  catch { ttsWorkerBase = null; }
+  return ttsWorkerBase;
+}
+export function setTtsWorkerBase(url: string): void {
+  try {
+    const v = (url || '').trim().replace(/\/+$/, '');
+    if (v) localStorage.setItem('wort.ttsWorker', v); else localStorage.removeItem('wort.ttsWorker');
+    ttsWorkerBase = v || null;
+  } catch { /* ignore */ }
+}
+
+/** Tries the cloud worker (fast CDN-cached mp3). Resolves true if played. */
+function speakCloud(text: string, opts: SpeakOptions): boolean {
+  const base = getTtsWorkerBase();
+  if (!base) return false;
+  try {
+    const url = `${base}/?lang=de&text=${encodeURIComponent(text)}`;
+    const audio = new Audio(url);
+    audio.lang = 'de-DE';
+    if (opts.rate) audio.playbackRate = Math.min(1.4, Math.max(0.5, opts.rate));
+    if (opts.onEnd) audio.addEventListener('ended', opts.onEnd, { once: true });
+    if (opts.onErr) audio.addEventListener('error', () => opts.onErr!('پخش صدای ابری ناموفق بود.'), { once: true });
+    void audio.play().catch(() => { if (opts.onErr) opts.onErr('مرورگر اجازهٔ پخش نداد.'); });
+    return true;
+  } catch { return false; }
+}
+
 export async function speak(
   text: string,
   options?: SpeakOptions | ((msg: string) => void)
 ): Promise<void> {
   const synth = getSpeechSynthesis();
+  // Cloud first: if a worker is configured, prefer the high-quality mp3 (works identically on iOS).
+  if (getTtsWorkerBase()) {
+    const optsCloud: SpeakOptions = typeof options === 'object' && options !== null ? options : {};
+    stopSpeaking();
+    if (speakCloud(text, optsCloud)) return;
+    // cloud failed → fall through to browser TTS below
+  }
 
   const opts: SpeakOptions =
     typeof options === 'object' && options !== null ? options : {};
@@ -161,4 +200,19 @@ export async function speak(
     console.error('Speech synthesis error:', e);
     reportError('پخش تلفظ با خطا مواجه شد.');
   }
+}
+
+/** Pre-warms the cloud TTS cache for the given texts (skips failures silently). */
+export async function prewarmTts(texts: string[], onProgress?: (done: number, total: number) => void): Promise<void> {
+  const base = getTtsWorkerBase();
+  if (!base) throw new Error('آدرس Worker ثبت نشده است.');
+  let done = 0;
+  for (const t of texts) {
+    const s = t.trim();
+    if (!s) { done++; continue; }
+    try { await fetch(`${base}/?lang=de&text=${encodeURIComponent(s)}`); } catch { /* skip */ }
+    done++;
+    if (onProgress && done % 10 === 0) onProgress(done, texts.length);
+  }
+  if (onProgress) onProgress(texts.length, texts.length);
 }
