@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppSettings, Word } from '../types';
-import { getCategories } from '../utils/storage';
-import { getGermanVoices, speak, stopSpeaking } from '../utils/audio';
+import { getCategories, fullWord } from '../utils/storage';
+import { getGermanVoices, speak, stopSpeaking, getTtsWorkerBase, setTtsWorkerBase, prewarmTts } from '../utils/audio';
 import { GeminiKeyCard } from '../components/GeminiKeyCard';
 import { PROVIDERS, describeAiError, getActiveProvider, getApiKey, getModel, testConnection } from '../utils/aiProvider';
-import { speak, stopSpeaking, getTtsWorkerBase, setTtsWorkerBase, prewarmTts } from '../utils/audio';
 
 interface SettingsViewProps {
   settings: AppSettings;
