@@ -30,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   cloudEmail
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-20 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 md:px-4 py-2.5 shadow-md flex items-center justify-between gap-2">
-      {/* Start (RTL: right) — back arrow + brand */}
+      {/* Start — back arrow + brand */}
       <div className="flex items-center gap-1.5 min-w-0">
         {canGoBack && (
           <button
@@ -67,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* End (RTL: left) — theme, cloud avatar-chip, overflow menu */}
+      {/* End — theme, cloud avatar, overflow menu, save-and-exit */}
       <div ref={menuRef} className="flex items-center gap-1.5 flex-shrink-0 relative">
         <button
           onClick={onToggleTheme}
@@ -101,6 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <MoreVertical size={18} />
         </button>
+
         {menuOpen && (
           <div
             className="absolute top-full mt-2 left-0 w-48 bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-30"
@@ -112,20 +114,25 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Info size={16} className="text-[#1f5fbf]" /> درباره برنامه
             </button>
+            <button
+              onClick={() => { setMenuOpen(false); onSaveAndExit(); }}
+              className="w-full h-11 px-3 flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition border-t border-slate-100 dark:border-slate-800"
+            >
+              <Save size={16} className="text-[#1f5fbf]" /> ذخیره و خروج
+            </button>
+          </div>
+        )}
+
         <button
           onClick={() => {
             if (!isStandalone()) { onSaveAndExit(); return; }
             setConfirmExit(true);
           }}
-          className="w-9 h-9 bg-white text-[#1f5fbf] hover:bg-slate-100 font-bold rounded-lg text-xs md:text-sm shadow-sm transition flex items-center justify-center"
-          title="ذخیره و خروج / Save and Exit"
+          className={iconBtn}
+          title="ذخیره و خروج"
           aria-label="ذخیره و خروج"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
+          <Save size={18} />
         </button>
       </div>
 
