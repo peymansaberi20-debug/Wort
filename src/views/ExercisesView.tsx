@@ -441,7 +441,8 @@ const FREE_ISSUE_BADGE: Record<string, string> = {
   'حرف اضافه و حالت دستوری': 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
   'واژه‌گزینی': 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300',
   'حروف ربط و ترتیب جمله': 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300',
-  'آرتیکل و صرف صفت': 'bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300'
+  'آرتیکل و صرف صفت': 'bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300',
+  'معنا و منطق جمله': 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
 };
 
 const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => void }> = ({ onShowToast }) => {
@@ -457,7 +458,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
     const s = text.trim();
     if (!s || busy) return;
     setBusy(true); setErrMsg(''); setReport(null);
-    const prompt = `You are an expert German proofreader for Persian-speaking learners. Evaluate the learner's German sentence.\n\nINPUT: "${s}"\n\nCHECK: grammar and verb conjugation; connectors (weil, dass, wenn, deshalb, ...) and clause order; prepositions and required cases; articles, gender and adjective endings; word order; spelling and capitalization; naturalness.\n\nRULES:\n- Correct genuine errors only; preserve meaning and wording as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت".\n- Score 0-100 (integer) on correctness and naturalness; ignore non-applicable criteria and redistribute weights proportionally; be consistent.\n- Explanations and the tip: concise Persian, no repetition.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
+    const prompt = `You are an expert German teacher who checks BOTH grammar AND meaning/logic ("deutsches Denken") for Persian-speaking learners. Evaluate the sentence.\n\nINPUT: "${s}"\n\nCHECK:\n1) Meaning & logic FIRST: does the sentence make sense? Is the connector logically correct for the intended meaning? obwohl = concession AGAINST the expectation, trotzdem = nevertheless, weil = reason. If the logic contradicts the connector (e.g. "wenig Geld, obwohl große Reise" — the money is a REASON against the trip), that is a serious error: fix the connector or the logic and explain.\n2) Grammar and verb conjugation.\n3) Connectors and clause order (Hauptsatz/Nebensatz, verb position).\n4) Prepositions and required cases.\n5) Articles, gender, adjective endings.\n6) Word order.\n7) Spelling and capitalization.\n8) Naturalness and register.\n\nRULES:\n- Correct genuine errors only; preserve meaning as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".\n- Score 0-100 (integer): meaning/logic errors cost the most.\n- Explanations and the tip: concise Persian, no repetition.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
     try {
       const out = await generateWithGemini(prompt, { json: true, timeoutMs: 45000, retries: 1 });
       const r: any = parseAI(out)[0] || {};
@@ -483,7 +484,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
     setChat(prev => [...prev, { q, a: '…' }]);
     setChatQ('');
     try {
-      const out = await generateWithGemini(`You are an expert German teacher. A learner's sentence was just proofread.\n${ctx}\nThe learner asks (in Persian): "${q}"\nAnswer ONLY a JSON array with one object — nothing outside it:\n[{"answer":"پاسخ کوتاه فارسی (۳ تا ۶ خط). واژه‌ها و مثال‌های آلمانی به آلمانی بمانند."}]`, { json: true, timeoutMs: 30000, retries: 1 });
+      const out = await generateWithGemini(`You are an expert German teacher. A learner's sentence was just proofread.\n${ctx}\nThe learner asks (in Persian): "${q}"If the question concerns meaning, logic or connector choice (e.g. obwohl vs trotzdem), explain the German thinking with mini examples.\nAnswer ONLY a JSON array with one object — nothing outside it:\n[{"answer":"پاسخ کوتاه فارسی (۳ تا ۶ خط). واژه‌ها و مثال‌های آلمانی به آلمانی بمانند."}]`, { json: true, timeoutMs: 30000, retries: 1 });
       let answer = out.trim();
       try {
         const parsed = parseAI(out)[0];
@@ -532,7 +533,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
             </span>
             {report.issues.length === 0 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
           </div>
-
+          <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
           {report.understood_fa && (
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-sm leading-7">
               <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت آلمانی‌زبان: </b>{report.understood_fa}
@@ -557,6 +558,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
             </div>
           )}
 
+          <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
           {report.tip_fa && (
             <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm leading-7">
               <b className="text-indigo-700 dark:text-indigo-300">💡 نکته: </b>{report.tip_fa}
