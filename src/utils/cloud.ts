@@ -100,6 +100,15 @@ function chunkBySize<T>(items: T[], maxBytes = 550000): T[][] {
   return chunks;
 }
 
+const SYNC_FLAG = (uid: string) => `wort.cloudSyncEnabled.${uid}`;
+/** true only after the user has uploaded explicitly at least once from this device. */
+export const isSyncEnabled = (uid: string): boolean => {
+  try { return localStorage.getItem(SYNC_FLAG(uid)) === '1'; } catch { return false; }
+};
+export const enableSync = (uid: string): void => {
+  try { localStorage.setItem(SYNC_FLAG(uid), '1'); } catch { /* ignore */ }
+};
+
 export interface CloudMeta {
   words: number;
   hist: number;
@@ -129,10 +138,18 @@ export async function uploadStateToCloud(user: User, state: AppState): Promise<v
   chunkBySize(sanitize(state.hist)).forEach((items, i) => { batch.set(doc(db, 'users', user.uid, 'hist', `c${i}`), { i, items }); ops++; });
   await flush();
 
+  try { window.dispatchEvent(new CustomEvent('wort-cloud-synced')); } catch { /* ignore */ }
   await setDoc(doc(db, 'users', user.uid, 'meta', 'main'), sanitize({
     v: state.v, sv: state.sv, set: state.set, daily: state.daily,
     words: state.words.length, hist: state.hist.length, updatedAt: Date.now()
   }));
+}
+
+/** Quick emptiness check of the cloud mirror (without pulling all chunks). */
+export async function isCloudEmpty(user: User): Promise<boolean> {
+  ensureInit();
+  const snap = await getDoc(doc(getFirestore(), 'users', user.uid, 'meta', 'main'));
+  return !snap.exists();
 }
 
 /** Metadata of the cloud mirror (null = cloud is empty). */
