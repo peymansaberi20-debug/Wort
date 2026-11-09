@@ -103,3 +103,19 @@ body.green-tint::before {
   pointer-events: none;
   background: rgba(24, 120, 66, 0.16);
 }
+
+/* ── 3D flip card (flashcard / review) ── */
+.flip-scene { perspective: 1400px; }
+@keyframes cardFlipIn {
+  from { transform: rotateY(88deg) scale(0.97); opacity: 0.25; }
+  to { transform: rotateY(0deg) scale(1); opacity: 1; }
+}
+@keyframes cardEnter {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.card-flip-in { animation: cardFlipIn 0.5s cubic-bezier(0.35, 0.1, 0.25, 1) both; transform-style: preserve-3d; backface-visibility: hidden; }
+.card-enter { animation: cardEnter 0.3s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .card-flip-in, .card-enter { animation: none; }
+}
