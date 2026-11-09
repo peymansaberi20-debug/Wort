@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { onCloudUserChanged } from './utils/cloud';
+import { onCloudUserChanged, isSyncEnabled, enableSync, uploadStateToCloud, isCloudEmpty } from './utils/cloud';
+import { type User } from 'firebase/auth';
 import { CloudAccountModal } from './components/CloudAccountModal';
 import { AppState, Word, CaseQuestion } from './types';
 import {
@@ -79,9 +80,10 @@ export default function App() {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [isImageExtractOpen, setIsImageExtractOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  const [cloudUser, setCloudUser] = useState<any>(null);
+    const [cloudUser, setCloudUser] = useState<any>(null);
   const [cloudOpen, setCloudOpen] = useState(false);
   useEffect(() => onCloudUserChanged((u: any) => setCloudUser(u)), []);
+  // CloudAccountModal enabling flag → App-level (kept simple: modal writes directly)
   const [activeHelpTopic, setActiveHelpTopic] = useState<string | null>(null);
 
   // Toast
@@ -565,6 +567,12 @@ export default function App() {
         state={state}
         onApplyState={s => setState(s)}
         onShowToast={showToast}
+        onSyncEnabled={(uid) => enableSync(uid)}
+      />
+      <AutoCloudSync
+        user={cloudUser}
+        state={state}
+        showToast={showToast}
       />
 
       {/* Main Container */}
@@ -864,4 +872,41 @@ export default function App() {
       <Toast message={toastMsg} isError={toastIsError} />
     </div>
   );
+}
+
+/** Silent background sync: after data changes, uploads to the cloud when enabled. */
+function AutoCloudSync({ user, state, showToast }: { user: any; state: any; showToast: (m: string, e?: boolean) => void }) {
+  const [savedUser, setSavedUser] = useState<User | null>(null);
+  const timerRef = useRef<any>(null);
+  const savingRef = useRef(false);
+  const [lastCount, setLastCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    setSavedUser(user);
+    setLastCount(state.words.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    if (!savedUser || !isSyncEnabled(savedUser.uid)) return;
+    if (state.words.length === lastCount) return; // nothing changed (word-count proxy is cheap and sufficient here)
+    if (savingRef.current) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      savingRef.current = true;
+      try {
+        await uploadStateToCloud(savedUser, state);
+        setLastCount(state.words.length);
+        showToast('☁️ همگام‌سازی ابری انجام شد.', false);
+      } catch (e: any) {
+        showToast(e?.message || 'خطا در همگام‌سازی ابری.', true);
+      } finally {
+        savingRef.current = false;
+      }
+    }, 3000);
+    return () => clearTimeout(timerRef.current);
+  }, [state, savedUser, lastCount]);
+
+  return null;
 }
