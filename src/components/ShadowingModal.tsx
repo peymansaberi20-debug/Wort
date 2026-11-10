@@ -41,6 +41,108 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose })
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState('');
   const [report, setReport] = useState<ShadowReport | null>(null);
+  const [analysis, setAnalysis] = useState<{ frames: number; eSample: number[]; eMine: number[]; offset: number; minePeak: number; samplePeak: number; mineRms: number; sampleRms: number; hints: string[] } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  /** Extracts RMS-energy contour (32 buckets, aligned to 2s window). */
+  const analyzeAudio = async (src: string): Promise<number[]> => {
+    const AC: any = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const ac = new AC();
+    const buf = await fetch(src).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b));
+    const ch = buf.getChannelData(0);
+    const sr = buf.sampleRate;
+    const frames = 32;
+    const win = Math.max(1, Math.floor(ch.length / frames));
+    const out: number[] = [];
+    for (let f = 0; f < frames; f++) {
+      let sum = 0;
+      const start = f * win, end = Math.min(ch.length, start + win);
+      let n = 0;
+      for (let i = start; i < end; i++) { sum += ch[i] * ch[i]; n++; }
+      out.push(n ? Math.sqrt(sum / n) : 0);
+    }
+    void sr;
+    return out;
+  };
+
+  const runAnalysis = async () => {
+    if (!recUrl) return;
+    const base = getTtsWorkerBase();
+    const sampleSrc = base ? `${base}/?lang=de&text=${encodeURIComponent(text)}` : '';
+    try {
+      const eMine = await analyzeAudio(recUrl);
+      const eSample = sampleSrc ? await analyzeAudio(sampleSrc) : [];
+      // best alignment offset (sample may start later/earlier than my recording)
+      let bestOff = 0;
+      if (eSample.length) {
+        let best = Infinity;
+        for (let off = -10; off <= 10; off++) {
+          let cost = 0, n = 0;
+          for (let i = 0; i < eMine.length; i++) {
+            const j = i + off;
+            if (j < 0 || j >= eSample.length) continue;
+            cost += Math.abs(eMine[i] - eSample[j]); n++;
+          }
+          if (n && cost / n < best) { best = cost / n; bestOff = off; }
+        }
+      }
+      const peak = (arr: number[]) => Math.max(0.0001, ...arr);
+      const rms = (arr: number[]) => Math.sqrt(arr.reduce((a, x) => a + x * x, 0) / Math.max(1, arr.length));
+      const minePeak = peak(eMine), samplePeak = eSample.length ? peak(eSample) : 0;
+      const mineRms = rms(eMine), sampleRms = eSample.length ? rms(eSample) : 0;
+      const hints: string[] = [];
+      if (eSample.length) {
+        if (mineRms < sampleRms * 0.45) hints.push('🎤 صدای ضبط خیلی آرام‌تر از نمونه است — میکروفون را نزدیک‌تر بگیر یا بلندتر بگو.');
+        else if (mineRms > sampleRms * 1.8) hints.push('🔊 صدای ضبط خیلی بلندتر از نمونه است (چهیست/دست‌کشیده).');
+        if (bestOff > 2) hints.push('⏱ شروع تو دیرتر از نمونه است — هم‌زمان با نمونه شروع کن.');
+        if (bestOff < -2) hints.push('⏱ زودتر از نمونه شروع کرده‌ای.');
+        let weakEnd = true;
+        for (let i = eMine.length - 6; i < eMine.length; i++) if (eMine[i] > mineRms * 0.5) weakEnd = false;
+        if (weakEnd && eSample.length && eSample.slice(-6).some(x => x > sampleRms * 0.5)) hints.push('📉 انتهای جمله انرژی‌اش افتاده — پایان جمله را با همان نیرو بگو (نمونه تا آخر پرانرژی است).');
+      }
+      setAnalysis({ frames: eMine.length, eSample, eMine, offset: bestOff, minePeak, samplePeak, mineRms, sampleRms, hints });
+    } catch {
+      setErr('تحلیل صوتی ناموفق بود (فرمت ضبط ممکن است در این مرورگر decode نشود).');
+    }
+  };
+
+  // draw the two contours on the canvas whenever analysis changes
+  useEffect(() => {
+    if (!analysis || !canvasRef.current) return;
+    const cv = canvasRef.current;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const maxV = Math.max(0.0001, analysis.minePeak, analysis.samplePeak);
+    const draw = (arr: number[], color: string, off: number) => {
+      ctx.beginPath();
+      arr.forEach((v, i) => {
+        const x = ((i + off + arr.length) % (arr.length * 2)) / (arr.length * 2) * W;
+        const y = H - 6 - (v / maxV) * (H - 14);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+    };
+    // mismatch bands: |mine - aligned sample| > 55% of max
+    if (analysis.eSample.length) {
+      for (let i = 0; i < analysis.eMine.length; i++) {
+        const j = i + analysis.offset;
+        const s = j >= 0 && j < analysis.eSample.length ? analysis.eSample[j] : 0;
+        if (Math.abs(analysis.eMine[i] - s) > maxV * 0.55) {
+          ctx.fillStyle = 'rgba(239,68,68,0.14)';
+          ctx.fillRect((i / analysis.eMine.length) * W, 0, W / analysis.eMine.length + 1, H);
+        }
+      }
+      draw(analysis.eSample, '#10b981', 0);
+    }
+    draw(analysis.eMine, '#3b82f6', 0);
+    // legend
+    ctx.fillStyle = '#10b981'; ctx.fillRect(8, 6, 10, 3);
+    ctx.fillStyle = '#3b82f6'; ctx.fillRect(8, 14, 10, 3);
+    ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif';
+    ctx.fillText('نمونه', 22, 10); ctx.fillText('ضبط من', 22, 18);
+  }, [analysis]);
 
   useEffect(() => {
     setReport(null); setErr(''); setRecUrl(null); setRecDur(null); setPart('de');
@@ -62,6 +164,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose })
     const a = new Audio(recUrl);
     const onMeta = () => { if (isFinite(a.duration)) setRecDur(a.duration); };
     a.addEventListener('loadedmetadata', onMeta);
+    void runAnalysis();
     return () => a.removeEventListener('loadedmetadata', onMeta);
   }, [recUrl]);
 
@@ -205,6 +308,21 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose })
           )}
 
           {err && <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{err}</div>}
+
+          {analysis && (
+            <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-slate-50 dark:bg-[#141923] p-3 space-y-2">
+              <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📊 تحلیل صوتی (انرژی در طول زمان)</div>
+              <canvas ref={canvasRef} width={520} height={110} className="w-full rounded-lg bg-white dark:bg-[#0f131c]" dir="ltr" />
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[#5d6676] dark:text-[#a3adbd]">
+                <span>🟩 نمونهٔ اصلی</span><span>🟦 ضبط من</span><span>🟥 نوار قرمز = ناهماهنگی انرژی</span>
+              </div>
+              {analysis.hints.length > 0 && (
+                <ul className="space-y-1 text-xs leading-6 text-slate-700 dark:text-slate-200">
+                  {analysis.hints.map((h, i) => <li key={i} className="flex gap-2"><span className="text-[#1f5fbf]">•</span><span>{h}</span></li>)}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* AI coach */}
           <button onClick={() => void askAi()} disabled={aiBusy}
