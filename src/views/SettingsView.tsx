@@ -237,6 +237,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <option value="new">🌟 اول واژگان جدید</option>
               <option value="mix">🔀 ترکیب یکی‌درمیان (سررسید و جدید)</option>
               <option value="rand">🎲 چینش کاملاً تصادفی</option>
+              <option value="randnew">🎲 چینش تصادفی واژه‌های جدید (سررسیدها اول)</option>
             </select>
           </div>
         </div>
