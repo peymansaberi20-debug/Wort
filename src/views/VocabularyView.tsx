@@ -124,6 +124,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const aiOperationRef = useRef(false);
   const aiDepthRef = useRef<'light' | 'mid' | 'full'>('full');
   wordsRef.current = words;
+  const [needsFullFlag, setNeedsFullFlag] = useState(false);
 
   const checkForDuplicate = (input = formDe, art = formArt): Word | null => {
     const duplicate = findExistingDuplicate(input, art, wordsRef.current, editingWordId);
@@ -263,6 +264,7 @@ return words
     setFormArt('');
     setFormFa('');
     setFormEn('');
+    setNeedsFullFlag(false);
     setFormCat('');
     setNewCatInput('');
     setFormSyn('');
@@ -478,6 +480,8 @@ return words
         if (item.sep) setFormSep(item.sep);
         if (item.notes) setFormNotes(item.notes);
         if (item.cat && !formCat) setFormCat(item.cat);
+        // fast depth → mark as needing full profile
+        if (aiDepthRef.current !== 'full') setNeedsFullFlag(true);
         // hard guarantee: non-noun headword is lowercase in the form (e.g. Machen → machen)
         {
           const posStr = String(item.pos || formPos || '').trim();
@@ -485,6 +489,7 @@ return words
           const fd = (item.de && item.de.trim()) || formDe.trim();
           if (!nounLike && fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
         }
+        if (aiDepthRef.current === 'full') setNeedsFullFlag(false); // 💎 → the word is now fully profiled
         onShowToast(`واژه تکمیل شد (${aiDepthRef.current === 'full' ? 'کامل — ۲۸ فیلد' : aiDepthRef.current === 'mid' ? 'نیمه' : 'سبک'}).`);
       } else if (errs.length > 0) {
         onShowToast(errs[0], true);
@@ -687,6 +692,7 @@ Answer ONLY a JSON array, no code fence, no commentary:
         art: formArt,
         fa: formFa.trim(),
         en: formEn.trim(),
+        needsFull: needsFullFlag,
         cat: finalCat,
         syn: formSyn.trim(),
         synFa: formSynFa.trim(),
@@ -1586,6 +1592,9 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                               <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded text-[10px]">
                                 {w.lvl}
                               </span>
+                            )}
+                            {w.needsFull && (
+                              <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded text-[10px] font-bold" title="پروفایل سبک است — در پروفایل، 💎 تکمیل کامل بزن">⚡</span>
                             )}
                             {isLeech(w) && <span>🩸</span>}
                             {w.img && <span>🖼</span>}
