@@ -14,6 +14,20 @@ function getSpeechSynthesis(): SpeechSynthesis | null {
   return window.speechSynthesis;
 }
 
+/** Registry of HTMLAudio elements created for cloud playback — all stopped on stopSpeaking(). */
+const liveAudios = new Set<HTMLAudioElement>();
+function stopAllAudio(): void {
+  liveAudios.forEach(a => { try { a.pause(); a.currentTime = 0; } catch { /* ignore */ } });
+  liveAudios.clear();
+}
+function trackAudio(a: HTMLAudioElement): HTMLAudioElement {
+  liveAudios.add(a);
+  const cleanup = () => { liveAudios.delete(a); };
+  a.addEventListener('ended', cleanup, { once: true });
+  a.addEventListener('error', cleanup, { once: true });
+  return a;
+}
+
 function isGermanVoice(voice: SpeechSynthesisVoice): boolean {
   return /^de(?:-|$)/i.test(voice.lang.trim());
 }
@@ -70,6 +84,7 @@ export function getGermanVoicesAsync(
 }
 
 export function stopSpeaking(): void {
+  stopAllAudio();
   const synth = getSpeechSynthesis();
   if (!synth) return;
 
@@ -102,12 +117,12 @@ function speakCloud(text: string, opts: SpeakOptions): boolean {
   if (!base) return false;
   try {
     const url = `${base}/?lang=de&text=${encodeURIComponent(text)}`;
-    const audio = new Audio(url);
+    const audio = trackAudio(new Audio(url));
     audio.lang = 'de-DE';
     if (opts.rate) audio.playbackRate = Math.min(1.4, Math.max(0.5, opts.rate));
     if (opts.onEnd) audio.addEventListener('ended', opts.onEnd, { once: true });
     if (opts.onErr) audio.addEventListener('error', () => opts.onErr!('پخش صدای ابری ناموفق بود.'), { once: true });
-    void audio.play().catch(() => { if (opts.onErr) opts.onErr('مرورگر اجازهٔ پخش نداد.'); });
+    void audio.play().catch(() => { if (opts.onErr) opts.onErr('مرورگر اجازهٔ پخش نداد.'); liveAudios.delete(audio); });
     return true;
   } catch { return false; }
 }
