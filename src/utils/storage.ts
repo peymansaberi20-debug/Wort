@@ -54,6 +54,7 @@ export function norm(w: any): Word | null {
     notes: s('notes'),
     def: s('def'),
     en: s('en'),
+    needsFull: !!w.needsFull,
     img: IMGOK.test(s('img')) && s('img').length < 600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,
