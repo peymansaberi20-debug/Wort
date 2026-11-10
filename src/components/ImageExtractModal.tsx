@@ -15,6 +15,8 @@ import { BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, l
 interface ExtractedCandidate {
   de: string;
   have: boolean;
+  art?: string;
+  cefr?: string;
   on: boolean;
   correctedSpell: string;
   cat: string;
@@ -119,11 +121,12 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
 
     try {
       const promptText = `Extract visible German words and expressions from this image.
+Return ONLY a JSON array, no Markdown, no commentary:
+[{"de":"noun WITHOUT article or the word/expression as-is","art":"der|die|das|","cefr":"A1|A2|B1|B2|C1|C2"}]
 Rules:
-- List only the visible German words or multiword expressions, one per line.
-- Do NOT include noun articles (der, die, das, ein, eine, etc.). Omit the article and output only the noun itself (e.g. write "Schule", not "die Schule").
-- Do NOT translate to Persian or English.
-- Do NOT include definitions, examples, grammar notes, numbers, or bullet points.
+- de: the visible German word/expression; for nouns omit the article and put it in "art".
+- cefr: realistic CEFR estimate of the word's difficulty (A1 = sehr einfach wie "Haus"; C2 = sehr selten/fach).
+- No translations, no definitions, no notes, no bullet points.
 - If a word is unreadable, omit it.`;
 
       const imagesPayload: { data: string; mimeType: string }[] = [];
@@ -136,32 +139,40 @@ Rules:
       }
 
       // One request to the ACTIVE provider only (no automatic fallback to another provider)
-      const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
-      const lines = rawText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
-
+      // JSON first; fallback to plain lines (older behaviour) if the model answered as text
+      let resCandidates: ExtractedCandidate[] = [];
       const seen = new Set<string>();
-      const resCandidates: ExtractedCandidate[] = [];
-
-      for (const rawLine of lines) {
-        let cleaned = rawLine.replace(/^[\*\-•\d\.\)\s]+/, '').trim();
-        // Remove leading articles
-        cleaned = cleaned.replace(/^(?:der|die|das|dem|den|des|ein|eine|einen|einem|einer|eines)\s+/i, '').trim();
-        cleaned = cleaned.replace(/[\*_`#]/g, '').trim();
-
-        if (!cleaned || cleaned.length < 2 || cleaned.toLowerCase() === 'none') continue;
-
+      const pushCand = (cleaned: string, art: string, cefr: string) => {
+        cleaned = cleaned.replace(/^(?:der|die|das|dem|den|des|ein|eine|einen|einem|einer|eines)\s+/i, '').trim()
+          .replace(/[\*_`#]/g, '').trim();
+        if (!cleaned || cleaned.length < 2 || cleaned.toLowerCase() === 'none') return;
         const k = cleaned.toLowerCase();
-        if (seen.has(k)) continue;
+        if (seen.has(k)) return;
         seen.add(k);
+        resCandidates.push({ de: cleaned, have: haveWords.has(k), on: !haveWords.has(k), correctedSpell: '', cat: '', art, cefr });
+      };
 
-        const isHave = haveWords.has(k);
-        resCandidates.push({
-          de: cleaned,
-          have: isHave,
-          on: !isHave,
-          correctedSpell: '',
-          cat: ''
-        });
+      let parsedOk = false;
+      try {
+        const arr = parseAI(rawText);
+        if (Array.isArray(arr) && arr.length && arr[0]?.de) {
+          parsedOk = true;
+          arr.forEach((o: any) => {
+            if (o && typeof o.de === 'string') {
+              pushCand(String(o.de).trim(), String(o.art || '').toLowerCase(), String(o.cefr || '').toUpperCase());
+            }
+          });
+        }
+      } catch { /* not JSON → legacy path */ }
+
+      if (!parsedOk) {
+        const lines = rawText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+        for (const rawLine of lines) {
+          let cleaned = rawLine.replace(/^[\*\-•\d\.\)\s]+/, '').trim();
+          cleaned = cleaned.replace(/^(?:der|die|das|dem|den|des|ein|eine|einen|einem|einer|eines)\s+/i, '').trim();
+          cleaned = cleaned.replace(/[\*_`#]/g, '').trim();
+          pushCand(cleaned, '', '');
+        }
       }
 
       setCandidates(resCandidates);
