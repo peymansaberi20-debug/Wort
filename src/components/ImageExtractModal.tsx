@@ -8,8 +8,7 @@ import { Conflict, ImportDecision, classifyImport } from '../utils/vocabMerge';
 import { ImportConflictDialog } from './ImportConflictDialog';
 import { copyText } from '../utils/clipboard';
 import { recognizeImage, releaseOcr } from '../utils/ocr';
-import {
-  BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, loadSession, makeCandidates, markCompleted, newSession,
+import { BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, loadSession, makeCandidates, markCompleted, newSession, buildSinglePromptDepth, type PromptDepth,
   nextOpenBatch, saveSession, sessionProgress, setBatchSize, splitCandidates, validateBatchResponse, validationToWords
 } from '../utils/extractSession';
 
@@ -46,6 +45,13 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [sourceCollapsed, setSourceCollapsed] = useState<boolean>(false);
 
+  const LEVEL_ORDER = ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const isBelowLevel = (cefr: string, min: string) => {
+    const a = LEVEL_ORDER.indexOf((cefr || '').toUpperCase());
+    const b = LEVEL_ORDER.indexOf(min.toUpperCase());
+    return a >= 0 && b > 0 && a <= b;
+  };
+
   const existingCategories = getCategories(words);
 
   // Extraction method: AI (selected provider) | local OCR (no AI) | manual text (no AI)
@@ -62,6 +68,8 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
   const [problems, setProblems] = useState<string[]>([]);
   const [copyFallback, setCopyFallback] = useState('');
   const [conflictState, setConflictState] = useState<{ fresh: Word[]; conflicts: Conflict[]; cids: string[] } | null>(null);
+  const [enrichDepth, setEnrichDepth] = useState<'light' | 'mid' | 'full'>('light');
+  const [minLevelFilter, setMinLevelFilter] = useState('');
 
   useEffect(() => {
     if (ext) saveSession(ext);
@@ -249,7 +257,8 @@ Rules:
           const pct = Math.round((doneCount / Math.max(1, totalCount)) * 90) + 5;
           setProgressPercent(pct);
           setProgressMsg(currentMsg);
-        }
+        },
+        enrichDepth
       );
 
       // Step 5: Validate and apply any user-selected categories
@@ -718,7 +727,28 @@ Rules:
             </div>
           ) : (
           <>
-            <div className="mb-2 flex justify-start">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <select
+                value={enrichDepth}
+                onChange={e => setEnrichDepth(e.target.value as 'light' | 'mid' | 'full')}
+                disabled={enriching}
+                className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none"
+              >
+                <option value="light">⚡ سبک (سریع — fa+en+lvl)</option>
+                <option value="mid">⚙️ نیمه (+pl+pos)</option>
+                <option value="full">💎 کامل (۲۸ فیلد)</option>
+              </select>
+              <select
+                value={minLevelFilter}
+                onChange={e => setMinLevelFilter(e.target.value)}
+                disabled={enriching}
+                className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none"
+              >
+                <option value="">فیلتر سطح: هیچ</option>
+                <option value="A1">حذف A1 و پایین‌تر</option>
+                <option value="A2">حذف A2 و پایین‌تر</option>
+                <option value="B1">حذف B1 و پایین‌تر</option>
+              </select>
               <button
                 type="button"
                 onClick={toggleAllCandidates}
@@ -739,7 +769,7 @@ Rules:
                       : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] opacity-75'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2 text-xs">
+                  <div className={`flex items-center justify-between gap-2 text-xs ${minLevelFilter && cand.cefr && isBelowLevel(cand.cefr, minLevelFilter) ? 'opacity-40' : ''}`}>
                     <label className="flex items-center gap-2 cursor-pointer min-w-0">
                       <input
                         type="checkbox"
