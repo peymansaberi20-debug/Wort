@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini } from '../utils/ai';
+import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
@@ -122,6 +122,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [aiChoicePrompt, setAiChoicePrompt] = useState<{ title: string; message: string; options: { label: string; target: string; instruction: string }[] } | null>(null);
   const wordsRef = useRef(words);
   const aiOperationRef = useRef(false);
+  const aiDepthRef = useRef<'light' | 'mid' | 'full'>('full');
   wordsRef.current = words;
 
   const checkForDuplicate = (input = formDe, art = formArt): Word | null => {
@@ -409,7 +410,11 @@ return words
     setAiLoading(true);
     try {
       const targetWord = choice?.target || formDe.trim();
-      const prompt = AIP(targetWord, wordsRef.current, formCat && formCat !== '__new' ? formCat : undefined) + (choice?.instruction ? `\n\nIMPORTANT USER-SELECTED MEANING/FORM:\n${choice.instruction}\nUse the selected target exactly and do not revert to another meaning.` : '');
+      const catOverride = formCat && formCat !== '__new' ? formCat : undefined;
+      const basePrompt = aiDepthRef.current === 'full'
+        ? AIP(targetWord, wordsRef.current, catOverride)
+        : buildSinglePromptDepth(targetWord, wordsRef.current, aiDepthRef.current, catOverride);
+      const prompt = basePrompt + (choice?.instruction ? `\n\nIMPORTANT USER-SELECTED MEANING/FORM:\n${choice.instruction}\nUse the selected target exactly and do not revert to another meaning.` : '');
       const resText = await generateWithGemini(prompt, { timeoutMs: 25000 });
       const duplicateAfterAi = checkForDuplicate(choice?.target || formDe.trim());
       if (duplicateAfterAi) {
@@ -480,7 +485,7 @@ return words
           const fd = (item.de && item.de.trim()) || formDe.trim();
           if (!nounLike && fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
         }
-        onShowToast(`پروفایل کامل ۲۲ پارامتری با هوش مصنوعی تکمیل شد.`);
+        onShowToast(`واژه تکمیل شد (${aiDepthRef.current === 'full' ? 'کامل — ۲۸ فیلد' : aiDepthRef.current === 'mid' ? 'نیمه' : 'سبک'}).`);
       } else if (errs.length > 0) {
         onShowToast(errs[0], true);
       }
@@ -899,18 +904,27 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => void handleAiAutoFill()}
+                onClick={() => { aiDepthRef.current = 'light'; void handleAiAutoFill(); }}
                 disabled={aiLoading || translateLoading || !formDe.trim()}
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center justify-center gap-1.5 flex-1 min-w-[180px]"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1 flex-1 min-w-[140px]"
               >
-                {aiLoading ? (
-                  <>
-                    <span className="inline-block animate-spin">⏳</span>
-                    <span>در حال تکمیل ۲۲ فیلد...</span>
-                  </>
-                ) : (
-                  <span>✨ تکمیل خودکار کل واژه (۲۲ پارامتر)</span>
-                )}
+                {aiLoading && aiDepthRef.current === 'light' ? <span className="inline-block animate-spin">⏳</span> : <span>⚡ تکمیل سبک</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => { aiDepthRef.current = 'mid'; void handleAiAutoFill(); }}
+                disabled={aiLoading || translateLoading || !formDe.trim()}
+                className="bg-[#b45309] hover:bg-[#92400e] text-white px-3 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1 flex-1 min-w-[150px]"
+              >
+                {aiLoading && aiDepthRef.current === 'mid' ? <span className="inline-block animate-spin">⏳</span> : <span>⚙️ تکمیل نیمه</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => { aiDepthRef.current = 'full'; void handleAiAutoFill(); }}
+                disabled={aiLoading || translateLoading || !formDe.trim()}
+                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 h-11 rounded-xl text-xs font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center justify-center gap-1 flex-1 min-w-[160px]"
+              >
+                {aiLoading && aiDepthRef.current === 'full' ? <span className="inline-block animate-spin">⏳</span> : <span>💎 تکمیل کامل (۲۸)</span>}
               </button>
 
               <button
