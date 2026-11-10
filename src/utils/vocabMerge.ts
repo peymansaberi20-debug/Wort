@@ -10,7 +10,7 @@ import { findDuplicateWord } from './duplicates';
 const CONTENT_FIELDS: (keyof Word)[] = [
   'de', 'art', 'fa', 'syn', 'synFa', 'ant', 'antFa', 'pl', 'pos', 'lvl', 'ex', 'exFa', 'ex2', 'ex2Fa',
   'conj', 'prat', 'perf', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr', 'imperativSie',
-  'sep', 'cloze', 'ans', 'tags', 'notes', 'def', 'en'
+  'sep', 'cloze', 'ans', 'tags', 'notes', 'def', 'en', 'needsFull'
 ];
 
 export const FIELD_LABELS: Record<string, string> = {
