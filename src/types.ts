@@ -66,7 +66,7 @@ export interface AppSettings {
   dir: 'de' | 'fa' | 'rand';
   nw: number; // new words per day 0-500
   rv: number; // reviews per day 0-500
-  order: 'due' | 'new' | 'mix' | 'rand';
+  order: 'due' | 'new' | 'mix' | 'rand' | 'randnew';
   activeCats: string[];
   ivlMod: number; // 0.8 | 1 | 1.25
   leechN: number; // 2-20
