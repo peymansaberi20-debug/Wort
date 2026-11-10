@@ -7,7 +7,8 @@ import { isLeech } from '../utils/storage';
 import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
-import { X, Pencil, Trash2 } from 'lucide-react';
+import { ShadowingModal } from './ShadowingModal';
+import { X, Pencil, Trash2, Mic } from 'lucide-react';
 
 interface WordDetailModalProps {
   word: Word | null;
@@ -25,6 +26,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   onImageChange
 }) => {
   const [showFa, setShowFa] = useState(false);
+  const [shadowOpen, setShadowOpen] = useState(false);
 
   // Hide every Persian translation whenever the active word changes or the modal closes.
   useEffect(() => {
@@ -293,6 +295,7 @@ const seg = pluralSegments2();
         if (e.target === e.currentTarget) { setShowFa(false); onClose(); }
       }}
     >
+      {shadowOpen && <ShadowingModal word={word} onClose={() => setShadowOpen(false)} />}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
         {/*
           Fulfills User Request #9:
@@ -306,6 +309,7 @@ const seg = pluralSegments2();
             <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
               {word.img ? '🖼️' : '📷'}
             </IconBtn>
+            <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
             <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
             <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
           </div>
