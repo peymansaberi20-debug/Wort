@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { onCloudUserChanged, uploadStateToCloud } from './utils/cloud';
 import { type User } from 'firebase/auth';
 import { CloudAccountModal } from './components/CloudAccountModal';
+import { GroupImportView } from './views/GroupImportView';
 import { AppState, Word, CaseQuestion } from './types';
 import {
   loadState,
@@ -81,7 +82,8 @@ export default function App() {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [isImageExtractOpen, setIsImageExtractOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-    const [cloudUser, setCloudUser] = useState<any>(null);
+  const [cloudUser, setCloudUser] = useState<any>(null);
+  const [showGroupImport, setShowGroupImport] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
   useEffect(() => onCloudUserChanged((u: any) => setCloudUser(u)), []);
   // CloudAccountModal enabling flag → App-level (kept simple: modal writes directly)
@@ -574,6 +576,14 @@ export default function App() {
         onOpenCloud={() => setCloudOpen(true)}
         cloudEmail={cloudUser?.email || null}
       />
+      {showGroupImport && (
+        <GroupImportView
+          words={state.words}
+          onAddEnrichedWords={ws => setState(prev => ({ ...prev, words: [...prev.words, ...ws] }))}
+          onClose={() => setShowGroupImport(false)}
+          onShowToast={showToast}
+        />
+      )}
       <CloudAccountModal
         open={cloudOpen}
         onClose={() => setCloudOpen(false)}
