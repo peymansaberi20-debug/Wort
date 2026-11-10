@@ -961,13 +961,16 @@ const buildAnkiText = (ws: Word[]): string => {
 
       {/* 2. SECOND CARD: ورود (Excel, CSV یا JSON) - Fulfills Task 3 */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
+        <div className="rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/30 px-3.5 py-2.5 text-xs leading-6 text-slate-700 dark:text-slate-200">
+          💡 برای استخراج واژه از <b>تصویر/PDF/متن</b> با تنظیمات سه‌وضعیتی (سبک/نیمه/کامل)، دستهٔ گروهی و فیلتر سطح → واژگان ← <b>📦 افزودن واژگان گروهی</b>. این کارت برای ورود مستقیم فایل‌های اکسل/CSV/JSON و پشتیبان‌ها است.
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">📥</span>
             <div>
               <b className="text-base text-slate-900 dark:text-slate-100">ورود فایل (Excel, CSV یا JSON)</b>
               <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                پشتیبان‌های قبلی، اکسل/CSV/JSON را همین‌جا وارد کن. برای استخراج از عکس/متن با تنظیمات سه‌وضعیتی ← واژگان ← 📦 افزودن واژگان گروهی
+                پشتیبان‌های قبلی برنامه، فایل‌های اکسل (.xlsx) یا فایل‌های واژگان CSV استاندارد را وارد کنید
               </p>
             </div>
           </div>
