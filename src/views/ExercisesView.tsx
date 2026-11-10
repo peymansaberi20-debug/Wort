@@ -1489,20 +1489,35 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
           </div>
         )}
-        {/* Example sentences - revealed ONLY when card is revealed (Section 11) */}
+        {/* Examples — revealed ONLY when card is revealed (Section 11): Bedeutung first, then Redemittel */}
         {(w.ex || w.ex2) && (
           <div className="space-y-2 pt-1">
             {w.ex && (
               <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
-                  <p className="text-sm md:text-base md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
+                  <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
                     {w.ex}
                   </p>
                   <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
                 </div>
                 {w.exFa && (
-                  <p className="text-sm md:text-base text-[#5d6676] dark:text-[#a3adbd] text-right" dir="rtl">
+                  <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] text-right" dir="rtl">
                     {w.exFa}
+                  </p>
+                )}
+              </div>
+            )}
+            {w.ex2 && (
+              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+                <div className="flex items-center justify-between gap-2" dir="ltr">
+                  <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
+                    {w.ex2}
+                  </p>
+                  <button onClick={() => speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
+                </div>
+                {w.ex2Fa && (
+                  <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] text-right" dir="rtl">
+                    {w.ex2Fa}
                   </p>
                 )}
               </div>
