@@ -270,18 +270,22 @@ JSON REQUIREMENTS
                 <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
                   <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی جمله:</div>
                   <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
+                  <button
+                    onClick={() => setShadowOpen(true)}
+                    className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                  >
+                    <Mic size={14} /> 🎙 تمرین تلفظ این جمله
+                  </button>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
-    </div>
-  );
-};
 
       {shadowOpen && report && (
         <ShadowingModal freeText={report.corrected_de} word={word} onClose={() => setShadowOpen(false)} />
       )}
     </div>
   );
+};
