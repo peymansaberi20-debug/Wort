@@ -562,6 +562,23 @@ export function buildGroupPromptV2(lines: string[], existingWords: Word[], targe
   );
 }
 
+/** Group prompt for light/mid depth: one object per target line. */
+export function buildGroupPromptDepth(
+  lines: string[],
+  words: Word[],
+  depth: 'light' | 'mid',
+  catOverride?: string
+): string {
+  const dynamicCats = getDynamicCategories(words);
+  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
+  const catRule = catOverride
+    ? `Assign "cat": "${catOverride}" to every object. Ignore the category list.`
+    : `Assign "cat" strictly from this list of EXISTING categories (never invent one):\n${catListStr}`;
+  const spec = DEPTH_FIELD_SPEC[depth].replace('exactly one object', 'exactly one object PER TARGET LINE');
+  const numbered = lines.map((l, i) => `[${i + 1}] ${l}`).join('\n');
+  return `You are an expert German vocabulary assistant for a Persian-speaking learner. Completion depth: ${depth}. There are ${lines.length} targets.\n\n=== TARGETS (one per line) ===\n${numbered}\n\n${spec}\n\nThe "de" of each object must be the exact target from its line, in the same order.\n- cat: ${catRule}`;
+}
+
 export const AIP = (de: string, words: Word[], catOverride?: string): string =>
   buildSinglePromptV2(de, words, catOverride);
 
@@ -762,9 +779,10 @@ export async function processBatchWordsWithGemini(
   lines: string[],
   words: Word[],
   catOverride?: string,
-  onProgress?: (doneCount: number, totalCount: number, currentMsg: string) => void
+  onProgress?: (doneCount: number, totalCount: number, currentMsg: string) => void,
+  depth: 'light' | 'mid' | 'full' = 'full'
 ): Promise<{ ws: Word[]; errs: string[] }> {
-  const BATCH_SIZE = 5;
+  const BATCH_SIZE = depth === 'full' ? 5 : 10;
   const chunks: string[][] = [];
   for (let i = 0; i < lines.length; i += BATCH_SIZE) {
     chunks.push(lines.slice(i, i + BATCH_SIZE));
@@ -785,7 +803,7 @@ export async function processBatchWordsWithGemini(
     );
 
     try {
-      const prompt = AIPM(chunk, words, catOverride);
+      const prompt = depth === 'full' ? AIPM(chunk, words, catOverride) : buildGroupPromptDepth(chunk, words, depth, catOverride);
       const resText = await generateWithGemini(prompt, { timeoutMs: 30000 });
       const parsed = parseAI(resText);
       const { ws, errs } = aiToIMP(parsed, words, catOverride);
