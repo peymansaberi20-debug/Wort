@@ -452,6 +452,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState('');
   const [chat, setChat] = useState<{ q: string; a: string; err?: boolean }[]>([]);
+  const [shadowOpen, setShadowOpen] = useState(false);
   const [chatQ, setChatQ] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
 
@@ -570,7 +571,16 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
             <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
               <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
               <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
+              <button
+                onClick={() => setShadowOpen(true)}
+                className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+              >
+                🎙 تمرین تلفظ این جمله
+              </button>
             </div>
+          )}
+          {shadowOpen && (
+            <ShadowingModal freeText={report.corrected_de} word={FREE_SENT_WORD} onClose={() => setShadowOpen(false)} />
           )}
 
           {/* Follow-up chat about this sentence and its correction */}
