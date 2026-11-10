@@ -818,3 +818,41 @@ export async function checkServerAiStatus(): Promise<{ ok: boolean; hasKey: bool
   const p = getActiveProvider();
   return { ok: true, hasKey: hasApiKey(p), model: getModel(p) };
 }
+
+/* =====================================================================
+   Prompt depth (light / mid / full) — fast completion.
+   'full' delegates to the existing 28-field master prompt (AIP).
+   light/mid are short prompts: fewer fields = much faster responses.
+   ===================================================================== */
+export type PromptDepth = 'light' | 'mid' | 'full';
+
+const DEPTH_FIELD_SPEC: Record<'light' | 'mid', string> = {
+  light: `Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:
+[{"de":"...","art":"der|die|das|","fa":"...","en":"...","lvl":"A1|A2|B1|B2|C1|C2","cat":"..."}]
+Field rules:
+- de: German dictionary form. Non-nouns (verbs/adjectives/adverbs) start lowercase (machen, schön); only nouns are capitalized.
+- art: exactly der|die|das for nouns, otherwise "".
+- fa: natural Persian translation, most common everyday meaning first.
+- en: closest English equivalent translated FROM THE GERMAN, lowercase; "" if none.
+- lvl: CEFR estimate of the word's typical use.`,
+  mid: `Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:
+[{"de":"...","art":"der|die|das|","fa":"...","en":"...","lvl":"...","pl":"...","pos":"...","cat":"..."}]
+Field rules:
+- de/art/fa/en/lvl: same rules as light depth.
+- pl: full plural WITHOUT article for nouns (e.g. Möglichkeiten), otherwise "".
+- pos: exactly one of: Nomen (اسم) | Verb (فعل) | Adjektiv (صفت) | Adverb (قید) | Präposition (حرف اضافه) | Redewendung (اصطلاح).`
+};
+
+export function buildSinglePromptDepth(
+  de: string,
+  words: Word[],
+  depth: 'light' | 'mid',
+  catOverride?: string
+): string {
+  const dynamicCats = getDynamicCategories(words);
+  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
+  const catRule = catOverride
+    ? `Assign "cat": "${catOverride}". Ignore the category list.`
+    : `Assign "cat" strictly from this list of EXISTING categories (never invent one):\n${catListStr}`;
+  return `You are an expert German vocabulary assistant for a Persian-speaking learner. Completion depth: ${depth}.\n\nTARGET: "${de}"\n\n${DEPTH_FIELD_SPEC[depth]}\n- cat: ${catRule}\n- If a value is uncertain, use "" instead of inventing it.`;
+}
