@@ -42,6 +42,7 @@ interface VocabularyViewProps {
   onDeleteCategory: (cat: string) => void;
   onSelectWord: (word: Word) => void;
   onOpenWordManager: () => void;
+  onOpenGroupImport: () => void;
   onOpenDuplicateDetector?: () => void;
   onOpenHelp: (topic: string) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
@@ -57,6 +58,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   onDeleteCategory,
   onSelectWord,
   onOpenWordManager,
+  onOpenGroupImport,
   onOpenDuplicateDetector,
   onOpenHelp,
   onShowToast
@@ -1331,6 +1333,16 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         >
           <span aria-hidden="true">{isFormOpen ? '▲' : '➕'}</span>
           <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن واژهٔ جدید'}</span>
+        </button>
+        <button
+          type="button"
+        <button
+          type="button"
+          onClick={onOpenGroupImport}
+          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
+        >
+          <span aria-hidden="true">📦</span>
+          <span className="truncate">افزودن واژگان گروهی</span>
         </button>
         <button
           type="button"
