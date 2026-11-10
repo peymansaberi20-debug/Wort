@@ -30,6 +30,7 @@ export interface Word {
   tags: string;
   notes: string;
   def?: string; // German definition (B1–B2 wording), shown above examples
+  needsFull?: boolean; // fast-completion word — full 28-field profile not yet generated
   en?: string; // closest English equivalent (translated FROM the German), optional
   img: string;
   added: number;
