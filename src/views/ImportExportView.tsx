@@ -841,8 +841,8 @@ const buildAnkiText = (ws: Word[]): string => {
         بعد «خروجی/پشتیبان گیری»"
       */}
 
-      {/* 1. FIRST CARD: افزودن گروهی با هوش مصنوعی */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-4 md:p-5 shadow-xs space-y-4">
+      {/* FIRST CARD — moved to VocabularyView → 📦 افزودن واژگان گروهی (kept as hidden fallback) */}
+      <div className="hidden bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-start gap-2.5 min-w-0">
@@ -962,7 +962,7 @@ const buildAnkiText = (ws: Word[]): string => {
       {/* 2. SECOND CARD: ورود (Excel, CSV یا JSON) - Fulfills Task 3 */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
         <div className="rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50/60 dark:bg-sky-950/30 px-3.5 py-2.5 text-xs leading-6 text-slate-700 dark:text-slate-200">
-          💡 برای استخراج واژه از <b>تصویر/PDF/متن</b> با تنظیمات سه‌وضعیتی (سبک/نیمه/کامل)، دستهٔ گروهی و فیلتر سطح → واژگان ← <b>📦 افزودن واژگان گروهی</b>. این کارت برای ورود مستقیم فایل‌های اکسل/CSV/JSON و پشتیبان‌ها است.
+          💡 افزودن گروهی (استخراج از <b>تصویر/PDF/متن</b> با تنظیمات سه‌وضعیتی سبک/نیمه/کامل، دستهٔ گروهی و فیلتر سطح) → واژگان ← <b>📦 افزودن واژگان گروهی</b>. این کارت فقط برای ورود مستقیم فایل‌های اکسل/CSV/JSON و پشتیبان‌ها است.
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
