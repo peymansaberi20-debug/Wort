@@ -916,6 +916,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           pool = [...newWords, ...dueWords];
         } else if (order === 'rand') {
           pool = [...dueWords, ...newWords].sort(() => Math.random() - 0.5);
+        } else if (order === 'randnew') {
+          // dues first (in due order), then a RANDOM pick among the unseen new words
+          pool = [...dueWords, ...newWords.slice().sort(() => Math.random() - 0.5)];
         } else if (order === 'mix') {
           const mixed: Word[] = [];
           const maxLen = Math.max(dueWords.length, newWords.length);
