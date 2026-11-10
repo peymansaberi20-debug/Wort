@@ -967,7 +967,7 @@ const buildAnkiText = (ws: Word[]): string => {
             <div>
               <b className="text-base text-slate-900 dark:text-slate-100">ورود فایل (Excel, CSV یا JSON)</b>
               <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                پشتیبان‌های قبلی برنامه، فایل‌های اکسل (.xlsx) یا فایل‌های واژگان CSV استاندارد را وارد کنید
+                پشتیبان‌های قبلی، اکسل/CSV/JSON را همین‌جا وارد کن. برای استخراج از عکس/متن با تنظیمات سه‌وضعیتی ← واژگان ← 📦 افزودن واژگان گروهی
               </p>
             </div>
           </div>
