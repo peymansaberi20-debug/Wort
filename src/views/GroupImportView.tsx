@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Word } from '../types';
-import { norm, applyGermanQuality, getCategories } from '../utils/storage';
+import { norm, getCategories } from '../utils/storage';
+import { applyGermanQuality } from '../utils/german';
 import { splitCandidates } from '../utils/extractSession';
-import { generateWithImages, generateWithGemini, processBatchWordsWithGemini, parseAI, describeAiError } from '../utils/ai';
+import { generateWithGemini, processBatchWordsWithGemini, parseAI } from '../utils/ai';
+import { generateWithImages } from '../utils/aiProvider';
 import { recognizeImage, releaseOcr } from '../utils/ocr';
 import { IconBtn } from '../components/IconBtn';
 import { X, Camera, FileText, Keyboard, ChevronLeft, Sparkles } from 'lucide-react';
