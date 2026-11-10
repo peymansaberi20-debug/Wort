@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Word } from '../types';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { IconBtn } from './IconBtn';
+import { ShadowingModal } from './ShadowingModal';
 import { X } from 'lucide-react';
 
 interface SentenceBuilderModalProps {
@@ -44,6 +45,7 @@ export const SentenceBuilderModal: React.FC<SentenceBuilderModalProps> = ({ word
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<SentenceReport | null>(null);
   const [errMsg, setErrMsg] = useState('');
+  const [shadowOpen, setShadowOpen] = useState(false);
 
   useEffect(() => {
     setText(''); setShowFa(false); setReport(null); setErrMsg(''); setLoading(false);
@@ -186,10 +188,10 @@ JSON REQUIREMENTS
               {report && (
                 <button
                   type="button"
-                  onClick={() => { setReport(null); setText(''); }}
-                  className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition"
+                  onClick={() => setShadowOpen(true)}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-1.5"
                 >
-                  🔄 تلاش دوباره
+                  <Mic size={15} /> 🎙 تمرین تلفظ جمله
                 </button>
               )}
             </div>
@@ -278,4 +280,8 @@ JSON REQUIREMENTS
   );
 };
 
-export default SentenceBuilderModal;
+      {shadowOpen && report && (
+        <ShadowingModal freeText={report.corrected_de} word={word} onClose={() => setShadowOpen(false)} />
+      )}
+    </div>
+  );
