@@ -11,8 +11,9 @@ const splitConjColumns = (forms: string[]): [string[], string[]] =>
   [forms.slice(0, 3), forms.slice(3, 6)];
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
+import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
-import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon } from 'lucide-react';
+import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lucide-react';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 
@@ -784,6 +785,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // Fulfills Section 21: View Full Word Profile modal accessible from EVERY exercise
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
   const [sentenceModalWord, setSentenceModalWord] = useState<Word | null>(null);
+  const [shadowWord, setShadowWord] = useState<Word | null>(null);
   pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord;
     
   // Fulfills Section 5: Flashcard timer per card
@@ -1805,8 +1807,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           {qMode !== 'freesent' && (
            <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
           )}
-         {activeMode !== 'case' && qMode !== 'sent' && qMode !== 'freesent' && currentItem && (
-            <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
+          {activeMode !== 'case' && qMode !== 'sent' && qMode !== 'freesent' && currentItem && (
+            <>
+              <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
+              <IconBtn onClick={() => setShadowWord(currentItem as Word)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
+            </>
           )}
           {qMode !== 'freesent' && (
             <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
@@ -1820,6 +1825,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </div>
       </div>
 
+      {shadowWord && (
+        <ShadowingModal word={shadowWord} onClose={() => setShadowWord(null)} />
+      )}
       {sentenceModalWord && (
         <SentenceBuilderModal
           word={sentenceModalWord}
