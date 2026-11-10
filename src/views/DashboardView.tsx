@@ -129,9 +129,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Next review
   const nextReviewWord = words.filter(w => w.last && w.due > n).sort((a, b) => a.due - b.due)[0];
 
-  // Words due for study and review today (Fulfills Request #4)
+  // Words due for review today — same source of truth as the "مرور کن" action:
+  // words answered correctly today are excluded so list, count and button never disagree.
+  const reviewedTodayIds = new Set(
+    state.hist.filter(x => x.ok && dstr(x.t) === today()).map(x => x.id)
+  );
+  const dueAllCount = dailyPool.filter(w => w.last && w.due <= n).length;
   const dueReviewWords = dailyPool
-    .filter(w => w.last && w.due <= n)
+    .filter(w => w.last && w.due <= n && !reviewedTodayIds.has(w.id))
     .sort((a, b) => a.due - b.due);
 
   // Frequently mistaken hard words with > 3 errors sorted descending (Fulfills Request #5)
@@ -306,7 +311,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {dueReviewWords.length === 0 ? (
             <div className="text-xs text-emerald-600 dark:text-emerald-400 py-3 text-center bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl">
-              ✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.
+              {dueAllCount > 0
+                ? `✅ همهٔ ${dueAllCount} سررسید امروز مرور شده‌اند — جلسهٔ امروز کامل است!`
+                : '✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.'}
             </div>
           ) : (
             <div className="max-h-52 overflow-y-auto bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
