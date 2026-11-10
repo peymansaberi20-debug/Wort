@@ -10,6 +10,8 @@ import { X, Mic, Square, Play, Trash2, Volume2, Wand2 } from 'lucide-react';
 interface ShadowingModalProps {
   word: Word;
   onClose: () => void;
+  /** Optional free text (e.g. corrected sentence) — replaces the word-based picker. */
+  freeText?: string;
 }
 
 interface ShadowReport {
@@ -21,13 +23,15 @@ interface ShadowReport {
 
 const fmtDur = (d: number | null) => (d != null && isFinite(d) ? `${d.toFixed(1)}s` : '—');
 
-export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose }) => {
-  const parts: { key: string; label: string; text: string }[] = [
-    { key: 'de', label: 'واژه', text: fullWord(word) },
-    ...(word.ex ? [{ key: 'ex', label: 'تعریف', text: word.ex }] : []),
-    ...(word.ex2 ? [{ key: 'ex2', label: 'مثال کاربردی', text: word.ex2 }] : [])
-  ];
-  const [part, setPart] = useState('de');
+export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, freeText }) => {
+  const parts: { key: string; label: string; text: string }[] = freeText
+    ? [{ key: 'free', label: 'جملهٔ اصلاح‌شده', text: freeText }]
+    : [
+        { key: 'de', label: 'واژه', text: fullWord(word) },
+        ...(word.ex ? [{ key: 'ex', label: 'تعریف', text: word.ex }] : []),
+        ...(word.ex2 ? [{ key: 'ex2', label: 'مثال کاربردی', text: word.ex2 }] : [])
+      ];
+  const [part, setPart] = useState(freeText ? 'free' : 'de');
   const text = parts.find(p => p.key === part)?.text || fullWord(word);
 
   const [recBusy, setRecBusy] = useState(false);
