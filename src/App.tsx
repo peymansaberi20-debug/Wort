@@ -738,6 +738,7 @@ export default function App() {
                   onDeleteCategory={handleDeleteCategory}
                   onSelectWord={setSelectedWord}
                   onOpenWordManager={() => setIsWordManagerOpen(true)}
+                  onOpenGroupImport={() => setShowGroupImport(true)}
                   onOpenHelp={setActiveHelpTopic}
                   onShowToast={showToast}
                 />
