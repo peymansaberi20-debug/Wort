@@ -36,7 +36,7 @@ import { ExercisesView, ExerciseMode } from './views/ExercisesView';
 import { VocabularyView } from './views/VocabularyView';
 import { ImportExportView } from './views/ImportExportView';
 import { SettingsView } from './views/SettingsView';
-import { today } from './utils/dates';
+import { dstr, today } from './utils/dates';
 import { isDuplicateEntry } from './utils/duplicates';
 import { ImportDecision, applyImportPlan, mergeWordUpdate } from './utils/vocabMerge';
 import { getTtsWorkerBase } from './utils/audio';
@@ -647,8 +647,14 @@ export default function App() {
                       return;
                     }
                     if (intent === 'review') {
+                      // skip words already reviewed today in this dashboard list (no repeat on re-entry)
+                      const reviewedToday = new Set(
+                        state.hist
+                          .filter(x => x.ok && dstr(x.t) === today())
+                          .map(x => x.id)
+                      );
                       const dueIds = state.words
-                        .filter(w => selectedIds.has(w.id) && w.last && w.due <= Date.now())
+                        .filter(w => selectedIds.has(w.id) && w.last && w.due <= Date.now() && !reviewedToday.has(w.id))
                         .sort((a, b) => a.due - b.due)
                         .map(w => w.id);
                       if (dueIds.length === 0) {
