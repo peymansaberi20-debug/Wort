@@ -72,6 +72,7 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
   const [conflictState, setConflictState] = useState<{ fresh: Word[]; conflicts: Conflict[]; cids: string[] } | null>(null);
   const [enrichDepth, setEnrichDepth] = useState<'light' | 'mid' | 'full'>('light');
   const [minLevelFilter, setMinLevelFilter] = useState('');
+  const [bulkCat, setBulkCat] = useState('');
 
   useEffect(() => {
     if (ext) saveSession(ext);
@@ -151,6 +152,8 @@ Rules:
         seen.add(k);
         resCandidates.push({ de: cleaned, have: haveWords.has(k), on: !haveWords.has(k), correctedSpell: '', cat: '', art, cefr });
       };
+
+      const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
 
       let parsedOk = false;
       try {
@@ -249,11 +252,13 @@ Rules:
     setProgressPercent(5);
     setProgressMsg(`در حال آغاز تکمیل مشخصات برای ${selected.length} واژه منتخب...`);
 
-    // Map each candidate's selected category if set
+    // Map each candidate's selected category: individual wins, else the bulk one, else AI decides
     const userCatMap = new Map<string, string>();
     selected.forEach(c => {
       if (c.cat && c.cat.trim()) {
         userCatMap.set(c.de.trim().toLowerCase(), c.cat.trim());
+      } else if (bulkCat && bulkCat.trim()) {
+        userCatMap.set(c.de.trim().toLowerCase(), bulkCat.trim());
       }
     });
 
@@ -738,7 +743,7 @@ Rules:
             </div>
           ) : (
           <>
-            <div className="mb-2 flex flex-wrap items-center gap-2">
+            <div className="mb-2.5 flex flex-wrap items-center gap-2">
               <select
                 value={enrichDepth}
                 onChange={e => setEnrichDepth(e.target.value as 'light' | 'mid' | 'full')}
@@ -748,6 +753,17 @@ Rules:
                 <option value="light">⚡ سبک (سریع — fa+en+lvl)</option>
                 <option value="mid">⚙️ نیمه (+pl+pos)</option>
                 <option value="full">💎 کامل (۲۸ فیلد)</option>
+              </select>
+              <select
+                value={bulkCat}
+                onChange={e => setBulkCat(e.target.value)}
+                disabled={enriching}
+                className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none max-w-[200px] truncate"
+              >
+                <option value="">📁 دستهٔ واژه‌های بی‌دسته: خودکار AI</option>
+                {existingCategories.map(([c]) => (
+                  <option key={c} value={c}>📁 {c}</option>
+                ))}
               </select>
               <select
                 value={minLevelFilter}
@@ -767,6 +783,15 @@ Rules:
                 className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40"
               >
                 {allSelected ? '☐ عدم انتخاب همه' : '☑ انتخاب همه'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCandidates(prev => prev.map(c => ({ ...c, on: !c.have && !c.on })))}
+                disabled={candidates.length === 0 || enriching}
+                className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40"
+                title="فقط واژه‌هایی که در کتابخانه نیستند انتخاب می‌شوند"
+              >
+                ✦ فقط جدیدها
               </button>
             </div>
             {candidates.map((cand, idx) => {
