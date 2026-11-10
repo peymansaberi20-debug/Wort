@@ -739,6 +739,8 @@ export default function App() {
                   onSelectWord={setSelectedWord}
                   onOpenWordManager={() => setIsWordManagerOpen(true)}
                   onOpenGroupImport={() => setShowGroupImport(true)}
+                  onOpenQualityModal={() => setIsQualityModalOpen(true)}
+                  onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}                  
                   onOpenHelp={setActiveHelpTopic}
                   onShowToast={showToast}
                 />
