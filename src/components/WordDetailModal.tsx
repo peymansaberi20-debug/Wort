@@ -8,7 +8,7 @@ import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
 import { ShadowingModal } from './ShadowingModal';
-import { X, Pencil, Trash2, Mic } from 'lucide-react';
+import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
 
 interface WordDetailModalProps {
   word: Word | null;
@@ -310,6 +310,7 @@ const seg = pluralSegments2();
               {word.img ? '🖼️' : '📷'}
             </IconBtn>
             <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
+             <IconBtn onClick={() => onEdit(word)} title="تکمیل کامل پروفایل (در فرم ویرایش، دکمهٔ 💎)"><Sparkles size={18} className="text-amber-500" /></IconBtn>
             <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
             <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
           </div>
