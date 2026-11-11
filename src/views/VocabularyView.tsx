@@ -1368,24 +1368,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           <span aria-hidden="true">📁</span>
           <span className="truncate">مدیریت دسته</span>
         </button>
-        <button
-          type="button"
-          onClick={() => onOpenDuplicateDetector?.()}
-          disabled={!onOpenDuplicateDetector}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2 disabled:opacity-40"
-        >
-          <span aria-hidden="true">🔍</span>
-          <span className="truncate">تشخیص تکراری‌ها</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenQualityModal?.()}
-          disabled={!onOpenQualityModal}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2 disabled:opacity-40"
-        >
-          <span aria-hidden="true">❗</span>
-          <span className="truncate">کنترل کیفیت</span>
-        </button>
       </div>
 
       {/* Category Management Modal: hidden until the pale-blue action button is pressed */}
