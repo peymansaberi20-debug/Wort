@@ -8,7 +8,7 @@ import { generateWithGemini, processBatchWordsWithGemini, parseAI } from '../uti
 import { generateWithImages } from '../utils/aiProvider';
 import { recognizeImage, releaseOcr } from '../utils/ocr';
 import { IconBtn } from '../components/IconBtn';
-import { X, Camera, FileText, Keyboard, ChevronLeft, Sparkles } from 'lucide-react';
+import { X, Camera, FileText, Keyboard, ChevronLeft, Sparkles, Clock } from 'lucide-react';
 
 interface GroupImportViewProps {
   words: Word[];
@@ -31,7 +31,7 @@ const isBelowLevel = (cefr: string, min: string) => {
 
 export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEnrichedWords, onClose, onShowToast }) => {
   const [source, setSource] = useState<'file' | 'text' | null>(null);
-  const [method, setMethod] = useState<'ai' | 'noai' | null>(null);
+  const [method, setMethod] = useState<'ai' | 'noai'>('ai');
   const [files, setFiles] = useState<File[]>([]);
   const [manualText, setManualText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -529,8 +529,8 @@ Return ONLY a JSON array, no Markdown:
               disabled={loading || enriching || !source || (source === 'file' && files.length === 0) || (source === 'text' && !manualText.trim())}
               className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-40 transition flex items-center gap-2"
             >
-              {loading ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <Sparkles size={16} />}
-              <span>{source === 'file' && method === 'ai' ? '⚡ استخراج با هوش مصنوعی' : method === 'noai' ? 'استخراج بدون هوش مصنوعی' : 'استخراج با هوش مصنوعی'}</span>
+              {loading ? <Clock size={16} className="animate-pulse" /> : <Sparkles size={16} />}
+              <span>{loading ? 'در حال استخراج…' : method === 'noai' ? 'استخراج بدون هوش مصنوعی' : '⚡ استخراج با هوش مصنوعی'}</span>
             </button>
             <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate">{ocrMsg || statusMsg}</span>
           </div>
