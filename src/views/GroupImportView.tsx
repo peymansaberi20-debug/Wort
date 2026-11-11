@@ -276,32 +276,23 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
     setLoading(true); setCands([]); setStatusMsg('');
     const isImages = source === 'file' && files.length > 0;
 
+    // AI from images → ONLY type the words into the manual textbox (same path as manual typing)
     if (isImages && method === 'ai') {
       try {
         const imagesPayload: { data: string; mimeType: string }[] = [];
         for (const f of files) imagesPayload.push({ data: await fileToBase64(f), mimeType: 'image/jpeg' });
-        const promptText = `Extract visible German words and expressions from this image.
+        const promptText = `Look at this image and type out ONLY the visible German words and expressions, one per line, exactly as fast typing — no analysis.
 Rules:
-- List only the visible German words or multiword expressions, one per line.
-- Do NOT include noun articles (der, die, das, ein, eine, etc.). Omit the article and output only the noun itself (e.g. write "Schule", not "die Schule").
-- Do NOT translate to Persian or English.
-- Do NOT include definitions, examples, grammar notes, numbers, or bullet points.
-- If a word is unreadable, omit it.`;
-        const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 45000, retries: 0 });
-        const haveKey = (d: string) => words.some(w => w.de.toLowerCase() === d.toLowerCase());
-        let ok = false;
-        try {
-          const arr = parseAI(rawText);
-          if (Array.isArray(arr) && arr.length && arr[0]?.de) {
-            ok = true;
-            pushCands(arr.map((o: any) => ({ de: String(o.de || ''), art: String(o.art || '').toLowerCase(), cefr: String(o.cefr || '').toUpperCase() })));
-          }
-        } catch { ok = false; }
-        if (!ok) {
-          const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-          pushCands(lines.map(l => ({ de: l.replace(/^[\*\-•\d\.\)\s]+/, '').replace(/^(?:der|die|das)\s+/i, '').trim() })));
-        }
-        setStatusMsg(`${candsCount()} واژه شناسایی شد.`);
+- No articles (der/die/das/ein...) — only the noun itself (write "Schule", not "die Schule").
+- No translations, no explanations, no numbers, no bullets, no extra words.
+- Just the words, one per line. If a word is unreadable, skip it.`;
+        const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
+        const typed = rawText.split(/\r?\n/).map(l => l.trim().replace(/^[\*\-•\d\.\)\s]+/, '').replace(/^(?:der|die|das)\s+/i, '').trim()).filter(Boolean);
+        if (typed.length === 0) throw new Error('واژه‌ای در تصویر پیدا نشد.');
+        setSource('text');
+        setManualText(prev => (prev ? prev + '\n' + typed.join('\n') : typed.join('\n')));
+        setStatusMsg(`✅ ${typed.length} واژه تایپ شد در کادر متن — حالا دکمهٔ «ساخت فهرست از متن» را بزن.`);
+        onShowToast(`${typed.length} واژه از تصویر تایپ شد.`, false);
       } catch (e: any) {
         setStatusMsg(`خطا: ${e?.message || 'استخراج ناموفق بود.'}`);
         onShowToast(e?.message || 'خطا در استخراج', true);
@@ -464,7 +455,7 @@ Return ONLY a JSON array, no Markdown:
               className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-40 transition flex items-center gap-2"
             >
               {loading ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <Sparkles size={16} />}
-              <span>{method === 'noai' ? 'استخراج بدون هوش مصنوعی' : 'استخراج با هوش مصنوعی'}</span>
+              <span>{source === 'file' && method === 'ai' ? '⚡ استخراج و تایپ در کادر متن' : method === 'noai' ? 'استخراج بدون هوش مصنوعی' : 'استخراج با هوش مصنوعی'}</span>
             </button>
             <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate">{ocrMsg || statusMsg}</span>
           </div>
