@@ -552,11 +552,31 @@ export const nzc = (s: string): string =>
     .replace(/ك/g, 'ک')
     .toLowerCase();
 
+const EXTRA_CATS_KEY = 'wb_extra_cats';
+export function getExtraCats(): string[] {
+  try {
+    const a = JSON.parse(localStorage.getItem(EXTRA_CATS_KEY) || '[]');
+    return Array.isArray(a) ? a.filter((x: any) => typeof x === 'string' && x.trim()) : [];
+  } catch { return []; }
+}
+function saveExtraCats(a: string[]) { try { localStorage.setItem(EXTRA_CATS_KEY, JSON.stringify(a)); } catch { /* ignore */ } }
+export function addExtraCat(name: string) {
+  const n = (name || '').trim(); if (!n) return;
+  const a = getExtraCats();
+  if (!a.some(x => x.toLowerCase() === n.toLowerCase())) { a.push(n); saveExtraCats(a); }
+}
+export function removeExtraCat(name: string) { saveExtraCats(getExtraCats().filter(x => x !== name)); }
+export function renameExtraCat(oldN: string, newN: string) {
+  const a = getExtraCats(); if (!a.includes(oldN)) return;
+  const b = a.filter(x => x !== oldN); if (!b.includes(newN)) b.push(newN); saveExtraCats(b);
+}
+
 export function getCategories(words: Word[]): [string, number][] {
   const m = new Map<string, number>();
   words.forEach(w => {
     if (w.cat) m.set(w.cat, (m.get(w.cat) || 0) + 1);
   });
+  getExtraCats().forEach(c => { if (!m.has(c)) m.set(c, 0); });
   return [...m].sort((a, b) => a[0].localeCompare(b[0], 'fa'));
 }
 
