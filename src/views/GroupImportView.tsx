@@ -217,31 +217,40 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
     return false;
   };
 
-  const handlePdf = async (file: File): Promise<boolean> => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) return false;
+  /** Returns text (digital PDF) or page images (scanned PDF). */
+  const handlePdf = async (file: File): Promise<{ text: string; images: File[] }> => {
     setOcrMsg('در حال خواندن PDF…');
     const pdfjs = await import('pdfjs-dist');
     pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
     const buf = await file.arrayBuffer();
     const pdf = await pdfjs.getDocument({ data: buf }).promise;
+    const maxPages = Math.min(pdf.numPages, 20);
     let text = '';
-    for (let p = 1; p <= Math.min(pdf.numPages, 20); p++) {
+    for (let p = 1; p <= maxPages; p++) {
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
       text += '\n' + content.items.map((it: any) => it.str).join(' ');
     }
-    if (!text.trim()) {
-      throw new Error('این PDF متن قابل استخراج ندارد (احتمالاً اسکن است) — صفحاتش را عکس بگیر و به‌عنوان تصویر وارد کن.');
+    if (text.replace(/\s/g, '').length > 20) return { text: text.trim(), images: [] };
+    // scanned PDF: render pages as images (max 8) so AI / OCR can read them
+    const images: File[] = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, 8); p++) {
+      setOcrMsg(`PDF اسکن‌شده — تبدیل صفحه ${p} به تصویر…`);
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.6 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+      const blob: Blob = await new Promise((res, rej) => canvas.toBlob(b => (b ? res(b) : rej(new Error('تبدیل صفحه PDF ممکن نشد.'))), 'image/jpeg', 0.8));
+      images.push(new File([blob], `${file.name}-p${p}.jpg`, { type: 'image/jpeg' }));
     }
-    setManualText(prev => (prev ? prev + '\n' + text.trim() : text.trim()));
-    setSource('text');
-    onShowToast('متن PDF استخراج و به ورودی متن اضافه شد.', false);
-    return true;
+    return { text: '', images };
   };
 
   const onFilesChosen = async (fileList: FileList | null) => {
     if (!fileList || !fileList.length) return;
-    setLoading(true); setStatusMsg(''); setErr2('');
+    setLoading(true); setStatusMsg('');
     const arr = Array.from(fileList);
     const images: File[] = [];
     let handledStructured = false;
@@ -249,7 +258,16 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
       for (const f of arr) {
         const n = f.name.toLowerCase();
         if (f.type.startsWith('image/')) { images.push(f); continue; }
-        if (n.endsWith('.pdf')) { await handlePdf(f); continue; }
+        if (n.endsWith('.pdf') || f.type === 'application/pdf') {
+          const r = await handlePdf(f);
+          if (r.text) {
+            setManualText(prev => (prev ? prev + '\n' + r.text : r.text));
+            setSource('text');
+            onShowToast('متن PDF خوانده شد.', false);
+          }
+          images.push(...r.images);
+          continue;
+        }
         if (n.endsWith('.xlsx') || n.endsWith('.xls') || n.endsWith('.csv') || n.endsWith('.json')) {
           await handleStructuredFile(f); handledStructured = true; continue;
         }
@@ -261,14 +279,14 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
         }
         throw new Error(`فرمت «${f.name}» پشتیبانی نمی‌شود.`);
       }
-      if (images.length) { setFiles(images); setSource('file'); }
-      if (handledStructured) setStatusMsg('فایل ساختاریافته خوانده شد — پیش‌نمایش پایین آماده است.');
-      else if (images.length) setStatusMsg(`${images.length} تصویر آماده است — حالا روش پردازش را انتخاب کن.`);
-      else if (!handledStructured) setStatusMsg('ورودی آماده است.');
+      if (images.length) { setFiles(prev => [...prev, ...images]); setSource('file'); }
+      if (handledStructured) setStatusMsg('فایل ساختاریافته خوانده شد — جدول پایین آماده است.');
+      else if (images.length) setStatusMsg(`${images.length} تصویر اضافه شد — «استخراج» را بزن.`);
+      else setStatusMsg('ورودی آماده است — «استخراج» را بزن.');
     } catch (e: any) {
       onShowToast(e?.message || 'خطا در خواندن فایل', true);
       setStatusMsg(e?.message || '');
-    } finally { setLoading(false); }
+    } finally { setOcrMsg(''); setLoading(false); }
   };
 
   // ---------- Extraction ----------
@@ -289,7 +307,7 @@ Rules:
 - Do NOT include definitions, examples, grammar notes, numbers, or bullet points.
 - If a word is unreadable, omit it.`;
         // One request to the ACTIVE provider only — the proven legacy path that worked for months
-        const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
+        const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 90000, retries: 0 });
         const lines = rawText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
 
         const seen = new Set<string>();
@@ -307,10 +325,9 @@ Rules:
 
         // Type the words into the manual textbox (user flow) AND build chips from the same list
         const typed = list.map(x => x.de);
-        setSource('text');
-        setManualText(prev => (prev ? prev + '\n' + typed.join('\n') : typed.join('\n')));
+        if (typed.length === 0) { setStatusMsg('هیچ واژه‌ای از تصویر خوانده نشد. عکس را واضح‌تر بگیر یا ردیف را دستی اضافه کن.'); return; }
         pushCands(list);
-        setStatusMsg(`✅ ${typed.length} واژه استخراج و در کادر متن تایپ شد.`);
+        setStatusMsg(`✅ ${typed.length} واژه در جدول پایین فهرست شد — ویرایش کن و ثبت بزن.`);
         onShowToast(`${typed.length} واژه استخراج شد.`, false);
       } catch (e: any) {
         setStatusMsg(`خطا: ${e?.message || 'استخراج ناموفق بود.'}`);
@@ -362,11 +379,34 @@ Return ONLY a JSON array, no Markdown:
     setLoading(false);
   };
 
+  const updateCand = (i: number, patch: Partial<GCand>) =>
+    setCands(prev => prev.map((x, j) => {
+      if (j !== i) return x;
+      const n = { ...x, ...patch };
+      if (n.full && (patch.de !== undefined || patch.fa !== undefined || patch.art !== undefined)) {
+        n.full = { ...n.full, de: n.de, fa: n.fa, art: n.art } as Word;
+      }
+      return n;
+    }));
+  const addEmptyRow = () => setCands(prev => [...prev, { de: '', art: '', cefr: '', fa: '', complete: false, have: false, on: true, cat: '' }]);
+  const deleteCand = (i: number) => setCands(prev => prev.filter((_, j) => j !== i));
+  const [quickAdd, setQuickAdd] = useState('');
+  const addFromQuick = () => {
+    const list = splitCandidates(quickAdd, { dropTrivial: false });
+    if (!list.length) return;
+    setCands(prev => {
+      const seen = new Set(prev.map(c => c.de.toLowerCase()));
+      const add = list.filter(l => !seen.has(l.toLowerCase())).map(l => ({ de: l, art: '', cefr: '', fa: '', complete: false, have: false, on: true, cat: '' } as GCand));
+      return [...prev, ...add];
+    });
+    setQuickAdd('');
+  };
+
   const candsCount = () => cands.filter(c => c.on).length;
 
   // ---------- Enrich & commit ----------
   const commit = async () => {
-    const selected = cands.filter(c => c.on);
+    const selected = cands.filter(c => c.on && c.de.trim().length >= 2);
     if (!selected.length) { onShowToast('حداقل یک واژه را انتخاب کن.', true); return; }
     setEnriching(true); setProgressPercent(5);
     setProgressMsg(`تکمیل ${selected.length} واژه (${depth === 'full' ? 'کامل' : depth === 'mid' ? 'نیمه' : 'سبک'})…`);
@@ -391,8 +431,13 @@ Return ONLY a JSON array, no Markdown:
           (d, t, m) => { setProgressPercent(Math.round((d / Math.max(1, t)) * 85) + 5); setProgressMsg(m); },
           depth
         );
+        const userOverride = new Map<string, GCand>();
+        rest.forEach(c => userOverride.set(c.de.trim().toLowerCase(), c));
         ws.forEach(w => {
           const key = w.de.toLowerCase();
+          const uo = userOverride.get(key);
+          if (uo?.fa?.trim()) w.fa = uo.fa.trim();
+          if (uo?.art) w.art = uo.art;
           if (userCatMap.has(key)) w.cat = userCatMap.get(key)!;
           const v = norm(w);
           if (v && v.de && v.fa) done.push(v);
@@ -438,17 +483,28 @@ Return ONLY a JSON array, no Markdown:
 
           {source === 'file' && (
             <div className="space-y-2">
-              <input
-                type="file" multiple
-                accept="image/*,application/pdf,.xlsx,.xls,.csv,.json,.txt"
-                onChange={e => void onFilesChosen(e.target.files)}
-                className="w-full text-xs file:bg-slate-100 dark:file:bg-slate-800 file:border-0 file:rounded-xl file:px-4 file:py-2.5 file:text-xs file:font-bold file:mr-2 cursor-pointer border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 bg-slate-50/50 dark:bg-[#141923]"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <label className="h-12 rounded-2xl border-2 border-dashed border-[#1f5fbf] text-[#1f5fbf] dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer">
+                  <Camera size={16} /> 📷 دوربین
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => { void onFilesChosen(e.target.files); e.target.value = ''; }} />
+                </label>
+                <label className="h-12 rounded-2xl border-2 border-dashed border-[#1f5fbf] text-[#1f5fbf] dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer">
+                  <FileText size={16} /> 🖼 عکس / PDF / اکسل
+                  <input type="file" multiple accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,.json,.txt" className="hidden"
+                    onChange={e => { void onFilesChosen(e.target.files); e.target.value = ''; }} />
+                </label>
+              </div>
               <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold">
                 <input type="checkbox" checked={method === 'noai'} onChange={e => setMethod(e.target.checked ? 'noai' : 'ai')} className="w-4 h-4 accent-[#1f5fbf]" />
                 <span>بدون هوش مصنوعی (فقط OCR محلی برای تصویر — بقیهٔ فرمت‌ها نیازی به AI ندارند)</span>
               </label>
-              {files.length > 0 && <div className="text-[11px] text-[#5d6676]">{files.length} فایل تصویری انتخاب شده.</div>}
+              {files.length > 0 && (
+                <div className="flex items-center justify-between text-[11px] text-[#5d6676]">
+                  <span>{files.length} تصویر آماده استخراج</span>
+                  <button onClick={() => setFiles([])} className="text-red-600 font-bold">پاک کردن تصاویر</button>
+                </div>
+              )}
             </div>
           )}
 
@@ -474,7 +530,7 @@ Return ONLY a JSON array, no Markdown:
               className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-40 transition flex items-center gap-2"
             >
               {loading ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : <Sparkles size={16} />}
-              <span>{source === 'file' && method === 'ai' ? '⚡ استخراج و تایپ در کادر متن' : method === 'noai' ? 'استخراج بدون هوش مصنوعی' : 'استخراج با هوش مصنوعی'}</span>
+              <span>{source === 'file' && method === 'ai' ? '⚡ استخراج با هوش مصنوعی' : method === 'noai' ? 'استخراج بدون هوش مصنوعی' : 'استخراج با هوش مصنوعی'}</span>
             </button>
             <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate">{ocrMsg || statusMsg}</span>
           </div>
@@ -519,36 +575,72 @@ Return ONLY a JSON array, no Markdown:
               </button>
             </div>
 
-            <div className="max-h-[46vh] overflow-y-auto space-y-2">
-              {cands.map((c, i) => {
-                const dim = minLevelFilter && isBelowLevel(c.cefr, minLevelFilter);
-                return (
-                  <div key={i} className={`p-2.5 rounded-2xl border transition space-y-1.5 ${c.on ? 'bg-blue-50/60 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] opacity-70'} ${dim ? 'opacity-40' : ''}`}>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <label className="flex items-center gap-2 cursor-pointer min-w-0">
-                        <input type="checkbox" checked={c.on} disabled={enriching} onChange={() => setCands(prev => prev.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))} className="w-4 h-4 accent-[#1f5fbf]" />
-                        <span dir="ltr" className="font-extrabold text-sm font-sans text-slate-900 dark:text-slate-100">
-                          {c.art ? c.art + ' ' : ''}{c.de}
-                        </span>
-                        {c.cefr && <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded text-[10px]">{c.cefr}</span>}
-                      </label>
-                      {c.have && <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">در کتابخانه هست</span>}
-                      {c.complete && <span className="text-[10px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">کامل از فایل</span>}
-                    </div>
-                    {c.fa && <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-right pr-6">{c.fa}</div>}
-                    {!c.complete && (
-                      <div className="flex-1 min-w-[160px]">
-                        <select value={c.cat} disabled={enriching}
-                          onChange={e => setCands(prev => prev.map((x, j) => (j === i ? { ...x, cat: e.target.value } : x)))}
-                          className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 text-xs outline-none">
-                          <option value="">📁 دسته‌بندی خودکار با هوش مصنوعی</option>
-                          {existingCategories.map(([cc]) => <option key={cc} value={cc}>{cc}</option>)}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="max-h-[52vh] overflow-auto border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl">
+              <table className="w-full text-xs min-w-[520px]">
+                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
+                  <tr className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+                    <th className="p-2 w-8">✓</th>
+                    <th className="p-2 w-[72px]">آرتیکل</th>
+                    <th className="p-2 text-left">Deutsch</th>
+                    <th className="p-2 text-right">ترجمه (اختیاری)</th>
+                    <th className="p-2">دسته</th>
+                    <th className="p-2 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cands.map((c, i) => {
+                    const dim = minLevelFilter && isBelowLevel(c.cefr, minLevelFilter);
+                    return (
+                      <tr key={i} className={`border-t border-[#e6e9f0] dark:border-[#2a3140] ${c.on ? '' : 'opacity-60'} ${dim ? 'opacity-40' : ''}`}>
+                        <td className="p-1.5 text-center">
+                          <input type="checkbox" checked={c.on} disabled={enriching} onChange={() => updateCand(i, { on: !c.on })} className="w-4 h-4 accent-[#1f5fbf]" />
+                        </td>
+                        <td className="p-1">
+                          <select value={c.art} disabled={enriching || c.complete} onChange={e => updateCand(i, { art: e.target.value })}
+                            className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1 outline-none">
+                            <option value="">—</option><option value="der">der</option><option value="die">die</option><option value="das">das</option>
+                          </select>
+                        </td>
+                        <td className="p-1">
+                          <input dir="ltr" value={c.de} disabled={enriching} onChange={e => updateCand(i, { de: e.target.value })} placeholder="Wort…"
+                            className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf]" />
+                          <div className="mt-0.5 flex gap-1">
+                            {c.have && <span className="text-[9px] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 rounded-full">در کتابخانه هست</span>}
+                            {c.complete && <span className="text-[9px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 rounded-full">کامل از فایل</span>}
+                            {c.cefr && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full">{c.cefr}</span>}
+                          </div>
+                        </td>
+                        <td className="p-1">
+                          <input dir="rtl" value={c.fa} disabled={enriching} onChange={e => updateCand(i, { fa: e.target.value })} placeholder="خالی = AI ترجمه می‌کند"
+                            className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 outline-none focus:border-[#1f5fbf]" />
+                        </td>
+                        <td className="p-1">
+                          {c.complete ? <span className="text-[10px] text-slate-400">از فایل</span> : (
+                            <select value={c.cat} disabled={enriching} onChange={e => updateCand(i, { cat: e.target.value })}
+                              className="w-full max-w-[130px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1 outline-none">
+                              <option value="">خودکار</option>
+                              {existingCategories.map(([cc]) => <option key={cc} value={cc}>{cc}</option>)}
+                            </select>
+                          )}
+                        </td>
+                        <td className="p-1 text-center">
+                          <button onClick={() => deleteCand(i)} disabled={enriching} title="حذف ردیف" className="text-red-500 font-bold px-1">✕</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={addEmptyRow} disabled={enriching}
+                className="bg-slate-100 dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">➕ ردیف جدید</button>
+              <input dir="ltr" value={quickAdd} onChange={e => setQuickAdd(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addFromQuick(); }}
+                placeholder="چند واژه را تایپ/بچسبان…" disabled={enriching}
+                className="flex-1 min-w-[140px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-1.5 text-xs outline-none" />
+              <button onClick={addFromQuick} disabled={enriching || !quickAdd.trim()}
+                className="bg-blue-50 text-[#1f5fbf] dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">افزودن به جدول</button>
             </div>
 
             {enriching && (
