@@ -20,6 +20,7 @@ interface GroupImportViewProps {
 interface GCand {
   de: string; art: string; cefr: string; fa: string;
   complete: boolean; full?: Word; have: boolean; on: boolean; cat: string;
+  fix?: string;
 }
 
 const LEVEL_ORDER = ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -383,8 +384,8 @@ Return ONLY a JSON array, no Markdown:
     setCands(prev => prev.map((x, j) => {
       if (j !== i) return x;
       const n = { ...x, ...patch };
-      if (n.full && (patch.de !== undefined || patch.fa !== undefined || patch.art !== undefined)) {
-        n.full = { ...n.full, de: n.de, fa: n.fa, art: n.art } as Word;
+      if (n.full && (patch.de !== undefined || patch.fix !== undefined)) {
+        n.full = { ...n.full, de: (n.fix || '').trim() || n.de } as Word;
       }
       return n;
     }));
@@ -406,33 +407,38 @@ Return ONLY a JSON array, no Markdown:
 
   // ---------- Enrich & commit ----------
   const commit = async () => {
-    const selected = cands.filter(c => c.on && c.de.trim().length >= 2);
+    const eff = (c: GCand) => ((c.fix || '').trim() || c.de).trim();
+    const selected = cands.filter(c => c.on && eff(c).length >= 2);
     if (!selected.length) { onShowToast('حداقل یک واژه را انتخاب کن.', true); return; }
     setEnriching(true); setProgressPercent(5);
     setProgressMsg(`تکمیل ${selected.length} واژه (${depth === 'full' ? 'کامل' : depth === 'mid' ? 'نیمه' : 'سبک'})…`);
     try {
       const userCatMap = new Map<string, string>();
       selected.forEach(c => {
-        const key = c.de.toLowerCase();
+        const key = eff(c).toLowerCase();
         if (c.cat && c.cat.trim()) userCatMap.set(key, c.cat.trim());
         else if (bulkCat && bulkCat.trim()) userCatMap.set(key, bulkCat.trim());
       });
 
       const done: Word[] = [];
+      let skippedByLevel = 0;
       // 1) complete ones (from structured files) go straight in
-      selected.filter(c => c.complete && c.full).forEach(c => done.push(c.full!));
+      selected.filter(c => c.complete && c.full).forEach(c => {
+        if (minLevelFilter && isBelowLevel(c.full!.lvl, minLevelFilter)) { skippedByLevel++; return; }
+        done.push(c.full!);
+      });
 
       // 2) enrich the rest by depth
       const rest = selected.filter(c => !c.complete);
       if (rest.length) {
-        const lines = rest.map(c => c.de.trim());
+        const lines = rest.map(c => eff(c));
         const { ws } = await processBatchWordsWithGemini(
           lines, words, undefined,
           (d, t, m) => { setProgressPercent(Math.round((d / Math.max(1, t)) * 85) + 5); setProgressMsg(m); },
           depth
         );
         const userOverride = new Map<string, GCand>();
-        rest.forEach(c => userOverride.set(c.de.trim().toLowerCase(), c));
+        rest.forEach(c => userOverride.set(eff(c).toLowerCase(), c));
         ws.forEach(w => {
           const key = w.de.toLowerCase();
           const uo = userOverride.get(key);
@@ -440,14 +446,17 @@ Return ONLY a JSON array, no Markdown:
           if (uo?.art) w.art = uo.art;
           if (userCatMap.has(key)) w.cat = userCatMap.get(key)!;
           const v = norm(w);
-          if (v && v.de && v.fa) done.push(v);
+          if (v && v.de && v.fa) {
+            if (minLevelFilter && isBelowLevel(v.lvl, minLevelFilter)) { skippedByLevel++; return; }
+            done.push(v);
+          }
         });
       }
 
-      if (done.length === 0) throw new Error('هیچ واژه‌ای تکمیل/ثبت نشد.');
+      if (done.length === 0) throw new Error(skippedByLevel ? 'همهٔ واژه‌ها به‌خاطر فیلتر سطح حذف شدند.' : 'هیچ واژه‌ای تکمیل/ثبت نشد.');
       onAddEnrichedWords(done);
       setProgressPercent(100);
-      onShowToast(`${done.length} واژه ثبت شد.`, false);
+      onShowToast(`${done.length} واژه ثبت شد.${skippedByLevel ? ` (${skippedByLevel} واژه با فیلتر سطح حذف شد)` : ''}`, false);
       setCands([]);
       onClose();
     } catch (e: any) {
@@ -555,19 +564,19 @@ Return ONLY a JSON array, no Markdown:
               </select>
               <select value={minLevelFilter} onChange={e => setMinLevelFilter(e.target.value)} disabled={enriching}
                 className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none">
-                <option value="">فیلتر سطح: هیچ</option>
+                <option value="">فیلتر سطح (هنگام ثبت): هیچ</option>
                 <option value="A1">حذف A1 و پایین‌تر</option>
                 <option value="A2">حذف A2 و پایین‌تر</option>
                 <option value="B1">حذف B1 و پایین‌تر</option>
               </select>
               <button
-                onClick={() => setCands(prev => prev.map(c => ({ ...c, on: !c.on })))}
+                onClick={() => { const all = cands.every(c => c.on); setCands(prev => prev.map(c => ({ ...c, on: !all }))); }}
                 disabled={enriching}
                 className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40">
                 {cands.every(c => c.on) ? '☐ عدم انتخاب همه' : '☑ انتخاب همه'}
               </button>
               <button
-                onClick={() => setCands(prev => prev.map(c => ({ ...c, on: c.complete ? true : !c.have && !c.on })))}
+                onClick={() => setCands(prev => prev.map(c => ({ ...c, on: c.complete ? true : !c.have })))}
                 disabled={enriching}
                 className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40"
                 title="جدیدها + واژه‌های کامل فایل را انتخاب می‌کند؛ تکراری‌های کتابخانه نه">
@@ -575,60 +584,57 @@ Return ONLY a JSON array, no Markdown:
               </button>
             </div>
 
-            <div className="max-h-[52vh] overflow-auto border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl">
-              <table className="w-full text-xs min-w-[520px]">
+            <div className="max-h-[52vh] overflow-y-auto overflow-x-hidden overscroll-contain border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl" style={{ touchAction: 'pan-y' }}>
+              <table className="w-full table-fixed text-xs">
+                <colgroup>
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '29%' }} />
+                  <col style={{ width: '29%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '11%' }} />
+                </colgroup>
                 <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
                   <tr className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
-                    <th className="p-2 w-8">✓</th>
-                    <th className="p-2 w-[72px]">آرتیکل</th>
+                    <th className="p-2">✓</th>
                     <th className="p-2 text-left">Deutsch</th>
-                    <th className="p-2 text-right">ترجمه (اختیاری)</th>
+                    <th className="p-2 text-right">املای صحیح احتمالی</th>
                     <th className="p-2">دسته</th>
-                    <th className="p-2 w-8"></th>
+                    <th className="p-2"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cands.map((c, i) => {
-                    const dim = minLevelFilter && isBelowLevel(c.cefr, minLevelFilter);
-                    return (
-                      <tr key={i} className={`border-t border-[#e6e9f0] dark:border-[#2a3140] ${c.on ? '' : 'opacity-60'} ${dim ? 'opacity-40' : ''}`}>
-                        <td className="p-1.5 text-center">
-                          <input type="checkbox" checked={c.on} disabled={enriching} onChange={() => updateCand(i, { on: !c.on })} className="w-4 h-4 accent-[#1f5fbf]" />
-                        </td>
-                        <td className="p-1">
-                          <select value={c.art} disabled={enriching || c.complete} onChange={e => updateCand(i, { art: e.target.value })}
-                            className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1 outline-none">
-                            <option value="">—</option><option value="der">der</option><option value="die">die</option><option value="das">das</option>
+                  {cands.map((c, i) => (
+                    <tr key={i} className={`border-t border-[#e6e9f0] dark:border-[#2a3140] ${c.on ? '' : 'opacity-60'}`}>
+                      <td className="p-1.5 text-center">
+                        <input type="checkbox" checked={c.on} disabled={enriching} onChange={() => updateCand(i, { on: !c.on })} className="w-5 h-5 accent-[#1f5fbf]" />
+                      </td>
+                      <td className="p-1 align-top">
+                        <input dir="ltr" value={c.de} disabled={enriching} onChange={e => updateCand(i, { de: e.target.value })} placeholder="Wort…"
+                          className="w-full min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf]" />
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {c.have && <span className="text-[9px] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 rounded-full">در کتابخانه هست</span>}
+                          {c.complete && <span className="text-[9px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 rounded-full">کامل از فایل</span>}
+                        </div>
+                      </td>
+                      <td className="p-1 align-top">
+                        <input dir="ltr" value={c.fix || ''} disabled={enriching} onChange={e => updateCand(i, { fix: e.target.value })} placeholder="اصلاح…"
+                          className={`w-full min-w-0 bg-white dark:bg-[#141923] border rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf] ${c.fix?.trim() ? 'border-amber-400' : 'border-[#dde1ea] dark:border-[#333b4a]'}`} />
+                      </td>
+                      <td className="p-1 align-top">
+                        {c.complete ? <span className="text-[10px] text-slate-400">از فایل</span> : (
+                          <select value={c.cat} disabled={enriching} onChange={e => updateCand(i, { cat: e.target.value })}
+                            className="w-full min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1 text-[11px] outline-none">
+                            <option value="">خودکار</option>
+                            {existingCategories.map(([cc]) => <option key={cc} value={cc}>{cc}</option>)}
                           </select>
-                        </td>
-                        <td className="p-1">
-                          <input dir="ltr" value={c.de} disabled={enriching} onChange={e => updateCand(i, { de: e.target.value })} placeholder="Wort…"
-                            className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf]" />
-                          <div className="mt-0.5 flex gap-1">
-                            {c.have && <span className="text-[9px] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 rounded-full">در کتابخانه هست</span>}
-                            {c.complete && <span className="text-[9px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 rounded-full">کامل از فایل</span>}
-                            {c.cefr && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full">{c.cefr}</span>}
-                          </div>
-                        </td>
-                        <td className="p-1">
-                          <input dir="rtl" value={c.fa} disabled={enriching} onChange={e => updateCand(i, { fa: e.target.value })} placeholder="خالی = AI ترجمه می‌کند"
-                            className="w-full bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 outline-none focus:border-[#1f5fbf]" />
-                        </td>
-                        <td className="p-1">
-                          {c.complete ? <span className="text-[10px] text-slate-400">از فایل</span> : (
-                            <select value={c.cat} disabled={enriching} onChange={e => updateCand(i, { cat: e.target.value })}
-                              className="w-full max-w-[130px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1 outline-none">
-                              <option value="">خودکار</option>
-                              {existingCategories.map(([cc]) => <option key={cc} value={cc}>{cc}</option>)}
-                            </select>
-                          )}
-                        </td>
-                        <td className="p-1 text-center">
-                          <button onClick={() => deleteCand(i)} disabled={enriching} title="حذف ردیف" className="text-red-500 font-bold px-1">✕</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        )}
+                      </td>
+                      <td className="p-1 text-center align-top">
+                        <button onClick={() => deleteCand(i)} disabled={enriching} title="حذف ردیف"
+                          className="w-9 h-9 text-2xl leading-none text-red-500 font-bold rounded-lg active:bg-red-50">✕</button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
