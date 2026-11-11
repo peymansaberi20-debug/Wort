@@ -10,6 +10,7 @@ interface WordManagerModalProps {
   onBatchDelete: (wordIds: string[]) => void;
   onOpenDuplicateDetector?: () => void;
   onOpenQualityControl?: () => void;
+  onOpenCategoryManager?: () => void;
   qualityIssueCount?: number;
 }
 
@@ -20,6 +21,7 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
   onBatchDelete,
   onOpenDuplicateDetector,
   onOpenQualityControl,
+  onOpenCategoryManager,
   qualityIssueCount = 0
 }) => {
   const [srcCat, setSrcCat] = useState<string>('*'); // default: all words!
@@ -124,27 +126,6 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
             </h3>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {onOpenDuplicateDetector && (
-              <button
-                onClick={onOpenDuplicateDetector}
-                className="bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200 dark:border-amber-800 px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1"
-                title="بررسی واژگان تکراری و مشابه"
-              >
-                🔍 بررسی تکراری‌ها
-              </button>
-            )}
-            {onOpenQualityControl && (
-              <button
-                onClick={onOpenQualityControl}
-                className="bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1"
-                title="کنترل کیفیت واژگان"
-              >
-                ✅ کنترل کیفیت
-                {qualityIssueCount > 0 && (
-                  <span className="bg-amber-500 text-white rounded-full px-1.5 text-[10px] leading-4">{qualityIssueCount}</span>
-                )}
-              </button>
-            )}
             <button
               onClick={() => setShowHelp(prev => !prev)}
               aria-label="راهنما"
@@ -180,6 +161,11 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
 
         {/* Filters and Search Bar */}
         <div className="p-4 border-b border-[#dde1ea] dark:border-[#333b4a] space-y-3 bg-slate-50/40 dark:bg-slate-900/20">
+          {onOpenCategoryManager && (
+            <button onClick={onOpenCategoryManager} className="w-full bg-sky-50 hover:bg-sky-100 dark:bg-slate-800 border border-sky-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-xl px-3 py-2.5 text-sm font-bold flex items-center justify-center gap-2">
+              <span className="text-xl">📁</span> مدیریت دسته‌ها (افزودن، تغییر نام، حذف)
+            </button>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1">
