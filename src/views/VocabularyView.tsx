@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
-import { getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
+import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
@@ -43,6 +43,7 @@ interface VocabularyViewProps {
   onSelectWord: (word: Word) => void;
   onOpenWordManager: () => void;
   onOpenGroupImport: () => void;
+  openCatMgrSignal?: number;
   onOpenDuplicateDetector?: () => void;
   onOpenQualityModal?: () => void;
   onOpenHelp: (topic: string) => void;
@@ -60,6 +61,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   onSelectWord,
   onOpenWordManager,
   onOpenGroupImport,
+  openCatMgrSignal,
   onOpenDuplicateDetector,
   onOpenQualityModal,
   onOpenHelp,
@@ -74,6 +76,10 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   // Category open accordion
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [catsVer, setCatsVer] = useState(0);
+  const [catMgrNew, setCatMgrNew] = useState('');
+  const [flatView, setFlatView] = useState(false);
+  React.useEffect(() => { if (openCatMgrSignal) setCategoryManagerOpen(true); }, [openCatMgrSignal]);
   const [compareOpen, setCompareOpen] = useState(false);
   const [collapsedInSearch, setCollapsedInSearch] = useState<Set<string>>(new Set());
 
@@ -137,7 +143,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   };
 
   // Categories list
-  const categories = useMemo(() => getCategories(words), [words]);
+  const categories = useMemo(() => getCategories(words), [words, catsVer]);
 
   // When editingWord changes, sync form
   React.useEffect(() => {
@@ -732,6 +738,24 @@ Answer ONLY a JSON array, no code fence, no commentary:
 
   return (
     <div className="space-y-4 text-right">
+      {/* Sticky main action bar: 5 big icons in one line */}
+      <div className="sticky top-16 md:top-[4.5rem] z-10 -mx-1 px-1 py-2 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur">
+        <div className="grid grid-cols-5 gap-1.5">
+          {[
+            { icon: '➕', label: 'افزودن تکی', onClick: () => { if (isFormOpen && isEditing) resetForm(); else setIsFormOpen(!isFormOpen); } },
+            { icon: '📦', label: 'افزودن گروهی', onClick: () => onOpenGroupImport() },
+            { icon: '⚖️', label: 'مقایسه لغت‌ها', onClick: () => setCompareOpen(true) },
+            { icon: '🗂', label: 'مدیریت گروهی', onClick: () => onOpenWordManager() },
+            { icon: '✅', label: 'کنترل کیفیت', onClick: () => onOpenQualityModal?.() }
+          ].map(b => (
+            <button key={b.label} type="button" onClick={b.onClick}
+              className="min-w-0 h-[70px] rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 flex flex-col items-center justify-center gap-0.5 active:scale-95 transition">
+              <span className="text-[28px] leading-none" aria-hidden="true">{b.icon}</span>
+              <span className="text-[10px] font-bold leading-tight text-center text-slate-800 dark:text-slate-100 px-0.5">{b.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Phase 3: empty-search suggestion — opens the existing creation workflow */}
 {noResults && (
 <div className="mb-3 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-sm">
@@ -770,7 +794,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
 )}
 {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
-        <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4 animate-fadeIn">
+        <div className="fixed inset-0 z-[60] bg-black/60 overflow-y-auto p-3 md:p-6">
+        <div className="max-w-3xl mx-auto bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-2xl space-y-4">
           <div className="flex items-center justify-between border-b pb-3">
             <div className="flex items-center gap-2">
               <span className="text-xl">{isEditing ? '✏️' : '➕'}</span>
@@ -1259,6 +1284,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             </button>
           </div>
         </div>
+        </div>
       )}
 
 
@@ -1323,53 +1349,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         </div>
       </div>
 
-      {/* Primary actions: equal-width, single-row buttons with a shared pale-blue style */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            if (isFormOpen && isEditing) resetForm();
-            else setIsFormOpen(!isFormOpen);
-          }}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
-        >
-          <span aria-hidden="true">{isFormOpen ? '▲' : '➕'}</span>
-          <span className="truncate">{isFormOpen ? 'بستن فرم' : 'افزودن واژهٔ تکی'}</span>
-        </button>
-        <button
-          type="button"
-          onClick={onOpenGroupImport}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
-        >
-          <span aria-hidden="true">📦</span>
-          <span className="truncate">افزودن واژگان گروهی</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setCompareOpen(true)}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
-        >
-          <span aria-hidden="true">⚖️</span>
-          <span className="truncate">مقایسه لغت‌ها</span>
-        </button>
-        <button
-          type="button"
-          onClick={onOpenWordManager}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
-        >
-          <span aria-hidden="true">🗂</span>
-          <span className="truncate">مدیریت گروهی</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setCategoryManagerOpen(true)}
-          className="min-w-0 min-h-[48px] w-full rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 px-1 sm:px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 hover:bg-sky-100 dark:hover:bg-slate-700 transition flex items-center justify-center gap-1 sm:gap-2"
-        >
-          <span aria-hidden="true">📁</span>
-          <span className="truncate">مدیریت دسته</span>
-        </button>
-      </div>
-
       {/* Category Management Modal: hidden until the pale-blue action button is pressed */}
       {categoryManagerOpen && (
         <div
@@ -1408,6 +1387,15 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           ایکون حذف هم که سطل اشغاله همون باشه خوبه .
           هر دو ایکون به سمت چپ ردیف خودشون فیکس بشن ."
         */}
+        <div className="mt-3 flex items-center gap-2">
+          <input value={catMgrNew} onChange={e => setCatMgrNew(e.target.value)} placeholder="نام دستهٔ جدید…"
+            className="flex-1 min-w-0 bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-sm outline-none focus:border-[#1f5fbf]" />
+          <button type="button" onClick={() => {
+            const n = catMgrNew.trim(); if (!n) return;
+            if (categories.some(([c]) => c.toLowerCase() === n.toLowerCase())) { onShowToast('این دسته از قبل وجود دارد.', true); return; }
+            addExtraCat(n); setCatsVer(x => x + 1); setCatMgrNew(''); onShowToast(`دستهٔ «${n}» اضافه شد.`, false);
+          }} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-2 rounded-xl text-xs font-bold">➕ افزودن دسته</button>
+        </div>
         <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800 space-y-1">
           {categories.length === 0 ? (
             <p className="text-xs text-[#5d6676] py-2">هنوز دسته‌ای ساخته نشده است.</p>
@@ -1427,7 +1415,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                     onClick={() => {
                       const newName = prompt('نام جدید دسته را وارد کنید:', catName);
                       if (newName && newName.trim() && newName.trim() !== catName) {
-                        onRenameCategory(catName, newName.trim());
+                        renameExtraCat(catName, newName.trim()); setCatsVer(x => x + 1); onRenameCategory(catName, newName.trim());
                       }
                     }}
                     title="تغییر نام / ادغام"
@@ -1439,7 +1427,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                   <button
                     onClick={() => {
                       if (confirm(`آیا از حذف دستهٔ «${catName}» اطمینان دارید؟ واژه‌ها حذف نمی‌شوند و فقط بدون دسته خواهند شد.`)) {
-                        onDeleteCategory(catName);
+                        removeExtraCat(catName); setCatsVer(x => x + 1); onDeleteCategory(catName);
                       }
                     }}
                     title="حذف دسته"
@@ -1496,17 +1484,22 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         </div>
       </div>
 
+      <label className="flex items-center gap-2.5 text-sm font-bold cursor-pointer bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5">
+        <input type="checkbox" checked={flatView} onChange={e => setFlatView(e.target.checked)} className="w-5 h-5 accent-[#1f5fbf]" />
+        <span>📃 مشاهده کل واژگان بدون دسته‌بندی</span>
+      </label>
+
       {/* Words List Grouped by Category */}
       <div className="space-y-3">
-        {categoryNames.length === 0 ? (
+        {(flatView ? filteredWords.length === 0 : categoryNames.length === 0) ? (
           <div className="text-center py-12 text-[#5d6676] bg-white dark:bg-[#1b2029] border rounded-2xl">
             واژه‌ای با این شرایط یافت نشد.
           </div>
         ) : (
-          categoryNames.map(cat => {
-            const catWords = wordsByCategory.get(cat) || [];
+          (flatView ? ['__flat'] : categoryNames).map(cat => {
+            const catWords = flatView ? filteredWords : (wordsByCategory.get(cat) || []);
             // Fulfills Requirement 14: when search is active, categories with matches are auto-expanded
-            const isOpen = searchQuery.trim() ? !collapsedInSearch.has(cat) : openCat === cat;
+            const isOpen = flatView ? true : searchQuery.trim() ? !collapsedInSearch.has(cat) : openCat === cat;
             return (
               <div
                 key={cat}
@@ -1526,7 +1519,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                       setOpenCat(openCat === cat ? null : cat);
                     }
                   }}
-                  className="w-full px-4 py-3 flex items-center justify-between text-right font-bold text-sm bg-slate-50/70 hover:bg-slate-100/70 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 transition"
+                  className={`${flatView ? 'hidden ' : ''}w-full px-4 py-3 flex items-center justify-between text-right font-bold text-sm bg-slate-50/70 hover:bg-slate-100/70 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 transition`}
                 >
                   <span className="flex items-center gap-2">
                     <span>📁 {cat}</span>
@@ -1549,7 +1542,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                         <div
                           key={w.id}
                           onClick={() => { setVisFa({}); onSelectWord(w); }}
-                          className="pt-1.5 pb-1.5 px-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition flex items-center justify-between gap-3 text-xs md:text-sm"
+                          className="py-2.5 px-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition flex items-center justify-between gap-3 text-xs md:text-sm"
                         >
                           {/* Word + Article + Hidden Translation + Audio */}
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -1575,7 +1568,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                                   {w.art}
                                 </span>
                               )}
-                              <span className="font-bold text-slate-900 dark:text-slate-100 font-sans">
+                              <span className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 font-sans">
                                 {w.de}
                               </span>
                             </div>
@@ -1583,7 +1576,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                             {/* Translation toggle button or revealed text */}
                             <div className="mr-2">
                               {isShowFa ? (
-                                <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">
                                   {w.fa}
                                 </span>
                               ) : (
