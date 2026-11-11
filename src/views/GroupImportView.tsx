@@ -281,18 +281,37 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
       try {
         const imagesPayload: { data: string; mimeType: string }[] = [];
         for (const f of files) imagesPayload.push({ data: await fileToBase64(f), mimeType: 'image/jpeg' });
-        const promptText = `Look at this image and type out ONLY the visible German words and expressions, one per line, exactly as fast typing — no analysis.
+        const promptText = `Extract visible German words and expressions from this image.
 Rules:
-- No articles (der/die/das/ein...) — only the noun itself (write "Schule", not "die Schule").
-- No translations, no explanations, no numbers, no bullets, no extra words.
-- Just the words, one per line. If a word is unreadable, skip it.`;
+- List only the visible German words or multiword expressions, one per line.
+- Do NOT include noun articles (der, die, das, ein, eine, etc.). Omit the article and output only the noun itself (e.g. write "Schule", not "die Schule").
+- Do NOT translate to Persian or English.
+- Do NOT include definitions, examples, grammar notes, numbers, or bullet points.
+- If a word is unreadable, omit it.`;
+        // One request to the ACTIVE provider only — the proven legacy path that worked for months
         const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
-        const typed = rawText.split(/\r?\n/).map(l => l.trim().replace(/^[\*\-•\d\.\)\s]+/, '').replace(/^(?:der|die|das)\s+/i, '').trim()).filter(Boolean);
-        if (typed.length === 0) throw new Error('واژه‌ای در تصویر پیدا نشد.');
+        const lines = rawText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+
+        const seen = new Set<string>();
+        const list: { de: string; art?: string; cefr?: string; fa?: string }[] = [];
+        for (const rawLine of lines) {
+          let cleaned = rawLine.replace(/^[\*\-•\d\.\)\s]+/, '').trim();
+          cleaned = cleaned.replace(/^(?:der|die|das|dem|den|des|ein|eine|einen|einem|einer|eines)\s+/i, '').trim();
+          cleaned = cleaned.replace(/[\*_`#]/g, '').trim();
+          if (!cleaned || cleaned.length < 2 || cleaned.toLowerCase() === 'none') continue;
+          const k = cleaned.toLowerCase();
+          if (seen.has(k)) continue;
+          seen.add(k);
+          list.push({ de: cleaned });
+        }
+
+        // Type the words into the manual textbox (user flow) AND build chips from the same list
+        const typed = list.map(x => x.de);
         setSource('text');
         setManualText(prev => (prev ? prev + '\n' + typed.join('\n') : typed.join('\n')));
-        setStatusMsg(`✅ ${typed.length} واژه تایپ شد در کادر متن — حالا دکمهٔ «ساخت فهرست از متن» را بزن.`);
-        onShowToast(`${typed.length} واژه از تصویر تایپ شد.`, false);
+        pushCands(list);
+        setStatusMsg(`✅ ${typed.length} واژه استخراج و در کادر متن تایپ شد.`);
+        onShowToast(`${typed.length} واژه استخراج شد.`, false);
       } catch (e: any) {
         setStatusMsg(`خطا: ${e?.message || 'استخراج ناموفق بود.'}`);
         onShowToast(e?.message || 'خطا در استخراج', true);
