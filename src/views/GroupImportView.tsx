@@ -475,7 +475,7 @@ Return ONLY a JSON array, no Markdown:
   const errMsg = '';
 
   return (
-    <div className="min-h-screen bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans">
       <header className="sticky top-0 z-20 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 md:px-5 h-14 md:h-16 flex items-center gap-2 shadow-lg">
         <h1 className="flex-1 text-right font-bold text-base md:text-lg">📦 افزودن واژگان گروهی</h1>
         <span className="hidden sm:inline text-[11px] text-white/70">گام ۱: ورودی ← گام ۲: روش ← گام ۳: تنظیم و ثبت</span>
@@ -594,65 +594,34 @@ Return ONLY a JSON array, no Markdown:
               </button>
             </div>
 
-            <div className="max-h-[52vh] overflow-y-auto overflow-x-hidden overscroll-contain border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl" style={{ touchAction: 'pan-y' }}>
-              <table className="w-full table-fixed text-xs">
-                <colgroup>
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '29%' }} />
-                  <col style={{ width: '29%' }} />
-                  <col style={{ width: '20%' }} />
-                  <col style={{ width: '11%' }} />
-                </colgroup>
-                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
-                  <tr className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
-                    <th className="p-2">✓</th>
-                    <th className="p-2 text-left">Deutsch</th>
-                    <th className="p-2 text-right">املای صحیح احتمالی</th>
-                    <th className="p-2">دسته</th>
-                    <th className="p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cands.map((c, i) => (
-                    <tr key={i} className={`border-t border-[#e6e9f0] dark:border-[#2a3140] ${c.on ? '' : 'opacity-60'}`}>
-                      <td className="p-1.5 text-center">
-                        <input type="checkbox" checked={c.on} disabled={enriching} onChange={() => updateCand(i, { on: !c.on })} className="w-5 h-5 accent-[#1f5fbf]" />
-                      </td>
-                      <td className="p-1 align-top">
-                        <input dir="ltr" value={c.de} disabled={enriching} onChange={e => updateCand(i, { de: e.target.value })} placeholder="Wort…"
-                          className="w-full min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf]" />
-                        <div className="mt-0.5 flex flex-wrap gap-1">
-                          {c.have && <span className="text-[9px] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 rounded-full">در کتابخانه هست</span>}
-                          {c.cefr && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full font-bold">{c.cefr}</span>}
-                          {c.complete && <span className="text-[9px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 rounded-full">کامل از فایل</span>}
-                        </div>
-                      </td>
-                      <td className="p-1 align-top">
-                        <input dir="ltr" value={c.fix || ''} disabled={enriching} onChange={e => updateCand(i, { fix: e.target.value })} placeholder="اصلاح…"
-                          className={`w-full min-w-0 bg-white dark:bg-[#141923] border rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf] ${c.fix?.trim() ? 'border-amber-400' : 'border-[#dde1ea] dark:border-[#333b4a]'}`} />
-                      </td>
-                      <td className="p-1 align-top">
-                        {c.complete ? <span className="text-[10px] text-slate-400">از فایل</span> : (
-                          <select value={c.cat} disabled={enriching} onChange={e => updateCand(i, { cat: e.target.value })}
-                            className="w-full min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1 text-[11px] outline-none">
-                            <option value="">خودکار</option>
-                            {existingCategories.map(([cc]) => <option key={cc} value={cc}>{cc}</option>)}
-                          </select>
-                        )}
-                      </td>
-                      <td className="p-1 text-center align-top">
-                        <button onClick={() => deleteCand(i)} disabled={enriching} title="حذف ردیف"
-                          className="w-9 h-9 text-2xl leading-none text-red-500 font-bold rounded-lg active:bg-red-50">✕</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="max-h-[55vh] overflow-y-auto overflow-x-hidden overscroll-contain border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl divide-y divide-[#e6e9f0] dark:divide-[#2a3140]" style={{ touchAction: 'pan-y' }}>
+              {cands.map((c, i) => (
+                <div key={i} className={`p-2 space-y-1.5 ${c.on ? '' : 'opacity-60'}`}>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={c.on} disabled={enriching} onChange={() => updateCand(i, { on: !c.on })} className="w-5 h-5 flex-shrink-0 accent-[#1f5fbf]" />
+                    <input dir="ltr" value={c.de} disabled={enriching} onChange={e => updateCand(i, { de: e.target.value })} placeholder="Wort…"
+                      className="flex-1 min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1.5 text-sm font-bold outline-none focus:border-[#1f5fbf]" />
+                    {c.cefr && <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">{c.cefr}</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 pr-7">
+                    <input dir="ltr" value={c.fix || ''} disabled={enriching} onChange={e => updateCand(i, { fix: e.target.value })} placeholder="املای صحیح احتمالی…"
+                      className={`flex-1 min-w-0 bg-white dark:bg-[#141923] border rounded-lg px-2 py-1 text-xs font-bold outline-none focus:border-[#1f5fbf] ${c.fix?.trim() ? 'border-amber-400' : 'border-[#dde1ea] dark:border-[#333b4a]'}`} />
+                    {c.complete ? <span className="text-[10px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 rounded-full flex-shrink-0">کامل از فایل</span> : (
+                      <select value={c.cat} disabled={enriching} onChange={e => updateCand(i, { cat: e.target.value })}
+                        className="w-[34%] min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-1 py-1.5 text-[11px] outline-none">
+                        <option value="">دسته: خودکار</option>
+                        {existingCategories.map(([cc]) => <option key={cc} value={cc}>{cc}</option>)}
+                      </select>
+                    )}
+                    <button onClick={() => deleteCand(i)} disabled={enriching} title="حذف ردیف"
+                      className="w-10 h-9 flex-shrink-0 text-2xl leading-none text-red-500 font-bold rounded-lg active:bg-red-50">✕</button>
+                  </div>
+                  {c.have && <div className="pr-7"><span className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 rounded-full">در کتابخانه هست</span></div>}
+                </div>
+              ))}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={addEmptyRow} disabled={enriching}
-                className="bg-slate-100 dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-1.5 rounded-xl text-xs font-bold disabled:opacity-40">➕ ردیف جدید</button>
               <input dir="ltr" value={quickAdd} onChange={e => setQuickAdd(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addFromQuick(); }}
                 placeholder="چند واژه را تایپ/بچسبان…" disabled={enriching}
                 className="flex-1 min-w-[140px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-1.5 text-xs outline-none" />
