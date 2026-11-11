@@ -281,13 +281,13 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
         const imagesPayload: { data: string; mimeType: string }[] = [];
         for (const f of files) imagesPayload.push({ data: await fileToBase64(f), mimeType: 'image/jpeg' });
         const promptText = `Extract visible German words and expressions from this image.
-Return ONLY a JSON array, no Markdown, no commentary:
-[{"de":"noun WITHOUT article or the word/expression as-is","art":"der|die|das|","cefr":"A1|A2|B1|B2|C1|C2"}]
 Rules:
-- de: the visible German word/expression; for nouns omit the article and put it in "art".
-- cefr: realistic CEFR estimate (A1 = sehr einfach; C2 = selten/fach).
-- No translations, no definitions, no notes, no bullet points. If a word is unreadable, omit it.`;
-        const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 60000, retries: 0 });
+- List only the visible German words or multiword expressions, one per line.
+- Do NOT include noun articles (der, die, das, ein, eine, etc.). Omit the article and output only the noun itself (e.g. write "Schule", not "die Schule").
+- Do NOT translate to Persian or English.
+- Do NOT include definitions, examples, grammar notes, numbers, or bullet points.
+- If a word is unreadable, omit it.`;
+        const rawText = await generateWithImages(promptText, imagesPayload, { timeoutMs: 45000, retries: 0 });
         const haveKey = (d: string) => words.some(w => w.de.toLowerCase() === d.toLowerCase());
         let ok = false;
         try {
