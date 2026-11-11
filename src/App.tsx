@@ -79,6 +79,7 @@ export default function App() {
   }, [exerciseSuspended, editingWordId, exerciseReturnTab]);
   const [isQualityModalOpen, setIsQualityModalOpen] = useState(false);
   const [isWordManagerOpen, setIsWordManagerOpen] = useState(false);
+  const [catMgrSignal, setCatMgrSignal] = useState(0);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [isImageExtractOpen, setIsImageExtractOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
@@ -738,6 +739,7 @@ export default function App() {
                   onDeleteCategory={handleDeleteCategory}
                   onSelectWord={setSelectedWord}
                   onOpenWordManager={() => setIsWordManagerOpen(true)}
+                  openCatMgrSignal={catMgrSignal}
                   onOpenGroupImport={() => setShowGroupImport(true)}
                   onOpenQualityModal={() => setIsQualityModalOpen(true)}
                   onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}                  
@@ -811,6 +813,7 @@ export default function App() {
         {isWordManagerOpen && (
           <WordManagerModal
             words={state.words}
+            onOpenCategoryManager={() => { setIsWordManagerOpen(false); setCatMgrSignal(n => n + 1); }}
             onClose={() => setIsWordManagerOpen(false)}
             onMoveWords={handleBatchMoveWords}
             onBatchDelete={handleBatchDeleteWords}
