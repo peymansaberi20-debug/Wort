@@ -27,7 +27,7 @@ const LEVEL_ORDER = ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const isBelowLevel = (cefr: string, min: string) => {
   const a = LEVEL_ORDER.indexOf((cefr || '').toUpperCase());
   const b = LEVEL_ORDER.indexOf(min.toUpperCase());
-  return a >= 0 && b > 0 && a <= b;
+  return !!cefr && a > 0 && b > 0 && a <= b;
 };
 
 export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEnrichedWords, onClose, onShowToast }) => {
@@ -36,6 +36,7 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
   const [files, setFiles] = useState<File[]>([]);
   const [manualText, setManualText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [inputOpen, setInputOpen] = useState(true);
   const [statusMsg, setStatusMsg] = useState('');
   const [ocrMsg, setOcrMsg] = useState('');
   const [cands, setCands] = useState<GCand[]>([]);
@@ -49,6 +50,8 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
 
   const existingCategories = getCategories(words);
   useEffect(() => () => { void releaseOcr(); }, []);
+  const hasCands = cands.length > 0;
+  useEffect(() => { if (hasCands) setInputOpen(false); }, [hasCands]);
 
   const fileToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -85,8 +88,8 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
       seen.add(k);
       const have = haveKey(it.art ? `${it.art} ${de}` : de) || haveKey(de);
       next.push({
-        de, art: (it.art || '').toLowerCase(), cefr: (it.cefr || '').toUpperCase(),
-        fa: it.fa || '', complete: !!it.full, full: it.full, have, on: !have, cat: ''
+        de, art: (it.art || '').toLowerCase(), cefr: (it.cefr || it.full?.lvl || '').toUpperCase(),
+        fa: it.fa || '', complete: !!it.full, full: it.full, have, on: !have && !(minLevelFilter && isBelowLevel(((it.cefr || it.full?.lvl || '') + '').toUpperCase(), minLevelFilter)), cat: ''
       });
     }
     setCands(next);
@@ -304,6 +307,7 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
 Rules:
 - List only the visible German words or multiword expressions, one per line.
 - Do NOT include noun articles (der, die, das, ein, eine, etc.). Omit the article and output only the noun itself (e.g. write "Schule", not "die Schule").
+- After each word write " | " and its CEFR level (A1, A2, B1, B2, C1 or C2), e.g. "gehen | A1".
 - Do NOT translate to Persian or English.
 - Do NOT include definitions, examples, grammar notes, numbers, or bullet points.
 - If a word is unreadable, omit it.`;
@@ -313,7 +317,8 @@ Rules:
 
         const seen = new Set<string>();
         const list: { de: string; art?: string; cefr?: string; fa?: string }[] = [];
-        for (const rawLine of lines) {
+        for (const rawFull of lines) {
+          const bar = rawFull.split('|'); const rawLine = bar[0]; const lvlM = (bar[1] || '').match(/[ABC][12]/i);
           let cleaned = rawLine.replace(/^[\*\-•\d\.\)\s]+/, '').trim();
           cleaned = cleaned.replace(/^(?:der|die|das|dem|den|des|ein|eine|einen|einem|einer|eines)\s+/i, '').trim();
           cleaned = cleaned.replace(/[\*_`#]/g, '').trim();
@@ -321,7 +326,7 @@ Rules:
           const k = cleaned.toLowerCase();
           if (seen.has(k)) continue;
           seen.add(k);
-          list.push({ de: cleaned });
+          list.push({ de: cleaned, cefr: lvlM ? lvlM[0].toUpperCase() : '' });
         }
 
         // Type the words into the manual textbox (user flow) AND build chips from the same list
@@ -389,6 +394,10 @@ Return ONLY a JSON array, no Markdown:
       }
       return n;
     }));
+  const applyLevelFilter = (v: string) => {
+    setMinLevelFilter(v);
+    setCands(prev => prev.map(c => ({ ...c, on: (c.complete || !c.have) && !(v && isBelowLevel(c.cefr, v)) })));
+  };
   const addEmptyRow = () => setCands(prev => [...prev, { de: '', art: '', cefr: '', fa: '', complete: false, have: false, on: true, cat: '' }]);
   const deleteCand = (i: number) => setCands(prev => prev.filter((_, j) => j !== i));
   const [quickAdd, setQuickAdd] = useState('');
@@ -424,7 +433,6 @@ Return ONLY a JSON array, no Markdown:
       let skippedByLevel = 0;
       // 1) complete ones (from structured files) go straight in
       selected.filter(c => c.complete && c.full).forEach(c => {
-        if (minLevelFilter && isBelowLevel(c.full!.lvl, minLevelFilter)) { skippedByLevel++; return; }
         done.push(c.full!);
       });
 
@@ -447,7 +455,6 @@ Return ONLY a JSON array, no Markdown:
           if (userCatMap.has(key)) w.cat = userCatMap.get(key)!;
           const v = norm(w);
           if (v && v.de && v.fa) {
-            if (minLevelFilter && isBelowLevel(v.lvl, minLevelFilter)) { skippedByLevel++; return; }
             done.push(v);
           }
         });
@@ -470,15 +477,16 @@ Return ONLY a JSON array, no Markdown:
   return (
     <div className="min-h-screen bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans">
       <header className="sticky top-0 z-20 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 md:px-5 h-14 md:h-16 flex items-center gap-2 shadow-lg">
-        <IconBtn onClick={onClose} title="بازگشت به واژگان"><X size={18} className="text-red-500" /></IconBtn>
         <h1 className="flex-1 text-right font-bold text-base md:text-lg">📦 افزودن واژگان گروهی</h1>
         <span className="hidden sm:inline text-[11px] text-white/70">گام ۱: ورودی ← گام ۲: روش ← گام ۳: تنظیم و ثبت</span>
+        <IconBtn onClick={onClose} title="بازگشت به واژگان"><X size={18} className="text-red-500" /></IconBtn>
       </header>
 
       <main className="flex-1 max-w-3xl w-full mx-auto p-3.5 md:p-6 space-y-4 pb-16">
         {/* Step 1 — source */}
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3">
-          <b className="text-sm md:text-base flex items-center gap-2"><span>۱.</span> ورودی را انتخاب کن</b>
+          <button onClick={() => setInputOpen(o => !o)} className="w-full flex items-center justify-between text-sm md:text-base font-bold"><span>۱. ورودی را انتخاب کن</span><span className="text-xs text-[#5d6676]">{inputOpen ? '▲ بستن' : '▼ باز کردن'}</span></button>
+          {inputOpen && (<div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => setSource('file')}
               className={`h-16 rounded-2xl border-2 font-bold text-sm transition flex items-center justify-center gap-2 ${source === 'file' ? 'border-[#1f5fbf] bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200'}`}>
@@ -543,6 +551,7 @@ Return ONLY a JSON array, no Markdown:
             </button>
             <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate">{ocrMsg || statusMsg}</span>
           </div>
+          </div>)}
         </div>
 
         {/* Step 3 — preview + settings */}
@@ -550,35 +559,36 @@ Return ONLY a JSON array, no Markdown:
           <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3">
             <b className="text-sm md:text-base flex items-center gap-2"><span>۳.</span> تنظیم و ثبت ({cands.filter(c => c.on).length} انتخاب‌شده از {cands.length})</b>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <select value={depth} onChange={e => setDepth(e.target.value as any)} disabled={enriching}
-                className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none">
+                className="col-span-2 w-full bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs font-bold outline-none">
                 <option value="light">⚡ سبک (سریع — fa+en+lvl)</option>
                 <option value="mid">⚙️ نیمه (+pl+pos)</option>
                 <option value="full">💎 کامل (۲۸ فیلد)</option>
               </select>
               <select value={bulkCat} onChange={e => setBulkCat(e.target.value)} disabled={enriching}
-                className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none max-w-[220px] truncate">
+                className="col-span-2 w-full bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none">
                 <option value="">📁 دستهٔ بی‌دسته‌ها: خودکار AI</option>
                 {existingCategories.map(([c]) => <option key={c} value={c}>📁 {c}</option>)}
               </select>
-              <select value={minLevelFilter} onChange={e => setMinLevelFilter(e.target.value)} disabled={enriching}
-                className="bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-1.5 text-xs font-bold outline-none">
-                <option value="">فیلتر سطح (هنگام ثبت): هیچ</option>
+              <select value={minLevelFilter} onChange={e => applyLevelFilter(e.target.value)} disabled={enriching}
+                className="col-span-2 w-full bg-white dark:bg-slate-800 border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs font-bold outline-none">
+                <option value="">فیلتر سطح: هیچ</option>
                 <option value="A1">حذف A1 و پایین‌تر</option>
                 <option value="A2">حذف A2 و پایین‌تر</option>
                 <option value="B1">حذف B1 و پایین‌تر</option>
+                <option value="B2">حذف B2 و پایین‌تر</option>
               </select>
               <button
                 onClick={() => { const all = cands.every(c => c.on); setCands(prev => prev.map(c => ({ ...c, on: !all }))); }}
                 disabled={enriching}
-                className="bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40">
+                className="w-full bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40">
                 {cands.every(c => c.on) ? '☐ عدم انتخاب همه' : '☑ انتخاب همه'}
               </button>
               <button
                 onClick={() => setCands(prev => prev.map(c => ({ ...c, on: c.complete ? true : !c.have })))}
                 disabled={enriching}
-                className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40"
+                className="w-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 px-3 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-40"
                 title="جدیدها + واژه‌های کامل فایل را انتخاب می‌کند؛ تکراری‌های کتابخانه نه">
                 ✦ فقط جدیدها
               </button>
@@ -613,6 +623,7 @@ Return ONLY a JSON array, no Markdown:
                           className="w-full min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2 py-1 font-bold outline-none focus:border-[#1f5fbf]" />
                         <div className="mt-0.5 flex flex-wrap gap-1">
                           {c.have && <span className="text-[9px] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 rounded-full">در کتابخانه هست</span>}
+                          {c.cefr && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full font-bold">{c.cefr}</span>}
                           {c.complete && <span className="text-[9px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 rounded-full">کامل از فایل</span>}
                         </div>
                       </td>
