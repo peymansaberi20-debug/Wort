@@ -13,6 +13,9 @@ interface HeaderProps {
   canGoBack: boolean;
   onOpenCloud: () => void;
   cloudEmail?: string | null;
+  onNavigate?: (target: string) => void;
+  backupDue?: boolean;
+  wordCount?: number;
 }
 
 /** Detects installed/standalone PWA mode (iOS & Android/desktop). */
@@ -25,7 +28,7 @@ const isStandalone = (): boolean =>
 const THEME_LABEL: Record<string, string> = { light: 'روشن', dark: 'تیره', green: 'مطالعهٔ سبز' };
 
 export const Header: React.FC<HeaderProps> = ({
-  onBack, onAbout, theme, onToggleTheme, onSaveAndExit, canGoBack, onOpenCloud, cloudEmail
+  onBack, onAbout, theme, onToggleTheme, onSaveAndExit, canGoBack, onOpenCloud, cloudEmail, onNavigate, backupDue, wordCount
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
@@ -39,12 +42,28 @@ export const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
 
+  const go = (t: string) => { setMenuOpen(false); onNavigate?.(t); };
+  const sec = (t: string) => <div className="px-3.5 pt-3 pb-1 text-[10px] font-bold text-[#5d6676] dark:text-[#a3adbd] tracking-wide">{t}</div>;
+  const row = (icon: string, label: string, desc: string, run: () => void, badge?: string) => (
+    <button key={label} onClick={run} className="w-full px-3.5 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 transition text-right">
+      <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">{label}</span>
+        {desc && <span className="block text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">{desc}</span>}
+      </span>
+      {badge && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">{badge}</span>}
+    </button>
+  );
   const menuItem = 'w-full px-3.5 h-12 flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-right';
 
   return (
     <header className="sticky top-0 z-20 bg-gradient-to-l from-[#6b4fd8] via-[#4a5ac9] to-[#1f5fbf] text-white shadow-lg flex items-center justify-between gap-2 px-3 md:px-5 h-16 md:h-[4.5rem]">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div className="absolute -top-10 -left-6 w-36 h-36 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -bottom-12 right-10 w-40 h-40 rounded-full bg-fuchsia-300/15 blur-2xl" />
+      </div>
       {/* ── Brand ── */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className="relative flex items-center gap-2.5 min-w-0">
         {canGoBack && (
           <button
             onClick={onBack}
@@ -65,61 +84,67 @@ export const Header: React.FC<HeaderProps> = ({
               <Sparkles size={10} /> AI-Powered
             </span>
           </div>
-          <span className="text-[10px] md:text-[11px] text-white/75 truncate leading-tight">
-            <span className="hidden sm:inline">پلتفرم هوشمند یادگیری واژگان آلمانی</span>
+          <span className="text-[11px] md:text-xs text-white/85 truncate leading-tight font-medium">
+            <span>واژه‌نامه آلمانی و فلش‌کارت</span>
             <span className="hidden md:inline text-white/40"> — </span>
             <span className="hidden md:inline">طراحی و توسعه: <span dir="ltr" className="font-medium">Peyman Saberi</span></span>
-            <span className="md:hidden">Peyman Saberi</span>
           </span>
         </div>
       </div>
 
       {/* ── Controls ── */}
-      <div ref={menuRef} className="flex items-center gap-1.5 flex-shrink-0 relative">
+      <div ref={menuRef} className="relative z-10 flex items-center gap-2 flex-shrink-0">
+        {typeof wordCount === 'number' && (
+          <span className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full bg-white/15 border border-white/20 text-[11px] font-bold">
+            <span aria-hidden="true">📚</span><span dir="ltr">{wordCount}</span>
+          </span>
+        )}
         <button
           onClick={() => setMenuOpen(v => !v)}
-          className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 transition flex items-center justify-center flex-shrink-0"
+          className="relative w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 transition flex items-center justify-center flex-shrink-0"
           title="منو" aria-label="منوی اصلی" aria-expanded={menuOpen}
         >
           <MoreVertical size={20} />
+          {backupDue && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-[#4a5ac9]" />}
         </button>
 
         {menuOpen && (
-          <div
-            className="absolute top-full mt-2 left-0 w-64 bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-30"
-            dir="rtl"
-          >
-            <div className="px-3.5 pt-3 pb-1 text-[10px] font-bold text-[#5d6676] dark:text-[#a3adbd] tracking-wide">تنظیمات سریع</div>
-            <button onClick={() => onToggleTheme()} className={menuItem}>
-              <Palette size={17} className="text-[#1f5fbf] flex-shrink-0" />
-              <span className="flex-1 font-bold">پوسته</span>
-              <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] flex items-center gap-0.5">
-                {THEME_LABEL[theme]} <ChevronLeft size={13} />
-              </span>
-            </button>
-            <button onClick={() => { setMenuOpen(false); onOpenCloud(); }} className={menuItem}>
-              <span className="relative flex-shrink-0">
-                <Cloud size={17} className="text-sky-600" />
-                {cloudEmail && <span className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-emerald-500 border border-white" />}
-              </span>
-              <span className="flex-1 font-bold">فضای ابری</span>
-              <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate max-w-[90px]" dir="ltr">
-                {cloudEmail ? cloudEmail.split('@')[0] : 'ورود'}
-              </span>
-            </button>
-            <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold text-[#5d6676] dark:text-[#a3adbd] tracking-wide">برنامه</div>
-            <button onClick={() => { setMenuOpen(false); onAbout(); }} className={menuItem}>
-              <Info size={17} className="text-[#1f5fbf] flex-shrink-0" />
-              <span className="flex-1 font-bold">درباره برنامه</span>
-            </button>
-            <button
-              onClick={() => { setMenuOpen(false); if (!isStandalone()) { onSaveAndExit(); return; } setConfirmExit(true); }}
-              className={menuItem + ' border-t border-slate-100 dark:border-slate-800'}
+          <>
+            <div className="fixed inset-0 z-20 bg-black/30 md:bg-transparent" onClick={() => setMenuOpen(false)} />
+            <div
+              className="fixed md:absolute z-30 inset-x-3 md:inset-x-auto top-[4.25rem] md:top-full md:mt-2 md:left-0 md:w-80 max-h-[calc(100vh-5.5rem)] overflow-y-auto bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl pb-2"
+              dir="rtl"
             >
-              <Save size={17} className="text-[#1f5fbf] flex-shrink-0" />
-              <span className="flex-1 font-bold">ذخیره و خروج</span>
-            </button>
-          </div>
+              {sec('حساب')}
+              {row('☁️', 'فضای ابری', cloudEmail ? cloudEmail : 'ورود و همگام‌سازی', () => { setMenuOpen(false); onOpenCloud(); })}
+
+              {sec('داده‌ها')}
+              {row('💾', 'ذخیره و پشتیبان‌گیری', 'پشتیبان کامل، CSV، Anki', () => go('backup'), backupDue ? 'یادآوری' : undefined)}
+              {row('♻️', 'بازیابی پشتیبان', 'برگرداندن از فایل JSON', () => go('restore'))}
+              {row('📥', 'ورود واژگان', 'Excel، CSV یا JSON', () => go('io'))}
+
+              {sec('تنظیمات')}
+              {row('🎨', 'پوسته', THEME_LABEL[theme], () => onToggleTheme())}
+              {row('🃏', 'ظاهر و فلش‌کارت', 'جهت کارت و نمایش', () => go('set:appearance'))}
+              {row('🎓', 'یادگیری و مرور', 'سقف روزانه، الگوریتم، تایمر', () => go('set:learning'))}
+              {row('🔊', 'صدا و تلفظ', 'صدا، سرعت و لهجه', () => go('set:audio'))}
+              {row('🎯', 'هدف روزانه و یادآوری', 'هدف و دورهٔ پشتیبان‌گیری', () => go('set:goal'))}
+              {row('🤖', 'اتصال به هوش مصنوعی', 'کلید Gemini', () => go('set:ai'))}
+              {row('⚙️', 'همهٔ تنظیمات', 'نمای کامل', () => go('set'))}
+              {row('⚠️', 'مدیریت داده‌ها', 'پاک‌سازی سابقه و واژگان', () => go('set:data'))}
+
+              {sec('برنامه')}
+              {row('ℹ️', 'درباره برنامه', 'نسخه و سازنده', () => { setMenuOpen(false); onAbout(); })}
+              <button
+                onClick={() => { setMenuOpen(false); if (!isStandalone()) { onSaveAndExit(); return; } setConfirmExit(true); }}
+                className={menuItem + ' border-t border-slate-100 dark:border-slate-800 mt-1'}
+              >
+                <Save size={17} className="text-[#1f5fbf] flex-shrink-0" />
+                <span className="flex-1 font-bold">ذخیره و خروج</span>
+              </button>
+              <div className="text-center text-[10px] text-[#5d6676] dark:text-[#a3adbd] pt-1" dir="ltr">WörterBuch · Peyman Saberi</div>
+            </div>
+          </>
         )}
       </div>
 
