@@ -877,6 +877,7 @@ export default function App() {
           words={state.words}
           onClose={() => setIsDuplicateModalOpen(false)}
           onDeleteWord={handleDeleteWord}
+          onDeleteWords={ws => handleBatchDeleteWords(ws.map(x => x.id), 'تکراری‌ها')}
           onBatchDelete={(ids: string[]) => handleBatchDeleteWords(ids, 'تشخیص واژه‌های تکراری')}
           onMergeWords={handleMergeWords}
           onEditWord={handleEditWord}
