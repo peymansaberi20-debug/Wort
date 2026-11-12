@@ -14,6 +14,7 @@ import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { SchreibenCorrector } from '../components/SchreibenCorrector';
 import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
+import { VerbPrep } from '../components/VerbPrep';
 import { PageOverlay } from '../components/PageOverlay';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
@@ -44,7 +45,8 @@ export type ExerciseMode =
   | 'schreiben'
   | 'puzzle'
   | 'dikt'
-  | 'errnb';
+  | 'errnb'
+  | 'vprep';
 
 export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string; desc: string }> = {
   flash: { title: 'فلش‌کارت', icon: '🃏', desc: 'کارت واژه با الگوریتم تکرار فاصله‌دار لایتنر' },
@@ -69,7 +71,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   schreiben: { title: 'تصحیح نوشتار (Schreiben)', icon: '📝', desc: 'عکس متن دست‌نویس (چند صفحه) را بفرست؛ تصحیح کامل با تفکر آلمانی، سبک، نوع متن و منطق' },
   puzzle: { title: 'چیدن جمله (Satzbau)', icon: '🧩', desc: 'کلمه‌های درهم‌ریختهٔ جمله‌های مثال خودت را به ترتیب درست آلمانی بچین' },
   dikt: { title: 'دیکته (Diktat)', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
-  errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' }
+  errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
+  vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' }
 };
 
 /**
@@ -79,7 +82,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
  */
 /** Two exercise-menu tabs: every exercise belongs to exactly one tab — nothing lost, nothing duplicated. */ 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'dict', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent', 'schreiben', 'puzzle', 'dikt', 'errnb'];  
+const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep'];  
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -774,7 +777,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // except the flashcard box, the free category review, free sentence writing and Schreiben correction.
   const words = useMemo(() => {
     const cats = settings?.activeCats;
-    const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'errnb';
+    const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'errnb' || activeMode === 'vprep';
     if (exempt || !cats || cats.length === 0 || (practiceWordIds && practiceWordIds.length > 0)) return allWords;
     const allowed = new Set(cats);
     return allWords.filter(w => allowed.has(w.cat));
@@ -986,7 +989,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       qIds = pool.slice().sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'sent') {
       qIds = shuffleArr<Word>(pool).slice(0, 10).map(w => w.id);
-    } else if (activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'puzzle' || activeMode === 'dikt' || activeMode === 'errnb') {
+    } else if (activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'puzzle' || activeMode === 'dikt' || activeMode === 'errnb' || activeMode === 'vprep') {
       qIds = ['freesent-self'];
     }
 
@@ -1010,7 +1013,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     if (activeMode === 'case') {
       return ALL_CASEQ.find(q => q.id === id) || null;
     }
-    if (activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'puzzle' || activeMode === 'dikt' || activeMode === 'errnb') {
+    if (activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'puzzle' || activeMode === 'dikt' || activeMode === 'errnb' || activeMode === 'vprep') {
       return FREE_SENT_WORD;
     }
     return words.find(w => w.id === id) || null;
@@ -1378,7 +1381,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setRevealedCardId(currentItem.id);
     } else if (qMode === 'sent') {
       setSentTimeUp(n => n + 1);
-    } else if ((qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb')) {
+    } else if ((qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) {
       // free writing: timer expiry has no automatic action
     } else if (qMode === 'art') {
       answerArt('');
@@ -1857,16 +1860,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* Phase 2 Sec.1: standardized toolbar — exit leftmost, then profile, then timer (LTR row) */}
         <div className="flex items-center gap-2" dir="ltr">
           <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
-          {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb') && (
+          {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
            <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
           )}
-          {activeMode !== 'case' && qMode !== 'sent' && (qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb') && currentItem && (
+          {activeMode !== 'case' && qMode !== 'sent' && (qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && currentItem && (
             <>
               <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
               <IconBtn onClick={() => setShadowWord(currentItem as Word)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
             </>
           )}
-          {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb') && (
+          {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
             <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
           )}
           {activeMode !== 'hard' && qMode && (
@@ -1890,7 +1893,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       )}
 
       {/* Progress & Subtitle (hidden for free-sentence exercise) */}
-      {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb') && (
+      {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
       <div className="space-y-1.5">
         <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
           <div
@@ -2223,7 +2226,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* ========================================================= */}
         {/* OTHER INTERACTIVE EXERCISES */}
         {/* ========================================================= */}
-        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl'  || qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb')) && (() => {
+        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl'  || qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) && (() => {
           const w = currentItem as Word;
           const remainingHints = Math.max(0, 2 - hintLevel);
 
@@ -2396,6 +2399,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'puzzle' && <SatzPuzzle key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
+              {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
 
               {qMode === 'prod' && (
                 <div className="space-y-2">
@@ -2408,7 +2412,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               )}
 
               {/* Input Box and Action Bar */}
-              {(qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb')) ? null : !answerResult ? (
+              {(qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) ? null : !answerResult ? (
                 <div className="space-y-3 pt-2 max-w-sm mx-auto">
                   <input
                     type="text"
