@@ -16,6 +16,8 @@ interface DuplicateDetectorModalProps {
   words: Word[];
   onClose: () => void;
   onDeleteWord: (word: Word) => void;
+  /** Deletes several words in one confirmation (needed when more than one duplicate is removed at once). */
+  onDeleteWords?: (words: Word[]) => void;
   onMergeWords: (canonicalId: string, mergedData: Partial<Word>, removedIds: string[]) => void;
   /** Opens the edit form of a word. The detector stays mounted (hidden) and is shown again afterwards. */
   onEditWord?: (word: Word) => void;
@@ -25,10 +27,19 @@ interface DuplicateDetectorModalProps {
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
 
+const DISMISS_KEY = 'wb_dismissed_dups';
+const loadDismissed = (): Set<string> => {
+  try { return new Set<string>(JSON.parse(localStorage.getItem(DISMISS_KEY) || '[]')); } catch { return new Set<string>(); }
+};
+/** Stable signature of a group (its word ids) so "keep all" survives closing the screen. */
+const sigOf = (g: DuplicateGroup) => g.words.map(w => w.id).sort().join('|');
+const keepAllLabel = (n: number) => n === 2 ? 'نگه‌داشتن هر دو' : n === 3 ? 'نگه‌داشتن هر سه' : `نگه‌داشتن هر ${n} مورد`;
+
 export const DuplicateDetectorModal: React.FC<DuplicateDetectorModalProps> = ({
   words,
   onClose,
   onDeleteWord,
+  onDeleteWords,
   onMergeWords,
   onEditWord,
   onImageChange,
@@ -52,7 +63,10 @@ export const DuplicateDetectorModal: React.FC<DuplicateDetectorModalProps> = ({
   }, [hidden]);
 
   // Ignored / dismissed groups for this session
-  const [dismissedGroupIds, setDismissedGroupIds] = useState<Set<string>>(new Set());
+  const [dismissedGroupIds, setDismissedGroupIds] = useState<Set<string>>(loadDismissed);
+  useEffect(() => {
+    try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...dismissedGroupIds])); } catch { /* ignore */ }
+  }, [dismissedGroupIds]);
 
   // Filter type
   const [activeFilter, setActiveFilter] = useState<'all' | 'exact' | 'likely' | 'similar'>('all');
@@ -170,28 +184,27 @@ export const DuplicateDetectorModal: React.FC<DuplicateDetectorModalProps> = ({
 
   const visibleGroups = useMemo(() => {
     return duplicateGroups
-      .filter(g => !dismissedGroupIds.has(g.id))
+      .filter(g => !dismissedGroupIds.has(sigOf(g)))
       .filter(g => activeFilter === 'all' || g.type === activeFilter);
   }, [duplicateGroups, dismissedGroupIds, activeFilter]);
 
-  const handleDismissGroup = (groupId: string) => {
-    setDismissedGroupIds(prev => new Set(prev).add(groupId));
-    onShowToast('هر دو مورد حفظ شدند و از فهرست تکراری‌ها نادیده گرفته شدند.');
+  const ignoredCount = duplicateGroups.filter(g => dismissedGroupIds.has(sigOf(g))).length;
+
+  const handleDismissGroup = (group: DuplicateGroup) => {
+    setDismissedGroupIds(prev => new Set(prev).add(sigOf(group)));
+    onShowToast('موارد این گروه حفظ شدند و دیگر در این فهرست نمایش داده نمی‌شوند.');
   };
 
-  const handleDeleteEntry = (word: Word, group: DuplicateGroup) => {
-    if (window.confirm(`آیا از حذف واژهٔ «${fullWord(word)}» اطمینان دارید؟`)) {
-      onDeleteWord(word);
-      onShowToast(`واژهٔ «${fullWord(word)}» حذف شد.`);
-    }
+  // The app shows its own confirmation dialog, so no extra confirm here.
+  const handleDeleteEntry = (word: Word, _group: DuplicateGroup) => {
+    onDeleteWord(word);
   };
 
   const handlePickCanonical = (canonical: Word, group: DuplicateGroup) => {
     const duplicates = group.words.filter(w => w.id !== canonical.id);
-    if (window.confirm(`واژهٔ «${fullWord(canonical)}» به‌عنوان نسخه اصلی نگه داشته شود و ${duplicates.length} مورد تکراری دیگر حذف شوند؟`)) {
-      duplicates.forEach(d => onDeleteWord(d));
-      onShowToast(`نسخهٔ اصلی حفظ شد و ${duplicates.length} مورد تکراری حذف گردید.`);
-    }
+    if (!duplicates.length) return;
+    if (onDeleteWords) onDeleteWords(duplicates);
+    else duplicates.forEach(x => onDeleteWord(x));
   };
 
   // AI-Assisted Merge
@@ -323,7 +336,6 @@ Reply with ONLY a valid JSON object matching these keys:
   const handleConfirmMerge = () => {
     if (!mergePreview) return;
     onMergeWords(mergePreview.canonicalId, mergePreview.draft, mergePreview.removedIds);
-    setDismissedGroupIds(prev => new Set(prev).add(mergePreview.groupId));
     setMergePreview(null);
     onShowToast('ادغام با موفقیت ذخیره شد و سابقهٔ مرور منتقل گردید.');
   };
@@ -340,20 +352,20 @@ Reply with ONLY a valid JSON object matching these keys:
         <div className="px-5 py-3.5 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
           <div className="flex items-center gap-2">
             <span className="text-xl">🔍</span>
-            <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
+            <h3 className="font-bold text-lg md:text-lg text-slate-900 dark:text-slate-100">
               شناسایی و ادغام واژگان تکراری و مشابه
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
+            className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 px-3 py-1 rounded-xl text-sm md:text-base font-semibold transition"
           >
             ×
           </button>
         </div>
 
         {/* Filter bar */}
-        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 flex flex-wrap items-center justify-between gap-2 text-sm">
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-slate-600 dark:text-slate-400">فیلتر نوع:</span>
             {(['all', 'exact', 'likely', 'similar'] as const).map(tab => (
@@ -374,8 +386,11 @@ Reply with ONLY a valid JSON object matching these keys:
             ))}
           </div>
 
-          <span className="text-[#5d6676] dark:text-[#a3adbd]">
+          <span className="flex items-center gap-2 text-[#5d6676] dark:text-[#a3adbd]">
             {visibleGroups.length} گروه نیازمند بررسی
+            {ignoredCount > 0 && (
+              <button onClick={() => setDismissedGroupIds(new Set())} className="underline font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">↺ {ignoredCount} نادیده‌گرفته</button>
+            )}
           </span>
         </div>
 
@@ -383,18 +398,18 @@ Reply with ONLY a valid JSON object matching these keys:
         {mergePreview && (
           <div className="p-4 bg-blue-50/90 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-800 space-y-3">
             <div className="flex items-center justify-between">
-              <b className="text-xs md:text-sm text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+              <b className="text-sm md:text-base text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
                 <span>🪄</span> پیش‌نمایش و ویرایش واژهٔ ادغام‌شده
               </b>
               <button
                 onClick={() => setMergePreview(null)}
-                className="text-xs text-slate-500 hover:text-slate-700"
+                className="text-sm text-slate-500 hover:text-slate-700"
               >
                 ×
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-sm">
               <div>
                 <label className="block font-bold mb-1">واژه آلمانی:</label>
                 <input
@@ -441,7 +456,7 @@ Reply with ONLY a valid JSON object matching these keys:
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
               <div>
                 <label className="block font-bold mb-1">جمله مثال:</label>
                 <input
@@ -473,13 +488,13 @@ Reply with ONLY a valid JSON object matching these keys:
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 onClick={() => setMergePreview(null)}
-                className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold"
+                className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-sm font-semibold"
               >
                 انصراف
               </button>
               <button
                 onClick={handleConfirmMerge}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-1.5 rounded-xl text-xs font-bold shadow-xs transition"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-1.5 rounded-xl text-sm font-bold shadow-xs transition"
               >
                 ✓ تأیید و ثبت ادغام نهایی
               </button>
@@ -494,7 +509,7 @@ Reply with ONLY a valid JSON object matching these keys:
           className="p-4 overflow-y-auto flex-1 max-h-[58vh] space-y-4"
         >
           {visibleGroups.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
+            <div className="text-center py-12 text-slate-400 text-sm">
               🎉 موردی برای نمایش یافت نشد. همهٔ واژگان متمایز و پاکیزه هستند!
             </div>
           ) : (
@@ -508,25 +523,25 @@ Reply with ONLY a valid JSON object matching these keys:
                   {/* Group Header */}
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-800 pb-2">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
+                      <span className={`px-2 py-0.5 rounded-lg text-[13px] font-bold ${
                         group.type === 'exact' ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300' :
                         group.type === 'likely' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
                         'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
                       }`}>
                         {group.type === 'exact' ? 'تکرار قطعی' : group.type === 'likely' ? 'تکرار احتمالی' : 'واژه‌های مشابه'}
                       </span>
-                      <b className="text-xs md:text-sm font-sans" dir="ltr">{group.title}</b>
+                      <b className="text-sm md:text-base font-sans" dir="ltr">{group.title}</b>
                     </div>
 
                     <button
-                      onClick={() => handleDismissGroup(group.id)}
-                      className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      onClick={() => handleDismissGroup(group)}
+                      className="text-sm font-bold px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
-                      نگه‌داشتن هر دو (صرف‌نظر) ✕
+                      {keepAllLabel(group.words.length)} (صرف‌نظر) ✕
                     </button>
                   </div>
 
-                  <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+                  <p className="text-[13px] text-[#5d6676] dark:text-[#a3adbd]">
                     {group.reason}
                   </p>
 
@@ -535,12 +550,12 @@ Reply with ONLY a valid JSON object matching these keys:
                     {group.words.map(w => (
                       <div
                         key={w.id}
-                        className="bg-white dark:bg-[#1b2029] border border-slate-200/70 dark:border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
+                        className="bg-white dark:bg-[#1b2029] border border-slate-200/70 dark:border-slate-800 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-sm"
                       >
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2" dir="ltr">
                             {w.art && (
-                              <span className={`px-1.5 py-0.2 rounded font-bold text-xs ${
+                              <span className={`px-1.5 py-0.2 rounded font-bold text-sm ${
                                 w.art === 'der' ? 'text-blue-600 dark:text-blue-400' :
                                 w.art === 'die' ? 'text-pink-600 dark:text-pink-400' :
                                 'text-emerald-600 dark:text-emerald-400'
@@ -548,44 +563,44 @@ Reply with ONLY a valid JSON object matching these keys:
                                 {w.art}
                               </span>
                             )}
-                            <span className="font-bold text-sm text-slate-900 dark:text-slate-100 font-sans">
+                            <span className="font-bold text-lg text-slate-900 dark:text-slate-100 font-sans">
                               {w.de}
                             </span>
                             <span className="text-slate-500" dir="rtl">
                               — {w.fa}
                             </span>
                           </div>
-                          <div className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] flex flex-wrap gap-2">
+                          <div className="text-[13px] text-[#5d6676] dark:text-[#a3adbd] flex flex-wrap gap-2">
                             <span>دسته: {w.cat || 'بدون دسته'}</span>
                             <span>سطح: {w.lvl || '—'}</span>
                             <span>مرورها: {w.ok} درست / {w.bad} غلط</span>
                           </div>
                           {w.ex && (
-                            <p className="text-[11px] text-slate-600 dark:text-slate-300 italic truncate" dir="ltr">
+                            <p className="text-[13px] text-slate-600 dark:text-slate-300 italic truncate" dir="ltr">
                               "{w.ex}"
                             </p>
                           )}
                         </div>
 
                         {/* Individual Word Actions */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
                           <button
                             onClick={() => setViewWordId(w.id)}
-                            className="bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-lg text-[11px] font-bold transition"
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-lg text-[13px] font-bold transition"
                             title="مشاهدهٔ شناسنامهٔ کامل واژه"
                           >
                             👁 مشاهده
                           </button>
                           <button
                             onClick={() => handlePickCanonical(w, group)}
-                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg text-[11px] font-bold transition"
+                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg text-[13px] font-bold transition"
                             title="حفظ این مورد و حذف بقیه"
                           >
                             ⭐ انتخاب به‌عنوان اصل
                           </button>
                           <button
                             onClick={() => handleDeleteEntry(w, group)}
-                            className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 px-2 py-1 rounded-lg text-[11px] font-bold transition"
+                            className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 px-2 py-1 rounded-lg text-[13px] font-bold transition"
                             title="حذف این مورد"
                           >
                             🗑 حذف
@@ -600,7 +615,7 @@ Reply with ONLY a valid JSON object matching these keys:
                     <button
                       onClick={() => handleStartAiMerge(group)}
                       disabled={isMerging}
-                      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
+                      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-1.5 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
                     >
                       <span>{isMerging ? '⏳ در حال مقایسه و ادغام...' : '✨ ادغام هوشمند با هوش مصنوعی'}</span>
                     </button>
