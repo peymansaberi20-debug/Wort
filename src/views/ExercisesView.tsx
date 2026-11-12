@@ -14,6 +14,7 @@ import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { SchreibenCorrector } from '../components/SchreibenCorrector';
 import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
+import { PageOverlay } from '../components/PageOverlay';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
 import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lucide-react';
@@ -755,7 +756,7 @@ interface ExercisesViewProps {
 }
 
 export const ExercisesView: React.FC<ExercisesViewProps> = ({
-  words,
+  words: allWords,
   settings,
   activeMode,
   practiceWordIds,
@@ -769,6 +770,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   paused,
   onUpdateSettings
 }) => {
+  // Only words of the categories chosen in Settings ("active categories") feed the exercises,
+  // except the flashcard box, the free category review, free sentence writing and Schreiben correction.
+  const words = useMemo(() => {
+    const cats = settings?.activeCats;
+    const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'errnb';
+    if (exempt || !cats || cats.length === 0 || (practiceWordIds && practiceWordIds.length > 0)) return allWords;
+    const allowed = new Set(cats);
+    return allWords.filter(w => allowed.has(w.cat));
+  }, [allWords, settings?.activeCats, activeMode, practiceWordIds]);
   const pausedRef = useRef<boolean>(!!paused);
   pausedRef.current = !!paused;
   const [faShown, setFaShown] = useState(false);
@@ -1592,65 +1602,87 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   // ==========================================
         
-  const [exTab, setExTab] = useState<'wortschatz' | 'grammatik'>('wortschatz');   
+  const [exTab, setExTab] = useState<'wortschatz' | 'grammatik'>('wortschatz');
+  const [showMore, setShowMore] = useState(false);   
   // If NO active mode is selected: Show Menu
   // ==========================================
   if (!activeMode) {
+    const otherList = exTab === 'wortschatz' ? WORTSCHATZ_MODES.filter(m => m !== 'flash') : GRAMMATIK_MODES;
+    const activeCatCount = settings?.activeCats?.length || 0;
     return (
       <div className="space-y-4 text-right max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-          <h2 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">
-            🎯 مرکز تمرین‌های زبان آلمانی
-          </h2>
-          <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-            مهارت‌های واژگان، گرامر، زمان‌ها و آرتیکل‌ها را با سیستم‌های فاصله‌دار و تمرین‌های تعاملی تقویت کنید.
-          </p>
-        </div>
-
-        <div className="space-y-2.5">
-          <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => setExTab('wortschatz')}
-              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-xs' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] text-slate-600 dark:text-slate-300'}`}
-              >
-              📚 Wortschatz üben
-            </button>
-            <button
-              onClick={() => setExTab('grammatik')}
-              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-xs' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] text-slate-600 dark:text-slate-300'}`}
-              >
-              🧩 Grammatik üben             
-            </button>
+        {/* 1. Flashcards (Leitner box) — big, enters directly */}
+        <button
+          onClick={() => onSelectMode('flash')}
+          className="w-full text-right rounded-3xl p-6 bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white shadow-xl active:scale-[.99] transition relative overflow-hidden"
+        >
+          <span className="absolute -top-8 -left-6 w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+          <div className="relative flex items-center gap-4">
+            <span className="text-6xl" aria-hidden="true">🃏</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-2xl font-extrabold">فلش‌کارت</div>
+              <div className="text-sm text-white/85 mt-1">جعبهٔ لایتنر — مرور هوشمند با تکرار فاصله‌دار</div>
+              <div className="text-xs text-white/75 mt-2.5 flex flex-wrap gap-2">
+                <span className="bg-white/15 rounded-full px-2.5 py-0.5">📚 {words.length} واژه</span>
+                {activeCatCount > 0 && <span className="bg-white/15 rounded-full px-2.5 py-0.5">🗂 {activeCatCount} دستهٔ فعال</span>}
+              </div>
+            </div>
+            <span className="text-4xl text-white/80" aria-hidden="true">‹</span>
           </div>
-          {(exTab === 'wortschatz' ? WORTSCHATZ_MODES : GRAMMATIK_MODES).map(mode => {
-            const info = EXERCISE_NAMES[mode];
-            return (
-              <div
-                key={mode}
-                className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 shadow-xs"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-2xl flex-shrink-0">{info.icon}</span>
-                  <div className="min-w-0">
-                    <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">
-                      {info.title}
-                    </b>
-                    <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">
-                      {info.desc}
-                    </span>
-                  </div>
-                </div>
+        </button>
 
+        {/* 2. Other exercises (opens a page) */}
+        <button
+          onClick={() => setShowMore(true)}
+          className="w-full text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
+        >
+          <span className="text-4xl" aria-hidden="true">🧩</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">سایر تمرینات</div>
+            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">واژگان، گرامر، نوشتار، دیکته، چیدن جمله و …</div>
+          </div>
+          <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
+        </button>
+
+        {showMore && (
+          <PageOverlay icon="🧩" title="سایر تمرینات" subtitle="واژگان و گرامر" onClose={() => setShowMore(false)}>
+            <div className="space-y-2.5 text-right">
+              <div className="flex gap-2 mb-3">
                 <button
-                  onClick={() => onSelectMode(mode)}
-                  className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition flex-shrink-0"
+                  onClick={() => setExTab('wortschatz')}
+                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a]'}`}
                 >
-                  شروع ▶
+                  📚 Wortschatz üben
+                </button>
+                <button
+                  onClick={() => setExTab('grammatik')}
+                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a]'}`}
+                >
+                  🧩 Grammatik üben
                 </button>
               </div>
-            );
-          })}
-        </div>
+              {otherList.map(mode => {
+                const info = EXERCISE_NAMES[mode];
+                return (
+                  <div
+                    key={mode}
+                    onClick={() => onSelectMode(mode)}
+                    className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-2xl flex-shrink-0">{info.icon}</span>
+                      <div className="min-w-0">
+                        <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                        <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                      </div>
+                    </div>
+                    <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs flex-shrink-0">شروع ▶</span>
+                  </div>
+                );
+              })}
+            </div>
+          </PageOverlay>
+        )}
       </div>
     );
   }
