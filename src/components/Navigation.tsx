@@ -10,9 +10,7 @@ interface NavigationProps {
 const TABS: { id: NavTab; label: string; icon: string }[] = [
   { id: 'dash', label: 'داشبورد', icon: '🏠' },
   { id: 'prac', label: 'تمرین‌ها', icon: '🎯' },
-  { id: 'lib', label: 'واژگان', icon: '📚' },
-  { id: 'io', label: 'ورود/خروج', icon: '💾' },
-  { id: 'set', label: 'تنظیمات', icon: '⚙️' }
+  { id: 'lib', label: 'واژگان', icon: '📚' }
 ];
 
 export const Navigation: React.FC<NavigationProps> = ({ currentTab, onSelectTab }) => {
