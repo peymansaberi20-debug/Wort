@@ -6,6 +6,7 @@ import { GeminiKeyCard } from '../components/GeminiKeyCard';
 import { PROVIDERS, describeAiError, getActiveProvider, getApiKey, getModel, testConnection } from '../utils/aiProvider';
 
 interface SettingsViewProps {
+  section?: string;
   settings: AppSettings;
   words: Word[];
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
@@ -15,6 +16,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
+  section,
   settings,
   words,
   onUpdateSettings,
@@ -143,8 +145,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const show = (k: string) => !section || section === k;
+
   return (
     <div className="space-y-5 text-right max-w-3xl mx-auto pb-10">
+      {show('appearance') && (<>
       {/* ========================================================= */}
       {/* 1. Appearance & Flashcard Direction (Section 2) */}
       {/* ========================================================= */}
@@ -184,7 +189,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
+      </>)}
 
+      {show('learning') && (<>
       {/* ========================================================= */}
       {/* 2. Daily Learning Limits & Session Order (Section 3) */}
       {/* ========================================================= */}
@@ -347,6 +354,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </p>
       </div>
 
+      </>)}
+      {show('audio') && (<>
       {/* ========================================================= */}
       {/* 5. Pronunciation and Audio Settings (Section 6) */}
       {/* ========================================================= */}
@@ -505,6 +514,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
+      </>)}
+      {show('goal') && (<>
       {/* ========================================================= */}
       {/* 6. Daily Goal & Backup Reminder (Section 7) */}
       {/* ========================================================= */}
@@ -548,6 +559,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
+      </>)}
       {/* ========================================================= */}
       {/* 7. Gemini AI Integration (Server-Side) */}
       {/* ========================================================= */}
@@ -578,8 +590,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      <GeminiKeyCard />
+      {show('ai') && <GeminiKeyCard />}
 
+      {show('data') && (<>
       {/* ========================================================= */}
       {/* 8. Data Management & Destructive Actions (Section 8) */}
       {/* ========================================================= */}
@@ -588,7 +601,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>⚠️</span> مدیریت داده‌ها و عملیات حساس
         </h3>
         <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-          لطفاً پیش از انجام این عملیات، در صورت نیاز از تب «ورود و صدور» یک فایل پشتیبان دریافت کنید.
+          لطفاً پیش از انجام این عملیات، در صورت نیاز از منوی ⋮ ← «ذخیره و پشتیبان‌گیری» یک فایل پشتیبان دریافت کنید.
         </p>
 
         <div className="space-y-3 pt-2">
@@ -640,6 +653,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 };
