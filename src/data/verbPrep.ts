@@ -1,5 +1,5 @@
 /** Verben mit Präpositionen: verb | preposition | case (A = Akkusativ, D = Dativ) | Persian | example (preposition appears as its own word). */
-export interface VP { id: string; verb: string; prep: string; kase: 'A' | 'D'; fa: string; ex: string; custom?: boolean }
+export interface VP { id: string; verb: string; prep: string; kase: 'A' | 'D'; fa: string; ex: string; custom?: boolean; lvl?: string }
 
 export const PREPS = ['an', 'auf', 'aus', 'bei', 'für', 'gegen', 'in', 'mit', 'nach', 'über', 'um', 'von', 'vor', 'zu'];
 
@@ -165,3 +165,11 @@ export const splitEx = (ex: string, prep: string): [string, string, string] | nu
   return [toks.slice(0, i).concat(m ? m[1] : '').join(' ').replace(/\s+$/, i > 0 ? ' ' : ''), m ? m[2] : core, (m ? m[3] : '') + (i < toks.length - 1 ? ' ' : '') + toks.slice(i + 1).join(' ')];
 };
 export const blankEx = (ex: string, prep: string): string => { const p = splitEx(ex, prep); return p ? `${p[0]}${p[0] && !p[0].endsWith(' ') ? ' ' : ''}____${p[2]}` : ex; };
+
+/** CEFR level of a verb: A1–A2 / B1 (default) / B2 / C1. User-added verbs carry their own level in `lvl`. */
+export const LEVELS = ['A1–A2', 'B1', 'B2', 'C1'];
+const ids = (s: string) => new Set(s.split(',').map(x => x.trim()));
+const L_A2 = ids('denken|an, schreiben|an, arbeiten|an, teilnehmen|an, warten|auf, sich freuen|auf, antworten|auf, aufpassen|auf, Lust haben|auf, stammen|aus, sich bedanken|bei, sich entschuldigen|bei, helfen|bei, bleiben|bei, sich interessieren|für, danken|für, sich bedanken|für, sprechen|mit, anfangen|mit, aufhören|mit, telefonieren|mit, sich treffen|mit, sich verabreden|mit, fragen|nach, suchen|nach, riechen|nach, schmecken|nach, sprechen|über, sich freuen|über, lachen|über, bitten|um, sich kümmern|um, träumen|von, erzählen|von, sich verabschieden|von, Angst haben|vor, einladen|zu, gehören|zu, gratulieren|zu');
+const L_B2 = ids('leiden|an, zweifeln|an, sich beteiligen|an, liegen|an, sterben|an, angewiesen sein|auf, sich beziehen|auf, verzichten|auf, sich eignen|für, sich einsetzen|für, gelten|für, sich wehren|gegen, stimmen|gegen, etwas haben|gegen, investieren|in, umgehen|mit, ausgehen|von, überzeugen|von, sich richten|nach, sich streiten|über, kämpfen|um, raten|zu, sich entschließen|zu, zwingen|zu, beitragen|zu, flüchten|vor, Respekt haben|vor, sich schützen|vor');
+const L_C1 = ids('beruhen|auf, bestehen|auf, verfügen|über, verstoßen|gegen, streben|nach, neigen|zu, sich auseinandersetzen|mit, folgen|aus, sich einmischen|in, sich täuschen|in, sich irren|in, trauern|um, sich bemühen|um');
+export const levelOf = (v: VP): string => v.lvl || (L_A2.has(v.id) ? 'A1–A2' : L_C1.has(v.id) ? 'C1' : L_B2.has(v.id) ? 'B2' : 'B1');
