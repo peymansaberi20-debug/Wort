@@ -3,6 +3,7 @@ import { Word } from '../types';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { describeAiError, generateWithImages } from '../utils/aiProvider';
 import { ShadowingModal } from './ShadowingModal';
+import { addErrors } from '../utils/errorBook';
 
 /** Synthetic target for pronunciation practice (no vocabulary item involved). */
 const SELF_WORD: Word = {
@@ -36,6 +37,8 @@ const BADGE: Record<string, string> = {
 };
 const TEXT_TYPES = ['تشخیص خودکار', 'نامهٔ رسمی / ایمیل رسمی', 'نامهٔ غیررسمی / پیام به دوست', 'نظر و استدلال (Meinung)', 'توصیف و گزارش', 'داستان و تجربه', 'درخواست / شکایت / تماس با اداره'];
 const LEVELS = ['A2', 'B1', 'B2', 'C1'];
+const TASK_KINDS = ['ایمیل کاری (حسابداری / اداری)', 'درخواست کار (Bewerbung)', 'ایمیل به صاحب‌خانه یا Hausverwaltung', 'نامه به بیمه یا اداره', 'ایمیل به پزشک / وقت گرفتن', 'نظر و استدلال (Meinung)', 'پیام غیررسمی به دوست', 'گزارش از یک تجربه'];
+interface Task { title: string; situation: string; points: string[]; min: number }
 
 const card = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3';
 const clamp = (n: any) => Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
@@ -81,6 +84,10 @@ export const SchreibenCorrector: React.FC<{ onShowToast: (m: string, e?: boolean
   const [report, setReport] = useState<Report | null>(null);
   const [showOk, setShowOk] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
+  const [savedErr, setSavedErr] = useState(0);
+  const [task, setTask] = useState<Task | null>(null);
+  const [taskKind, setTaskKind] = useState(TASK_KINDS[0]);
+  const [taskBusy, setTaskBusy] = useState(false);
   const camRef = useRef<HTMLInputElement>(null);
   const galRef = useRef<HTMLInputElement>(null);
 
@@ -116,7 +123,7 @@ Rules: copy EXACTLY what the writer wrote, INCLUDING all spelling and grammar mi
     setBusy(true); setErrMsg(''); setReport(null);
     const prompt = `You are an experienced German teacher and examiner (Korrektor) for Persian-speaking learners. Correct the learner's WHOLE text and give feedback in PERSIAN (German examples stay German).
 THINK LIKE A NATIVE GERMAN WRITER: do not judge by word-for-word translation from Persian. Check not only grammar and vocabulary but also whether the text sounds natural, whether the text type (Textsorte) and register fit, and whether the content is logical.
-Target level: ${level}. Declared text type: ${textType === TEXT_TYPES[0] ? 'unknown - detect it' : textType}.
+${task ? 'TASK GIVEN TO THE LEARNER (also check task fulfilment: is every Leitpunkt covered, is the length sufficient, does the register fit? Name missing points in logic_fa):\nSituation: ' + task.situation + '\nLeitpunkte: ' + task.points.join(' | ') + '\nMinimum words: ' + task.min + '\n' : ''}Target level: ${level}. Declared text type: ${textType === TEXT_TYPES[0] ? 'unknown - detect it' : textType}.
 CHECK ALL OF THESE:
 1) Grammar: Artikel/Genus/Kasus, Adjektivendungen, Verbposition (V2, Nebensatz verb-final, Inversion), Konjugation, Tempus and Perfekt auxiliary (haben/sein), Passiv, Konjunktiv II, trennbare Verben, Präpositionen with Kasus, Pronomen, Plural, Negation (nicht/kein).
 2) Spelling and punctuation: noun capitalisation, ß/ss, commas (dass/weil/Relativsatz/Infinitivgruppen), sentence ends.
@@ -149,8 +156,28 @@ ${t}
         corrected_de: str(r.corrected_de), natural_de: str(r.natural_de),
         vocab: arr(r.vocab).map((v: any) => ({ de: str(v.de), fa: str(v.fa), note_fa: str(v.note_fa) }))
       });
+      const bads = arr(r.sentences)
+        .filter((s: any) => !(s.ok && !arr(s.issues).length) && str(s.original) && str(s.corrected))
+        .map((s: any) => ({ original: str(s.original), corrected: str(s.corrected), type: str(arr(s.issues)[0]?.type), why: arr(s.issues).map((i: any) => `${str(i.type)}: ${str(i.why_fa)}`).join(' | ') }));
+      setSavedErr(addErrors(bads));
     } catch (e: any) { setErrMsg(describeAiError ? describeAiError(e) : (e?.message || 'خطا')); }
     finally { setBusy(false); }
+  };
+
+  const makeTask = async () => {
+    if (taskBusy) return;
+    setTaskBusy(true); setErrMsg('');
+    const prompt = `Create ONE realistic German writing task (Schreibaufgabe) for a learner at level ${level}. Kind of text: ${taskKind}. Setting: everyday life or work in Austria (Vienna) where natural; for work topics use accounting/office contexts (Rechnung, Mahnung, Umsatzsteuer, Bewerbung als Buchhalter).
+Return ONLY valid JSON: {"title":"short Persian title","situation":"2-3 sentences in German describing the situation and who the learner writes to","points":["3 or 4 Leitpunkte in German, each a short sentence of what must be mentioned"],"min":80}
+"min" = minimum words (A2: 60, B1: 80, B2: 120, C1: 150).`;
+    try {
+      const out = await generateWithGemini(prompt, { timeoutMs: 60000, retries: 1 });
+      const r: any = parseAI(out)[0] || {};
+      if (!str(r.situation) || !arr(r.points).length) throw new Error('موضوع ساخته نشد. دوباره تلاش کن.');
+      setTask({ title: str(r.title), situation: str(r.situation), points: arr(r.points).map(str), min: Number(r.min) || 80 });
+      setReport(null);
+    } catch (e: any) { setErrMsg(describeAiError ? describeAiError(e) : (e?.message || 'خطا')); }
+    finally { setTaskBusy(false); }
   };
 
   const copy = (s: string) => { try { navigator.clipboard.writeText(s); onShowToast('کپی شد.'); } catch { onShowToast('کپی ممکن نشد.', true); } };
@@ -160,6 +187,26 @@ ${t}
 
   return (
     <div className="space-y-4 text-right max-w-3xl mx-auto">
+      {/* 0. optional task (Aufgabe) */}
+      <div className={card}>
+        <div className="font-extrabold text-sm">🎯 موضوع برای نوشتن (اختیاری)</div>
+        <p className="text-[12px] leading-6 text-[#5d6676] dark:text-[#a3adbd]">اگر موضوعی نداری، برنامه مثل آزمون یک «Aufgabe» می‌دهد. بعد از نوشتن، تصحیح هم بررسی می‌کند که همهٔ نکته‌ها را پوشش داده‌ای.</p>
+        <div className="flex gap-2">
+          <select value={taskKind} onChange={e => setTaskKind(e.target.value)} className="flex-1 min-w-0 bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2 py-2 text-xs font-bold outline-none">
+            {TASK_KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <button onClick={makeTask} disabled={taskBusy} className="px-3 h-10 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-xs disabled:opacity-40 flex-shrink-0">{taskBusy ? '⏳ …' : task ? '🔄 موضوع دیگر' : '🎯 موضوع بده'}</button>
+        </div>
+        {task && (
+          <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 space-y-2">
+            <div className="flex items-start justify-between gap-2"><b className="text-sm">{task.title}</b><button onClick={() => setTask(null)} className="text-red-600 text-lg leading-none">✕</button></div>
+            <div dir="ltr" className="text-sm font-sans leading-7">{task.situation}</div>
+            <ul dir="ltr" className="text-sm font-sans leading-7 list-disc pl-5">{task.points.map((p, i) => <li key={i}>{p}</li>)}</ul>
+            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">حداقل {task.min} کلمه</div>
+          </div>
+        )}
+      </div>
+
       {/* 1. photos */}
       <div className={card}>
         <div className="font-extrabold text-sm flex items-center justify-between"><span>📷 عکس متن نوشته‌شده (چند صفحه)</span>{(pages.length > 0 || text) && <button onClick={reset} className="text-xs text-red-600 font-bold">🔄 شروع دوباره</button>}</div>
@@ -229,6 +276,7 @@ ${t}
               <Score label="منطق و محتوا" n={report.scores.logic} />
             </div>
             {report.summary_fa && <p className="text-sm leading-7">{report.summary_fa}</p>}
+            {savedErr > 0 && <div className="text-xs font-bold text-indigo-700 dark:text-indigo-300">📓 {savedErr} جمله به «دفتر خطاها» اضافه شد؛ در تمرین «دفتر خطاها» مرورشان کن.</div>}
           </div>
 
           {(report.strengths_fa.length > 0 || report.priorities_fa.length > 0) && (
