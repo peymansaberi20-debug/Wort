@@ -317,63 +317,60 @@ const seg = pluralSegments2();
         </div>
 
         {/* Modal Hero / Word Header */}
-        <div className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white p-5 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2" dir="ltr">
-            {articleBadge()}
-            <span className="text-2xl md:text-3xl font-extrabold tracking-wide font-sans">{word.de}</span>
-            <button
-              onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
-              className="bg-white/20 hover:bg-white/30 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm transition ml-1"
-              title="پخش تلفظ صوتی"
-            >
-              🔊
-            </button>
+        <div className="bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white px-4 pt-3 pb-5 text-center">
+          {/* 1. status line (small) */}
+          <div className="text-[10px] md:text-[11px] text-white/70 font-medium leading-5">
+            {dueText(word)} · فاصله: {word.ivl} روز · درست: {word.ok} · غلط: {word.bad}
           </div>
 
-          {/* Phase 3: plural form shown prominently beneath the word */}
-          {renderPluralBlock()}
-          {/* Translation with toggle or reveal */}
-          <div className="mt-2 text-center" dir="rtl">
-            {showFa && word.fa ? (
-              <p className="text-xl md:text-2xl font-bold text-amber-200">{word.fa}</p>
-            ) : null}
-            <button
-              onClick={() => setShowFa(value => !value)}
-              className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-4 py-1.5 text-sm font-medium transition"
-              aria-expanded={showFa}
-            >
-              {showFa ? '🙈 مخفی کردن ترجمه‌ها' : '👁 نمایش همه ترجمه‌ها'}
-            </button>
-          </div>
-
-          {/* Badges */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3.5">
+          {/* 2. category / part of speech / level */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1.5">
             {word.cat && (
-              <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium">
-                📁 {word.cat}
-              </span>
+              <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium">📁 {word.cat}</span>
             )}
             {word.pos && (
-              <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium">
-                {word.pos}
-              </span>
+              <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium">{word.pos}</span>
             )}
             {word.lvl && (
-              <span className="bg-amber-400 text-slate-900 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                {word.lvl}
-              </span>
+              <span className="bg-amber-400 text-slate-900 text-xs px-2.5 py-0.5 rounded-full font-bold">{word.lvl}</span>
             )}
-          
             {isLeech(word) && (
-              <span className="bg-red-500 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">
-                🩸 واژه سخت
-              </span>
+              <span className="bg-red-500 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">🩸 واژه سخت</span>
             )}
           </div>
 
-          <div className="mt-3 text-xs text-white/80">
-            {dueText(word)} • فاصله: {word.ivl} روز • درست: {word.ok} • غلط: {word.bad}
+          {/* 3. the word in a card, with audio and translation toggle (icons only) */}
+          <div dir="ltr" className="mt-3 mx-auto max-w-md rounded-2xl bg-white dark:bg-[#10151f] text-slate-900 dark:text-white shadow-lg ring-1 ring-white/40 px-4 py-3.5">
+            <div className="flex items-center justify-center gap-2.5 flex-wrap">
+              {articleBadge()}
+              <span className="text-3xl md:text-4xl font-extrabold tracking-wide font-sans">{word.de}</span>
+              <button
+                onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
+                className="w-10 h-10 rounded-full bg-[#1f5fbf]/10 hover:bg-[#1f5fbf]/20 text-[#1f5fbf] dark:text-[#7fb0ff] flex items-center justify-center text-lg transition"
+                title="پخش تلفظ صوتی" aria-label="پخش تلفظ صوتی"
+              >
+                🔊
+              </button>
+              <button
+                onClick={() => setShowFa(value => !value)}
+                className="w-10 h-10 rounded-full bg-amber-400/20 hover:bg-amber-400/30 flex items-center justify-center text-lg transition"
+                title={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
+                aria-label={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
+                aria-expanded={showFa}
+              >
+                {showFa ? '🙈' : '👁'}
+              </button>
+            </div>
+            {renderPluralBlock()}
           </div>
+
+          {/* 4. Persian translation box — same style family as the English-equivalent box */}
+          {showFa && word.fa && (
+            <div dir="rtl" className="mt-2.5 mx-auto max-w-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 text-sm flex items-center justify-between gap-3 text-slate-900 dark:text-slate-100">
+              <span className="font-bold text-amber-700 dark:text-amber-300 flex-shrink-0">🇮🇷 معادل فارسی:</span>
+              <span className="text-lg md:text-xl font-bold text-left">{word.fa}</span>
+            </div>
+          )}
         </div>
 
         {/* Modal Body */}
