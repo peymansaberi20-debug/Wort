@@ -23,6 +23,8 @@ import {
 } from './utils/storage';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
+import { PageOverlay } from './components/PageOverlay';
+import { BackupPanel, RestorePanel } from './components/BackupModal';
 import { Toast } from './components/Toast';
 import { WordDetailModal } from './components/WordDetailModal';
 import { QualityControlModal } from './components/QualityControlModal';
@@ -48,6 +50,7 @@ export default function App() {
   const [state, setState] = useState<AppState>(() => loadState());
   const [extData, setExtData] = useState(() => getExtData());
   const [currentTab, setCurrentTab] = useState<NavTab>('dash');
+  const [overlay, setOverlay] = useState<null | { kind: 'backup' | 'restore' | 'io' | 'settings'; section?: string }>(null);
   const [historyStack, setHistoryStack] = useState<NavTab[]>([]);
 
   // Active exercise mode if inside practice
@@ -136,6 +139,8 @@ export default function App() {
 
   // Handle Tab Navigation with bugfix for Request #5
   const navigateToTab = (tab: NavTab) => {
+    if (tab === 'set') { setOverlay({ kind: 'settings' }); return; }
+    if (tab === 'io') { setOverlay({ kind: 'io' }); return; }
     if (tab !== currentTab || activeExercise) {
       setHistoryStack(prev => [...prev.slice(-25), currentTab]);
     }
@@ -168,6 +173,7 @@ export default function App() {
   };
 
   const handleBack = () => {
+    if (overlay) { setOverlay(null); return; }
     // Word edit form opened from the quality control list: close it and show the list again
     if (editingWordId && (isQualityModalOpen || isDuplicateModalOpen)) {
       setEditingWordId(null);
@@ -557,6 +563,15 @@ export default function App() {
     showToast('نسخه پشتیبان با موفقیت بازیابی شد.');
   };
 
+  const backupDue = (() => {
+    try {
+      const days = state.set.bkDays || 0;
+      if (!days || !state.words.length) return false;
+      const last = Number(localStorage.getItem('wb_last_backup') || 0);
+      return !last || Date.now() - last > days * 86400000;
+    } catch { return false; }
+  })();
+
   return (
     <div className="min-h-screen bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans transition-colors duration-200">
       {/* Top Application Header */}
@@ -566,7 +581,14 @@ export default function App() {
         theme={state.set.theme}
         onToggleTheme={handleToggleTheme}
         onSaveAndExit={handleSaveAndExit}
+        onNavigate={(t: string) => {
+          if (t === 'backup' || t === 'restore' || t === 'io') setOverlay({ kind: t });
+          else if (t.startsWith('set')) setOverlay({ kind: 'settings', section: t.split(':')[1] || undefined });
+        }}
+        backupDue={backupDue}
+        wordCount={state.words.length}
         canGoBack={
+          !!overlay ||
           historyStack.length > 0 ||
           !!activeExercise ||
           !!selectedWord ||
@@ -748,20 +770,36 @@ export default function App() {
                 />
               )}
 
-              {currentTab === 'io' && (
+            </>
+          )}
+        </main>
+      </div>
+
+      {overlay && (() => {
+        const SET_T: Record<string, [string, string]> = { appearance: ['🃏', 'ظاهر و فلش‌کارت'], learning: ['🎓', 'یادگیری و مرور'], audio: ['🔊', 'صدا و تلفظ'], goal: ['🎯', 'هدف روزانه و یادآوری'], ai: ['🤖', 'اتصال به هوش مصنوعی'], data: ['⚠️', 'مدیریت داده‌ها'] };
+        const meta: [string, string] =
+          overlay.kind === 'backup' ? ['💾', 'ذخیره و پشتیبان‌گیری'] :
+          overlay.kind === 'restore' ? ['♻️', 'بازیابی پشتیبان'] :
+          overlay.kind === 'io' ? ['📥', 'ورود واژگان'] :
+          (overlay.section && SET_T[overlay.section]) || ['⚙️', 'تنظیمات'];
+        return (
+          <PageOverlay icon={meta[0]} title={meta[1]} onClose={() => setOverlay(null)}>
+            {overlay.kind === 'backup' && <BackupPanel state={state} words={state.words} onShowToast={showToast} />}
+            {overlay.kind === 'restore' && <RestorePanel state={state} onRestore={s => { handleRestoreBackup(s); setOverlay(null); }} onShowToast={showToast} />}
+            {overlay.kind === 'io' && (
                 <ImportExportView
                   state={state}
                   words={state.words}
                   onImportWords={handleImportWords}
                   onRestoreBackup={handleRestoreBackup}
-                  onOpenImageExtract={() => setIsImageExtractOpen(true)}
+                  onOpenImageExtract={() => { setOverlay(null); setIsImageExtractOpen(true); }}
                   onOpenHelp={setActiveHelpTopic}
                   onShowToast={showToast}
                 />
-              )}
-
-              {currentTab === 'set' && (
+            )}
+            {overlay.kind === 'settings' && (
                 <SettingsView
+                  section={overlay?.section}
                   settings={state.set}
                   words={state.words}
                   onUpdateSettings={newSet => {
@@ -781,11 +819,10 @@ export default function App() {
                   }}
                   onShowToast={showToast}
                 />
-              )}
-            </>
-          )}
-        </main>
-      </div>
+            )}
+          </PageOverlay>
+        );
+      })()}
 
       {/* Footer */}
       <footer className="border-t border-[#dde1ea] dark:border-[#333b4a] pt-5 pb-[calc(6.25rem+env(safe-area-inset-bottom))] md:pb-6 px-4 text-center text-xs text-[#475569] dark:text-[#c0c8d5] space-y-1.5 mt-auto">
