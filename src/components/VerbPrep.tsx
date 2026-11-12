@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { PREPS, VERB_PREPS, VP, blankEx, daForm, makeId, parseVP, splitEx, woForm } from '../data/verbPrep';
+import { LEVELS, PREPS, VERB_PREPS, VP, blankEx, daForm, levelOf, makeId, parseVP, splitEx, woForm } from '../data/verbPrep';
 import { speak } from '../utils/audio';
 import { addErrors } from '../utils/errorBook';
 import { generateWithGemini, parseAI } from '../utils/ai';
@@ -29,6 +29,9 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
   const [stats, setStats] = useState<Record<string, St>>(() => load(STATS_KEY, {}));
   const all = useMemo(() => [...VERB_PREPS, ...custom], [custom]);
   const [fPrep, setFPrep] = useState('');
+  const [fLvl, setFLvl] = useState<string>(() => load<string>('wb_vprep_lvl', ''));
+  const setLvl = (x: string) => { setFLvl(x); save('wb_vprep_lvl', x); };
+  const [addLvl, setAddLvl] = useState('B1');
   // practice session
   const [count, setCount] = useState(10);
   const [sess, setSess] = useState<null | { q: string[]; i: number; ok: number; bad: number; again: Set<string> }>(null);
@@ -41,7 +44,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
 
   const byId = useMemo(() => new Map(all.map(v => [v.id, v])), [all]);
   const learned = all.filter(v => (stats[v.id]?.box || 0) >= 3).length;
-  const pool = all.filter(v => !fPrep || v.prep === fPrep);
+  const pool = all.filter(v => (!fPrep || v.prep === fPrep) && (!fLvl || levelOf(v) === fLvl));
 
   const start = () => {
     const now = Date.now();
@@ -88,10 +91,10 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
   const askAi = async () => {
     if (aiBusy) return; setAiBusy(true);
     const have = all.filter(v => v.prep === aiPrep).map(v => v.verb).join(', ');
-    const prompt = `List 8 more common German verbs (level B1-B2) that take the preposition "${aiPrep}" and are NOT in this list: ${have}. Return ONLY a JSON array: [{"verb":"infinitive (with sich if reflexive)","prep":"${aiPrep}","kase":"A or D = case after the preposition","fa":"short Persian meaning","ex":"a simple German example sentence in which the preposition appears as a separate word, not contracted"}]`;
+    const prompt = `List 8 more common German verbs (CEFR level ${addLvl === 'A1–A2' ? 'A2' : addLvl}) that take the preposition "${aiPrep}" and are NOT in this list: ${have}. Return ONLY a JSON array: [{"verb":"infinitive (with sich if reflexive)","prep":"${aiPrep}","kase":"A or D = case after the preposition","fa":"short Persian meaning","ex":"a simple German example sentence in which the preposition appears as a separate word, not contracted"}]`;
     try {
       const arr = parseAI(await generateWithGemini(prompt, { timeoutMs: 60000, retries: 1 })) as any[];
-      const items = parseVP(arr.map(o => `${o.verb}|${String(o.prep || aiPrep).toLowerCase()}|${o.kase}|${o.fa}|${o.ex}`).join('\n'), true).filter(v => splitEx(v.ex, v.prep));
+      const items = parseVP(arr.map(o => `${o.verb}|${String(o.prep || aiPrep).toLowerCase()}|${o.kase}|${o.fa}|${o.ex}`).join('\n'), true).filter(v => splitEx(v.ex, v.prep)).map(v => ({ ...v, lvl: addLvl }));
       if (!items.length) throw new Error('پاسخ نامعتبر بود.');
       addCustom(items);
     } catch (e: any) { onShowToast(e?.message || 'خطا در هوش مصنوعی', true); }
@@ -117,8 +120,14 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
               <button key={p || 'all'} onClick={() => setFPrep(p)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${fPrep === p ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>{p || 'همه'}</button>
             ))}
           </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]">سطح:</span>
+            {['', ...LEVELS].map(l => (
+              <button key={l || 'all'} onClick={() => setLvl(l)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${fLvl === l ? 'bg-[#6b4fd8] text-white border-[#6b4fd8]' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>{l || 'همه'}</button>
+            ))}
+          </div>
           {(fPrep ? [fPrep] : PREPS).map(p => {
-            const list = all.filter(v => v.prep === p); if (!list.length) return null;
+            const list = all.filter(v => v.prep === p && (!fLvl || levelOf(v) === fLvl)); if (!list.length) return null;
             return (
               <div key={p} className={card + ' !p-3'}>
                 <div className="flex items-center justify-between">
@@ -130,6 +139,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
                     <div className="flex items-center gap-2 flex-wrap">
                       <b dir="ltr" className="font-sans text-base">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
                       <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
                       {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600">✓ یاد گرفته</span>}
                     </div>
@@ -148,13 +158,14 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
         <div className={card}>
           <div className="font-extrabold text-sm">🔗 فعل + حرف اضافه (Verben mit Präpositionen)</div>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2"><div className="font-extrabold text-lg" dir="ltr">{all.length}</div><div className="text-[11px]">فعل</div></div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2"><div className="font-extrabold text-lg" dir="ltr">{pool.length}</div><div className="text-[11px]">فعل در این فیلتر</div></div>
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 py-2"><div className="font-extrabold text-lg text-emerald-700 dark:text-emerald-300" dir="ltr">{learned}</div><div className="text-[11px]">یاد گرفته</div></div>
             <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 py-2"><div className="font-extrabold text-lg text-amber-700 dark:text-amber-300" dir="ltr">{all.filter(v => stats[v.id] && stats[v.id].due <= Date.now()).length}</div><div className="text-[11px]">نوبت مرور</div></div>
           </div>
           <p className="text-[12px] leading-6 text-[#5d6676] dark:text-[#a3adbd]">هر سؤال دو قدم دارد: ۱) حرف اضافهٔ درست، ۲) حالت دستوری (Akk یا Dat). اول چهارگزینه‌ای است؛ وقتی فعل را بهتر بلد شدی باید خودت تایپ کنی. فعل‌های غلط دوباره در همین جلسه می‌آیند و به «دفتر خطاها» هم می‌روند.</p>
-          <div className="grid grid-cols-2 gap-2">
-            {PrepSel(fPrep, setFPrep, 'همهٔ حرف‌های اضافه')}
+          <div className="grid grid-cols-3 gap-2">
+            <select value={fLvl} onChange={e => setLvl(e.target.value)} className={inp}><option value="">همهٔ سطوح</option>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
+            {PrepSel(fPrep, setFPrep, 'همهٔ حرف‌ها')}
             <select value={count} onChange={e => setCount(Number(e.target.value))} className={inp}>{[10, 20, 30].map(n => <option key={n} value={n}>{n} سؤال</option>)}</select>
           </div>
           <button onClick={start} className="w-full h-12 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">▶️ شروع تمرین</button>
@@ -215,6 +226,10 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
       {/* ---------------- ADD ---------------- */}
       {tab === 'add' && (
         <div className="space-y-3">
+          <div className={card + ' !p-3 flex items-center gap-3'}>
+            <span className="text-xs font-bold flex-shrink-0">سطح فعل‌های افزوده:</span>
+            <select value={addLvl} onChange={e => setAddLvl(e.target.value)} className={inp}>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
+          </div>
           <div className={card}>
             <div className="font-extrabold text-sm">🤖 ساخت فعل‌های بیشتر با هوش مصنوعی</div>
             <p className="text-[12px] text-[#5d6676] dark:text-[#a3adbd]">برای حرف اضافهٔ انتخاب‌شده ۸ فعل جدید (که در فهرست نیست) ساخته و اضافه می‌شود.</p>
@@ -226,20 +241,20 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
             <div className="grid grid-cols-2 gap-2">{PrepSel(f.prep, p => setF({ ...f, prep: p }))}<select className={inp} value={f.kase} onChange={e => setF({ ...f, kase: e.target.value })}><option value="A">Akkusativ</option><option value="D">Dativ</option></select></div>
             <input className={inp} placeholder="معنی فارسی" value={f.fa} onChange={e => setF({ ...f, fa: e.target.value })} />
             <input dir="ltr" className={inp} placeholder="Beispielsatz (mit der Präposition)" value={f.ex} onChange={e => setF({ ...f, ex: e.target.value })} />
-            <button onClick={() => { const it = parseVP(`${f.verb}|${f.prep}|${f.kase}|${f.fa}|${f.ex}`, true).filter(v => splitEx(v.ex, v.prep)); if (!it.length) { onShowToast('فعل، معنی و جملهٔ مثال (شامل همان حرف اضافه) لازم است.', true); return; } if (addCustom(it)) setF({ ...f, verb: '', fa: '', ex: '' }); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm">افزودن</button>
+            <button onClick={() => { const it = parseVP(`${f.verb}|${f.prep}|${f.kase}|${f.fa}|${f.ex}`, true).filter(v => splitEx(v.ex, v.prep)).map(v => ({ ...v, lvl: addLvl })); if (!it.length) { onShowToast('فعل، معنی و جملهٔ مثال (شامل همان حرف اضافه) لازم است.', true); return; } if (addCustom(it)) setF({ ...f, verb: '', fa: '', ex: '' }); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm">افزودن</button>
           </div>
           <div className={card}>
             <div className="font-extrabold text-sm">📋 افزودن گروهی (هر خط یک فعل)</div>
             <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">verb|prep|A or D|فارسی|Beispielsatz</p>
             <textarea dir="ltr" rows={4} className={inp} value={bulk} onChange={e => setBulk(e.target.value)} placeholder="warten|auf|A|منتظر بودن|Ich warte auf den Bus." />
-            <button onClick={() => { const it = parseVP(bulk, true).filter(v => splitEx(v.ex, v.prep)); if (!it.length) { onShowToast('هیچ خط معتبری پیدا نشد.', true); return; } addCustom(it); setBulk(''); }} className="w-full h-11 rounded-xl border border-[#1f5fbf] text-[#1f5fbf] dark:text-blue-300 font-bold text-sm">افزودن همه</button>
+            <button onClick={() => { const it = parseVP(bulk, true).filter(v => splitEx(v.ex, v.prep)).map(v => ({ ...v, lvl: addLvl })); if (!it.length) { onShowToast('هیچ خط معتبری پیدا نشد.', true); return; } addCustom(it); setBulk(''); }} className="w-full h-11 rounded-xl border border-[#1f5fbf] text-[#1f5fbf] dark:text-blue-300 font-bold text-sm">افزودن همه</button>
           </div>
           {custom.length > 0 && (
             <div className={card}>
               <div className="font-extrabold text-sm">فعل‌های افزودهٔ من ({custom.length})</div>
               {custom.map(v => (
                 <div key={v.id} className="flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-2">
-                  <div className="min-w-0 text-sm"><b dir="ltr" className="font-sans">{v.verb} {v.prep}</b> <span className={`text-[10px] px-1.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span><div className="truncate text-xs text-[#5d6676]">{v.fa}</div></div>
+                  <div className="min-w-0 text-sm"><b dir="ltr" className="font-sans">{v.verb} {v.prep}</b> <span className={`text-[10px] px-1.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span> <span className="text-[10px] text-slate-500">{levelOf(v)}</span><div className="truncate text-xs text-[#5d6676]">{v.fa}</div></div>
                   <button onClick={() => { const nc = custom.filter(c => c.id !== v.id); setCustom(nc); save(CUSTOM_KEY, nc); }} className="text-red-500 text-xl px-1">✕</button>
                 </div>
               ))}
