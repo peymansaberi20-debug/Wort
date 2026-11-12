@@ -1012,58 +1012,6 @@ const buildAnkiText = (ws: Word[]): string => {
         </div>
       </div>
 
-      {/*
-        3. THIRD CARD: خروجی/پشتیبان گیری
-        Fulfills User Request #15:
-        "سه تا گزینه زیر خروجی هم توی یک خط جا داده بشن"
-      */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center gap-2 border-b pb-3">
-          <span className="text-2xl">💾</span>
-          <div>
-            <b className="text-base text-slate-900 dark:text-slate-100">خروجی و پشتیبان‌گیری</b>
-            <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-              دانلود واژگان در قالب فایل اکسل/CSV و ذخیره نسخه کامل تاریخچه و تنظیمات
-            </p>
-          </div>
-        </div>
-
-        {/* The 3 buttons side-by-side in a single line! */}
-        <div className="flex flex-row flex-wrap md:flex-nowrap items-center gap-2.5">
-          <button
-            onClick={() => downloadFile('deutschlab_vocab.csv', wordsToCSV(words), 'text/csv')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>📊 واژگان (CSV)</span>
-          </button>
-
-          <button
-            onClick={() => downloadFile('worterbuch_backup.json', JSON.stringify(state, null, 2), 'application/json')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>💾 پشتیبان کامل (JSON)</span>
-          </button>
-
-          <button
-            onClick={() => downloadFile('deutschlab_history.json', JSON.stringify(state.hist, null, 2), 'application/json')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-[#dde1ea] dark:border-[#333b4a] py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
-          >
-            <span>📈 تاریخچهٔ مرور (JSON)</span>
-          </button>
-        </div>
-
-        <button
-          onClick={() => {
-            downloadFile('worterbuch_anki_deck.txt', buildAnkiText(words), 'text/plain;charset=utf-8');
-            onShowToast(`${words.length} کارت Anki ساخته شد — در Anki: File ← Import.`);
-          }}
-          className="w-full bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/60 text-violet-800 dark:text-violet-300 border border-violet-200 dark:border-violet-800 py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-2"
-          title="خروجی استاندارد Anki (TSV) برای درون‌ریزی مستقیم"
-        >
-          <span>🃏 خروجی Anki — {words.length} کارت آماده</span>
-          <span className="text-[10px] font-normal opacity-70 hidden sm:inline">(در Anki: File ← Import)</span>
-        </button>
-      </div>
 
       {/* Import Help Modal (Task 3.1) */}
       {isHelpModalOpen && (
