@@ -13,6 +13,7 @@ import {
   today
 } from '../utils/dates';
 import { isLeech, isWeak, streakCount, auditWord, fullWord } from '../utils/storage';
+import { PageOverlay } from '../components/PageOverlay';
 
 interface DashboardViewProps {
   state: AppState;
@@ -34,6 +35,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectWord
 }) => {
   const n = Date.now();
+  const [stageView, setStageView] = React.useState<string | null>(null);
   const words = state.words;
   const hist = state.hist;
   const dueWords = words.filter(w => w.last && w.due <= n);
@@ -122,6 +124,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   const weakList = words.filter(isWeak);
+  const stageDefs: { key: string; icon: string; label: string; cls: string; list: Word[] }[] = [
+    { key: 'mastered', icon: '🏆', label: 'مسلط', cls: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-200', list: words.filter(w => w.last && w.ivl >= 21) },
+    { key: 'familiar', icon: '✨', label: 'آشنا', cls: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-900 dark:text-blue-200', list: words.filter(w => w.last && w.ivl >= 3 && w.ivl < 21 && !isWeak(w)) },
+    { key: 'learning', icon: '🌱', label: 'در حال یادگیری', cls: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200', list: words.filter(w => w.last && (w.stage > 0 || w.ivl < 3) && !isWeak(w)) },
+    { key: 'newWords', icon: '🆕', label: 'کلمات جدید', cls: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-950/30 dark:border-purple-900 dark:text-purple-200', list: words.filter(w => !w.last) },
+    { key: 'weak', icon: '🩸', label: 'ضعیف / سخت', cls: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-200', list: weakList }
+  ];
   const totalAuditedIssues = words
     .filter(w => !ignoredQualityIds[w.id])
     .filter(w => auditWord(w).length > 0).length;
@@ -193,10 +202,64 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/*
-        Fulfills User Request #7:
-        "قسمت تحلیل هوشمند یادگیری رو جذابتر و قابل فهم تر گزارش بده"
-      */}
+        {/* Today's Target Card */}
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+          <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+            <span>🎯</span> هدف و پیشرفت امروز
+          </b>
+
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span>کلمات جدید:</span>
+              <span>
+                {dailyNewDone} از {state.set.nw}
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] h-full transition-all"
+                style={{ width: `${state.set.nw <= 0 ? 100 : Math.min(100, (dailyNewDone / state.set.nw) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span>مرور:</span>
+              <span>
+                {dailyReviewDone} از {state.set.rv}
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-emerald-500 h-full transition-all"
+                style={{ width: `${state.set.rv <= 0 ? 100 : Math.min(100, (dailyReviewDone / state.set.rv) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+            کل واژگان: {words.length} • سررسید مرور: {dueCount}
+            {dueCount === 0 && nextReviewWord && (
+              <span> • نزدیک‌ترین مرور: {dueText(nextReviewWord)}</span>
+            )}
+          </p>
+
+          <div className="pt-1">
+            {dailyComplete ? (
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                ✅ تمرین‌های امروز تمام شده‌اند. برای تمرین بیشتر، از بخش تمرین‌ها استفاده کنید.
+              </div>
+            ) : (
+              <button
+                onClick={() => onNavigate('daily')}
+                className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
+              >
+                🌟 شروع جلسهٔ روزانه ({dailyTasksLeft} تمرین باقی‌مانده)
+              </button>
+            )}
+          </div>
+        </div>
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -216,48 +279,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
 
-        {/* Word Mastery Distribution Grid with badges and counts */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-xl p-2.5">
-            <span className="text-xs text-emerald-700 dark:text-emerald-300 font-bold block mb-1">
-              🏆 مسلط
-            </span>
-            <b className="text-lg text-emerald-900 dark:text-emerald-100">{stages.mastered}</b>
-            <span className="text-[10px] text-emerald-600 block mt-0.5">فاصله ۲۱+ روز</span>
-          </div>
-
-          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl p-2.5">
-            <span className="text-xs text-blue-700 dark:text-blue-300 font-bold block mb-1">
-              ✨ آشنا
-            </span>
-            <b className="text-lg text-blue-900 dark:text-blue-100">{stages.familiar}</b>
-            <span className="text-[10px] text-blue-600 block mt-0.5">در مسیر تثبیت</span>
-          </div>
-
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-2.5">
-            <span className="text-xs text-amber-700 dark:text-amber-300 font-bold block mb-1">
-              🌱 در حال یادگیری
-            </span>
-            <b className="text-lg text-amber-900 dark:text-amber-100">{stages.learning}</b>
-            <span className="text-[10px] text-amber-600 block mt-0.5">تکرار کوتاه‌مدت</span>
-          </div>
-
-          <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-xl p-2.5">
-            <span className="text-xs text-purple-700 dark:text-purple-300 font-bold block mb-1">
-              🆕 کلمات جدید
-            </span>
-            <b className="text-lg text-purple-900 dark:text-purple-100">{stages.newWords}</b>
-            <span className="text-[10px] text-purple-600 block mt-0.5">منتظر اولین مرور</span>
-          </div>
-
-          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl p-2.5 col-span-2 sm:col-span-1">
-            <span className="text-xs text-red-700 dark:text-red-300 font-bold block mb-1">
-              🩸 ضعیف / سخت
-            </span>
-            <b className="text-lg text-red-900 dark:text-red-100">{stages.weakWords}</b>
-            <span className="text-[10px] text-red-600 block mt-0.5">نیاز به تمرکز ویژه</span>
-          </div>
+        {/* Word mastery boxes: one line, tap to open the word list */}
+        <div className="grid grid-cols-5 gap-1.5 text-center">
+          {stageDefs.map(b => (
+            <button key={b.key} type="button" onClick={() => setStageView(b.key)}
+              className={`${b.cls} border rounded-xl py-2 px-0.5 flex flex-col items-center gap-0.5 active:scale-95 transition`}>
+              <span className="text-xl leading-none" aria-hidden="true">{b.icon}</span>
+              <b className="text-base leading-tight">{b.list.length}</b>
+              <span className="text-[10px] font-bold leading-tight">{b.label}</span>
+            </button>
+          ))}
         </div>
+        <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] -mt-1">روی هر باکس بزن تا فهرست واژه‌هایش را ببینی.</p>
 
         {weakList.length > 0 && (
           <button
@@ -268,8 +301,61 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         )}
 
+        {/* Suggested Target & Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          {suggestedNew !== state.set.nw ? (
+            <div className="flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2 rounded-xl">
+              <span>
+                پیشنهاد هوشمند سهمیه کلمه روزانه: <b>{suggestedNew}</b> (فعلی: {state.set.nw})
+              </span>
+              <button
+                onClick={() => onUpdateDailyNewTarget(suggestedNew)}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg font-bold"
+              >
+                اعمال سهمیه
+              </button>
+            </div>
+          ) : (
+            <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
+          )}
+
+        </div>
+      </div>
+
+        {/* Global Statistics Card */}
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+          <b className="text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+            <span>📊</span> آمار کلی تمرین‌ها
+          </b>
+
+          <div className="grid grid-cols-5 gap-1.5 pt-1">
+            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
+              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">پاسخ‌های درست</span>
+              <b className="text-sm text-emerald-600">{okTotal}</b>
+            </div>
+            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
+              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">پاسخ‌های نادرست</span>
+              <b className="text-sm text-red-500">{hist.length - okTotal}</b>
+            </div>
+            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
+              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">دقت کلی</span>
+              <b className="text-sm text-[#1f5fbf] dark:text-[#7fb0ff]">{pct(okTotal, hist.length)}</b>
+            </div>
+            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
+              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">دقت جای‌خالی</span>
+              <b className="text-sm text-purple-600">{pct(clozeOk, clozeHist.length)}</b>
+            </div>
+            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
+              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">امروز (جدید / مرور)</span>
+              <b className="text-sm text-slate-800 dark:text-slate-200">
+                {dailyNewDone} / {dailyReviewDone}
+              </b>
+            </div>
+          </div>
+        </div>
+
         {/* Key Coaching Insights in compact banner */}
-        <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
               مرورهای عقب‌افتاده: <b className="text-red-500">{overdueBacklog}</b> • سررسید همین حالا:{' '}
@@ -291,7 +377,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           Fulfills User Request #4:
           "در صفحه داشبورد در قسمت تحلیل هوشمند که میگه چندتا لغت باید مطالعه بشوند ، لیست لغات (بدون ترجمه ) و تاریخی که باید مرور بشن توی باکس قابل اسکرول نشون داده بشن و یک دکمه هم تعبیه بشه که همین حالا انجامش بده و با زدن رو اون لغاتی که وقتشون هست شروع بشه به مرور شدن طبق دستورالعملی که باید باشه"
         */}
-        <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3">
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="text-base">📋</span>
@@ -368,121 +454,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
 
-        {/* Suggested Target & Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          {suggestedNew !== state.set.nw ? (
-            <div className="flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2 rounded-xl">
-              <span>
-                پیشنهاد هوشمند سهمیه کلمه روزانه: <b>{suggestedNew}</b> (فعلی: {state.set.nw})
-              </span>
-              <button
-                onClick={() => onUpdateDailyNewTarget(suggestedNew)}
-                className="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg font-bold"
-              >
-                اعمال سهمیه
-              </button>
-            </div>
-          ) : (
-            <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
-          )}
-
-        </div>
-      </div>
-
-      {/* Today's Goal and Overall Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Today's Target Card */}
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-          <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-            <span>🎯</span> هدف و پیشرفت امروز
-          </b>
-
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>کلمات جدید:</span>
-              <span>
-                {dailyNewDone} از {state.set.nw}
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] h-full transition-all"
-                style={{ width: `${state.set.nw <= 0 ? 100 : Math.min(100, (dailyNewDone / state.set.nw) * 100)}%` }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>مرور:</span>
-              <span>
-                {dailyReviewDone} از {state.set.rv}
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-              <div
-                className="bg-emerald-500 h-full transition-all"
-                style={{ width: `${state.set.rv <= 0 ? 100 : Math.min(100, (dailyReviewDone / state.set.rv) * 100)}%` }}
-              />
-            </div>
-          </div>
-
-          <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-            کل واژگان: {words.length} • سررسید مرور: {dueCount}
-            {dueCount === 0 && nextReviewWord && (
-              <span> • نزدیک‌ترین مرور: {dueText(nextReviewWord)}</span>
-            )}
-          </p>
-
-          <div className="pt-1">
-            {dailyComplete ? (
-              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                ✅ تمرین‌های امروز تمام شده‌اند. برای تمرین بیشتر، از بخش تمرین‌ها استفاده کنید.
-              </div>
-            ) : (
-              <button
-                onClick={() => onNavigate('daily')}
-                className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
-              >
-                🌟 شروع جلسهٔ روزانه ({dailyTasksLeft} تمرین باقی‌مانده)
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Global Statistics Card */}
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-          <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-            <span>📊</span> آمار کلی تمرین‌ها
-          </b>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center">
-              <span className="text-[11px] text-[#5d6676] block mb-0.5">پاسخ‌های درست</span>
-              <b className="text-base text-emerald-600">{okTotal}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center">
-              <span className="text-[11px] text-[#5d6676] block mb-0.5">پاسخ‌های نادرست</span>
-              <b className="text-base text-red-500">{hist.length - okTotal}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center">
-              <span className="text-[11px] text-[#5d6676] block mb-0.5">دقت کلی</span>
-              <b className="text-base text-[#1f5fbf] dark:text-[#7fb0ff]">{pct(okTotal, hist.length)}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center">
-              <span className="text-[11px] text-[#5d6676] block mb-0.5">دقت جای‌خالی</span>
-              <b className="text-base text-purple-600">{pct(clozeOk, clozeHist.length)}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center col-span-2 sm:col-span-1">
-              <span className="text-[11px] text-[#5d6676] block mb-0.5">امروز (جدید / مرور)</span>
-              <b className="text-base text-slate-800 dark:text-slate-200">
-                {dailyNewDone} / {dailyReviewDone}
-              </b>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/*
         Fulfills User Request #5:
         "در پایین صفحه داشبورد ، یک بخش جدید اضافه بشه واژه های پر اشتباه و سخت و زیرش لیست واژه هایی ک بیشترین تکرار اشتباه رو داشتن از بیشترین به کمترین لیست بشه و گزینه تمرین این واژه ها زیرش باشه . شرط اومدن تو این قسمت بیش از ۳ بار اشتباه"
@@ -550,6 +521,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </>
         )}
       </div>
+
+      {stageView && (() => {
+        const d = stageDefs.find(x => x.key === stageView);
+        if (!d) return null;
+        const artCls = (a: string) => a === 'der' ? 'bg-blue-100 text-blue-800' : a === 'die' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
+        const sorted = [...d.list].sort((a, b) => a.de.localeCompare(b.de, 'de'));
+        return (
+          <PageOverlay icon={d.icon} title={`${d.label} (${d.list.length})`} onClose={() => setStageView(null)}>
+            {sorted.length === 0 ? (
+              <div className="p-4 rounded-xl bg-white dark:bg-[#1b2029] text-center text-sm text-[#5d6676]">واژه‌ای در این گروه نیست.</div>
+            ) : (
+              <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden">
+                {sorted.map(w => (
+                  <button key={w.id} onClick={() => onSelectWord(w)} className="w-full flex items-center justify-between gap-3 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0 text-right hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <span dir="ltr" className="flex items-center gap-2 min-w-0">
+                      {w.art && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${artCls(w.art)}`}>{w.art}</span>}
+                      <b className="text-lg font-sans truncate">{w.de}</b>
+                      {w.lvl && <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full">{w.lvl}</span>}
+                    </span>
+                    <span className="text-sm text-[#5d6676] dark:text-[#a3adbd] truncate">{w.fa}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </PageOverlay>
+        );
+      })()}
     </div>
   );
 };
