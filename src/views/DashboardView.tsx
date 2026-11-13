@@ -38,8 +38,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [stageView, setStageView] = React.useState<string | null>(null);
   const words = state.words;
   const hist = state.hist;
-  const dueWords = words.filter(w => w.last && w.due <= n);
-  const dueCount = dueWords.length;
   const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 };
   const dailyNewDone = Math.max(0, dailyToday.n || 0);
   const dailyReviewDone = Math.max(0, dailyToday.r || 0);
@@ -93,9 +91,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   //
   const t0 = dayStart(0);
   const histLast7 = hist.filter(x => x.t > n - 7 * DAY);
-  const overdueBacklog = words.filter(w => w.last && w.due < t0).length;
+  const overdueBacklog = dailyPool.filter(w => w.last && w.due < t0).length;
   const newWordsLeftToday = dailyNewTasksLeft;
-  const estimatedMins = Math.ceil((dueCount * 20 + newWordsLeftToday * 30) / 60);
+  const estimatedMins = Math.ceil((dailyReviewTasksLeft * 20 + newWordsLeftToday * 30) / 60);
 
   const acc7 = histLast7.length ? histLast7.filter(y => y.ok).length / histLast7.length : null;
   const matureWords = words.filter(w => w.ivl >= 7 && w.ok + w.bad > 0);
@@ -108,28 +106,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     : null;
 
   // Mastery breakdown
+  // Every word belongs to exactly ONE group (previously 'familiar'/'learning'/'mastered' overlapped with 'weak').
+  const stageOf = (w: Word) => !w.last ? 'newWords' : isWeak(w) ? 'weak' : w.ivl >= 21 ? 'mastered' : w.ivl >= 3 ? 'familiar' : 'learning';
   const stages = {
-    mastered: words.filter(w => w.last && w.ivl >= 21).length,
-    familiar: words.filter(w => w.last && w.ivl >= 3 && w.ivl < 21 && !isWeak(w)).length,
-    learning: words.filter(w => w.last && (w.stage > 0 || w.ivl < 3) && !isWeak(w)).length,
-    newWords: words.filter(w => !w.last).length,
-    weakWords: words.filter(w => isWeak(w)).length
+    mastered: words.filter(w => stageOf(w) === 'mastered').length,
+    familiar: words.filter(w => stageOf(w) === 'familiar').length,
+    learning: words.filter(w => stageOf(w) === 'learning').length,
+    newWords: words.filter(w => stageOf(w) === 'newWords').length,
+    weakWords: words.filter(w => stageOf(w) === 'weak').length
   };
 
   let suggestedNew = state.set.nw;
-  if (acc7 !== null && (acc7 < 0.7 || dueCount > 40)) {
+  if (acc7 !== null && (acc7 < 0.7 || dailyDueAvailable > 40)) {
     suggestedNew = Math.max(3, state.set.nw - 3);
-  } else if (acc7 !== null && acc7 > 0.9 && dueCount < 10) {
+  } else if (acc7 !== null && acc7 > 0.9 && dailyDueAvailable < 10) {
     suggestedNew = state.set.nw + 2;
   }
 
   const weakList = words.filter(isWeak);
   const stageDefs: { key: string; icon: string; label: string; cls: string; list: Word[] }[] = [
-    { key: 'mastered', icon: '🏆', label: 'مسلط', cls: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-200', list: words.filter(w => w.last && w.ivl >= 21) },
-    { key: 'familiar', icon: '✨', label: 'آشنا', cls: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-900 dark:text-blue-200', list: words.filter(w => w.last && w.ivl >= 3 && w.ivl < 21 && !isWeak(w)) },
-    { key: 'learning', icon: '🌱', label: 'در حال یادگیری', cls: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200', list: words.filter(w => w.last && (w.stage > 0 || w.ivl < 3) && !isWeak(w)) },
-    { key: 'newWords', icon: '🆕', label: 'کلمات جدید', cls: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-950/30 dark:border-purple-900 dark:text-purple-200', list: words.filter(w => !w.last) },
-    { key: 'weak', icon: '🩸', label: 'ضعیف / سخت', cls: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-200', list: weakList }
+    { key: 'mastered', icon: '🏆', label: 'مسلط', cls: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-200', list: words.filter(w => stageOf(w) === 'mastered') },
+    { key: 'familiar', icon: '✨', label: 'آشنا', cls: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-900 dark:text-blue-200', list: words.filter(w => stageOf(w) === 'familiar') },
+    { key: 'learning', icon: '🌱', label: 'در حال یادگیری', cls: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200', list: words.filter(w => stageOf(w) === 'learning') },
+    { key: 'newWords', icon: '🆕', label: 'کلمات جدید', cls: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-950/30 dark:border-purple-900 dark:text-purple-200', list: words.filter(w => stageOf(w) === 'newWords') },
+    { key: 'weak', icon: '🩸', label: 'ضعیف / سخت', cls: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-200', list: words.filter(w => stageOf(w) === 'weak') }
   ];
   const totalAuditedIssues = words
     .filter(w => !ignoredQualityIds[w.id])
@@ -239,8 +239,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-            کل واژگان: {words.length} • سررسید مرور: {dueCount}
-            {dueCount === 0 && nextReviewWord && (
+            کل واژگان: {words.length} • سررسید مرور: {dailyDueAvailable}
+            {dailyDueAvailable === 0 && nextReviewWord && (
               <span> • نزدیک‌ترین مرور: {dueText(nextReviewWord)}</span>
             )}
           </p>
@@ -359,7 +359,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
               مرورهای عقب‌افتاده: <b className="text-red-500">{overdueBacklog}</b> • سررسید همین حالا:{' '}
-              <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">{dueCount}</b> • زمان تقریبی جلسه:{' '}
+              <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">{dailyDueAvailable}</b> • زمان تقریبی جلسه:{' '}
               <b>{estimatedMins} دقیقه</b>
             </span>
             {acc7 !== null && (
