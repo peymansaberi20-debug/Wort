@@ -818,6 +818,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   // Fulfills Section 10: Independent answer visibility per card
   const [revealedCardId, setRevealedCardId] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);   // flashcard: "more details" drawer
   const [currentCardDir, setCurrentCardDir] = useState<'de' | 'fa'>('de');
 
   // Input states
@@ -1064,6 +1065,17 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     }
     return words.find(w => w.id === id) || null;
   }, [queue, currentIndex, activeMode, words]);
+
+  // Flashcards: the details drawer closes on every new card; the page cannot scroll until the drawer is opened.
+  const cardKeyNow = queue[currentIndex] || '';
+  useEffect(() => { setMoreOpen(false); }, [cardKeyNow]);
+  useEffect(() => {
+    const flashLike = activeMode === 'flash' || activeMode === 'free' || activeMode === 'review' || activeMode === 'daily';
+    if (!flashLike || !currentItem || moreOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [activeMode, currentItem, moreOpen]);
 
   // Adjective-declension question of the current queue entry
   const adjInfo = useMemo(() => {
@@ -2039,109 +2051,106 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {isFlashType && (() => {
           const w = currentItem as Word;
           const isFaDir = currentCardDir === 'fa';
+          const artCls = w.art === 'der' ? 'text-blue-600 dark:text-blue-400' : w.art === 'die' ? 'text-pink-600 dark:text-pink-400' : 'text-emerald-600 dark:text-emerald-400';
+          const speakWord = (e: React.MouseEvent) => { e.stopPropagation(); speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); };
+          const Row = (label: string, val: React.ReactNode) => (
+            <div className="flex items-baseline gap-2 py-1.5 border-b border-slate-200/70 dark:border-slate-700/60 last:border-0 text-right">
+              <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] w-14 flex-shrink-0">{label}</span>
+              <span className="flex-1 min-w-0 text-sm leading-6 break-words">{val || <span className="text-slate-400">—</span>}</span>
+            </div>
+          );
+          const de = (t: string) => <span dir="ltr" className="font-sans">{t}</span>;
+          const pair = (a: string, b: string) => (a ? <>{de(a)}{b ? <span className="text-[#5d6676] dark:text-[#a3adbd]"> — {b}</span> : null}</> : null);
+          const exFirst = w.def || w.ex;
+          const faceCls = 'fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-lg bg-white dark:bg-[#1b2029] ';
+          const gradeBtn = (g: 0 | 1 | 2 | 3, label: string, cls: string) => (
+            <button onClick={() => handleFlashGrade(g)} className={`${cls} border rounded-xl py-2 px-1 flex flex-col items-center leading-tight active:scale-95 transition`}>
+              <span className="text-sm font-bold">{label}</span>
+              <span className="text-[10px] font-medium opacity-75 mt-0.5">{intervalPreview(w, g, settings?.ivlMod || 1.0)}</span>
+            </button>
+          );
 
           return (
-            <div className="flip-scene">
-            <div key={currentKey + (isCardRevealed ? '::back' : '::front')} className={'space-y-4 text-center ' + (isCardRevealed ? 'card-flip-in' : 'card-enter')}>
-              {/* Question Face */}
-              {!isFaDir ? (
-                <div className="py-4 space-y-2">
-                  <div className="flex items-center justify-center gap-2" dir="ltr">
-                    {w.art && (
-                      <span className={`px-2.5 py-0.5 rounded-lg font-bold text-sm ${
-                        w.art === 'der' ? 'text-blue-600 dark:text-blue-400' :
-                        w.art === 'die' ? 'text-pink-600 dark:text-pink-400' :
-                        'text-emerald-600 dark:text-emerald-400'
-                      }`}>
-                        {w.art}
-                      </span>
+            <div className="space-y-3">
+              <div key={currentKey} className="fc-scene" style={{ height: 'min(46dvh, 420px)', minHeight: 290 }}>
+                <div className={'fc-card h-full ' + (isCardRevealed ? 'flipped' : '')}>
+                  {/* FRONT */}
+                  <div className={faceCls + 'flex flex-col items-center justify-center gap-2 p-5 text-center cursor-pointer'} onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
+                    {!isFaDir ? (
+                      <>
+                        <div className="flex items-center justify-center gap-2 flex-wrap" dir="ltr">
+                          {w.art && <span className={`px-2.5 py-0.5 rounded-lg font-bold text-lg ${artCls}`}>{w.art}</span>}
+                          <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
+                          <button onClick={speakWord} className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-base flex items-center justify-center">🔊</button>
+                        </div>
+                        {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
+                        {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
+                      </>
                     )}
-                    <span className="text-3xl md:text-4xl font-extrabold font-sans text-slate-900 dark:text-slate-100">
-                      {w.de}
-                    </span>
-                    <button
-                      onClick={() => speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
-                      className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center"
-                    >
-                      🔊
-                    </button>
+                    <span className="absolute bottom-3 text-[11px] text-[#5d6676] dark:text-[#a3adbd]">برای دیدن پشت کارت بزن ↻</span>
                   </div>
-                  {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
-                </div>
-              ) : (
-                <div className="py-4 space-y-2">
-                  <div className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">
-                    {w.fa}
-                  </div>
-                  {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
-                </div>
-              )}
 
-              {/* Reveal Action Button (Section 10 & 11: Examples & answers strictly hidden until revealed) */}
-              {!isCardRevealed ? (
-                <div className="pt-2">
-                  <button
-                    onClick={handleRevealCard}
-                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:opacity-95 transition"
-                  >
-                    👁 {isFaDir ? 'نمایش لغت آلمانی و جزئیات' : 'نمایش ترجمه و جزئیات'}
-                  </button>
+                  {/* BACK */}
+                  <div className={faceCls + 'fc-back p-4 overflow-y-auto bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029]'}>
+                    {!isFaDir ? (
+                      <div className="text-2xl md:text-3xl font-extrabold text-center pb-2 text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 pb-2 flex-wrap" dir="ltr">
+                        {w.art && <span className={`font-bold text-lg ${artCls}`}>{w.art}</span>}
+                        <span className="text-3xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
+                        <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
+                      </div>
+                    )}
+                    {Row('جمع', w.pl ? de(w.pl) : null)}
+                    {Row('انگلیسی', w.en ? de(w.en) : null)}
+                    {Row('مترادف', pair(w.syn, w.synFa))}
+                    {Row('متضاد', pair(w.ant, w.antFa))}
+                    {Row(w.def ? 'تعریف' : 'مثال', exFirst ? <>{de(exFirst)}{!w.def && w.exFa ? <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{w.exFa}</div> : null}</> : null)}
+                  </div>
                 </div>
+              </div>
+
+              {!isCardRevealed ? (
+                <button
+                  onClick={handleRevealCard}
+                  className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md hover:opacity-95 transition"
+                >
+                  🔄 {isFaDir ? 'چرخاندن کارت (لغت آلمانی)' : 'چرخاندن کارت (ترجمه)'}
+                </button>
               ) : (
                 <>
-                  {renderUnifiedWordCard(w)}
-
-                  {/* Rating / Decision Buttons */}
                   {qMode === 'free' ? (
-                    <div className="flex items-center justify-center gap-3 pt-3">
-                      <button
-                        onClick={() => handleFreeKnow(0)}
-                        className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 px-5 py-2.5 rounded-xl font-bold text-xs md:text-sm transition flex-1 max-w-xs"
-                      >
-                        ❌ هنوز نه
-                      </button>
-                      <button
-                        onClick={() => handleFreeKnow(1)}
-                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-5 py-2.5 rounded-xl font-bold text-xs md:text-sm transition flex-1 max-w-xs"
-                      >
-                        ✅ بلدم
-                      </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => handleFreeKnow(0)} className="bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 py-2.5 rounded-xl font-bold text-sm">❌ هنوز نه</button>
+                      <button onClick={() => handleFreeKnow(1)} className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 py-2.5 rounded-xl font-bold text-sm">✅ بلدم</button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
-                      <button
-                        onClick={() => handleFlashGrade(0)}
-                        className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-900 py-2.5 px-2 rounded-xl text-xs font-bold"
-                      >
-                        دوباره · {intervalPreview(w, 0, settings?.ivlMod || 1.0)}
-                      </button>
-                      <button
-                        onClick={() => handleFlashGrade(1)}
-                        className="bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-900 py-2.5 px-2 rounded-xl text-xs font-bold"
-                      >
-                        سخت · {intervalPreview(w, 1, settings?.ivlMod || 1.0)}
-                      </button>
-                      <button
-                        onClick={() => handleFlashGrade(2)}
-                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 py-2.5 px-2 rounded-xl text-xs font-bold"
-                      >
-                        خوب · {intervalPreview(w, 2, settings?.ivlMod || 1.0)}
-                      </button>
-                      <button
-                        onClick={() => handleFlashGrade(3)}
-                        className="bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900 py-2.5 px-2 rounded-xl text-xs font-bold"
-                      >
-                        آسان · {intervalPreview(w, 3, settings?.ivlMod || 1.0)}
-                      </button>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {gradeBtn(0, 'دوباره', 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-900')}
+                      {gradeBtn(1, 'سخت', 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900')}
+                      {gradeBtn(2, 'خوب', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900')}
+                      {gradeBtn(3, 'آسان', 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-900')}
                     </div>
                   )}
+
+                  <button
+                    onClick={() => setMoreOpen(o => !o)}
+                    className="mx-auto flex items-center gap-1.5 text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 px-3.5 py-1.5 rounded-full"
+                  >
+                    {moreOpen ? '▲ بستن توضیحات' : '▼ مثال و توضیحات بیشتر'}
+                  </button>
+                  <div className={`overflow-hidden transition-all duration-500 ease-out ${moreOpen ? 'max-h-[4000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    {moreOpen && renderUnifiedWordCard(w)}
+                  </div>
                 </>
               )}
             </div>
-            </div>
           );
         })()}
-
         {/* ========================================================= */}
         {/* ARTICLE PRACTICE (der / die / das) */}
         {/* ========================================================= */}
