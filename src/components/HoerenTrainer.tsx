@@ -3,16 +3,17 @@ import { generateWithGemini, parseAI } from '../utils/ai';
 
 type ExamType = 'Standard' | 'Goethe' | 'OESD' | 'Telc' | 'EPD';
 
-type TF = { statement: string; answer: boolean; explanation: string };
-type MC = { question: string; options: string[]; answerIndex: number; explanation: string };
-type Gap = { sentence: string; answer: string };
-type Short = { question: string; answer: string };
+type TF = { statement: string; answer: boolean; explanation: string; translation?: string };
+type MC = { question: string; options: string[]; answerIndex: number; explanation: string; translation?: string };
+type Gap = { sentence: string; answer: string; translation?: string };
+type Short = { question: string; answer: string; translation?: string };
 type Vocab = { word: string; meaning: string };
 
 type Grade = {
   correct: boolean;
   points: number;
   feedback: string;
+  feedbackFa: string;
 };
 
 type SectionScore = {
@@ -30,6 +31,7 @@ type GradingResult = {
   passed: boolean;
   sections: SectionScore[];
   teacherComment: string;
+  teacherCommentFa: string;
   strengths: string;
   recommendations: string;
   details: Record<string, Grade>;
@@ -46,7 +48,7 @@ type Exercise = {
   vocabulary: Vocab[];
 };
 
-const STORAGE_KEY = 'hoeren_trainer_state_v2';
+const STORAGE_KEY = 'hoeren_trainer_state_v3';
 
 const EXAM_LABELS: Record<ExamType, string> = {
   Standard: 'Standard / Allgemein',
@@ -66,43 +68,41 @@ const EXAM_INSTRUCTIONS: Record<ExamType, string> = {
   * part4Short: 2 offene Verständnisfragen
   * vocabulary: 4 wichtige Wörter/Ausdrücke aus dem Text`,
   Goethe: `
-- Stil: Goethe-Zertifikat Hörverstehen. Fokus auf Global-, Detail- und selektives Verstehen, Meinungen und Absichten der Sprecher.
+- Stil: Goethe-Zertifikat Hörverstehen. Fokus auf Global-, Detail- und selektives Verstehen.
 - Aufteilung:
-  * part1TF: 4 Richtig/Falsch-Aussagen (Alltags- oder Radiotext-Aussagen)
-  * part2MC: 4 Multiple-Choice-Fragen (je 3 Optionen, typisches Goethe-Format mit Distraktoren)
+  * part1TF: 4 Richtig/Falsch-Aussagen
+  * part2MC: 4 Multiple-Choice-Fragen (je 3 Optionen)
   * part3Gap: 0 Lückensätze (leeres Array [])
   * part4Short: 0 offene Fragen (leeres Array [])
   * vocabulary: 3 prüfungsrelevante Ausdrücke`,
   OESD: `
-- Stil: ÖSD (Österreichisches Sprachdiplom Deutsch). Fokus auf präzise Detailinformationen, Zahlen/Fakten und standardsprachliche Nuancen.
+- Stil: ÖSD (Österreichisches Sprachdiplom Deutsch). Fokus auf präzise Detailinformationen und Zahlen/Fakten.
 - Aufteilung:
   * part1TF: 3 Richtig/Falsch-Aussagen
   * part2MC: 2 Multiple-Choice-Fragen (je 3 Optionen)
-  * part3Gap: 3 Lückensätze (Notizen/Stichworte ergänzen, typisch für ÖSD)
+  * part3Gap: 3 Lückensätze (Notizen/Stichworte ergänzen)
   * part4Short: 1 offene Detailfrage
   * vocabulary: 3 relevante Wörter/Wendungen`,
   Telc: `
-- Stil: telc Deutsch Hörverstehen (Globalverstehen, Detailverstehen, selektives Verstehen). Klare, direkte Aussagen.
+- Stil: telc Deutsch Hörverstehen.
 - Aufteilung:
   * part1TF: 5 Richtig/Falsch-Aussagen
-  * part2MC: 4 Multiple-Choice-Fragen (je 3 Optionen, telc-typisch)
+  * part2MC: 4 Multiple-Choice-Fragen (je 3 Optionen)
   * part3Gap: 0 Lückensätze (leeres Array [])
   * part4Short: 0 offene Fragen (leeres Array [])
   * vocabulary: 3 wichtige Begriffe`,
   EPD: `
-- Stil: EPD (Ergänzungsprüfung Deutsch für österreichische Universitäten / VWU). Akademisches Hochschulniveau. Fokus auf Argumentationsstruktur, Kausalzusammenhänge, Fachterminologie und präzise Wiedergabe.
+- Stil: EPD (Ergänzungsprüfung Deutsch für österreichische Universitäten / VWU). Akademisches Hochschulniveau.
 - Aufteilung:
   * part1TF: 2 anspruchsvolle Richtig/Falsch-Aussagen
   * part2MC: 2 akademische Multiple-Choice-Fragen (je 3 Optionen)
-  * part3Gap: 3 komplexe Lückensätze (inhaltliche Zusammenfassung des Hörtextes)
-  * part4Short: 3 offene Verständnis- und Synthesefragen (typisch für EPD)
+  * part3Gap: 3 komplexe Lückensätze
+  * part4Short: 3 offene Verständnis- und Synthesefragen
   * vocabulary: 4 akademische/gehobene Ausdrücke aus dem Transkript`,
 };
 
-function getOfficialGradeInfo(percentage: number, examType: ExamType) {
-  const passThreshold = examType === 'EPD' ? 60 : 60;
-  const passed = percentage >= passThreshold;
-
+function getOfficialGradeInfo(percentage: number) {
+  const passed = percentage >= 60;
   if (percentage >= 90) return { gradeLabel: 'Sehr gut (1)', passed };
   if (percentage >= 80) return { gradeLabel: 'Gut (2)', passed };
   if (percentage >= 70) return { gradeLabel: 'Befriedigend (3)', passed };
@@ -113,39 +113,33 @@ function getOfficialGradeInfo(percentage: number, examType: ExamType) {
 function buildPrompt(examType: ExamType, level: string): string {
   return `
 Erstelle eine HÖRVERSTEHEN-Prüfung im exakten Stil von: "${EXAM_LABELS[examType]}" auf dem Sprachniveau "${level}".
-Benutze ausschließlich Informationen aus dem Transkript. Erfinde keine Fakten. Falsche Aussagen müssen durch den Text widerlegt werden.
+Benutze ausschließlich Informationen aus dem Transkript. Erfinde keine Fakten.
 Antworte ausschließlich mit gültigem JSON, ohne Markdown-Blöcke.
 
 Spezifische Prüfungsanforderungen für ${examType} (${level}):
 ${EXAM_INSTRUCTIONS[examType]}
 
-JSON-Schema (halte dich exakt an diese Schlüssel):
+JSON-Schema (halte dich exakt an diese Schlüssel und füge zu jeder Frage/Aussage "translation" mit der persischen Übersetzung hinzu):
 {
   "title": "Passender Prüfungstitel",
   "examType": "${examType}",
   "level": "${level}",
   "part1TF": [
-    {"statement": "Aussage", "answer": true, "explanation": "Kurze Begründung auf Deutsch"}
+    {"statement": "Aussage auf Deutsch", "answer": true, "explanation": "Kurze Begründung auf Deutsch", "translation": "ترجمه فارسی"}
   ],
   "part2MC": [
-    {"question": "Frage", "options": ["Option A", "Option B", "Option C"], "answerIndex": 0, "explanation": "Kurze Begründung auf Deutsch"}
+    {"question": "Frage auf Deutsch", "options": ["Option A", "Option B", "Option C"], "answerIndex": 0, "explanation": "Begründung auf Deutsch", "translation": "ترجمه فارسی"}
   ],
   "part3Gap": [
-    {"sentence": "Satz mit _____", "answer": "fehlender Text"}
+    {"sentence": "Satz mit _____ auf Deutsch", "answer": "fehlender Text", "translation": "ترجمه فارسی جمله"}
   ],
   "part4Short": [
-    {"question": "Offene Frage", "answer": "Musterantwort auf Deutsch"}
+    {"question": "Offene Frage auf Deutsch", "answer": "Musterantwort auf Deutsch", "translation": "ترجمه فارسی"}
   ],
   "vocabulary": [
-    {"word": "Wort/Ausdruck aus dem Text", "meaning": "Einfache Erklärung auf Deutsch"}
+    {"word": "Wort aus dem Text", "meaning": "Einfache Erklärung auf Deutsch"}
   ]
 }
-
-Wichtige Regeln:
-- Wenn ein Aufgabentyp laut Prüfungsanforderung 0 Aufgaben hat, gib ein leeres Array [] zurück.
-- Bei part1TF müssen sowohl richtige (true) als auch falsche (false) Aussagen vorkommen.
-- Bei part2MC muss "options" immer genau 3 plausible Optionen enthalten, und "answerIndex" muss 0, 1 oder 2 sein.
-- Sprachniveau (${level}) und Komplexität der Aufgaben müssen exakt dem Niveau und dem Prüfungsformat (${examType}) entsprechen.
 `;
 }
 
@@ -155,6 +149,7 @@ function normalize(data: any, fallbackExam: ExamType, fallbackLevel: string): Ex
       statement: String(q?.statement || ''),
       answer: q?.answer === true || String(q?.answer).toLowerCase() === 'true',
       explanation: String(q?.explanation || ''),
+      translation: String(q?.translation || ''),
     }));
 
   const mc = (arr: any): MC[] =>
@@ -166,6 +161,7 @@ function normalize(data: any, fallbackExam: ExamType, fallbackLevel: string): Ex
         options: opts.length >= 2 ? opts : ['Option A', 'Option B', 'Option C'],
         answerIndex: [0, 1, 2].includes(idx) ? idx : 0,
         explanation: String(q?.explanation || ''),
+        translation: String(q?.translation || ''),
       };
     });
 
@@ -173,6 +169,7 @@ function normalize(data: any, fallbackExam: ExamType, fallbackLevel: string): Ex
     (Array.isArray(arr) ? arr : []).map((q: any) => ({
       sentence: String(q?.sentence || ''),
       answer: String(q?.answer || ''),
+      translation: String(q?.translation || ''),
     }));
 
   return {
@@ -185,6 +182,7 @@ function normalize(data: any, fallbackExam: ExamType, fallbackLevel: string): Ex
     part4Short: (Array.isArray(data?.part4Short) ? data.part4Short : []).map((q: any) => ({
       question: String(q?.question || ''),
       answer: String(q?.answer || ''),
+      translation: String(q?.translation || ''),
     })),
     vocabulary: (Array.isArray(data?.vocabulary) ? data.vocabulary : []).map((q: any) => ({
       word: String(q?.word || ''),
@@ -214,6 +212,17 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [result, setResult] = useState<GradingResult | null>(null);
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
+
+  // استیت‌های مودم‌ها (پاپ‌آپ‌ها)
+  const [showSentenceModal, setShowSentenceModal] = useState(false);
+  const [sentencePairs, setSentencePairs] = useState<{ de: string; fa: string }[]>([]);
+  const [loadingSentences, setLoadingSentences] = useState(false);
+
+  const [showVocabModal, setShowVocabModal] = useState(false);
+  const [vocabMinLevel, setVocabMinLevel] = useState<string>('B1');
+  const [extractedVocabs, setExtractedVocabs] = useState<{ word: string; translation: string; level: string; selected: boolean }[]>([]);
+  const [loadingVocabs, setLoadingVocabs] = useState(false);
+  const [copySuccessMsg, setCopySuccessMsg] = useState('');
 
   useEffect(() => {
     try {
@@ -306,9 +315,8 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         details[id] = {
           correct,
           points: pts,
-          feedback:
-            q.explanation ||
-            `Richtige Antwort: ${q.answer ? 'Richtig' : 'Falsch'}`,
+          feedback: q.explanation || `Richtige Antwort: ${q.answer ? 'Richtig' : 'Falsch'}`,
+          feedbackFa: `پاسخ صحیح: ${q.answer ? 'درست (Richtig)' : 'نادرست (Falsch)'} — ${q.explanation}`,
         };
       });
 
@@ -323,97 +331,57 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         details[id] = {
           correct,
           points: pts,
-          feedback:
-            q.explanation ||
-            `Richtige Antwort: ${String.fromCharCode(65 + q.answerIndex)}) ${correctOptionText}`,
+          feedback: q.explanation || `Richtige Antwort: ${String.fromCharCode(65 + q.answerIndex)}) ${correctOptionText}`,
+          feedbackFa: `پاسخ صحیح: ${String.fromCharCode(65 + q.answerIndex)}) ${correctOptionText} — ${q.explanation}`,
         };
       });
 
-      const addFree = (
-        id: string,
-        question: string,
-        expected: string,
-        category: string
-      ) => {
-        freeQuestions.push({
-          id,
-          question,
-          expected,
-          userAnswer: answers[id] || '',
-          category,
-        });
+      const addFree = (id: string, question: string, expected: string, category: string) => {
+        freeQuestions.push({ id, question, expected, userAnswer: answers[id] || '', category });
       };
 
-      exercise.part3Gap.forEach((q, i) =>
-        addFree(`gap-${i}`, q.sentence, q.answer, 'Lückentext')
-      );
-
-      exercise.part4Short.forEach((q, i) =>
-        addFree(`short-${i}`, q.question, q.answer, 'Offene Frage')
-      );
-
-      exercise.vocabulary.forEach((q, i) =>
-        addFree(`v-${i}`, q.word, q.meaning, 'Wortschatz')
-      );
+      exercise.part3Gap.forEach((q, i) => addFree(`gap-${i}`, q.sentence, q.answer, 'Lückentext'));
+      exercise.part4Short.forEach((q, i) => addFree(`short-${i}`, q.question, q.answer, 'Offene Frage'));
+      exercise.vocabulary.forEach((q, i) => addFree(`v-${i}`, q.word, q.meaning, 'Wortschatz'));
 
       let aiTeacherComment = '';
+      let aiTeacherCommentFa = '';
       let aiStrengths = '';
       let aiRecommendations = '';
 
       if (freeQuestions.length > 0) {
         const gradingPrompt = `
-Du bist ein erfahrener, zertifizierter Prüfer für Deutsch als Fremdsprache (${EXAM_LABELS[exercise.examType]}, Niveau ${exercise.level}).
-Bewerte die Antworten des Prüfungsteilnehmers fair, objektiv und nach offiziellen Prüfungsmaßstäben.
+Du bist ein erfahrener Prüfer für Deutsch als Fremdsprache (${EXAM_LABELS[exercise.examType]}, Niveau ${exercise.level}).
+Bewerte die Antworten fair und gib Erklärungen und Feedback AUCH AUF PERSISCH (فارسی).
 
-Regeln für die Einzelbewertung:
-- Verwende ausschließlich das Transkript und die Musterantworten als Grundlage.
-- Akzeptiere sinngleiche, inhaltlich korrekte Antworten.
-- Maßstab nach Prüfungsformat:
-  * Bei EPD & C1/C2: Achte auf präzise inhaltliche Wiedergabe, korrekte Fachterminologie und klare Ausdrucksweise.
-  * Bei Goethe/telc/ÖSD (A2–B2): Die kommunikative und inhaltliche Verständlichkeit steht im Vordergrund; kleine Rechtschreibfehler ohne Sinnentstellung führen nicht zum Punktabzug.
-- Vergib für jede Aufgabe:
-  * 1 (vollständig richtig)
-  * 0.5 (teilweise richtig / Kerninformation erfasst, aber unvollständig)
-  * 0 (falsch oder leer)
-- Gib bei falschen oder teilrichtigen Antworten eine kurze, konstruktive Erklärung auf Deutsch.
-
-Erstelle zusätzlich ein professionelles Gesamtfeedback eines Deutschlehrers (auf Deutsch, motivierend und fachlich fundiert):
-- "teacherComment": Gesamteinschätzung der Hörverstehensleistung (2-3 Sätze).
-- "strengths": Was hat der Lernende gut gemacht? (1-2 Sätze).
-- "recommendations": Konkrete Lerntipps für das Prüfungsformat ${exercise.examType} auf Niveau ${exercise.level} (1-2 Sätze).
+JSON-Ausgabeformat (streng einhalten):
+{
+  "results": [
+    {
+      "id": "gap-0",
+      "points": 1,
+      "feedback": "Begründung auf Deutsch",
+      "feedbackFa": "توضیح و دلیل به زبان فارسی"
+    }
+  ],
+  "teacherComment": "Gesamteinschätzung auf Deutsch",
+  "teacherCommentFa": "ارزیابی کلی عملکرد به زبان فارسی",
+  "strengths": "Stärken auf Deutsch und Persisch",
+  "recommendations": "Empfehlungen auf Deutsch und Persisch"
+}
 
 Transkript:
 ${transcript}
 
 Aufgaben und Antworten:
 ${JSON.stringify(freeQuestions)}
-
-Gib ausschließlich gültiges JSON in folgendem Format zurück:
-{
-  "results": [
-    {
-      "id": "gap-0",
-      "points": 1,
-      "feedback": "Kurze Begründung auf Deutsch"
-    }
-  ],
-  "teacherComment": "...",
-  "strengths": "...",
-  "recommendations": "..."
-}
 `;
 
-        const raw = await generateWithGemini(gradingPrompt, {
-          timeoutMs: 60000,
-          retries: 1,
-        });
-
+        const raw = await generateWithGemini(gradingPrompt, { timeoutMs: 60000, retries: 1 });
         const parsed = parseAI(raw)[0];
         const aiResults = Array.isArray(parsed?.results) ? parsed.results : [];
 
-        const aiById = new Map<string, any>(
-          aiResults.map((item: any) => [String(item.id), item])
-        );
+        const aiById = new Map<string, any>(aiResults.map((item: any) => [String(item.id), item]));
 
         freeQuestions.forEach(q => {
           const graded = aiById.get(q.id);
@@ -424,14 +392,13 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
           details[q.id] = {
             correct: validPoints === 1,
             points: validPoints,
-            feedback: String(
-              graded?.feedback ||
-                'Die Antwort konnte nicht zuverlässig bewertet werden.'
-            ),
+            feedback: String(graded?.feedback || 'Die Antwort konnte nicht bewertet werden.'),
+            feedbackFa: String(graded?.feedbackFa || 'پاسخ قابل ارزیابی دقیق نبود.'),
           };
         });
 
         aiTeacherComment = String(parsed?.teacherComment || '');
+        aiTeacherCommentFa = String(parsed?.teacherCommentFa || '');
         aiStrengths = String(parsed?.strengths || '');
         aiRecommendations = String(parsed?.recommendations || '');
       }
@@ -441,12 +408,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         if (ids.length === 0) return;
         const earned = ids.reduce((s, id) => s + (pointsById[id] ?? 0), 0);
         const total = ids.length;
-        sections.push({
-          label,
-          earned,
-          total,
-          percentage: Math.round((earned / total) * 100),
-        });
+        sections.push({ label, earned, total, percentage: Math.round((earned / total) * 100) });
       };
 
       calcSection('Richtig / Falsch', exercise.part1TF.map((_, i) => `tf-${i}`));
@@ -466,22 +428,13 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
       const maxScore = allIds.length;
       const score = allIds.reduce((sum, id) => sum + (pointsById[id] ?? 0), 0);
       const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-      const { gradeLabel, passed } = getOfficialGradeInfo(percentage, exercise.examType);
+      const { gradeLabel, passed } = getOfficialGradeInfo(percentage);
 
       if (!aiTeacherComment) {
-        if (percentage >= 85) {
-          aiTeacherComment = `Hervorragende Leistung im Prüfungsformat ${EXAM_LABELS[exercise.examType]} (${exercise.level}).`;
-          aiStrengths = 'Hohe Genauigkeit beim Erfassen von Details und Hauptinformationen.';
-          aiRecommendations = 'Weiter so! Testen Sie komplexere Fachtexte.';
-        } else if (percentage >= 60) {
-          aiTeacherComment = `Solide Leistung auf dem Niveau ${exercise.level}. Die wichtigsten Kernaussagen wurden verstanden.`;
-          aiStrengths = 'Gutes Grundverständnis des Gesamtzusammenhangs.';
-          aiRecommendations = 'Achten Sie genauer auf Signalwörter und feine Nuancen.';
-        } else {
-          aiTeacherComment = `Das Ergebnis liegt noch unter der Bestehensgrenze für ${EXAM_LABELS[exercise.examType]}.`;
-          aiStrengths = 'Erste Ansätze beim Erkennen von Schlüsselwörtern.';
-          aiRecommendations = 'Wiederholen Sie den Wortschatz und hören Sie den Text ein weiteres Mal.';
-        }
+        aiTeacherComment = `Leistung auf Niveau ${exercise.level}.`;
+        aiTeacherCommentFa = `عملکرد شما در سطح ${exercise.level} ارزیابی شد.`;
+        aiStrengths = 'Gutes Bemühen beim Verstehen des Hörtextes. تلاش خوب در درک متن شنیداری.';
+        aiRecommendations = 'Üben Sie weiter mit originalen Audios. تمرین بیشتر با فایل‌های صوتی توصیه می‌شود.';
       }
 
       setResult({
@@ -492,16 +445,14 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         passed,
         sections,
         teacherComment: aiTeacherComment,
+        teacherCommentFa: aiTeacherCommentFa,
         strengths: aiStrengths,
         recommendations: aiRecommendations,
         details,
       });
       setSubmitted(true);
     } catch (e: any) {
-      setError(
-        e?.message ||
-          'Die Antworten konnten nicht bewertet werden. Bitte erneut versuchen.'
-      );
+      setError(e?.message || 'Die Antworten konnten nicht bewertet werden.');
     } finally {
       setGrading(false);
     }
@@ -524,13 +475,12 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
 
     try {
       const promptText = buildPrompt(examType, level);
-      const raw = await generateWithGemini(
-        `${promptText}\n\nTRANSKRIPT:\n${transcript.trim()}`,
-        { timeoutMs: 60000, retries: 1 }
-      );
+      const raw = await generateWithGemini(`${promptText}\n\nTRANSKRIPT:\n${transcript.trim()}`, {
+        timeoutMs: 60000,
+        retries: 1,
+      });
 
       const generatedExercise = normalize(parseAI(raw)[0], examType, level);
-
       const totalQuestions =
         generatedExercise.part1TF.length +
         generatedExercise.part2MC.length +
@@ -538,29 +488,97 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         generatedExercise.part4Short.length;
 
       if (totalQuestions === 0) {
-        throw new Error(
-          'Die Aufgaben konnten nicht vollständig erstellt werden. Bitte erneut versuchen.'
-        );
+        throw new Error('Die Aufgaben konnten nicht vollständig erstellt werden.');
       }
 
       setExercise(generatedExercise);
     } catch (e: any) {
-      setError(
-        e?.message || 'ساخت تمرین ناموفق بود. تنظیمات هوش مصنوعی را بررسی کن.'
-      );
+      setError(e?.message || 'ساخت تمرین ناموفق بود.');
     } finally {
       setLoading(false);
     }
   };
 
+  // تابع باز کردن پاپ‌آپ ترجمه جمله به جمله
+  const handleOpenSentenceModal = async () => {
+    if (!transcript.trim()) return;
+    setShowSentenceModal(true);
+    setLoadingSentences(true);
+
+    try {
+      const prompt = `
+Zerlege den folgenden deutschen Text in einzelne Sätze. Gib das Ergebnis als JSON-Array zurück, wobei jedes Objekt den deutschen Satz ("de") und dessen genaue persische Übersetzung ("fa") enthält.
+Antworte ausschließlich mit gültigem JSON (ohne Markdown).
+Format: [{"de": "Deutscher Satz...", "fa": "ترجمه فارسی..."}]
+
+Text:
+${transcript}
+`;
+      const raw = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
+      const parsed = parseAI(raw);
+      const arr = Array.isArray(parsed[0]) ? parsed[0] : Array.isArray(parsed) ? parsed : [];
+      setSentencePairs(arr.map((item: any) => ({ de: String(item?.de || ''), fa: String(item?.fa || '') })));
+    } catch {
+      setSentencePairs([{ de: transcript, fa: 'خطا در بارگذاری ترجمه جمله به جمله.' }]);
+    } finally {
+      setLoadingSentences(false);
+    }
+  };
+
+  // تابع باز کردن پاپ‌آپ استخراج واژگان
+  const handleOpenVocabModal = async () => {
+    if (!transcript.trim()) return;
+    setShowVocabModal(true);
+    fetchExtractedVocabs(vocabMinLevel);
+  };
+
+  const fetchExtractedVocabs = async (minLvl: string) => {
+    setLoadingVocabs(true);
+    try {
+      const prompt = `
+Analysiere das folgende Transkript und extrahiere wichtige Wörter oder Ausdrücke ab dem Niveau "${minLvl}" und höher (z.B. wenn minLvl=B1, dann B1, B2, C1, C2).
+Ignoriere Wörter unterhalb des gewählten Niveaus (wie A1/A2, einfache Pronomen oder Grundverben).
+Gib das Ergebnis als JSON-Array zurück. Jedes Objekt muss folgende Felder haben:
+- "word": Das Wort auf Deutsch (bei Nomen UNBEDINGT mit Artikel, z.B. "der Tisch", "das Buch").
+- "translation": Persische Übersetzung.
+- "level": Das Sprachniveau (z.B. "B1", "B2", "C1").
+
+Antworte ausschließlich mit gültigem JSON (ohne Markdown).
+Format: [{"word": "der Vorschlag", "translation": "پیشنهاد", "level": "B1"}]
+
+Transkript:
+${transcript}
+`;
+      const raw = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
+      const parsed = parseAI(raw);
+      const arr = Array.isArray(parsed[0]) ? parsed[0] : Array.isArray(parsed) ? parsed : [];
+      setExtractedVocabs(
+        arr.map((item: any) => ({
+          word: String(item?.word || ''),
+          translation: String(item?.translation || ''),
+          level: String(item?.level || minLvl),
+          selected: true,
+        }))
+      );
+    } catch {
+      setExtractedVocabs([]);
+    } finally {
+      setLoadingVocabs(false);
+    }
+  };
+
+  const handleCopySelectedVocabs = () => {
+    const selectedWords = extractedVocabs.filter(v => v.selected).map(v => v.word).join('\n');
+    if (!selectedWords) return;
+
+    navigator.clipboard.writeText(selectedWords);
+    setCopySuccessMsg('لیست لغات کپی شد ، از تب واژگان قسمت افزودن گروهی بخش متن دستی میتوانید لغات را به واژگان برنامه اضافه کنید');
+    setTimeout(() => setCopySuccessMsg(''), 7000);
+  };
+
+  // روش اصلاح‌شده چاپ PDF با استفاده از پنهان‌سازی iframe برای سازگاری کامل با سافاری آیفون
   const handlePrintPDF = (mode: 'transcript' | 'questions' | 'certificate') => {
     if (!exercise) return;
-
-    const printWindow = window.open('', '_blank', 'width=900,height=750');
-    if (!printWindow) {
-      setError('لطفاً اجازه باز شدن پنجره (Pop-up) را در مرورگر فعال کنید تا فایل PDF ساخته شود.');
-      return;
-    }
 
     const today = new Date().toLocaleDateString('de-AT', {
       year: 'numeric',
@@ -570,113 +588,40 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
 
     const baseStyles = `
       <style>
-        @page { size: A4; margin: 18mm 16mm; }
+        @page { size: A4; margin: 15mm; }
         body {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           color: #1e293b;
-          line-height: 1.55;
-          font-size: 10.5pt;
+          line-height: 1.4;
+          font-size: 11.5pt;
           margin: 0;
           padding: 0;
         }
         .header {
           border-bottom: 2px solid #0f172a;
-          padding-bottom: 10px;
-          margin-bottom: 18px;
+          padding-bottom: 6px;
+          margin-bottom: 12px;
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
         }
-        .header-title {
-          font-size: 16pt;
-          font-weight: 800;
-          color: #0f172a;
-          margin: 0;
-        }
-        .header-meta {
-          font-size: 9pt;
-          color: #475569;
-          margin-top: 4px;
-        }
-        .badge {
-          background: #f1f5f9;
-          border: 1px solid #cbd5e1;
-          padding: 4px 10px;
-          border-radius: 6px;
-          font-weight: 700;
-          font-size: 9.5pt;
-        }
-        h2 {
-          font-size: 12pt;
-          color: #0f172a;
-          border-left: 4px solid #2563eb;
-          padding-left: 8px;
-          margin: 18px 0 10px 0;
-          page-break-after: avoid;
-        }
-        .question-box {
-          margin-bottom: 12px;
-          padding: 8px 10px;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          page-break-inside: avoid;
-        }
-        .options {
-          margin-top: 6px;
-          padding-left: 14px;
-        }
-        .option-item {
-          margin: 3px 0;
-        }
-        .write-line {
-          border-bottom: 1px dashed #64748b;
-          height: 22px;
-          margin-top: 6px;
-        }
-        .transcript-body {
-          white-space: pre-wrap;
-          text-align: justify;
-          font-size: 11pt;
-          line-height: 1.7;
-          background: #f8fafc;
-          padding: 16px;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 12px 0;
-          font-size: 9.5pt;
-        }
-        th, td {
-          border: 1px solid #cbd5e1;
-          padding: 7px 10px;
-          text-align: left;
-        }
-        th {
-          background: #f1f5f9;
-          font-weight: 700;
-        }
-        .summary-card {
-          background: #f8fafc;
-          border: 1.5px solid #94a3b8;
-          border-radius: 8px;
-          padding: 14px;
-          margin-bottom: 16px;
-        }
+        .header-title { font-size: 14pt; font-weight: 800; color: #0f172a; margin: 0; }
+        .header-meta { font-size: 8.5pt; color: #475569; margin-top: 2px; }
+        .badge { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 8.5pt; }
+        h2 { font-size: 11pt; color: #0f172a; border-left: 3px solid #2563eb; padding-left: 6px; margin: 12px 0 6px 0; page-break-after: avoid; }
+        .question-box { margin-bottom: 8px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; page-break-inside: avoid; }
+        .options { margin-top: 4px; padding-left: 10px; font-size: 10.5pt; }
+        .option-item { margin: 2px 0; }
+        .write-line { border-bottom: 1px dashed #64748b; height: 18px; margin-top: 4px; }
+        .transcript-body { white-space: pre-wrap; text-align: justify; font-size: 10.5pt; line-height: 1.5; background: #f8fafc; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 9pt; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; }
+        th { background: #f1f5f9; font-weight: 700; }
+        .summary-card { background: #f8fafc; border: 1px solid #94a3b8; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 9.5pt; }
         .pass { color: #059669; font-weight: 700; }
         .fail { color: #dc2626; font-weight: 700; }
         .partial { color: #d97706; font-weight: 700; }
-        .footer {
-          margin-top: 24px;
-          padding-top: 8px;
-          border-top: 1px solid #cbd5e1;
-          font-size: 8.5pt;
-          color: #64748b;
-          display: flex;
-          justify-content: space-between;
-        }
+        .footer { margin-top: 16px; padding-top: 4px; border-top: 1px solid #cbd5e1; font-size: 8pt; color: #64748b; display: flex; justify-content: space-between; }
       </style>
     `;
 
@@ -718,10 +663,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
               <div><strong>${i + 1}.</strong> ${escapeHtml(q.question)}</div>
               <div class="options">
                 ${q.options
-                  .map(
-                    (opt, idx) =>
-                      `<div class="option-item">☐ <strong>${String.fromCharCode(65 + idx)})</strong> ${escapeHtml(opt)}</div>`
-                  )
+                  .map((opt, idx) => `<div class="option-item">☐ <strong>${String.fromCharCode(65 + idx)})</strong> ${escapeHtml(opt)}</div>`)
                   .join('')}
               </div>
             </div>`;
@@ -748,7 +690,6 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             <div class="question-box">
               <div><strong>${i + 1}.</strong> ${escapeHtml(q.question)}</div>
               <div class="write-line"></div>
-              <div class="write-line"></div>
             </div>`;
         });
       }
@@ -772,21 +713,14 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
           </div>
           <div class="badge">Niveau ${escapeHtml(exercise.level)} · ${today}</div>
         </div>
-        <div style="margin-bottom:14px; font-size:9.5pt;">
+        <div style="margin-bottom:10px; font-size:9pt;">
           <strong>Name:</strong> ___________________________ &nbsp;&nbsp;&nbsp; <strong>Datum:</strong> ${today}
         </div>
         ${qHtml}
       `;
     } else if (mode === 'certificate' && result) {
       const sectionRows = result.sections
-        .map(
-          s => `
-          <tr>
-            <td>${escapeHtml(s.label)}</td>
-            <td>${s.earned} / ${s.total}</td>
-            <td>${s.percentage} %</td>
-          </tr>`
-        )
+        .map(s => `<tr><td>${escapeHtml(s.label)}</td><td>${s.earned} / ${s.total}</td><td>${s.percentage} %</td></tr>`)
         .join('');
 
       let detailRows = '';
@@ -794,44 +728,36 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         if (!grade) return;
         const statusText =
           grade.points === 1
-            ? '<span class="pass">✓ Richtig (1 Pkt.)</span>'
+            ? '<span class="pass">✓ Richtig</span>'
             : grade.points === 0.5
-              ? '<span class="partial">◐ Teilweise (0.5 Pkt.)</span>'
-              : '<span class="fail">✗ Falsch (0 Pkt.)</span>';
-        const noteText =
-          grade.points === 1 ? '—' : escapeHtml(grade.feedback);
+              ? '<span class="partial">◐ Teilweise</span>'
+              : '<span class="fail">✗ Falsch</span>';
 
         detailRows += `
           <tr>
             <td>${escapeHtml(label)}</td>
-            <td>${escapeHtml(userAns || '(Keine Antwort)')}</td>
+            <td>${escapeHtml(userAns || '(Keine)')}</td>
             <td>${statusText}</td>
-            <td>${noteText}</td>
+            <td>${escapeHtml(grade.feedback)}<br/><span style="color:#475569; font-size:8pt;">${escapeHtml(grade.feedbackFa)}</span></td>
           </tr>`;
       };
 
       exercise.part1TF.forEach((q, i) => {
         const val = answers[`tf-${i}`];
-        const disp = val === 'true' ? 'Richtig' : val === 'false' ? 'Falsch' : '';
-        appendDetailRow(`TF ${i + 1}: ${q.statement}`, disp, result.details[`tf-${i}`]);
+        appendDetailRow(`TF ${i + 1}: ${q.statement}`, val === 'true' ? 'Richtig' : val === 'false' ? 'Falsch' : '', result.details[`tf-${i}`]);
       });
-
       exercise.part2MC.forEach((q, i) => {
         const idx = Number(answers[`mc-${i}`]);
-        const disp = !isNaN(idx) && q.options[idx] ? `${String.fromCharCode(65 + idx)}) ${q.options[idx]}` : '';
-        appendDetailRow(`MC ${i + 1}: ${q.question}`, disp, result.details[`mc-${i}`]);
+        appendDetailRow(`MC ${i + 1}: ${q.question}`, !isNaN(idx) && q.options[idx] ? `${String.fromCharCode(65 + idx)}) ${q.options[idx]}` : '', result.details[`mc-${i}`]);
       });
-
       exercise.part3Gap.forEach((q, i) => {
-        appendDetailRow(`Lücke ${i + 1}: ${q.sentence}`, answers[`gap-${i}`] || '', result.details[`gap-${i}`]);
+        appendDetailRow(`Lücke ${i + 1}`, answers[`gap-${i}`] || '', result.details[`gap-${i}`]);
       });
-
       exercise.part4Short.forEach((q, i) => {
-        appendDetailRow(`Frage ${i + 1}: ${q.question}`, answers[`short-${i}`] || '', result.details[`short-${i}`]);
+        appendDetailRow(`Frage ${i + 1}`, answers[`short-${i}`] || '', result.details[`short-${i}`]);
       });
-
       exercise.vocabulary.forEach((q, i) => {
-        appendDetailRow(`Wortschatz ${i + 1}: ${q.word}`, answers[`v-${i}`] || '', result.details[`v-${i}`]);
+        appendDetailRow(`Wort ${q.word}`, answers[`v-${i}`] || '', result.details[`v-${i}`]);
       });
 
       bodyContent = `
@@ -844,100 +770,94 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         </div>
 
         <div class="summary-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div>
-              <span style="font-size:14pt; font-weight:800;">Gesamtergebnis: ${result.score} / ${result.maxScore} Punkte (${result.percentage} %)</span>
-            </div>
-            <div style="font-size:12pt;" class="${result.passed ? 'pass' : 'fail'}">
-              ${escapeHtml(result.gradeLabel)} · ${result.passed ? 'BESTANDEN' : 'NICHT BESTANDEN'}
-            </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:12pt; font-weight:800;">Ergebnis: ${result.score} / ${result.maxScore} (${result.percentage} %)</span>
+            <span style="font-size:11pt;" class="${result.passed ? 'pass' : 'fail'}">${escapeHtml(result.gradeLabel)} · ${result.passed ? 'BESTANDEN' : 'NICHT BESTANDEN'}</span>
           </div>
-          <p style="margin:6px 0;"><strong>Beurteilung der Lehrkraft:</strong> ${escapeHtml(result.teacherComment)}</p>
-          <p style="margin:4px 0;"><strong>Stärken:</strong> ${escapeHtml(result.strengths)}</p>
-          <p style="margin:4px 0;"><strong>Empfehlungen:</strong> ${escapeHtml(result.recommendations)}</p>
+          <p style="margin:4px 0;"><strong>Lehrkraft:</strong> ${escapeHtml(result.teacherComment)} / <span dir="rtl">${escapeHtml(result.teacherCommentFa)}</span></p>
         </div>
 
-        <h2>Teilergebnisse nach Prüfungsbereich</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Prüfungsteil</th>
-              <th>Erreichte Punkte</th>
-              <th>Prozent</th>
-            </tr>
-          </thead>
-          <tbody>${sectionRows}</tbody>
-        </table>
+        <h2>Teilergebnisse</h2>
+        <table><thead><tr><th>Bereich</th><th>Punkte</th><th>%</th></tr></thead><tbody>${sectionRows}</tbody></table>
 
-        <h2>Detailauswertung der Aufgaben</h2>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:32%;">Aufgabe</th>
-              <th style="width:22%;">Ihre Antwort</th>
-              <th style="width:18%;">Bewertung</th>
-              <th style="width:28%;">Hinweis / Korrektur</th>
-            </tr>
-          </thead>
-          <tbody>${detailRows}</tbody>
-        </table>
+        <h2>Detailauswertung</h2>
+        <table><thead><tr><th>Aufgabe</th><th>Antwort</th><th>Status</th><th>Feedback</th></tr></thead><tbody>${detailRows}</tbody></table>
       `;
     }
 
-    printWindow.document.open();
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html lang="de">
-      <head>
-        <meta charset="UTF-8" />
-        <title>${escapeHtml(exercise.title)} - ${mode.toUpperCase()}</title>
-        ${baseStyles}
-      </head>
-      <body>
-        ${bodyContent}
-        <div class="footer">
-          <span>Peyman Saberi · Deutsch Hörverstehen Trainer</span>
-          <span>Generiert am ${today}</span>
-        </div>
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 250);
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
+    // ساخت iframe پنهان برای چاپ ایمن در سافاری آیفون بدون گیر کردن صفحه
+    const existingIframe = document.getElementById('print-iframe');
+    if (existingIframe) existingIframe.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Print</title>
+          ${baseStyles}
+        </head>
+        <body>
+          ${bodyContent}
+          <div class="footer">
+            <span>Peyman Saberi · Hörverstehen Trainer</span>
+            <span>${today}</span>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      doc.close();
+    }
   };
 
-  const renderFeedback = (id: string) => {
-    if (!submitted || !result?.details[id]) return null;
-    const item = result.details[id];
-
-    if (item.points === 1) {
-      return (
-        <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 pt-0.5">
-          ✓ Richtig
-        </p>
-      );
-    }
-
+  const renderFeedback = (id: string, translation?: string) => {
     return (
-      <p
-        className={`text-xs font-medium pt-0.5 leading-relaxed ${
-          item.points === 0.5
-            ? 'text-amber-600 dark:text-amber-400'
-            : 'text-red-600 dark:text-red-400'
-        }`}
-      >
-        <span className="font-bold">
-          {item.points === 0.5 ? '◐ Teilweise richtig' : '✗ Falsch'}
-        </span>
-        {' — '}
-        {item.feedback}
-      </p>
+      <div className="space-y-1 pt-1">
+        {translation && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium" dir="rtl">
+            ترجمه: {translation}
+          </p>
+        )}
+        {submitted && result?.details[id] && (
+          <div>
+            {result.details[id].points === 1 ? (
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ Richtig</p>
+            ) : (
+              <div className="text-xs space-y-0.5">
+                <p className={result.details[id].points === 0.5 ? 'text-amber-600 font-bold' : 'text-red-600 font-bold'}>
+                  {result.details[id].points === 0.5 ? '◐ Teilweise richtig' : '✗ Falsch'}
+                </p>
+                <p className="text-red-600 dark:text-red-400 font-medium" dir="rtl">
+                  {result.details[id].feedbackFa}
+                </p>
+                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
+                  ({result.details[id].feedback})
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -960,17 +880,16 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         </span>
       </div>
 
+      {/* باکس ورودی متن و تنظیمات */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-5 shadow-sm space-y-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
-              <span>🎧</span>
-              <span>Hörverstehen erstellen</span>
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              نوع آزمون و سطح را انتخاب کنید و متن فایل صوتی را وارد کنید تا آزمون استاندارد ساخته شود.
-            </p>
-          </div>
+        <div>
+          <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+            <span>🎧</span>
+            <span>Hörverstehen erstellen</span>
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            نوع آزمون و سطح را انتخاب کنید و متن فایل صوتی را وارد کنید تا آزمون استاندارد ساخته شود.
+          </p>
         </div>
 
         <textarea
@@ -987,7 +906,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             <select
               value={examType}
               onChange={e => setExamType(e.target.value as ExamType)}
-              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium"
             >
               {(Object.keys(EXAM_LABELS) as ExamType[]).map(type => (
                 <option key={type} value={type}>
@@ -1002,7 +921,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             <select
               value={level}
               onChange={e => setLevel(e.target.value)}
-              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium"
             >
               {['A2', 'B1', 'B2', 'C1', 'C2'].map(x => (
                 <option key={x} value={x}>
@@ -1021,6 +940,29 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
           </button>
         </div>
 
+        {/* دکمه‌های ابزار کمکی (ترجمه جمله به جمله و استخراج لغات) */}
+        {transcript.trim().length >= 20 && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={handleOpenSentenceModal}
+              className="rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:border-purple-800 px-3 py-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300 transition flex items-center gap-1.5"
+            >
+              <span>📖</span>
+              <span>ترجمه جمله به جمله متن</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenVocabModal}
+              className="rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 transition flex items-center gap-1.5"
+            >
+              <span>🔤</span>
+              <span>استخراج هوشمند واژگان</span>
+            </button>
+          </div>
+        )}
+
         {error && (
           <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
             {error}
@@ -1028,6 +970,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         )}
       </div>
 
+      {/* بدنه آزمون */}
       {exercise && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-6 shadow-sm space-y-5">
           <div className="border-b border-slate-200 dark:border-slate-700 pb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -1044,6 +987,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             </span>
           </div>
 
+          {/* بخش ۱: TF */}
           {exercise.part1TF.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1054,19 +998,13 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                 {exercise.part1TF.map((q, i) => {
                   const id = `tf-${i}`;
                   return (
-                    <div
-                      key={id}
-                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
-                    >
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
                       <p className="text-sm leading-snug">
                         <span className="font-semibold">{i + 1}.</span> {q.statement}
                       </p>
                       <div className="flex gap-6 text-xs sm:text-sm">
                         {['Richtig', 'Falsch'].map((label, j) => (
-                          <label
-                            key={label}
-                            className="flex items-center gap-2 cursor-pointer select-none"
-                          >
+                          <label key={label} className="flex items-center gap-2 cursor-pointer select-none">
                             <input
                               type="radio"
                               name={id}
@@ -1084,7 +1022,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                           <strong>Lösung:</strong> {q.answer ? 'Richtig' : 'Falsch'} — {q.explanation}
                         </p>
                       )}
-                      {renderFeedback(id)}
+                      {renderFeedback(id, q.translation)}
                     </div>
                   );
                 })}
@@ -1092,6 +1030,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             );
           })()}
 
+          {/* بخش ۲: MC */}
           {exercise.part2MC.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1102,19 +1041,13 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                 {exercise.part2MC.map((q, i) => {
                   const id = `mc-${i}`;
                   return (
-                    <div
-                      key={id}
-                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
-                    >
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
                       <p className="text-sm font-medium leading-snug">
                         <span className="font-semibold">{i + 1}.</span> {q.question}
                       </p>
                       <div className="space-y-1.5 pl-1 text-xs sm:text-sm">
                         {q.options.map((opt, optIdx) => (
-                          <label
-                            key={optIdx}
-                            className="flex items-start gap-2 cursor-pointer select-none"
-                          >
+                          <label key={optIdx} className="flex items-start gap-2 cursor-pointer select-none">
                             <input
                               type="radio"
                               name={id}
@@ -1134,7 +1067,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                           <strong>Lösung:</strong> {String.fromCharCode(65 + q.answerIndex)}) {q.options[q.answerIndex]} — {q.explanation}
                         </p>
                       )}
-                      {renderFeedback(id)}
+                      {renderFeedback(id, q.translation)}
                     </div>
                   );
                 })}
@@ -1142,6 +1075,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             );
           })()}
 
+          {/* بخش ۳: Gap */}
           {exercise.part3Gap.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1152,15 +1086,12 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                 {exercise.part3Gap.map((q, i) => {
                   const id = `gap-${i}`;
                   return (
-                    <div
-                      key={id}
-                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
-                    >
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
                       <p className="text-sm leading-snug">
                         <span className="font-semibold">{i + 1}.</span> {q.sentence}
                       </p>
                       <input
-                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm"
                         value={answers[id] || ''}
                         onChange={e => answer(id, e.target.value)}
                         disabled={submitted}
@@ -1171,7 +1102,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                           <strong>Lösung:</strong> {q.answer}
                         </p>
                       )}
-                      {renderFeedback(id)}
+                      {renderFeedback(id, q.translation)}
                     </div>
                   );
                 })}
@@ -1179,6 +1110,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             );
           })()}
 
+          {/* بخش ۴: Short */}
           {exercise.part4Short.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1189,10 +1121,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                 {exercise.part4Short.map((q, i) => {
                   const id = `short-${i}`;
                   return (
-                    <div
-                      key={id}
-                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
-                    >
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
                       <p className="text-sm leading-snug">
                         <span className="font-semibold">{i + 1}.</span> {q.question}
                       </p>
@@ -1201,7 +1130,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                         value={answers[id] || ''}
                         onChange={e => answer(id, e.target.value)}
                         disabled={submitted}
-                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm"
                         placeholder="Ihre Antwort auf Deutsch"
                       />
                       {solutions && (
@@ -1209,7 +1138,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                           <strong>Musterantwort:</strong> {q.answer}
                         </p>
                       )}
-                      {renderFeedback(id)}
+                      {renderFeedback(id, q.translation)}
                     </div>
                   );
                 })}
@@ -1217,6 +1146,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             );
           })()}
 
+          {/* واژگان */}
           {exercise.vocabulary.length > 0 && (
             <section className="space-y-2.5">
               <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
@@ -1225,10 +1155,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
               {exercise.vocabulary.map((q, i) => {
                 const id = `v-${i}`;
                 return (
-                  <div
-                    key={id}
-                    className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
-                  >
+                  <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
                     <p className="text-sm font-semibold">
                       {i + 1}. {q.word}
                     </p>
@@ -1236,7 +1163,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                       value={answers[id] || ''}
                       onChange={e => answer(id, e.target.value)}
                       disabled={submitted}
-                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm"
                       placeholder="Bedeutung auf Deutsch"
                     />
                     {solutions && (
@@ -1257,6 +1184,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
             </div>
           )}
 
+          {/* دکمه‌های پایانی آزمون و چاپ PDF */}
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <button
@@ -1265,11 +1193,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                 disabled={grading || submitted}
                 className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
               >
-                {grading
-                  ? 'Antworten werden bewertet…'
-                  : submitted
-                    ? 'Antworten überprüft'
-                    : 'Antworten überprüfen'}
+                {grading ? 'Antworten werden bewertet…' : submitted ? 'Antworten überprüft' : 'Antworten überprüfen'}
               </button>
 
               <button
@@ -1285,36 +1209,29 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
               <button
                 type="button"
                 onClick={() => handlePrintPDF('transcript')}
-                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
-                title="Transkript als PDF drucken"
+                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium"
               >
-                <span>📄</span>
-                <span>Transkript (PDF)</span>
+                📄 Transkript (PDF)
               </button>
-
               <button
                 type="button"
                 onClick={() => handlePrintPDF('questions')}
-                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
-                title="Prüfungsfragen als PDF drucken"
+                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium"
               >
-                <span>📝</span>
-                <span>Fragen (PDF)</span>
+                📝 Fragen (PDF)
               </button>
-
               <button
                 type="button"
                 onClick={() => handlePrintPDF('certificate')}
                 disabled={!result}
-                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5"
-                title="Zeugnis / Ergebnis als PDF drucken"
+                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium disabled:opacity-40"
               >
-                <span>📊</span>
-                <span>Zeugnis (PDF)</span>
+                📊 Zeugnis (PDF)
               </button>
             </div>
           </div>
 
+          {/* کارنامه */}
           {result && (
             <section className="rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/50 p-4 sm:p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
@@ -1329,90 +1246,198 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
 
                 <div className="text-right">
                   <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-                    {result.score} / {result.maxScore}{' '}
-                    <span className="text-sm font-semibold text-slate-500">
-                      ({result.percentage} %)
-                    </span>
+                    {result.score} / {result.maxScore} <span className="text-sm font-semibold text-slate-500">({result.percentage} %)</span>
                   </div>
-                  <div
-                    className={`text-xs font-bold ${
-                      result.passed
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}
-                  >
+                  <div className={`text-xs font-bold ${result.passed ? 'text-emerald-600' : 'text-red-600'}`}>
                     {result.gradeLabel} · {result.passed ? 'Bestanden' : 'Nicht bestanden'}
                   </div>
                 </div>
               </div>
 
-              {result.sections.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  {result.sections.map((sec, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] px-3 py-2 flex items-center justify-between text-xs"
-                    >
-                      <span className="font-medium text-slate-600 dark:text-slate-300">
-                        {sec.label}
-                      </span>
-                      <span className="font-bold text-slate-800 dark:text-slate-100">
-                        {sec.earned}/{sec.total} ({sec.percentage}%)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="rounded-xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 p-3.5 space-y-2 text-xs leading-relaxed">
-                <p className="font-bold text-blue-900 dark:text-blue-300">
-                  👨‍🏫 Beurteilung der Lehrkraft:
-                </p>
-                <p className="text-slate-700 dark:text-slate-200">
-                  {result.teacherComment}
-                </p>
-                {result.strengths && (
-                  <p className="text-slate-700 dark:text-slate-300">
-                    <strong className="text-emerald-700 dark:text-emerald-400">Stärken:</strong>{' '}
-                    {result.strengths}
-                  </p>
-                )}
-                {result.recommendations && (
-                  <p className="text-slate-700 dark:text-slate-300">
-                    <strong className="text-amber-700 dark:text-amber-400">Empfehlungen:</strong>{' '}
-                    {result.recommendations}
-                  </p>
-                )}
+              <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3.5 space-y-2 text-xs leading-relaxed">
+                <p className="font-bold text-blue-900 dark:text-blue-300">👨‍🏫 Beurteilung der Lehrkraft:</p>
+                <p className="text-slate-700 dark:text-slate-200">{result.teacherComment}</p>
+                <p className="text-slate-700 dark:text-slate-300 font-medium" dir="rtl">{result.teacherCommentFa}</p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <div className="flex gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSubmitted(false);
-                    setResult(null);
-                    setSolutions(false);
-                  }}
-                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] hover:bg-slate-100 dark:hover:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold transition"
+                  onClick={() => { setSubmitted(false); setResult(null); setSolutions(false); }}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-3.5 py-1.5 text-xs font-semibold"
                 >
                   Antworten bearbeiten
                 </button>
-
                 <button
                   type="button"
-                  onClick={() => {
-                    setAnswers({});
-                    setSubmitted(false);
-                    setResult(null);
-                    setSolutions(false);
-                  }}
-                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] hover:bg-slate-100 dark:hover:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold transition"
+                  onClick={() => { setAnswers({}); setSubmitted(false); setResult(null); setSolutions(false); }}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-3.5 py-1.5 text-xs font-semibold"
                 >
-                  Erneut üben (Alles zurücksetzen)
+                  Erneut üben
                 </button>
               </div>
             </section>
           )}
+        </div>
+      )}
+
+      {/* مودال (پاپ‌آپ) ترجمه جمله به جمله */}
+      {showSentenceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" dir="ltr">
+          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <span>📖</span>
+                <span>Satz-für-Satz Übersetzung (ترجمه جمله به جمله)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSentenceModal(false)}
+                className="rounded-full w-8 h-8 flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {loadingSentences ? (
+                <div className="py-12 text-center text-xs text-slate-500">در حال پردازش و ترجمه متن…</div>
+              ) : sentencePairs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-500">متنی یافت نشد.</div>
+              ) : (
+                sentencePairs.map((pair, idx) => (
+                  <div key={idx} className="rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 space-y-1.5 bg-slate-50/50 dark:bg-slate-800/30">
+                    <p className="text-sm font-medium text-slate-900 dark:text-white text-left">
+                      {pair.de}
+                    </p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">
+                      {pair.fa}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 text-right">
+              <button
+                type="button"
+                onClick={() => setShowSentenceModal(false)}
+                className="rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-2 text-xs font-semibold"
+              >
+                بستن (Zurück)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* مودال (پاپ‌آپ) استخراج هوشمند واژگان */}
+      {showVocabModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" dir="ltr">
+          <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <span>🔤</span>
+                <span>Wortschatz-Extraktor (استخراج هوشمند واژگان)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowVocabModal(false)}
+                className="rounded-full w-8 h-8 flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* انتخاب فیلتر سطح */}
+            <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+              <label className="text-xs font-semibold flex items-center gap-2">
+                <span>حذف سطوح پایین‌تر از:</span>
+                <select
+                  value={vocabMinLevel}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setVocabMinLevel(val);
+                    fetchExtractedVocabs(val);
+                  }}
+                  className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1 text-xs font-medium"
+                >
+                  <option value="A2">A2 (و پایین‌تر را نمی‌خواهم)</option>
+                  <option value="B1">B1 (و پایین‌تر را نمی‌خواهم)</option>
+                  <option value="B2">B2 (و پایین‌تر را نمی‌خواهم)</option>
+                  <option value="C1">C1 (و پایین‌تر را نمی‌خواهم)</option>
+                </select>
+              </label>
+              <span className="text-xs text-slate-500 ml-auto">فقط لغات سطح انتخابی و بالاتر استخراج می‌شوند.</span>
+            </div>
+
+            {/* جدول لغات */}
+            <div className="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+              {loadingVocabs ? (
+                <div className="py-16 text-center text-xs text-slate-500">در حال استخراج و تحلیل سطح لغات متن…</div>
+              ) : extractedVocabs.length === 0 ? (
+                <div className="py-16 text-center text-xs text-slate-500">لغتی با این فیلتر سطح یافت نشد.</div>
+              ) : (
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0">
+                    <tr>
+                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold">Wort (واژه با ارتیکل)</th>
+                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold">Bedeutung (ترجمه فارسی)</th>
+                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold">Niveau</th>
+                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold text-center">Auswahl (انتخاب)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {extractedVocabs.map((v, idx) => (
+                      <tr key={idx} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <td className="p-2.5 font-semibold text-slate-900 dark:text-white">{v.word}</td>
+                        <td className="p-2.5 font-medium text-slate-700 dark:text-slate-200" dir="rtl">{v.translation}</td>
+                        <td className="p-2.5"><span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-[10px]">{v.level}</span></td>
+                        <td className="p-2.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={v.selected}
+                            onChange={() => {
+                              const updated = [...extractedVocabs];
+                              updated[idx].selected = !updated[idx].selected;
+                              setExtractedVocabs(updated);
+                            }}
+                            className="w-4 h-4 accent-blue-600 cursor-pointer"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {copySuccessMsg && (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-700 p-3 text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed font-medium">
+                {copySuccessMsg}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleCopySelectedVocabs}
+                disabled={extractedVocabs.filter(v => v.selected).length === 0}
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50 transition flex items-center gap-1.5"
+              >
+                <span>📋</span>
+                <span>کپی لیست لغات انتخاب‌شده</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowVocabModal(false)}
+                className="rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-2 text-xs font-semibold"
+              >
+                بستن (Zurück)
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
