@@ -119,3 +119,12 @@ body.green-tint::before {
 @media (prefers-reduced-motion: reduce) {
   .card-flip-in, .card-enter { animation: none; }
 }
+
+
+/* Flashcard: real 3D flip */
+.fc-scene { perspective: 1400px; position: relative; }
+.fc-card { position: relative; width: 100%; transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(0.4, 0.1, 0.2, 1); }
+.fc-card.flipped { transform: rotateY(180deg); }
+.fc-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.fc-back { transform: rotateY(180deg); }
+@media (prefers-reduced-motion: reduce) { .fc-card { transition: none; } }
