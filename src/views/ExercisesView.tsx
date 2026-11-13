@@ -76,7 +76,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   dikt: { title: 'دیکته (Diktat)', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' }
-  hoeren: {  title: 'Hörverstehen',  icon: '🎧',  desc: 'Hörtexte, Richtig/Falsch und Lückentexte'},
+  hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' }
 };
 
 /**
@@ -1946,6 +1946,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       <HoerenTrainer onClose={() => onSelectMode(null)} />
    );
  }
+  if (activeMode === 'hoeren') {
+    return <HoerenTrainer onClose={() => onSelectMode(null)} />;
+  }
   if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
