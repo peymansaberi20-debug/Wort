@@ -183,7 +183,18 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   );
 
   return (
-    <div className="space-y-5 text-left" dir="ltr">
+      <div className="space-y-5 text-left" dir="ltr">
+      <div className="flex justify-start mb-3" dir="ltr">
+        <button
+          type="button"
+          onClick={onClose}
+          title="Schließen"
+          aria-label="Schließen"
+          className="rounded-full border border-slate-300 dark:border-slate-600 p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          ✕
+        </button>
+      </div>
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-4 space-y-3">
         <h2 className="text-xl font-extrabold">🎧 Hörverstehen erstellen</h2>
         <p className="text-sm text-slate-500">
