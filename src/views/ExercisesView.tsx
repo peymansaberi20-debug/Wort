@@ -79,12 +79,6 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' }
 };
 
-/**
- * Colour-coded conjugated form (regular endings blue, irregular stem changes red).
- * The logic now lives in src/utils/conjugation.ts and is shared with the vocabulary profile.
- * Kept as an export for backward compatibility.
- */
-/** Two exercise-menu tabs: every exercise belongs to exactly one tab — nothing lost, nothing duplicated. */ 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'dict', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
 const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep', 'hoeren'];  
 
@@ -98,18 +92,11 @@ export const HighlightedVerbForm: React.FC<{
 );
 
 interface MistakeComparisonProps {
-  /** What the learner typed */
   user: string;
-  /** The correct answer, or all accepted answers (the closest one is used for the comparison) */
   expected: string | string[];
-  /** Optional small title, e.g. "حرف اضافه" when an exercise has several blanks */
   label?: string;
 }
 
-/**
- * Shows the learner's wrong answer next to the correct one, highlights the differing
- * characters and explains in Persian what exactly went wrong.
- */
 export const MistakeComparison: React.FC<MistakeComparisonProps> = ({ user, expected, label }) => {
   const report = useMemo(() => {
     const list = Array.isArray(expected) ? expected : [expected];
@@ -184,7 +171,6 @@ export const MistakeComparison: React.FC<MistakeComparisonProps> = ({ user, expe
   );
 };
 
-/** "Haus" -> "H _ _ _" (level 1) or "Ha _ s" (level 2) */
 const maskText = (text: string, level: number): string =>
   text
     .split(' ')
@@ -203,11 +189,6 @@ interface HintInfo {
   mask: string;
 }
 
-/**
- * Progressive hints for typed exercises.
- * Level 1: what kind of answer is expected + its length and first letter.
- * Level 2: more letters (first two and the last one) and, where useful, extra information.
- */
 const buildHint = (
   mode: string,
   w: Word,
@@ -272,11 +253,8 @@ const buildHint = (
   return { note: notes.join(' • '), mask: target ? maskText(target, level) : '' };
 };
 
-
-// ---- Sentence practice (write a German sentence with the given word) ----
 const germanTokens = (t: string): string[] => t.split(/[^\p{L}]+/u).filter(Boolean);
 
-/** Finds the target word (or a grammatical form of it) in the learner's sentence. */
 export function findWordInSentence(w: Word, sentence: string): string {
   const tokens = germanTokens(sentence);
   const low = tokens.map(t => t.toLowerCase());
@@ -446,7 +424,6 @@ Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentenc
   );
 };
 
-// ---- Free sentence practice (write ANY German sentence; AI proofreads it) ----
 interface FreeReport {
   understood_fa: string;
   score: number;
@@ -510,7 +487,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
       try {
         const parsed = parseAI(out)[0];
         if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) answer = parsed.answer.trim();
-      } catch { /* مدل متن خام داد؛ همان نمایش داده می‌شود */ }
+      } catch { /* ignore */ }
       setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: answer || 'پاسخی دریافت نشد.' }; return next; });
     } catch (e: any) {
       setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: e?.friendly || e?.message || 'پاسخی دریافت نشد.', err: true }; return next; });
@@ -602,7 +579,6 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
             <ShadowingModal freeText={report.corrected_de} word={FREE_SENT_WORD} onClose={() => setShadowOpen(false)} />
           )}
 
-          {/* Follow-up chat about this sentence and its correction */}
           <div className="pt-1 border-t border-slate-200 dark:border-slate-800 space-y-2">
             <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی دربارهٔ این جمله یا تصحیحش داری؟ بپرس:</div>
             {chat.map((m, i) => (
@@ -649,14 +625,11 @@ const shuffleArr = <T,>(arr: T[]): T[] => {
   return r;
 };
 
-/** Splits "a, b; c" style lists (synonyms / antonyms) into separate entries. */
 const splitList = (s: string): string[] =>
   (s || '').split(/[,;،؛/|]/).map(x => x.trim()).filter(Boolean);
 
-/** All case / preposition questions (seed list + extra, harder questions). */
 const ALL_CASEQ: CaseQuestion[] = [...CASEQ, ...EXTRA_CASEQ];
 
-/** Synthetic target for the free-sentence exercise (no vocabulary item involved). */
 const FREE_SENT_WORD: Word = {
   id: 'freesent-self', de: '', art: '', fa: '', syn: '', synFa: '', ant: '', antFa: '',
   pl: '', pos: '', lvl: 'A2', ex: '', exFa: '', ex2: '', ex2Fa: '', conj: '', prat: '',
@@ -664,7 +637,6 @@ const FREE_SENT_WORD: Word = {
   notes: '', added: 0, last: 0, due: 0, ivl: 0, ease: 2.5, stage: 0, ok: 0, bad: 0, res: ''
 };
 
-/** Progressive session: a few questions of every difficulty level, easiest first. */
 const pickCaseQueue = (): string[] => {
   const byLevel = new Map<number, CaseQuestion[]>();
   ALL_CASEQ.forEach(q => byLevel.set(q.cs || 1, [...(byLevel.get(q.cs || 1) || []), q]));
@@ -673,7 +645,6 @@ const pickCaseQueue = (): string[] => {
   return chosen.sort((a, b) => (a.cs || 1) - (b.cs || 1)).map(q => q.id);
 };
 
-/** Queue key of one adjective-declension question: "<wordId>::adjdecl::<source>~<spec>" */
 const adjKey = (w: Word, level?: number): string | null => {
   const sources = adjSources(w, isAdjPos(w.pos));
   if (sources.length === 0) return null;
@@ -701,7 +672,6 @@ const buildAdjQueue = (ws: Word[], n: number): string[] => {
   return out;
 };
 
-/** Queue key for the synonym/antonym exercise: "<wordId>::<sub>::<syn|ant>" */
 const synAntKey = (w: Word, sub = 'synant'): string => {
   const kinds: string[] = [];
   if (splitList(w.syn).length) kinds.push('syn');
@@ -710,10 +680,6 @@ const synAntKey = (w: Word, sub = 'synant'): string => {
   return `${w.id}::${sub}::${kind}`;
 };
 
-/**
- * Mixed session for hard words: every word is asked in several different formats,
- * and the whole order is reshuffled every time a session starts.
- */
 const buildHardQueue = (ws: Word[]): string[] => {
   const keys: string[] = [];
   ws.forEach(w => {
@@ -757,16 +723,12 @@ interface ExercisesViewProps {
   onEditWord?: (word: Word) => void;
   onDeleteWord?: (word: Word) => void;
   onImageChange?: (word: Word, newImg: string) => void;
-  /** true while the exercise is hidden behind the word edit form */
   paused?: boolean;
   onUpdateSettings?: (patch: Partial<AppSettings>) => void;
-  /** starts the dedicated practice for the given hard words */
   onStartHard?: (ids: string[]) => void;
-  /** counters of today's new / reviewed words (from the app state) */
   dailyProgress?: { d: string; n: number; r: number };
 }
 
-// Flashcards: the day's NEW words are fixed at the first start of the day and never topped up afterwards.
 const ALLOC_KEY = 'wb_flash_new_alloc';
 const readAlloc = (d: string): string[] | null => {
   try { const o = JSON.parse(localStorage.getItem(ALLOC_KEY) || 'null'); return o && o.d === d && Array.isArray(o.ids) ? o.ids : null; } catch { return null; }
@@ -790,8 +752,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onStartHard,
   dailyProgress
 }) => {
-  // Only words of the categories chosen in Settings ("active categories") feed the exercises,
-  // except the flashcard box, the free category review, free sentence writing and Schreiben correction.
   const words = useMemo(() => {
     const cats = settings?.activeCats;
     const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'errnb' || activeMode === 'vprep';
@@ -799,34 +759,29 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const allowed = new Set(cats);
     return allWords.filter(w => allowed.has(w.cat));
   }, [allWords, settings?.activeCats, activeMode, practiceWordIds]);
+
   const pausedRef = useRef<boolean>(!!paused);
   pausedRef.current = !!paused;
   const [faShown, setFaShown] = useState(false);
   const [conjPron, setConjPron] = useState(2);
 
-  // Free review configuration
   const [freeCat, setFreeCat] = useState<string>(settings?.freeCat || '');
   const [freeDir, setFreeDir] = useState<'de' | 'fa'>(settings?.freeDir || 'de');
   const [freeRnd, setFreeRnd] = useState<boolean>(settings?.freeRnd ?? true);
   const [isFreeStarted, setIsFreeStarted] = useState<boolean>(false);
 
-  // Flashcard setup config
   const [flashDir, setFlashDir] = useState<'de' | 'fa' | 'rand'>(settings?.dir || 'de');
   const [flashCat, setFlashCat] = useState<string>('');
   const [isFlashConfigured, setIsFlashConfigured] = useState<boolean>(false);
 
-  // Active session queue
   const [queue, setQueue] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
 
-  // Fulfills Section 10: Independent answer visibility per card
   const [revealedCardId, setRevealedCardId] = useState<string | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);   // flashcard: "more details" drawer
+  const [moreOpen, setMoreOpen] = useState(false);
   const [currentCardDir, setCurrentCardDir] = useState<'de' | 'fa'>('de');
 
-  // Input states
   const [userInput, setUserInput] = useState<string>('');
-  // Fulfills Section 19: Two separate blanks for Case & Preposition
   const [casePrepInput, setCasePrepInput] = useState<string>('');
   const [caseArtInput, setCaseArtInput] = useState<string>('');
   const [caseResult, setCaseResult] = useState<{ prepOk: boolean; artOk: boolean } | null>(null);
@@ -834,28 +789,23 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [answerResult, setAnswerResult] = useState<{ ok: number; exp: string; msg?: string; cands?: string[] } | null>(null);
   const [hintLevel, setHintLevel] = useState<number>(0);
 
-  // Fulfills Section 21: View Full Word Profile modal accessible from EVERY exercise
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
   const [sentenceModalWord, setSentenceModalWord] = useState<Word | null>(null);
   const [shadowWord, setShadowWord] = useState<Word | null>(null);
   pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord;
     
-  // Fulfills Section 5: Flashcard timer per card
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [timerPopupOpen, setTimerPopupOpen] = useState(false);   const [timerSecDraft, setTimerSecDraft] = useState<string | null>(null);
+  const [timerPopupOpen, setTimerPopupOpen] = useState(false);
+  const [timerSecDraft, setTimerSecDraft] = useState<string | null>(null);
   const [sentTimeUp, setSentTimeUp] = useState(0);
   const timeUpRef = useRef<() => void>(() => {});
   const timerRef = useRef<any>(null);
 
-  // For free review tracking
   const [knownMap, setKnownMap] = useState<Record<string, number>>({});
-
   const categories = useMemo(() => getCategories(words), [words]);
 
-  // Words already counted towards the daily goal in a mixed hard-word session
   const hardCountedRef = useRef<Set<string>>(new Set());
 
-  // Queue keys: plain word id, or "<id>::<sub>[::<kind>]" for the mixed / synonym exercises
   const currentKey = queue[currentIndex] || '';
   const keyParts = currentKey.split('::');
   const currentSub = keyParts[1] || '';
@@ -878,7 +828,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     onRecordResult(item, mode, grade, retry);
   };
 
-  // Clean up timers and audio on unmount or question change
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -886,7 +835,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     };
   }, []);
 
-  // Build queue when activeMode starts
   useEffect(() => {
     if (!activeMode) {
       setQueue([]);
@@ -898,8 +846,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setCaseResult(null);
       setAnswerResult(null);
       setHintLevel(0);
-    setFaShown(false);
-    setConjPron(Math.floor(Math.random() * 6));
+      setFaShown(false);
+      setConjPron(Math.floor(Math.random() * 6));
       setIsFreeStarted(false);
       setIsFlashConfigured(false);
       stopSpeaking();
@@ -909,14 +857,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const n = Date.now();
     let qIds: string[] = [];
 
-    // Filter by active categories if specified (Section 3.4)
     let pool = words;
     if (settings?.activeCats && settings.activeCats.length > 0) {
       const allowed = new Set(settings.activeCats);
       pool = pool.filter(w => allowed.has(w.cat));
     }
 
-    // Exclude suspended words if leechAct === 'suspend' (Section 4.3)
     if (settings?.leechAct === 'suspend') {
       const leechThreshold = settings.leechN || 4;
       pool = pool.filter(w => !isLeech(w, leechThreshold));
@@ -961,9 +907,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       if (activeMode === 'review') {
         pool = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due);
       } else if (!flashCat) {
-        // 1st start of the day: due reviews (max "rv") + exactly the daily quota of new words ("nw").
-        // Later starts the same day: no further new words — only the words that are due again
-        // (plus any of the day's new words that were not seen yet).
         const day = today();
         const dp = dailyProgress && dailyProgress.d ? dailyProgress : { d: '', n: 0, r: 0 };
         const dueSel = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due).slice(0, settings?.rv || 20);
@@ -996,14 +939,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         const dueWords = pool.filter(w => w.last && w.due <= n);
         const newWords = pool.filter(w => !w.last);
 
-        // Respect session order (Section 3.3)
         const order = settings?.order || 'due';
         if (order === 'new') {
           pool = [...newWords, ...dueWords];
         } else if (order === 'rand') {
           pool = [...dueWords, ...newWords].sort(() => Math.random() - 0.5);
         } else if (order === 'randnew') {
-          // dues first (in due order), then a RANDOM pick among the unseen new words
           pool = [...dueWords, ...newWords.slice().sort(() => Math.random() - 0.5)];
         } else if (order === 'mix') {
           const mixed: Word[] = [];
@@ -1014,7 +955,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           }
           pool = mixed;
         } else {
-          // 'due' default
           pool = [...dueWords, ...newWords];
         }
       }
@@ -1056,7 +996,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setConjPron(Math.floor(Math.random() * 6));
   }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct]);
 
-  // Current item
   const currentItem = useMemo(() => {
     if (queue.length === 0 || currentIndex >= queue.length) return null;
     const id = queue[currentIndex].split('::')[0];
@@ -1069,7 +1008,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return words.find(w => w.id === id) || null;
   }, [queue, currentIndex, activeMode, words]);
 
-  // Flashcards: the details drawer closes on every new card; the page cannot scroll until the drawer is opened.
   const cardKeyNow = queue[currentIndex] || '';
   useEffect(() => { setMoreOpen(false); }, [cardKeyNow]);
   useEffect(() => {
@@ -1080,7 +1018,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return () => { document.body.style.overflow = prev; };
   }, [activeMode, currentItem, moreOpen]);
 
-  // Adjective-declension question of the current queue entry
   const adjInfo = useMemo(() => {
     if (qMode !== 'adjdecl' || !currentItem) return null;
     const w = currentItem as Word;
@@ -1092,16 +1029,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return item ? { item, src } : null;
   }, [qMode, currentItem, currentKind]);
 
-  // Fulfills Section 2.2: Independent random direction per card
-  // Fulfills Section 5: Flashcard timer per card
-  // Fulfills Section 6.1: Automatic audio playback
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     stopSpeaking();
 
     if (!currentItem) return;
 
-    // Free practice uses its own direction setting, independently of scheduled review settings.
     const defaultDir = settings?.dir || 'de';
     if (hardFlashDir) {
       setCurrentCardDir(hardFlashDir);
@@ -1115,13 +1048,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setCurrentCardDir(defaultDir);
     }
 
-    // Reset card-specific state (Section 10)
     setRevealedCardId(null);
 
     const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review';
 
-    // Automatic TTS for question if German is SHOWN (Section 6.1).
-    // Never auto-play when only the Persian side is visible: audio would reveal the hidden German word.
     if (isFlashType && settings?.auto && currentCardDir === 'de' && revealedCardId !== currentItem.id) {
       const w = currentItem as Word;
       speak(fullWord(w), {
@@ -1137,7 +1067,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     };
   }, [currentIndex, currentItem?.id, currentKey, qMode, activeMode, freeDir, freeRnd, flashDir, settings?.dir]);
 
-  // Countdown timer of the current exercise type (one interval at a time, always cleaned up)
   const timerCfg: ExerciseTimerCfg = qMode ? getTimerCfg(settings, qMode) : { on: false, sec: 30 };
   const timerAnswered = !!answerResult || !!caseResult || (!!currentItem && revealedCardId === currentItem.id);
   const hasItem = !!currentItem;
@@ -1160,7 +1089,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return () => clearInterval(id);
   }, [activeMode, currentKey, currentIndex, qMode, hasItem, timerCfg.on, timerCfg.sec, timerAnswered]);
 
-  // If a word is deleted while practising (e.g. from the word profile), drop it from the session
   useEffect(() => {
     if (profileModalWord && activeMode !== 'case' && !ALL_CASEQ.some(q => q.id === profileModalWord.id)) {
       if (!words.some(w => w.id === profileModalWord.id)) setProfileModalWord(null);
@@ -1181,12 +1109,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setCaseResult(null);
       setAnswerResult(null);
       setHintLevel(0);
-    setFaShown(false);
-    setConjPron(Math.floor(Math.random() * 6));
+      setFaShown(false);
+      setConjPron(Math.floor(Math.random() * 6));
     }
   }, [words]);
 
-  // Advance to next question
   const advanceQuestion = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     stopSpeaking();
@@ -1217,13 +1144,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     advanceQuestion();
   };
 
-  // User manual reveal
   const handleRevealCard = () => {
     if (!currentItem) return;
     setRevealedCardId(currentItem.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Audio on reveal (Section 6.1 & 6.2) — only if the German side is the newly revealed one
     const w = currentItem as Word;
     if ((settings?.auto || settings?.autoEx) && currentCardDir === 'de') {
       stopSpeaking();
@@ -1244,7 +1169,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     }
   };
 
-  // Fulfills Section 19: Check Case and Preposition Exercise with TWO separate blanks
   const runCaseCheck = (force: boolean) => {
     if (!currentItem || answerResult) return;
     const q = currentItem as CaseQuestion;
@@ -1290,7 +1214,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     }
   };
 
-  // Check standard interactive text exercises
   const runCheckAnswer = (force: boolean) => {
     if (!currentItem || answerResult) return;
     const trimmed = userInput.trim();
@@ -1422,7 +1345,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const handleCheckCaseAnswer = () => runCaseCheck(false);
   const handleCheckAnswer = () => runCheckAnswer(false);
 
-  // Article choice (der / die / das); an empty choice means "time is up" and counts as wrong
   const answerArt = (art: string) => {
     if (!currentItem || answerResult) return;
     const w = currentItem as Word;
@@ -1435,7 +1357,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     record(w, 'art', ok ? (faShown ? 1 : 2) : 0);
   };
 
-  // What happens when the countdown reaches zero
   timeUpRef.current = () => {
     if (!currentItem) return;
     if (qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily') {
@@ -1443,7 +1364,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     } else if (qMode === 'sent') {
       setSentTimeUp(n => n + 1);
     } else if ((qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) {
-      // free writing: timer expiry has no automatic action
+      // free practice
     } else if (qMode === 'art') {
       answerArt('');
     } else if (qMode === 'case') {
@@ -1453,10 +1374,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     }
   };
 
-  // Open Full Word Profile Modal from ANY exercise (Section 21)
   const handleOpenWordProfile = () => {
     if (!currentItem) return;
-    // adjdecl: show the adjective actually used in the blank, not the training word
     if (qMode === 'adjdecl' && adjInfo) {
       const base = String(adjInfo.item.base || adjInfo.src.base || '').trim().toLowerCase();
       if (base) {
@@ -1529,11 +1448,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     }
   };
 
-  // Unified clean card display (revealed face)
   const renderUnifiedWordCard = (w: Word, opts?: { hideConj?: boolean }) => {
     return (
       <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 text-right">
-        {/* Top: Word, Article, Translation */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-800 pb-2">
           <div className="flex items-center gap-2" dir="ltr">
             {w.art && (
@@ -1562,7 +1479,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         </div>
 
-        {/* Synonyms & Antonyms */}
         {(w.syn || w.ant) && (
           <div className="flex flex-wrap items-center gap-4 text-sm md:text-base">
             {w.syn && (
@@ -1582,14 +1498,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
-        {/* Phase 3: German definition above the example */}
         {w.def && (
           <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-900 p-2.5 rounded-xl text-sm" dir="ltr">
             <span className="text-[10px] font-bold text-[#4338ca] dark:text-[#a5b4fc] uppercase">Bedeutung: </span>
             <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
           </div>
         )}
-        {/* Examples — revealed ONLY when card is revealed (Section 11): Bedeutung first, then Redemittel */}
+
         {(w.ex || w.ex2) && (
           <div className="space-y-2 pt-1">
             {w.ex && (
@@ -1625,7 +1540,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
-        {/* Verb table: two columns LTR — ich/du/er left, wir/ihr/sie right */}
         {w.conj && !opts?.hideConj && (
           (() => {
             const forms = splitConj(w.conj);
@@ -1654,7 +1568,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           })()
         )}
         
-        {/* Image if available */}
         {w.img && (
           <div className="text-center pt-1">
             <img src={w.img} alt={w.de} className="max-h-40 mx-auto rounded-xl object-contain shadow-xs" />
@@ -1663,113 +1576,186 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       </div>
     );
   };
-
-  // ==========================================
         
-  const [exTab, setExTab] = useState<'wortschatz' | 'grammatik'>('wortschatz');
-  const [showMore, setShowMore] = useState(false);
+  const [mainTab, setMainTab] = useState<'flash' | 'wortschatz' | 'grammatik' | 'skills'>('flash');
   const [showHard, setShowHard] = useState(false);   
-  // If NO active mode is selected: Show Menu
-  // ==========================================
+
   if (!activeMode) {
-    const otherList = exTab === 'wortschatz' ? WORTSCHATZ_MODES.filter(m => m !== 'flash') : GRAMMATIK_MODES;
     const activeCatCount = settings?.activeCats?.length || 0;
+    const hardWordsCount = allWords.filter(w => (w.bad || 0) > 3).length;
+
     return (
-      <div className="flex flex-col gap-3 text-right max-w-2xl mx-auto h-[calc(100dvh-10.5rem)] min-h-[440px] overflow-hidden">
-        {/* 1. Flashcards (Leitner box) — big, enters directly */}
-        <button
-          onClick={() => onSelectMode('flash')}
-          className="w-full flex-[2.4] min-h-0 flex items-center text-right rounded-3xl p-5 bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white shadow-xl active:scale-[.99] transition relative overflow-hidden"
-        >
-          <span className="absolute -top-8 -left-6 w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-          <div className="relative flex items-center gap-4 w-full">
-            <span className="text-6xl" aria-hidden="true">🃏</span>
-            <div className="min-w-0 flex-1">
-              <div className="text-2xl font-extrabold">فلش‌کارت</div>
-              <div className="text-sm text-white/85 mt-1">جعبهٔ لایتنر — مرور هوشمند با تکرار فاصله‌دار</div>
-              <div className="text-xs text-white/75 mt-2.5 flex flex-wrap gap-2">
-                <span className="bg-white/15 rounded-full px-2.5 py-0.5">📚 {words.length} واژه</span>
-                {activeCatCount > 0 && <span className="bg-white/15 rounded-full px-2.5 py-0.5">🗂 {activeCatCount} دستهٔ فعال</span>}
-              </div>
-            </div>
-            <span className="text-4xl text-white/80" aria-hidden="true">‹</span>
-          </div>
-        </button>
+      <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs font-bold">
+          <button
+            onClick={() => setMainTab('flash')}
+            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-base">🃏</span>
+            <span>فلش‌کارت</span>
+          </button>
+          <button
+            onClick={() => setMainTab('wortschatz')}
+            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-base">📚</span>
+            <span>واژگان</span>
+          </button>
+          <button
+            onClick={() => setMainTab('grammatik')}
+            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-base">🧩</span>
+            <span>گرامر</span>
+          </button>
+          <button
+            onClick={() => setMainTab('skills')}
+            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'skills' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-base">🎧</span>
+            <span>مهارت‌ها</span>
+          </button>
+        </div>
 
-        {/* 2. Other exercises (opens a page) */}
-        <button
-          onClick={() => setShowMore(true)}
-          className="w-full flex-1 min-h-0 text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
-        >
-          <span className="text-4xl" aria-hidden="true">🧩</span>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">سایر تمرینات</div>
-            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">واژگان، گرامر، نوشتار، دیکته، چیدن جمله و …</div>
-          </div>
-          <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
-        </button>
-
-        <button
-          onClick={() => onSelectMode('errnb')}
-          className="w-full flex-1 min-h-0 text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
-        >
-          <span className="text-4xl" aria-hidden="true">📓</span>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">دفتر خطاها</div>
-            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">جمله‌های غلطِ خودت را مرور کن</div>
-          </div>
-          <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
-        </button>
-        <button
-          onClick={() => setShowHard(true)}
-          className="w-full flex-1 min-h-0 text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
-        >
-          <span className="text-4xl" aria-hidden="true">🩸</span>
-          <div className="min-w-0 flex-1">
-            <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">واژه‌های پر اشتباه و سخت</div>
-            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">فهرست و تمرین اختصاصی</div>
-          </div>
-          <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
-        </button>
-
-        {showMore && (
-          <PageOverlay icon="🧩" title="سایر تمرینات" subtitle="واژگان و گرامر" onClose={() => setShowMore(false)}>
-            <div className="space-y-2.5 text-right">
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => setExTab('wortschatz')}
-                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a]'}`}
-                >
-                  📚 Wortschatz üben
-                </button>
-                <button
-                  onClick={() => setExTab('grammatik')}
-                  className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition ${exTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a]'}`}
-                >
-                  🧩 Grammatik üben
-                </button>
-              </div>
-              {otherList.map(mode => {
-                const info = EXERCISE_NAMES[mode];
-                return (
-                  <div
-                    key={mode}
-                    onClick={() => onSelectMode(mode)}
-                    className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-2xl flex-shrink-0">{info.icon}</span>
-                      <div className="min-w-0">
-                        <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
-                        <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
-                      </div>
-                    </div>
-                    <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs flex-shrink-0">شروع ▶</span>
+        {mainTab === 'flash' && (
+          <div className="space-y-3">
+            <button
+              onClick={() => onSelectMode('flash')}
+              className="w-full text-right rounded-3xl p-6 bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white shadow-xl active:scale-[.99] transition relative overflow-hidden"
+            >
+              <div className="relative flex items-center gap-4 w-full">
+                <span className="text-5xl">🃏</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-2xl font-extrabold">جعبه لایتنر و فلش‌کارت</div>
+                  <div className="text-sm text-white/85 mt-1">مرور هوشمند واژگان با تکرار فاصله‌دار استاندارد</div>
+                  <div className="text-xs text-white/75 mt-3 flex flex-wrap gap-2">
+                    <span className="bg-white/15 rounded-full px-3 py-1">📚 {words.length} واژه آماده مرور</span>
+                    {activeCatCount > 0 && <span className="bg-white/15 rounded-full px-3 py-1">🗂 {activeCatCount} دستهٔ فعال</span>}
                   </div>
-                );
-              })}
+                </div>
+                <span className="text-3xl text-white/85">‹</span>
+              </div>
+            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => onSelectMode('review')}
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+              >
+                <span className="text-3xl">🔁</span>
+                <div>
+                  <div className="font-bold text-sm">مرور سررسیدها</div>
+                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">فقط واژه‌های نیازمند مرور امروز</div>
+                </div>
+              </button>
+              <button
+                onClick={() => onSelectMode('daily')}
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+              >
+                <span className="text-3xl">🌟</span>
+                <div>
+                  <div className="font-bold text-sm">جلسه روزانه</div>
+                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">ترکیب سررسیدها + لغات جدید</div>
+                </div>
+              </button>
             </div>
-          </PageOverlay>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => onSelectMode('errnb')}
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+              >
+                <span className="text-3xl">📓</span>
+                <div>
+                  <div className="font-bold text-sm">دفتر خطاها</div>
+                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">مرور جمله‌های غلطِ خودت</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setShowHard(true)}
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+              >
+                <span className="text-3xl">🩸</span>
+                <div>
+                  <div className="font-bold text-sm">واژه‌های پر اشتباه ({hardWordsCount})</div>
+                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">تمرین اختصاصی واژه‌های سخت</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mainTab === 'wortschatz' && (
+          <div className="space-y-2.5">
+            {WORTSCHATZ_MODES.filter(m => m !== 'flash' && m !== 'review' && m !== 'daily').map(mode => {
+              const info = EXERCISE_NAMES[mode];
+              return (
+                <div
+                  key={mode}
+                  onClick={() => onSelectMode(mode)}
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-2xl flex-shrink-0">{info.icon}</span>
+                    <div className="min-w-0">
+                      <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                    </div>
+                  </div>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0">شروع ▶</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {mainTab === 'grammatik' && (
+          <div className="space-y-2.5">
+            {GRAMMATIK_MODES.filter(m => m !== 'hoeren' && m !== 'schreiben' && m !== 'puzzle' && m !== 'dikt' && m !== 'errnb').map(mode => {
+              const info = EXERCISE_NAMES[mode];
+              return (
+                <div
+                  key={mode}
+                  onClick={() => onSelectMode(mode)}
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-2xl flex-shrink-0">{info.icon}</span>
+                    <div className="min-w-0">
+                      <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                    </div>
+                  </div>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0">شروع ▶</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {mainTab === 'skills' && (
+          <div className="space-y-2.5">
+            {(['hoeren', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep'] as ExerciseMode[]).map(mode => {
+              const info = EXERCISE_NAMES[mode];
+              if (!info) return null;
+              return (
+                <div
+                  key={mode}
+                  onClick={() => onSelectMode(mode)}
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-2xl flex-shrink-0">{info.icon}</span>
+                    <div className="min-w-0">
+                      <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                    </div>
+                  </div>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0">شروع ▶</span>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {showHard && (() => {
@@ -1810,7 +1796,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // Flashcard setup modal if needed
   if (activeMode === 'flash' && !isFlashConfigured) {
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-4 text-right max-w-xl mx-auto">
@@ -1879,12 +1864,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // ==========================================
-  // Independent Free Category Review setup
-  // ==========================================
   if (activeMode === 'free' && !isFreeStarted) {
     const selectedCount = words.filter(w => !freeCat || w.cat === freeCat).length;
-
 
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5 text-right max-w-xl mx-auto">
@@ -1923,14 +1904,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  // ==========================================
-  // Active Exercise Runner
-  // ==========================================
   const progressPercent = queue.length > 0 ? Math.round(((currentIndex + 1) / queue.length) * 100) : 0;
   const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily';
   const isCardRevealed = !!currentItem && revealedCardId === currentItem.id;
 
-  // Persian translations stay hidden until the learner asks for them (or has answered)
   const faVisible = faShown || !!answerResult || !!caseResult;
   const faButton = (
     <button
@@ -1941,14 +1918,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       👁 مشاهدهٔ ترجمه
     </button>
   );
-  if (activeMode === 'hoeren') {
-    return (
-      <HoerenTrainer onClose={() => onSelectMode(null)} />
-   );
- }
+
   if (activeMode === 'hoeren') {
     return <HoerenTrainer onClose={() => onSelectMode(null)} />;
   }
+
   if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
@@ -1975,16 +1949,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   return (
     <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
-      {/* Exercise Top Bar */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
-        {/* Title (help icon moved into the standardized toolbar) */}
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
         </div>
 
-        {/* Phase 2 Sec.1: standardized toolbar — exit leftmost, then profile, then timer (LTR row) */}
         <div className="flex items-center gap-2" dir="ltr">
           <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
           {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
@@ -2019,7 +1990,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         />
       )}
 
-      {/* Progress & Subtitle (hidden for free-sentence exercise) */}
       {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
       <div className="space-y-1.5">
         <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -2042,7 +2012,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       </div>
       )}
 
-      {/* Active Card Body */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
         {activeMode === 'hard' && qMode && (
           <div className="flex justify-center">
@@ -2055,9 +2024,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </span>
           </div>
         )}
-        {/* ========================================================= */}
-        {/* FLASHCARD / REVIEW CARD (Sections 10 & 11) */}
-        {/* ========================================================= */}
+
         {isFlashType && (() => {
           const w = currentItem as Word;
           const isFaDir = currentCardDir === 'fa';
@@ -2084,7 +2051,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <div className="space-y-3">
               <div key={currentKey} className="fc-scene" style={{ height: 'min(46dvh, 420px)', minHeight: 290 }}>
                 <div className={'fc-card h-full ' + (isCardRevealed ? 'flipped' : '')}>
-                  {/* FRONT */}
                   <div className={faceCls + 'flex flex-col items-center justify-center gap-2 p-5 text-center cursor-pointer'} onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
                     {!isFaDir ? (
                       <>
@@ -2104,7 +2070,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     <span className="absolute bottom-3 text-[11px] text-[#5d6676] dark:text-[#a3adbd]">برای دیدن پشت کارت بزن ↻</span>
                   </div>
 
-                  {/* BACK */}
                   <div className={faceCls + 'fc-back p-4 overflow-y-auto bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029]'}>
                     {!isFaDir ? (
                       <div className="text-2xl md:text-3xl font-extrabold text-center pb-2 text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
@@ -2161,9 +2126,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </div>
           );
         })()}
-        {/* ========================================================= */}
-        {/* ARTICLE PRACTICE (der / die / das) */}
-        {/* ========================================================= */}
+
         {qMode === 'art' && (() => {
           const w = currentItem as Word;
           return (
@@ -2210,9 +2173,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           );
         })()}
 
-        {/* ========================================================= */}
-        {/* Fulfills Section 19: REDESIGNED CASE AND PREPOSITION WITH 2 BLANKS */}
-        {/* ========================================================= */}
         {qMode === 'case' && (() => {
           const q = currentItem as CaseQuestion;
           const bareNoun = q.n.replace(/^(der|die|das|den|dem|des)\s+/i, '').trim();
@@ -2227,7 +2187,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </span>
               </p>
 
-              {/* Sentence with 2 blanks */}
               <div className="text-xl md:text-2xl font-bold font-sans py-2 text-slate-900 dark:text-slate-100" dir="ltr">
                 {q.s}
               </div>
@@ -2240,7 +2199,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
               {!answerResult ? (
                 <div className="space-y-3 pt-2 max-w-md mx-auto">
-                  {/* Two Separate Inputs (Section 19) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-right">
                     <div>
                       <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
@@ -2347,9 +2305,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           );
         })()}
 
-        {/* ========================================================= */}
-        {/* OTHER INTERACTIVE EXERCISES */}
-        {/* ========================================================= */}
         {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl'  || qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) && (() => {
           const w = currentItem as Word;
           const remainingHints = Math.max(0, 2 - hintLevel);
@@ -2493,7 +2448,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-                            {qMode === 'sent' && (
+              {qMode === 'sent' && (
                 <SentencePractice
                   key={currentKey}
                   w={w}
@@ -2535,7 +2490,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               )}
 
-              {/* Input Box and Action Bar */}
               {(qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) ? null : !answerResult ? (
                 <div className="space-y-3 pt-2 max-w-sm mx-auto">
                   <input
@@ -2630,7 +2584,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         })()}
       </div>
 
-      {/* Fulfills Section 21: Full Word Profile Modal from Exercise */}
       {timerPopupOpen && qMode && activeMode !== 'hard' && (
         <div
           className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
@@ -2700,7 +2653,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             onImageChange={(w, img) => (inLibrary ? onImageChange?.(w, img) : notSaved())}
           />
         );
-      })()}
+      })}
     </div>
   );
 };
