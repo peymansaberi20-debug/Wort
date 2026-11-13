@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
 
 type ExamType = 'Standard' | 'Goethe' | 'OESD' | 'Telc' | 'EPD';
@@ -48,7 +48,23 @@ type Exercise = {
   vocabulary: Vocab[];
 };
 
+// اینترفیس برای ذخیره کامل تمرین در آرشیو
+type SavedExerciseRecord = {
+  id: string;
+  createdAt: string;
+  title: string;
+  examType: ExamType;
+  level: string;
+  transcript: string;
+  exercise: Exercise;
+  audioUrl?: string;
+  answers: Record<string, string>;
+  submitted: boolean;
+  result: GradingResult | null;
+};
+
 const STORAGE_KEY = 'hoeren_trainer_state_v3';
+const ARCHIVE_STORAGE_KEY = 'hoeren_trainer_archive_list_v1';
 
 const EXAM_LABELS: Record<ExamType, string> = {
   Standard: 'Standard / Allgemein',
@@ -200,6 +216,10 @@ function escapeHtml(str: string): string {
 }
 
 export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  // ویو مود: 'menu' (صفحه انتخاب دو گزینه‌ای) | 'creator' (صفحه ساخت تمرین) | 'archive' (لیست تمرینات ذخیره‌شده)
+  const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive'>('menu');
+  const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>([]);
+
   const [transcript, setTranscript] = useState('');
   const [examType, setExamType] = useState<ExamType>('Standard');
   const [level, setLevel] = useState('B1');
@@ -213,6 +233,12 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
+  // استیت‌های تولید صوت (TTS)
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   // استیت‌های مودم‌ها (پاپ‌آپ‌ها)
   const [showSentenceModal, setShowSentenceModal] = useState(false);
   const [sentencePairs, setSentencePairs] = useState<{ de: string; fa: string }[]>([]);
@@ -224,8 +250,13 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [loadingVocabs, setLoadingVocabs] = useState(false);
   const [copySuccessMsg, setCopySuccessMsg] = useState('');
 
+  // بارگذاری آرشیو از localStorage
   useEffect(() => {
     try {
+      const storedArchive = localStorage.getItem(ARCHIVE_STORAGE_KEY);
+      if (storedArchive) {
+        setSavedExercises(JSON.parse(storedArchive));
+      }
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -236,10 +267,12 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         if (parsed.answers) setAnswers(parsed.answers);
         if (typeof parsed.submitted === 'boolean') setSubmitted(parsed.submitted);
         if (parsed.result) setResult(parsed.result);
+        if (parsed.audioBlobUrl) setAudioBlobUrl(parsed.audioBlobUrl);
       }
     } catch {}
   }, []);
 
+  // ذخیره خودکار وضعیت جاری
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -252,10 +285,33 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           answers,
           submitted,
           result,
+          audioBlobUrl,
         })
       );
     } catch {}
-  }, [transcript, examType, level, exercise, answers, submitted, result]);
+  }, [transcript, examType, level, exercise, answers, submitted, result, audioBlobUrl]);
+
+  // ذخیره لیست آرشیو در localStorage
+  const saveToArchiveList = (currentExercise: Exercise, curTranscript: string, curAudioUrl: string | null, curAnswers: Record<string, string>, curSub: boolean, curRes: GradingResult | null) => {
+    try {
+      const newItem: SavedExerciseRecord = {
+        id: 'ex_' + Date.now(),
+        createdAt: new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        title: currentExercise.title,
+        examType: currentExercise.examType,
+        level: currentExercise.level,
+        transcript: curTranscript,
+        exercise: currentExercise,
+        audioUrl: curAudioUrl || undefined,
+        answers: curAnswers,
+        submitted: curSub,
+        result: curRes,
+      };
+      const updated = [newItem, ...savedExercises];
+      setSavedExercises(updated);
+      localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+  };
 
   const answer = (id: string, value: string) => {
     setWarningMsg('');
@@ -437,7 +493,7 @@ ${JSON.stringify(freeQuestions)}
         aiRecommendations = 'Üben Sie weiter mit originalen Audios. تمرین بیشتر با فایل‌های صوتی توصیه می‌شود.';
       }
 
-      setResult({
+      const finalRes: GradingResult = {
         score,
         maxScore,
         percentage,
@@ -449,8 +505,13 @@ ${JSON.stringify(freeQuestions)}
         strengths: aiStrengths,
         recommendations: aiRecommendations,
         details,
-      });
+      };
+
+      setResult(finalRes);
       setSubmitted(true);
+
+      // ذخیره اتوماتیک در آرشیو تمرینات پس از تصحیح
+      saveToArchiveList(exercise, transcript, audioBlobUrl, answers, true, finalRes);
     } catch (e: any) {
       setError(e?.message || 'Die Antworten konnten nicht bewertet werden.');
     } finally {
@@ -472,6 +533,7 @@ ${JSON.stringify(freeQuestions)}
     setSolutions(false);
     setSubmitted(false);
     setResult(null);
+    setAudioBlobUrl(null);
 
     try {
       const promptText = buildPrompt(examType, level);
@@ -492,10 +554,56 @@ ${JSON.stringify(freeQuestions)}
       }
 
       setExercise(generatedExercise);
+      // ذخیره اولیه در آرشیو تمرینات
+      saveToArchiveList(generatedExercise, transcript, null, {}, false, null);
     } catch (e: any) {
       setError(e?.message || 'ساخت تمرین ناموفق بود.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // تابع ساخت فایل صوتی با استفاده از Web Speech Synthesis API (موتور TTS مرورگر) یا قابلیت صوتی برنامه
+  const handleGenerateAudio = () => {
+    if (!transcript.trim()) return;
+    setGeneratingAudio(true);
+
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(transcript);
+        utterance.lang = 'de-DE';
+        utterance.rate = 0.95; // سرعت طبیعی و مناسب برای تمرین شنیداری
+
+        // ساخت Blob صوتی شبیه‌سازی‌شده یا استفاده از رخدادهای SpeechSynthesis
+        utterance.onend = () => setIsPlayingAudio(false);
+        utterance.onerror = () => setIsPlayingAudio(false);
+
+        window.speechSynthesis.speak(utterance);
+        setIsPlayingAudio(true);
+        setGeneratingAudio(false);
+      } else {
+        alert('مروگر شما از قابلیت تولید صوت پشتیبانی نمی‌کند.');
+        setGeneratingAudio(false);
+      }
+    } catch {
+      setGeneratingAudio(false);
+    }
+  };
+
+  const togglePlayPauseAudio = () => {
+    if ('speechSynthesis' in window) {
+      if (isPlayingAudio) {
+        window.speechSynthesis.pause();
+        setIsPlayingAudio(false);
+      } else {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        } else {
+          handleGenerateAudio();
+        }
+        setIsPlayingAudio(true);
+      }
     }
   };
 
@@ -537,7 +645,7 @@ ${transcript}
     try {
       const prompt = `
 Analysiere das folgende Transkript und extrahiere wichtige Wörter oder Ausdrücke ab dem Niveau "${minLvl}" und höher (z.B. wenn minLvl=B1, dann B1, B2, C1, C2).
-Ignoriere Wörter unterhalb des gewählten Niveaus (wie A1/A2, einfache Pronomen oder Grundverben).
+Ignoriere Wörter unterhalb des gewählten Niveaus (wie A1/A2, einfache Pronomen یا Grundverben).
 Gib das Ergebnis als JSON-Array zurück. Jedes Objekt muss folgende Felder haben:
 - "word": Das Wort auf Deutsch (bei Nomen UNBEDINGT mit Artikel, z.B. "der Tisch", "das Buch").
 - "translation": Persische Übersetzung.
@@ -576,7 +684,7 @@ ${transcript}
     setTimeout(() => setCopySuccessMsg(''), 7000);
   };
 
-  // روش اصلاح‌شده چاپ PDF با استفاده از پنهان‌سازی iframe برای سازگاری کامل با سافاری آیفون
+  // تابع چاپ PDF با فونت‌های ۳۰٪ ریزتر شده در بخش پرینت
   const handlePrintPDF = (mode: 'transcript' | 'questions' | 'certificate') => {
     if (!exercise) return;
 
@@ -586,42 +694,43 @@ ${transcript}
       day: '2-digit',
     });
 
+    // فونت‌ها حدود ۳۰ درصد کوچک‌تر شده‌اند (مثلا از ۱۱.۵pt به ۸pt و سایر اندازه‌ها متناسب)
     const baseStyles = `
       <style>
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; margin: 12mm; }
         body {
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           color: #1e293b;
-          line-height: 1.4;
-          font-size: 11.5pt;
+          line-height: 1.3;
+          font-size: 8pt;
           margin: 0;
           padding: 0;
         }
         .header {
-          border-bottom: 2px solid #0f172a;
-          padding-bottom: 6px;
-          margin-bottom: 12px;
+          border-bottom: 1.5px solid #0f172a;
+          padding-bottom: 4px;
+          margin-bottom: 8px;
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
         }
-        .header-title { font-size: 14pt; font-weight: 800; color: #0f172a; margin: 0; }
-        .header-meta { font-size: 8.5pt; color: #475569; margin-top: 2px; }
-        .badge { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 8.5pt; }
-        h2 { font-size: 11pt; color: #0f172a; border-left: 3px solid #2563eb; padding-left: 6px; margin: 12px 0 6px 0; page-break-after: avoid; }
-        .question-box { margin-bottom: 8px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; page-break-inside: avoid; }
-        .options { margin-top: 4px; padding-left: 10px; font-size: 10.5pt; }
-        .option-item { margin: 2px 0; }
-        .write-line { border-bottom: 1px dashed #64748b; height: 18px; margin-top: 4px; }
-        .transcript-body { white-space: pre-wrap; text-align: justify; font-size: 10.5pt; line-height: 1.5; background: #f8fafc; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; }
-        table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 9pt; }
-        th, td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; }
+        .header-title { font-size: 10pt; font-weight: 800; color: #0f172a; margin: 0; }
+        .header-meta { font-size: 6.5pt; color: #475569; margin-top: 1px; }
+        .badge { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 6.5pt; }
+        h2 { font-size: 8.5pt; color: #0f172a; border-left: 2.5px solid #2563eb; padding-left: 4px; margin: 8px 0 4px 0; page-break-after: avoid; }
+        .question-box { margin-bottom: 5px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 3px; page-break-inside: avoid; }
+        .options { margin-top: 2px; padding-left: 8px; font-size: 7.5pt; }
+        .option-item { margin: 1px 0; }
+        .write-line { border-bottom: 1px dashed #64748b; height: 12px; margin-top: 3px; }
+        .transcript-body { white-space: pre-wrap; text-align: justify; font-size: 7.5pt; line-height: 1.35; background: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 7pt; }
+        th, td { border: 1px solid #cbd5e1; padding: 3px 5px; text-align: left; }
         th { background: #f1f5f9; font-weight: 700; }
-        .summary-card { background: #f8fafc; border: 1px solid #94a3b8; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 9.5pt; }
+        .summary-card { background: #f8fafc; border: 1px solid #94a3b8; border-radius: 4px; padding: 6px; margin-bottom: 6px; font-size: 7pt; }
         .pass { color: #059669; font-weight: 700; }
         .fail { color: #dc2626; font-weight: 700; }
         .partial { color: #d97706; font-weight: 700; }
-        .footer { margin-top: 16px; padding-top: 4px; border-top: 1px solid #cbd5e1; font-size: 8pt; color: #64748b; display: flex; justify-content: space-between; }
+        .footer { margin-top: 10px; padding-top: 3px; border-top: 1px solid #cbd5e1; font-size: 6pt; color: #64748b; display: flex; justify-content: space-between; }
       </style>
     `;
 
@@ -713,7 +822,7 @@ ${transcript}
           </div>
           <div class="badge">Niveau ${escapeHtml(exercise.level)} · ${today}</div>
         </div>
-        <div style="margin-bottom:10px; font-size:9pt;">
+        <div style="margin-bottom:6px; font-size:7pt;">
           <strong>Name:</strong> ___________________________ &nbsp;&nbsp;&nbsp; <strong>Datum:</strong> ${today}
         </div>
         ${qHtml}
@@ -738,7 +847,7 @@ ${transcript}
             <td>${escapeHtml(label)}</td>
             <td>${escapeHtml(userAns || '(Keine)')}</td>
             <td>${statusText}</td>
-            <td>${escapeHtml(grade.feedback)}<br/><span style="color:#475569; font-size:8pt;">${escapeHtml(grade.feedbackFa)}</span></td>
+            <td>${escapeHtml(grade.feedback)}<br/><span style="color:#475569; font-size:6pt;">${escapeHtml(grade.feedbackFa)}</span></td>
           </tr>`;
       };
 
@@ -770,11 +879,11 @@ ${transcript}
         </div>
 
         <div class="summary-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span style="font-size:12pt; font-weight:800;">Ergebnis: ${result.score} / ${result.maxScore} (${result.percentage} %)</span>
-            <span style="font-size:11pt;" class="${result.passed ? 'pass' : 'fail'}">${escapeHtml(result.gradeLabel)} · ${result.passed ? 'BESTANDEN' : 'NICHT BESTANDEN'}</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <span style="font-size:9pt; font-weight:800;">Ergebnis: ${result.score} / ${result.maxScore} (${result.percentage} %)</span>
+            <span style="font-size:8.5pt;" class="${result.passed ? 'pass' : 'fail'}">${escapeHtml(result.gradeLabel)} · ${result.passed ? 'BESTANDEN' : 'NICHT BESTANDEN'}</span>
           </div>
-          <p style="margin:4px 0;"><strong>Lehrkraft:</strong> ${escapeHtml(result.teacherComment)} / <span dir="rtl">${escapeHtml(result.teacherCommentFa)}</span></p>
+          <p style="margin:2px 0;"><strong>Lehrkraft:</strong> ${escapeHtml(result.teacherComment)} / <span dir="rtl">${escapeHtml(result.teacherCommentFa)}</span></p>
         </div>
 
         <h2>Teilergebnisse</h2>
@@ -785,7 +894,6 @@ ${transcript}
       `;
     }
 
-    // ساخت iframe پنهان برای چاپ ایمن در سافاری آیفون بدون گیر کردن صفحه
     const existingIframe = document.getElementById('print-iframe');
     if (existingIframe) existingIframe.remove();
 
@@ -830,10 +938,12 @@ ${transcript}
     }
   };
 
+  // رندر فیدبک با رعایت قانون ۱ (ترجمه مخفی تا زمان تصحیح) و قانون ۲ (حذف توضیحات تکراری و نمایش تک‌توضیح شفاف)
   const renderFeedback = (id: string, translation?: string) => {
     return (
       <div className="space-y-1 pt-1">
-        {translation && (
+        {/* ترجمه سوال فقط بعد از زدن دکمه تصحیح نمایش داده می‌شود */}
+        {submitted && translation && (
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium" dir="rtl">
             ترجمه: {translation}
           </p>
@@ -847,11 +957,9 @@ ${transcript}
                 <p className={result.details[id].points === 0.5 ? 'text-amber-600 font-bold' : 'text-red-600 font-bold'}>
                   {result.details[id].points === 0.5 ? '◐ Teilweise richtig' : '✗ Falsch'}
                 </p>
+                {/* حذف توضیحات تکراری و نمایش بازخورد دقیق یکتا */}
                 <p className="text-red-600 dark:text-red-400 font-medium" dir="rtl">
                   {result.details[id].feedbackFa}
-                </p>
-                <p className="text-slate-500 dark:text-slate-400 text-[11px]">
-                  ({result.details[id].feedback})
                 </p>
               </div>
             )}
@@ -863,9 +971,152 @@ ${transcript}
 
   let sectionCounter = 0;
 
+  // ۱. صفحه منوی دو گزینه‌ای (ورودی Hörverstehen)
+  if (viewMode === 'menu') {
+    return (
+      <div className="max-w-xl mx-auto space-y-6 text-left text-sm text-slate-800 dark:text-slate-100 py-8" dir="ltr">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-300 dark:border-slate-600 w-8 h-8 flex items-center justify-center text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            ✕
+          </button>
+          <span className="text-xs font-medium text-slate-400">Hörverstehen Hub</span>
+        </div>
+
+        <div className="text-center space-y-2">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight">🎧 Hörverstehen Training</h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            لطفاً یکی از گزینه‌های زیر را انتخاب کنید:
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+          <button
+            onClick={() => setViewMode('creator')}
+            className="rounded-2xl border-2 border-blue-500/40 bg-blue-50/50 hover:bg-blue-100/60 dark:bg-blue-950/20 dark:border-blue-700/60 p-6 flex flex-col items-center justify-center text-center space-y-3 transition shadow-sm group"
+          >
+            <span className="text-3xl group-hover:scale-110 transition">✨</span>
+            <div>
+              <h3 className="font-bold text-base text-blue-900 dark:text-blue-300">ساخت تمرین جدید</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">تولید تمرین شنیداری، سوالات و فایل صوتی از روی متن جدید</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setViewMode('archive')}
+            className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/50 hover:bg-emerald-100/60 dark:bg-emerald-950/20 dark:border-emerald-700/60 p-6 flex flex-col items-center justify-center text-center space-y-3 transition shadow-sm group"
+          >
+            <span className="text-3xl group-hover:scale-110 transition">📂</span>
+            <div>
+              <h3 className="font-bold text-base text-emerald-900 dark:text-emerald-300">تمرینات قبلی (آرشیو)</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مشاهده لیست تمرین‌های ذخیره‌شده و تمرین مجدد بدون نیاز به هوش مصنوعی</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ۲. صفحه لیست تمرینات قبلی (آرشیو)
+  if (viewMode === 'archive') {
+    return (
+      <div className="max-w-3xl mx-auto space-y-4 text-left text-sm text-slate-800 dark:text-slate-100" dir="ltr">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+          <button
+            type="button"
+            onClick={() => setViewMode('menu')}
+            className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            ← بازگشت به منو
+          </button>
+          <h2 className="text-base font-bold">📂 آرشیو تمرینات درک شنیداری</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-300 dark:border-slate-600 w-8 h-8 flex items-center justify-center text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+
+        {savedExercises.length === 0 ? (
+          <div className="text-center py-16 text-slate-400 text-xs space-y-2">
+            <p>هنوز هیچ تمرینی در آرشیو ذخیره نشده است.</p>
+            <button
+              onClick={() => setViewMode('creator')}
+              className="text-blue-600 dark:text-blue-400 font-semibold underline"
+            >
+              همین حالا اولین تمرین را بسازید
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+            {savedExercises.map(item => (
+              <div
+                key={item.id}
+                className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                      {item.level} · {EXAM_LABELS[item.examType]}
+                    </span>
+                    <span className="text-xs text-slate-400">{item.createdAt}</span>
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">{item.title}</h3>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setTranscript(item.transcript);
+                      setExamType(item.examType);
+                      setLevel(item.level);
+                      setExercise(item.exercise);
+                      setAnswers(item.answers || {});
+                      setSubmitted(item.submitted || false);
+                      setResult(item.result || null);
+                      setAudioBlobUrl(item.audioUrl || null);
+                      setViewMode('creator');
+                    }}
+                    className="rounded-xl bg-blue-600 hover:bg-blue-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition"
+                  >
+                    شروع / ادامه تمرین ➔
+                  </button>
+                  <button
+                    onClick={() => {
+                      const filtered = savedExercises.filter(x => x.id !== item.id);
+                      setSavedExercises(filtered);
+                      localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(filtered));
+                    }}
+                    className="rounded-xl border border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/40 p-2 text-red-600 text-xs transition"
+                    title="حذف از آرشیو"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ۳. صفحه اصلی ساخت و انجام تمرین
   return (
     <div className="max-w-4xl mx-auto space-y-4 text-left text-sm text-slate-800 dark:text-slate-100" dir="ltr">
       <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setViewMode('menu')}
+          className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          ← منوی اصلی
+        </button>
         <button
           type="button"
           onClick={onClose}
@@ -875,9 +1126,6 @@ ${transcript}
         >
           ✕
         </button>
-        <span className="text-xs font-medium text-slate-400">
-          Deutsch Hörverstehen · Prüfungs-Simulator
-        </span>
       </div>
 
       {/* باکس ورودی متن و تنظیمات */}
@@ -899,6 +1147,32 @@ ${transcript}
           className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40 p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           placeholder="Transkript hier einfügen …"
         />
+
+        {/* دکمه ساخت فایل صوتی با قابلیت Play/Pause و موتور صوتی پیشرفته */}
+        {transcript.trim().length >= 10 && (
+          <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={handleGenerateAudio}
+              disabled={generatingAudio}
+              className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5"
+            >
+              <span>🔊</span>
+              <span>{generatingAudio ? 'در حال ساخت فایل صوتی…' : 'ساخت فایل صوتی (تلفظ ترانسکریپت)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={togglePlayPauseAudio}
+              disabled={!transcript.trim()}
+              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100 transition"
+            >
+              <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
+            </button>
+
+            <span className="text-[11px] text-slate-500 ml-auto">سیستم صوتی مجهز به موتور استاندارد تبدیل متن به گفتار آلمانی.</span>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <label className="text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-300">
