@@ -736,7 +736,6 @@ export default function App() {
                 />
               )}
 
-              {currentTab === 'prac' && <HoerenTrainer />}
               {currentTab === 'prac' && (
                 <ExercisesView
                   words={state.words}
