@@ -43,6 +43,7 @@ import { dstr, today } from './utils/dates';
 import { isDuplicateEntry } from './utils/duplicates';
 import { ImportDecision, applyImportPlan, mergeWordUpdate } from './utils/vocabMerge';
 import { getTtsWorkerBase } from './utils/audio';
+import { HoerenTrainer } from './components/HoerenTrainer';
 
 const isDuplicateVocabularyEntry = isDuplicateEntry;
 
@@ -735,6 +736,7 @@ export default function App() {
                 />
               )}
 
+              {currentTab === 'prac' && <HoerenTrainer />}
               {currentTab === 'prac' && (
                 <ExercisesView
                   words={state.words}
