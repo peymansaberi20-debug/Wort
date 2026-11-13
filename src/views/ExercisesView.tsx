@@ -16,6 +16,7 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { PageOverlay } from '../components/PageOverlay';
+import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
 import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lucide-react';
@@ -758,7 +759,16 @@ interface ExercisesViewProps {
   onUpdateSettings?: (patch: Partial<AppSettings>) => void;
   /** starts the dedicated practice for the given hard words */
   onStartHard?: (ids: string[]) => void;
+  /** counters of today's new / reviewed words (from the app state) */
+  dailyProgress?: { d: string; n: number; r: number };
 }
+
+// Flashcards: the day's NEW words are fixed at the first start of the day and never topped up afterwards.
+const ALLOC_KEY = 'wb_flash_new_alloc';
+const readAlloc = (d: string): string[] | null => {
+  try { const o = JSON.parse(localStorage.getItem(ALLOC_KEY) || 'null'); return o && o.d === d && Array.isArray(o.ids) ? o.ids : null; } catch { return null; }
+};
+const writeAlloc = (d: string, ids: string[]) => { try { localStorage.setItem(ALLOC_KEY, JSON.stringify({ d, ids })); } catch { /* ignore */ } };
 
 export const ExercisesView: React.FC<ExercisesViewProps> = ({
   words: allWords,
@@ -774,7 +784,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onImageChange,
   paused,
   onUpdateSettings,
-  onStartHard
+  onStartHard,
+  dailyProgress
 }) => {
   // Only words of the categories chosen in Settings ("active categories") feed the exercises,
   // except the flashcard box, the free category review, free sentence writing and Schreiben correction.
@@ -945,6 +956,38 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
       if (activeMode === 'review') {
         pool = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due);
+      } else if (!flashCat) {
+        // 1st start of the day: due reviews (max "rv") + exactly the daily quota of new words ("nw").
+        // Later starts the same day: no further new words — only the words that are due again
+        // (plus any of the day's new words that were not seen yet).
+        const day = today();
+        const dp = dailyProgress && dailyProgress.d ? dailyProgress : { d: '', n: 0, r: 0 };
+        const dueSel = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due).slice(0, settings?.rv || 20);
+        const unseen = pool.filter(w => !w.last);
+        const ord = settings?.order || 'due';
+        let allocIds = readAlloc(day);
+        if (!allocIds) {
+          const cand = ord === 'rand' || ord === 'randnew' ? unseen.slice().sort(() => Math.random() - 0.5) : unseen;
+          const take = Math.max(0, (settings?.nw ?? 10) - (dp.n || 0));
+          allocIds = cand.slice(0, take).map(w => w.id);
+          writeAlloc(day, allocIds);
+        }
+        const allocSet = new Set(allocIds);
+        const newSel = unseen.filter(w => allocSet.has(w.id));
+        if (ord === 'new') {
+          pool = [...newSel, ...dueSel];
+        } else if (ord === 'rand') {
+          pool = [...dueSel, ...newSel].sort(() => Math.random() - 0.5);
+        } else if (ord === 'mix') {
+          const mixed: Word[] = [];
+          for (let i = 0; i < Math.max(dueSel.length, newSel.length); i++) {
+            if (i < dueSel.length) mixed.push(dueSel[i]);
+            if (i < newSel.length) mixed.push(newSel[i]);
+          }
+          pool = mixed;
+        } else {
+          pool = [...dueSel, ...newSel];
+        }
       } else {
         const dueWords = pool.filter(w => w.last && w.due <= n);
         const newWords = pool.filter(w => !w.last);
@@ -971,7 +1014,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           pool = [...dueWords, ...newWords];
         }
       }
-      qIds = pool.map(w => w.id).slice(0, settings?.rv || 20);
+      qIds = activeMode === 'flash' && !flashCat ? pool.map(w => w.id) : pool.map(w => w.id).slice(0, settings?.rv || 20);
     } else if (activeMode === 'daily') {
       const due = pool.filter(w => w.last && w.due <= n);
       const nw = pool.filter(w => !w.last);
