@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
+import { speak, stopSpeaking } from '../utils/audio';
 
 type ExamType = 'Standard' | 'Goethe' | 'OESD' | 'Telc' | 'EPD';
 
@@ -242,7 +243,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
-  // استیت‌های صوت و پلیر پیشرفته با موتور Worker
+  // استیت‌های صوت و پلیر پیشرفته
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -250,6 +251,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioRate, setAudioRate] = useState(1.0);
+  const [browserSpeaking, setBrowserSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [sentencePairsCache, setSentencePairsCache] = useState<{ de: string; fa: string }[]>([]);
@@ -327,6 +329,8 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     setResult(null);
     setAudioUrl(null);
     setIsPlayingAudio(false);
+    setBrowserSpeaking(false);
+    stopSpeaking();
     setSentencePairsCache([]);
     setHistoryAttempts([]);
     if (audioRef.current) {
@@ -563,6 +567,8 @@ ${JSON.stringify(freeQuestions)}
     setResult(null);
     setAudioUrl(null);
     setIsPlayingAudio(false);
+    setBrowserSpeaking(false);
+    stopSpeaking();
     setSentencePairsCache([]);
     setHistoryAttempts([]);
     setCurrentArchiveId(null);
@@ -594,7 +600,7 @@ ${JSON.stringify(freeQuestions)}
     }
   };
 
-  // اتصال به وب‌ورکر سفارشی شما برای تولید صوت با کیفیت بالا
+  // تولید صوت با کیفیت بالا (ابری)
   const handleGenerateAudio = async () => {
     if (!transcript.trim() || audioUrl) return;
     setGeneratingAudio(true);
@@ -622,6 +628,22 @@ ${JSON.stringify(freeQuestions)}
     } catch (err: any) {
       setError(err?.message || 'ساخت فایل صوتی با خطا مواجه شد.');
       setGeneratingAudio(false);
+    }
+  };
+
+  // پخش آنی با صدای پیش‌فرض مرورگر (جهت دور زدن زمان‌بر بودن سرور)
+  const handleToggleBrowserSpeech = () => {
+    if (browserSpeaking) {
+      stopSpeaking();
+      setBrowserSpeaking(false);
+    } else {
+      if (!transcript.trim()) return;
+      setBrowserSpeaking(true);
+      speak(transcript, {
+        rate: audioRate,
+        onEnd: () => setBrowserSpeaking(false),
+        onErr: () => setBrowserSpeaking(false)
+      });
     }
   };
 
@@ -744,11 +766,14 @@ ${transcript}
     const baseStyles = `
       <style>
         @page { size: A4; margin: 15mm; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1e293b; line-height: 1.5; font-size: 11pt; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1e293b; line-height: 1.5; font-size: 11pt; direction: rtl; text-align: right; }
         .header { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 15px; }
         .header-title { font-size: 15pt; font-weight: 800; color: #0f172a; margin: 0; }
-        .question-box { margin-bottom: 12px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; page-break-inside: avoid; }
-        .transcript-body { white-space: pre-wrap; font-size: 11pt; line-height: 1.6; background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 6px; }
+        .question-box { margin-bottom: 12px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; page-break-inside: avoid; direction: ltr; text-align: left; }
+        .transcript-body { white-space: pre-wrap; font-size: 11pt; line-height: 1.6; background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 6px; direction: ltr; text-align: left; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 10pt; }
+        th { background: #e2e8f0; }
       </style>
     `;
 
@@ -764,6 +789,47 @@ ${transcript}
         qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.question)}<br/>${q.options.map((o, idx) => `<div>${String.fromCharCode(65 + idx)}) ${escapeHtml(o)}</div>`).join('')}</div>`;
       });
       bodyContent = `<div class="header"><h1 class="header-title">Prüfungsaufgaben</h1></div>${qHtml}`;
+    } else if (mode === 'certificate') {
+      let historyRows = '';
+      if (historyAttempts.length > 0) {
+        const datesHeader = historyAttempts.map(att => `<th>${att.date}</th>`).join('');
+        const scoresRow = historyAttempts.map(att => `<td>${att.score} / ${att.maxScore}</td>`).join('');
+        const percentRow = historyAttempts.map(att => `<td>${att.percentage}%</td>`).join('');
+        const gradeRow = historyAttempts.map(att => `<td>${att.gradeLabel}</td>`).join('');
+
+        historyRows = `
+          <h3>تاریخچه و مقایسه تلاش‌ها (کارنامه پیشرفت)</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>متریک / تاریخ</th>
+                ${datesHeader}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight: bold;">امتیاز مکتسبه</td>
+                ${scoresRow}
+              </tr>
+              <tr>
+                <td style="font-weight: bold;">درصد موفقیت</td>
+                ${percentRow}
+              </tr>
+              <tr>
+                <td style="font-weight: bold;">ارزیابی / وضعیت</td>
+                ${gradeRow}
+              </tr>
+            </tbody>
+          </table>
+        `;
+      }
+
+      bodyContent = `
+        <div class="header"><h1 class="header-title">Prüfungszertifikat & Leistungsbericht</h1></div>
+        <p><strong>تمرین:</strong> ${escapeHtml(exercise.title)} (${EXAM_LABELS[exercise.examType]} - Niveau ${exercise.level})</p>
+        ${historyRows}
+        ${result ? `<div style="margin-top: 15px; padding: 10px; background: #f1f5f9; border-radius: 6px;"><strong>نظر مدرس:</strong><br/>${escapeHtml(result.teacherComment)}<br/><span style="color: #475569;">${escapeHtml(result.teacherCommentFa)}</span></div>` : ''}
+      `;
     }
 
     const iframe = document.createElement('iframe');
@@ -909,9 +975,9 @@ ${transcript}
                       setExamType(item.examType);
                       setLevel(item.level);
                       setExercise(item.exercise);
-                      setAnswers({});
-                      setSubmitted(false);
-                      setResult(null);
+                      setAnswers(item.answers || {});
+                      setSubmitted(item.submitted || false);
+                      setResult(item.result || null);
                       setAudioUrl(item.audioUrl || null);
                       setSentencePairsCache(item.sentencePairsCache || []);
                       setHistoryAttempts(item.historyAttempts || []);
@@ -978,42 +1044,59 @@ ${transcript}
         {transcript.trim().length >= 10 && (
           <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={handleGenerateAudio}
-                disabled={generatingAudio || !!audioUrl}
-                className={`rounded-xl px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 ${
-                  audioUrl ? 'bg-emerald-600 opacity-80 cursor-default' : 'bg-purple-600 hover:bg-purple-700'
-                }`}
-              >
-                <span>🔊</span>
-                <span>{generatingAudio ? 'در حال ساخت فایل صوتی با کیفیت بالا…' : audioUrl ? '✓ فایل صوتی آماده است' : 'ساخت فایل صوتی'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* اگر فایل صوتی ابری وجود ندارد، دکمه ساخت صوت ابری نشان داده شود */}
+                {!audioUrl && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateAudio}
+                    disabled={generatingAudio}
+                    className="rounded-xl px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    <span>🔊</span>
+                    <span>{generatingAudio ? 'در حال ساخت فایل صوتی با کیفیت بالا…' : 'ساخت فایل صوتی باکیفیت'}</span>
+                  </button>
+                )}
 
-              <div className="flex items-center gap-2">
+                {/* کلید دوم: پخش فوری با صدای مرورگر */}
                 <button
                   type="button"
-                  onClick={togglePlayPauseAudio}
-                  disabled={!audioUrl}
-                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100 disabled:opacity-40"
+                  onClick={handleToggleBrowserSpeech}
+                  className={`rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 ${
+                    browserSpeaking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600'
+                  }`}
                 >
-                  <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
+                  <span>🗣️</span>
+                  <span>{browserSpeaking ? 'توقف صدای مرورگر' : 'پخش با صدای مرورگر (آنی)'}</span>
                 </button>
-
-                <label className="text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                  <span>سرعت:</span>
-                  <select
-                    value={audioRate}
-                    onChange={(e) => handleRateChange(parseFloat(e.target.value))}
-                    className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2 py-1 text-xs"
-                  >
-                    <option value={0.75}>0.75x</option>
-                    <option value={1.0}>1.0x (معمولی)</option>
-                    <option value={1.25}>1.25x</option>
-                    <option value={1.5}>1.5x</option>
-                  </select>
-                </label>
               </div>
+
+              {/* اگر فایل صوتی ابری آماده است، فقط پلیر Play/Pause و تنظیم سرعت نشان داده شود */}
+              {audioUrl && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={togglePlayPauseAudio}
+                    className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100"
+                  >
+                    <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
+                  </button>
+
+                  <label className="text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                    <span>سرعت:</span>
+                    <select
+                      value={audioRate}
+                      onChange={(e) => handleRateChange(parseFloat(e.target.value))}
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2 py-1 text-xs"
+                    >
+                      <option value={0.75}>0.75x</option>
+                      <option value={1.0}>1.0x (معمولی)</option>
+                      <option value={1.25}>1.25x</option>
+                      <option value={1.5}>1.5x</option>
+                    </select>
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* عنصر صوتی پنهان و نوار پیمایش قابل تنظیم دستی */}
@@ -1027,20 +1110,22 @@ ${transcript}
               />
             )}
 
-            <div className="space-y-1">
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={audioProgress}
-                onChange={handleSeek}
-                className="w-full accent-purple-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
-              />
-              <div className="flex justify-between text-[10px] text-slate-500">
-                <span>{Math.floor(audioCurrentTime)}s</span>
-                <span>{Math.floor(audioDuration)}s</span>
+            {audioUrl && (
+              <div className="space-y-1">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={audioProgress}
+                  onChange={handleSeek}
+                  className="w-full accent-purple-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500">
+                  <span>{Math.floor(audioCurrentTime)}s</span>
+                  <span>{Math.floor(audioDuration)}s</span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1050,7 +1135,8 @@ ${transcript}
             <select
               value={examType}
               onChange={e => setExamType(e.target.value as ExamType)}
-              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3 py-2 text-xs font-medium"
+              disabled={!!currentArchiveId}
+              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3 py-2 text-xs font-medium disabled:opacity-50"
             >
               {(Object.keys(EXAM_LABELS) as ExamType[]).map(type => (
                 <option key={type} value={type}>
@@ -1065,7 +1151,8 @@ ${transcript}
             <select
               value={level}
               onChange={e => setLevel(e.target.value)}
-              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3 py-2 text-xs font-medium"
+              disabled={!!currentArchiveId}
+              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3 py-2 text-xs font-medium disabled:opacity-50"
             >
               {['A2', 'B1', 'B2', 'C1', 'C2'].map(x => (
                 <option key={x} value={x}>
@@ -1075,15 +1162,18 @@ ${transcript}
             </select>
           </label>
 
-          <div className="flex items-end pt-4 sm:pt-0">
-            <button
-              onClick={generate}
-              disabled={loading}
-              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
-            >
-              {loading ? 'در حال ساخت تمرین…' : 'ساخت تمرین'}
-            </button>
-          </div>
+          {/* اگر از آرشیو آمده‌ایم، دکمه «ساخت تمرین» نباید نمایش داده شود */}
+          {!currentArchiveId && (
+            <div className="flex items-end pt-4 sm:pt-0">
+              <button
+                onClick={generate}
+                disabled={loading}
+                className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
+              >
+                {loading ? 'در حال ساخت تمرین…' : 'ساخت تمرین'}
+              </button>
+            </div>
+          )}
         </div>
 
         {transcript.trim().length >= 20 && (
@@ -1327,6 +1417,13 @@ ${transcript}
               >
                 📝 Fragen (PDF)
               </button>
+              <button
+                type="button"
+                onClick={() => handlePrintPDF('certificate')}
+                className="rounded-lg border border-indigo-300 dark:border-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+              >
+                🏆 چاپ کارنامه (PDF)
+              </button>
             </div>
           </div>
 
@@ -1335,10 +1432,10 @@ ${transcript}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                    Prüfungsergebnis & Historischer Vergleich
+                    Prüfungsergebnis & Historischer Vergleich (کارنامه پیشرفت)
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    مقایسه نتایج آزمون در تاریخ‌های مختلف
+                    با هر بار آزمون مجدد، ستون جدیدی به این جدول اضافه می‌شود
                   </p>
                 </div>
               </div>
@@ -1351,7 +1448,7 @@ ${transcript}
                         <th className="p-2 border border-slate-300 dark:border-slate-700">متریک / تاریخ آزمون</th>
                         {historyAttempts.map((att, idx) => (
                           <th key={idx} className="p-2 border border-slate-300 dark:border-slate-700 text-center font-bold">
-                            {att.date}
+                            تلاش {idx + 1} ({att.date})
                           </th>
                         ))}
                       </tr>
