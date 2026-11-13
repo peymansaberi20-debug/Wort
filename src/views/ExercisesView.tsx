@@ -756,6 +756,8 @@ interface ExercisesViewProps {
   /** true while the exercise is hidden behind the word edit form */
   paused?: boolean;
   onUpdateSettings?: (patch: Partial<AppSettings>) => void;
+  /** starts the dedicated practice for the given hard words */
+  onStartHard?: (ids: string[]) => void;
 }
 
 export const ExercisesView: React.FC<ExercisesViewProps> = ({
@@ -771,7 +773,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onDeleteWord,
   onImageChange,
   paused,
-  onUpdateSettings
+  onUpdateSettings,
+  onStartHard
 }) => {
   // Only words of the categories chosen in Settings ("active categories") feed the exercises,
   // except the flashcard box, the free category review, free sentence writing and Schreiben correction.
@@ -1606,21 +1609,22 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // ==========================================
         
   const [exTab, setExTab] = useState<'wortschatz' | 'grammatik'>('wortschatz');
-  const [showMore, setShowMore] = useState(false);   
+  const [showMore, setShowMore] = useState(false);
+  const [showHard, setShowHard] = useState(false);   
   // If NO active mode is selected: Show Menu
   // ==========================================
   if (!activeMode) {
     const otherList = exTab === 'wortschatz' ? WORTSCHATZ_MODES.filter(m => m !== 'flash') : GRAMMATIK_MODES;
     const activeCatCount = settings?.activeCats?.length || 0;
     return (
-      <div className="space-y-4 text-right max-w-2xl mx-auto">
+      <div className="flex flex-col gap-3 text-right max-w-2xl mx-auto h-[calc(100dvh-10.5rem)] min-h-[440px] overflow-hidden">
         {/* 1. Flashcards (Leitner box) — big, enters directly */}
         <button
           onClick={() => onSelectMode('flash')}
-          className="w-full text-right rounded-3xl p-6 bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white shadow-xl active:scale-[.99] transition relative overflow-hidden"
+          className="w-full flex-[2.4] min-h-0 flex items-center text-right rounded-3xl p-5 bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white shadow-xl active:scale-[.99] transition relative overflow-hidden"
         >
           <span className="absolute -top-8 -left-6 w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-          <div className="relative flex items-center gap-4">
+          <div className="relative flex items-center gap-4 w-full">
             <span className="text-6xl" aria-hidden="true">🃏</span>
             <div className="min-w-0 flex-1">
               <div className="text-2xl font-extrabold">فلش‌کارت</div>
@@ -1637,12 +1641,35 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* 2. Other exercises (opens a page) */}
         <button
           onClick={() => setShowMore(true)}
-          className="w-full text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
+          className="w-full flex-1 min-h-0 text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
         >
           <span className="text-4xl" aria-hidden="true">🧩</span>
           <div className="min-w-0 flex-1">
             <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">سایر تمرینات</div>
             <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">واژگان، گرامر، نوشتار، دیکته، چیدن جمله و …</div>
+          </div>
+          <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
+        </button>
+
+        <button
+          onClick={() => onSelectMode('errnb')}
+          className="w-full flex-1 min-h-0 text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
+        >
+          <span className="text-4xl" aria-hidden="true">📓</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">دفتر خطاها</div>
+            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">جمله‌های غلطِ خودت را مرور کن</div>
+          </div>
+          <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
+        </button>
+        <button
+          onClick={() => setShowHard(true)}
+          className="w-full flex-1 min-h-0 text-right rounded-2xl p-4 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] shadow-xs active:scale-[.99] transition flex items-center gap-3"
+        >
+          <span className="text-4xl" aria-hidden="true">🩸</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-extrabold text-slate-900 dark:text-slate-100">واژه‌های پر اشتباه و سخت</div>
+            <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">فهرست و تمرین اختصاصی</div>
           </div>
           <span className="text-3xl text-[#5d6676] dark:text-[#a3adbd]" aria-hidden="true">‹</span>
         </button>
@@ -1686,6 +1713,41 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </div>
           </PageOverlay>
         )}
+
+        {showHard && (() => {
+          const hardWords = allWords.filter(w => (w.bad || 0) > 3).sort((a, b) => (b.bad || 0) - (a.bad || 0));
+          const artCls = (a: string) => a === 'der' ? 'bg-blue-100 text-blue-800' : a === 'die' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
+          return (
+            <PageOverlay icon="🩸" title={`واژه‌های پر اشتباه و سخت (${hardWords.length})`} onClose={() => setShowHard(false)}>
+              {hardWords.length === 0 ? (
+                <div className="p-4 rounded-xl bg-white dark:bg-[#1b2029] text-center text-sm text-[#5d6676]">هنوز واژه‌ای بیش از ۳ بار اشتباه نشده است.</div>
+              ) : (
+                <div className="space-y-3 text-right">
+                  <button
+                    onClick={() => { setShowHard(false); if (onStartHard) onStartHard(hardWords.map(w => w.id)); else onShowToast('شروع تمرین ممکن نشد.', true); }}
+                    className="w-full h-12 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold text-sm shadow-md"
+                  >
+                    🎯 شروع تمرین اختصاصی واژه‌های سخت ({hardWords.length})
+                  </button>
+                  <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden">
+                    {hardWords.map(w => (
+                      <div key={w.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span dir="ltr" className="flex items-center gap-2">
+                            {w.art && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${artCls(w.art)}`}>{w.art}</span>}
+                            <b className="text-lg font-sans truncate">{w.de}</b>
+                          </span>
+                          <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] truncate">{w.fa}</div>
+                        </div>
+                        <div className="text-xs text-left flex-shrink-0 space-y-0.5"><div className="text-red-500 font-bold">❌ {w.bad}</div><div className="text-emerald-600">✅ {w.ok}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </PageOverlay>
+          );
+        })()}
       </div>
     );
   }
