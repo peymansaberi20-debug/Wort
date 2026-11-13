@@ -37,6 +37,16 @@ type GradingResult = {
   details: Record<string, Grade>;
 };
 
+// ساختار تاریخچه نتایج برای مقایسه در کارنامه
+type HistoryAttempt = {
+  date: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  gradeLabel: string;
+  passed: boolean;
+};
+
 type Exercise = {
   title: string;
   examType: ExamType;
@@ -48,7 +58,6 @@ type Exercise = {
   vocabulary: Vocab[];
 };
 
-// اینترفیس برای ذخیره کامل تمرین در آرشیو
 type SavedExerciseRecord = {
   id: string;
   createdAt: string;
@@ -57,14 +66,16 @@ type SavedExerciseRecord = {
   level: string;
   transcript: string;
   exercise: Exercise;
-  audioUrl?: string;
+  sentencePairsCache?: { de: string; fa: string }[];
+  audioGenerated?: boolean;
   answers: Record<string, string>;
   submitted: boolean;
   result: GradingResult | null;
+  historyAttempts?: HistoryAttempt[];
 };
 
-const STORAGE_KEY = 'hoeren_trainer_state_v3';
-const ARCHIVE_STORAGE_KEY = 'hoeren_trainer_archive_list_v1';
+const STORAGE_KEY = 'hoeren_trainer_state_v4';
+const ARCHIVE_STORAGE_KEY = 'hoeren_trainer_archive_list_v2';
 
 const EXAM_LABELS: Record<ExamType, string> = {
   Standard: 'Standard / Allgemein',
@@ -216,9 +227,9 @@ function escapeHtml(str: string): string {
 }
 
 export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  // ویو مود: 'menu' (صفحه انتخاب دو گزینه‌ای) | 'creator' (صفحه ساخت تمرین) | 'archive' (لیست تمرینات ذخیره‌شده)
   const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive'>('menu');
   const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>([]);
+  const [currentArchiveId, setCurrentArchiveId] = useState<string | null>(null);
 
   const [transcript, setTranscript] = useState('');
   const [examType, setExamType] = useState<ExamType>('Standard');
@@ -233,15 +244,20 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
-  // استیت‌های تولید صوت (TTS)
-  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  // استیت‌های صوت و پلیر پیشرفته
+  const [audioGenerated, setAudioGenerated] = useState(false);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioRate, setAudioRate] = useState(1.0);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  // استیت‌های مودم‌ها (پاپ‌آپ‌ها)
+  // کش ترجمه جمله به جمله
+  const [sentencePairsCache, setSentencePairsCache] = useState<{ de: string; fa: string }[]>([]);
+  const [historyAttempts, setHistoryAttempts] = useState<HistoryAttempt[]>([]);
+
+  // تاریخچه نتایج برای کارنامه مقایسه‌ای
   const [showSentenceModal, setShowSentenceModal] = useState(false);
-  const [sentencePairs, setSentencePairs] = useState<{ de: string; fa: string }[]>([]);
   const [loadingSentences, setLoadingSentences] = useState(false);
 
   const [showVocabModal, setShowVocabModal] = useState(false);
@@ -250,67 +266,76 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [loadingVocabs, setLoadingVocabs] = useState(false);
   const [copySuccessMsg, setCopySuccessMsg] = useState('');
 
-  // بارگذاری آرشیو از localStorage
   useEffect(() => {
     try {
       const storedArchive = localStorage.getItem(ARCHIVE_STORAGE_KEY);
       if (storedArchive) {
         setSavedExercises(JSON.parse(storedArchive));
       }
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.transcript) setTranscript(parsed.transcript);
-        if (parsed.examType) setExamType(parsed.examType);
-        if (parsed.level) setLevel(parsed.level);
-        if (parsed.exercise) setExercise(parsed.exercise);
-        if (parsed.answers) setAnswers(parsed.answers);
-        if (typeof parsed.submitted === 'boolean') setSubmitted(parsed.submitted);
-        if (parsed.result) setResult(parsed.result);
-        if (parsed.audioBlobUrl) setAudioBlobUrl(parsed.audioBlobUrl);
-      }
     } catch {}
   }, []);
 
-  // ذخیره خودکار وضعیت جاری
-  useEffect(() => {
+  // تابع ذخیره یا آپدیت تمرین در آرشیو
+  const persistCurrentToArchive = (curEx: Exercise | null, curTr: string, curAns: Record<string, string>, curSub: boolean, curRes: GradingResult | null, curPairs: { de: string; fa: string }[], isAudioGen: boolean, curHist: HistoryAttempt[]) => {
+    if (!curEx) return;
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          transcript,
-          examType,
-          level,
-          exercise,
-          answers,
-          submitted,
-          result,
-          audioBlobUrl,
-        })
-      );
-    } catch {}
-  }, [transcript, examType, level, exercise, answers, submitted, result, audioBlobUrl]);
+      const existingList = [...savedExercises];
+      const targetId = currentArchiveId || 'ex_' + Date.now();
+      if (!currentArchiveId) {
+        setCurrentArchiveId(targetId);
+      }
 
-  // ذخیره لیست آرشیو در localStorage
-  const saveToArchiveList = (currentExercise: Exercise, curTranscript: string, curAudioUrl: string | null, curAnswers: Record<string, string>, curSub: boolean, curRes: GradingResult | null) => {
-    try {
-      const newItem: SavedExerciseRecord = {
-        id: 'ex_' + Date.now(),
-        createdAt: new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
-        title: currentExercise.title,
-        examType: currentExercise.examType,
-        level: currentExercise.level,
-        transcript: curTranscript,
-        exercise: currentExercise,
-        audioUrl: curAudioUrl || undefined,
-        answers: curAnswers,
+      const recordIndex = existingList.findIndex(item => item.id === targetId);
+      const recordData: SavedExerciseRecord = {
+        id: targetId,
+        createdAt: recordIndex !== -1 ? existingList[recordIndex].createdAt : new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        title: curEx.title,
+        examType: curEx.examType,
+        level: curEx.level,
+        transcript: curTr,
+        exercise: curEx,
+        sentencePairsCache: curPairs,
+        audioGenerated: isAudioGen,
+        answers: curAns,
         submitted: curSub,
         result: curRes,
+        historyAttempts: curHist,
       };
-      const updated = [newItem, ...savedExercises];
-      setSavedExercises(updated);
-      localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(updated));
+
+      if (recordIndex !== -1) {
+        existingList[recordIndex] = recordData;
+      } else {
+        existingList.unshift(recordData);
+      }
+
+      setSavedExercises(existingList);
+      localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(existingList));
     } catch {}
+  };
+
+  const handleBackToMenu = () => {
+    const confirmLeave = window.confirm('با خارج شدن شما این تمرین در لیست تمرینات آرشیو ذخیره خواهد شد و برای ادامه تمرین یا تمرین مجدد از آن بخش می‌توانید استفاده کنید. آیا مایل به خروج هستید؟');
+    if (!confirmLeave) return;
+
+    if (exercise) {
+      persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, audioGenerated, historyAttempts);
+    }
+
+    // ریست کامل صفحه برای ساخت تمرین جدید
+    setViewMode('menu');
+    setCurrentArchiveId(null);
+    setTranscript('');
+    setExercise(null);
+    setAnswers({});
+    setSubmitted(false);
+    setResult(null);
+    setAudioGenerated(false);
+    setIsPlayingAudio(false);
+    setSentencePairsCache([]);
+    setHistoryAttempts([]);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
   };
 
   const answer = (id: string, value: string) => {
@@ -366,7 +391,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         const given = answers[id];
         const correct = given === String(q.answer);
         const pts = correct ? 1 : 0;
-
         pointsById[id] = pts;
         details[id] = {
           correct,
@@ -382,7 +406,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         const correct = given === String(q.answerIndex);
         const pts = correct ? 1 : 0;
         const correctOptionText = q.options[q.answerIndex] || '';
-
         pointsById[id] = pts;
         details[id] = {
           correct,
@@ -436,14 +459,12 @@ ${JSON.stringify(freeQuestions)}
         const raw = await generateWithGemini(gradingPrompt, { timeoutMs: 60000, retries: 1 });
         const parsed = parseAI(raw)[0];
         const aiResults = Array.isArray(parsed?.results) ? parsed.results : [];
-
         const aiById = new Map<string, any>(aiResults.map((item: any) => [String(item.id), item]));
 
         freeQuestions.forEach(q => {
           const graded = aiById.get(q.id);
           const points = Number(graded?.points);
           const validPoints = [0, 0.5, 1].includes(points) ? points : 0;
-
           pointsById[q.id] = validPoints;
           details[q.id] = {
             correct: validPoints === 1,
@@ -489,8 +510,8 @@ ${JSON.stringify(freeQuestions)}
       if (!aiTeacherComment) {
         aiTeacherComment = `Leistung auf Niveau ${exercise.level}.`;
         aiTeacherCommentFa = `عملکرد شما در سطح ${exercise.level} ارزیابی شد.`;
-        aiStrengths = 'Gutes Bemühen beim Verstehen des Hörtextes. تلاش خوب در درک متن شنیداری.';
-        aiRecommendations = 'Üben Sie weiter mit originalen Audios. تمرین بیشتر با فایل‌های صوتی توصیه می‌شود.';
+        aiStrengths = 'Gutes Bemühen beim Verstehen des Hörtextes.';
+        aiRecommendations = 'Üben Sie weiter mit originalen Audios.';
       }
 
       const finalRes: GradingResult = {
@@ -510,8 +531,20 @@ ${JSON.stringify(freeQuestions)}
       setResult(finalRes);
       setSubmitted(true);
 
-      // ذخیره اتوماتیک در آرشیو تمرینات پس از تصحیح
-      saveToArchiveList(exercise, transcript, audioBlobUrl, answers, true, finalRes);
+      // ثبت تاریخچه این بار امتحان برای مقایسه در کارنامه ستونی
+      const todayStr = new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      const newAttempt: HistoryAttempt = {
+        date: todayStr + ' (' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')',
+        score,
+        maxScore,
+        percentage,
+        gradeLabel,
+        passed,
+      };
+      const updatedHistory = [...historyAttempts, newAttempt];
+      setHistoryAttempts(updatedHistory);
+
+      persistCurrentToArchive(exercise, transcript, answers, true, finalRes, sentencePairsCache, audioGenerated, updatedHistory);
     } catch (e: any) {
       setError(e?.message || 'Die Antworten konnten nicht bewertet werden.');
     } finally {
@@ -533,7 +566,11 @@ ${JSON.stringify(freeQuestions)}
     setSolutions(false);
     setSubmitted(false);
     setResult(null);
-    setAudioBlobUrl(null);
+    setAudioGenerated(false);
+    setIsPlayingAudio(false);
+    setSentencePairsCache([]);
+    setHistoryAttempts([]);
+    setCurrentArchiveId(null);
 
     try {
       const promptText = buildPrompt(examType, level);
@@ -554,8 +591,7 @@ ${JSON.stringify(freeQuestions)}
       }
 
       setExercise(generatedExercise);
-      // ذخیره اولیه در آرشیو تمرینات
-      saveToArchiveList(generatedExercise, transcript, null, {}, false, null);
+      persistCurrentToArchive(generatedExercise, transcript, {}, false, null, [], false, []);
     } catch (e: any) {
       setError(e?.message || 'ساخت تمرین ناموفق بود.');
     } finally {
@@ -563,9 +599,9 @@ ${JSON.stringify(freeQuestions)}
     }
   };
 
-  // تابع ساخت فایل صوتی با استفاده از Web Speech Synthesis API (موتور TTS مرورگر) یا قابلیت صوتی برنامه
+  // ساخت فایل صوتی واقعی با تنظیم سرعت و نوار پیشرفت
   const handleGenerateAudio = () => {
-    if (!transcript.trim()) return;
+    if (!transcript.trim() || audioGenerated) return;
     setGeneratingAudio(true);
 
     try {
@@ -573,17 +609,32 @@ ${JSON.stringify(freeQuestions)}
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(transcript);
         utterance.lang = 'de-DE';
-        utterance.rate = 0.95; // سرعت طبیعی و مناسب برای تمرین شنیداری
+        utterance.rate = audioRate;
 
-        // ساخت Blob صوتی شبیه‌سازی‌شده یا استفاده از رخدادهای SpeechSynthesis
-        utterance.onend = () => setIsPlayingAudio(false);
-        utterance.onerror = () => setIsPlayingAudio(false);
+        utterance.onboundary = (event) => {
+          if (transcript.length > 0) {
+            const pct = Math.min(100, Math.round((event.charIndex / transcript.length) * 100));
+            setAudioProgress(pct);
+          }
+        };
 
+        utterance.onend = () => {
+          setIsPlayingAudio(false);
+          setAudioProgress(100);
+        };
+        utterance.onerror = () => {
+          setIsPlayingAudio(false);
+        };
+
+        utteranceRef.current = utterance;
         window.speechSynthesis.speak(utterance);
         setIsPlayingAudio(true);
+        setAudioGenerated(true);
         setGeneratingAudio(false);
+
+        persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, true, historyAttempts);
       } else {
-        alert('مروگر شما از قابلیت تولید صوت پشتیبانی نمی‌کند.');
+        alert('مرورگر شما از تولید صوت پشتیبانی نمی‌کند.');
         setGeneratingAudio(false);
       }
     } catch {
@@ -599,20 +650,36 @@ ${JSON.stringify(freeQuestions)}
       } else {
         if (window.speechSynthesis.paused) {
           window.speechSynthesis.resume();
+          setIsPlayingAudio(true);
         } else {
           handleGenerateAudio();
         }
-        setIsPlayingAudio(true);
       }
     }
   };
 
-  // تابع باز کردن پاپ‌آپ ترجمه جمله به جمله
+  const handleRateChange = (newRate: number) => {
+    setAudioRate(newRate);
+    if ('speechSynthesis' in window && isPlayingAudio) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(transcript);
+      utterance.lang = 'de-DE';
+      utterance.rate = newRate;
+      utterance.onend = () => setIsPlayingAudio(false);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // ترجمه جمله به جمله با چک کردن کش
   const handleOpenSentenceModal = async () => {
     if (!transcript.trim()) return;
     setShowSentenceModal(true);
-    setLoadingSentences(true);
 
+    if (sentencePairsCache.length > 0) {
+      return; // از کش استفاده کن و هوش مصنوعی مصرف نکن
+    }
+
+    setLoadingSentences(true);
     try {
       const prompt = `
 Zerlege den folgenden deutschen Text in einzelne Sätze. Gib das Ergebnis als JSON-Array zurück, wobei jedes Objekt den deutschen Satz ("de") und dessen genaue persische Übersetzung ("fa") enthält.
@@ -625,15 +692,16 @@ ${transcript}
       const raw = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
       const parsed = parseAI(raw);
       const arr = Array.isArray(parsed[0]) ? parsed[0] : Array.isArray(parsed) ? parsed : [];
-      setSentencePairs(arr.map((item: any) => ({ de: String(item?.de || ''), fa: String(item?.fa || '') })));
+      const formatted = arr.map((item: any) => ({ de: String(item?.de || ''), fa: String(item?.fa || '') }));
+      setSentencePairsCache(formatted);
+      persistCurrentToArchive(exercise, transcript, answers, submitted, result, formatted, audioGenerated, historyAttempts);
     } catch {
-      setSentencePairs([{ de: transcript, fa: 'خطا در بارگذاری ترجمه جمله به جمله.' }]);
+      setSentencePairsCache([{ de: transcript, fa: 'خطا در بارگذاری ترجمه جمله به جمله.' }]);
     } finally {
       setLoadingSentences(false);
     }
   };
 
-  // تابع باز کردن پاپ‌آپ استخراج واژگان
   const handleOpenVocabModal = async () => {
     if (!transcript.trim()) return;
     setShowVocabModal(true);
@@ -644,15 +712,9 @@ ${transcript}
     setLoadingVocabs(true);
     try {
       const prompt = `
-Analysiere das folgende Transkript und extrahiere wichtige Wörter oder Ausdrücke ab dem Niveau "${minLvl}" und höher (z.B. wenn minLvl=B1, dann B1, B2, C1, C2).
-Ignoriere Wörter unterhalb des gewählten Niveaus (wie A1/A2, einfache Pronomen یا Grundverben).
-Gib das Ergebnis als JSON-Array zurück. Jedes Objekt muss folgende Felder haben:
-- "word": Das Wort auf Deutsch (bei Nomen UNBEDINGT mit Artikel, z.B. "der Tisch", "das Buch").
-- "translation": Persische Übersetzung.
-- "level": Das Sprachniveau (z.B. "B1", "B2", "C1").
-
-Antworte ausschließlich mit gültigem JSON (ohne Markdown).
-Format: [{"word": "der Vorschlag", "translation": "پیشنهاد", "level": "B1"}]
+Analysiere das folgende Transkript und extrahiere wichtige Wörter oder Ausdrücke ab dem Niveau "${minLvl}" und höher.
+Gib das Ergebnis als JSON-Array zurück: [{"word": "der Vorschlag", "translation": "پیشنهاد", "level": "B1"}]
+Antworte ausschließlich mit gültigem JSON.
 
 Transkript:
 ${transcript}
@@ -678,271 +740,65 @@ ${transcript}
   const handleCopySelectedVocabs = () => {
     const selectedWords = extractedVocabs.filter(v => v.selected).map(v => v.word).join('\n');
     if (!selectedWords) return;
-
     navigator.clipboard.writeText(selectedWords);
-    setCopySuccessMsg('لیست لغات کپی شد ، از تب واژگان قسمت افزودن گروهی بخش متن دستی میتوانید لغات را به واژگان برنامه اضافه کنید');
-    setTimeout(() => setCopySuccessMsg(''), 7000);
+    setCopySuccessMsg('لیست لغات کپی شد.');
+    setTimeout(() => setCopySuccessMsg(''), 5000);
   };
 
-  // تابع چاپ PDF با فونت‌های ۳۰٪ ریزتر شده در بخش پرینت
+  // چاپ PDF با فونت‌های درشت‌تر و خواناتر
   const handlePrintPDF = (mode: 'transcript' | 'questions' | 'certificate') => {
     if (!exercise) return;
+    const today = new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
-    const today = new Date().toLocaleDateString('de-AT', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-
-    // فونت‌ها حدود ۳۰ درصد کوچک‌تر شده‌اند (مثلا از ۱۱.۵pt به ۸pt و سایر اندازه‌ها متناسب)
     const baseStyles = `
       <style>
-        @page { size: A4; margin: 12mm; }
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          color: #1e293b;
-          line-height: 1.3;
-          font-size: 8pt;
-          margin: 0;
-          padding: 0;
-        }
-        .header {
-          border-bottom: 1.5px solid #0f172a;
-          padding-bottom: 4px;
-          margin-bottom: 8px;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-        }
-        .header-title { font-size: 10pt; font-weight: 800; color: #0f172a; margin: 0; }
-        .header-meta { font-size: 6.5pt; color: #475569; margin-top: 1px; }
-        .badge { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 6.5pt; }
-        h2 { font-size: 8.5pt; color: #0f172a; border-left: 2.5px solid #2563eb; padding-left: 4px; margin: 8px 0 4px 0; page-break-after: avoid; }
-        .question-box { margin-bottom: 5px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 3px; page-break-inside: avoid; }
-        .options { margin-top: 2px; padding-left: 8px; font-size: 7.5pt; }
-        .option-item { margin: 1px 0; }
-        .write-line { border-bottom: 1px dashed #64748b; height: 12px; margin-top: 3px; }
-        .transcript-body { white-space: pre-wrap; text-align: justify; font-size: 7.5pt; line-height: 1.35; background: #f8fafc; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
-        table { width: 100%; border-collapse: collapse; margin: 5px 0; font-size: 7pt; }
-        th, td { border: 1px solid #cbd5e1; padding: 3px 5px; text-align: left; }
+        @page { size: A4; margin: 15mm; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1e293b; line-height: 1.5; font-size: 11pt; }
+        .header { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .header-title { font-size: 15pt; font-weight: 800; color: #0f172a; margin: 0; }
+        .question-box { margin-bottom: 12px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; page-break-inside: avoid; }
+        .transcript-body { white-space: pre-wrap; font-size: 11pt; line-height: 1.6; background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
         th { background: #f1f5f9; font-weight: 700; }
-        .summary-card { background: #f8fafc; border: 1px solid #94a3b8; border-radius: 4px; padding: 6px; margin-bottom: 6px; font-size: 7pt; }
-        .pass { color: #059669; font-weight: 700; }
-        .fail { color: #dc2626; font-weight: 700; }
-        .partial { color: #d97706; font-weight: 700; }
-        .footer { margin-top: 10px; padding-top: 3px; border-top: 1px solid #cbd5e1; font-size: 6pt; color: #64748b; display: flex; justify-content: space-between; }
       </style>
     `;
 
     let bodyContent = '';
-
     if (mode === 'transcript') {
-      bodyContent = `
-        <div class="header">
-          <div>
-            <h1 class="header-title">Hörtext / Transkript</h1>
-            <div class="header-meta">${escapeHtml(exercise.title)} · ${escapeHtml(EXAM_LABELS[exercise.examType])}</div>
-          </div>
-          <div class="badge">Niveau ${escapeHtml(exercise.level)} · ${today}</div>
-        </div>
-        <div class="transcript-body">${escapeHtml(transcript.trim())}</div>
-      `;
+      bodyContent = `<div class="header"><h1>Hörtext / Transkript</h1></div><div class="transcript-body">${escapeHtml(transcript.trim())}</div>`;
     } else if (mode === 'questions') {
-      let secNum = 0;
       let qHtml = '';
-
-      if (exercise.part1TF.length > 0) {
-        secNum++;
-        qHtml += `<h2>${secNum}. Richtig oder falsch?</h2>`;
-        exercise.part1TF.forEach((q, i) => {
-          qHtml += `
-            <div class="question-box">
-              <div><strong>${i + 1}.</strong> ${escapeHtml(q.statement)}</div>
-              <div class="options">☐ Richtig &nbsp;&nbsp;&nbsp;&nbsp; ☐ Falsch</div>
-            </div>`;
-        });
-      }
-
-      if (exercise.part2MC.length > 0) {
-        secNum++;
-        qHtml += `<h2>${secNum}. Wählen Sie die richtige Lösung (A, B oder C).</h2>`;
-        exercise.part2MC.forEach((q, i) => {
-          qHtml += `
-            <div class="question-box">
-              <div><strong>${i + 1}.</strong> ${escapeHtml(q.question)}</div>
-              <div class="options">
-                ${q.options
-                  .map((opt, idx) => `<div class="option-item">☐ <strong>${String.fromCharCode(65 + idx)})</strong> ${escapeHtml(opt)}</div>`)
-                  .join('')}
-              </div>
-            </div>`;
-        });
-      }
-
-      if (exercise.part3Gap.length > 0) {
-        secNum++;
-        qHtml += `<h2>${secNum}. Ergänzen Sie die Lücken.</h2>`;
-        exercise.part3Gap.forEach((q, i) => {
-          qHtml += `
-            <div class="question-box">
-              <div><strong>${i + 1}.</strong> ${escapeHtml(q.sentence)}</div>
-              <div class="write-line"></div>
-            </div>`;
-        });
-      }
-
-      if (exercise.part4Short.length > 0) {
-        secNum++;
-        qHtml += `<h2>${secNum}. Beantworten Sie die Fragen.</h2>`;
-        exercise.part4Short.forEach((q, i) => {
-          qHtml += `
-            <div class="question-box">
-              <div><strong>${i + 1}.</strong> ${escapeHtml(q.question)}</div>
-              <div class="write-line"></div>
-            </div>`;
-        });
-      }
-
-      if (exercise.vocabulary.length > 0) {
-        qHtml += `<h2>Wortschatz – Erklären Sie die Wörter auf Deutsch.</h2>`;
-        exercise.vocabulary.forEach((q, i) => {
-          qHtml += `
-            <div class="question-box">
-              <div><strong>${i + 1}. ${escapeHtml(q.word)}</strong></div>
-              <div class="write-line"></div>
-            </div>`;
-        });
-      }
-
-      bodyContent = `
-        <div class="header">
-          <div>
-            <h1 class="header-title">HÖRVERSTEHEN – Prüfungsaufgaben</h1>
-            <div class="header-meta">${escapeHtml(exercise.title)} · ${escapeHtml(EXAM_LABELS[exercise.examType])}</div>
-          </div>
-          <div class="badge">Niveau ${escapeHtml(exercise.level)} · ${today}</div>
-        </div>
-        <div style="margin-bottom:6px; font-size:7pt;">
-          <strong>Name:</strong> ___________________________ &nbsp;&nbsp;&nbsp; <strong>Datum:</strong> ${today}
-        </div>
-        ${qHtml}
-      `;
-    } else if (mode === 'certificate' && result) {
-      const sectionRows = result.sections
-        .map(s => `<tr><td>${escapeHtml(s.label)}</td><td>${s.earned} / ${s.total}</td><td>${s.percentage} %</td></tr>`)
-        .join('');
-
-      let detailRows = '';
-      const appendDetailRow = (label: string, userAns: string, grade?: Grade) => {
-        if (!grade) return;
-        const statusText =
-          grade.points === 1
-            ? '<span class="pass">✓ Richtig</span>'
-            : grade.points === 0.5
-              ? '<span class="partial">◐ Teilweise</span>'
-              : '<span class="fail">✗ Falsch</span>';
-
-        detailRows += `
-          <tr>
-            <td>${escapeHtml(label)}</td>
-            <td>${escapeHtml(userAns || '(Keine)')}</td>
-            <td>${statusText}</td>
-            <td>${escapeHtml(grade.feedback)}<br/><span style="color:#475569; font-size:6pt;">${escapeHtml(grade.feedbackFa)}</span></td>
-          </tr>`;
-      };
-
       exercise.part1TF.forEach((q, i) => {
-        const val = answers[`tf-${i}`];
-        appendDetailRow(`TF ${i + 1}: ${q.statement}`, val === 'true' ? 'Richtig' : val === 'false' ? 'Falsch' : '', result.details[`tf-${i}`]);
+        qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.statement)}<br/>☐ Richtig &nbsp;&nbsp;&nbsp; ☐ Falsch</div>`;
       });
       exercise.part2MC.forEach((q, i) => {
-        const idx = Number(answers[`mc-${i}`]);
-        appendDetailRow(`MC ${i + 1}: ${q.question}`, !isNaN(idx) && q.options[idx] ? `${String.fromCharCode(65 + idx)}) ${q.options[idx]}` : '', result.details[`mc-${i}`]);
+        qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.question)}<br/>${q.options.map((o, idx) => `<div>${String.fromCharCode(65 + idx)}) ${escapeHtml(o)}</div>`).join('')}</div>`;
       });
-      exercise.part3Gap.forEach((q, i) => {
-        appendDetailRow(`Lücke ${i + 1}`, answers[`gap-${i}`] || '', result.details[`gap-${i}`]);
-      });
-      exercise.part4Short.forEach((q, i) => {
-        appendDetailRow(`Frage ${i + 1}`, answers[`short-${i}`] || '', result.details[`short-${i}`]);
-      });
-      exercise.vocabulary.forEach((q, i) => {
-        appendDetailRow(`Wort ${q.word}`, answers[`v-${i}`] || '', result.details[`v-${i}`]);
-      });
-
-      bodyContent = `
-        <div class="header">
-          <div>
-            <h1 class="header-title">Prüfungszeugnis & Auswertung</h1>
-            <div class="header-meta">${escapeHtml(exercise.title)} · ${escapeHtml(EXAM_LABELS[exercise.examType])}</div>
-          </div>
-          <div class="badge">Niveau ${escapeHtml(exercise.level)} · ${today}</div>
-        </div>
-
-        <div class="summary-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-            <span style="font-size:9pt; font-weight:800;">Ergebnis: ${result.score} / ${result.maxScore} (${result.percentage} %)</span>
-            <span style="font-size:8.5pt;" class="${result.passed ? 'pass' : 'fail'}">${escapeHtml(result.gradeLabel)} · ${result.passed ? 'BESTANDEN' : 'NICHT BESTANDEN'}</span>
-          </div>
-          <p style="margin:2px 0;"><strong>Lehrkraft:</strong> ${escapeHtml(result.teacherComment)} / <span dir="rtl">${escapeHtml(result.teacherCommentFa)}</span></p>
-        </div>
-
-        <h2>Teilergebnisse</h2>
-        <table><thead><tr><th>Bereich</th><th>Punkte</th><th>%</th></tr></thead><tbody>${sectionRows}</tbody></table>
-
-        <h2>Detailauswertung</h2>
-        <table><thead><tr><th>Aufgabe</th><th>Antwort</th><th>Status</th><th>Feedback</th></tr></thead><tbody>${detailRows}</tbody></table>
-      `;
+      bodyContent = `<div class="header"><h1>Prüfungsaufgaben</h1></div>${qHtml}`;
+    } else if (mode === 'certificate' && result) {
+      bodyContent = `<div class="header"><h1>Prüfungszeugnis</h1></div><p>Ergebnis: ${result.score}/${result.maxScore} (${result.percentage}%)</p>`;
     }
 
-    const existingIframe = document.getElementById('print-iframe');
-    if (existingIframe) existingIframe.remove();
-
     const iframe = document.createElement('iframe');
-    iframe.id = 'print-iframe';
     iframe.style.position = 'fixed';
     iframe.style.right = '0';
     iframe.style.bottom = '0';
     iframe.style.width = '0';
     iframe.style.height = '0';
-    iframe.style.border = '0';
     document.body.appendChild(iframe);
-
     const doc = iframe.contentWindow?.document;
     if (doc) {
       doc.open();
-      doc.write(`
-        <!DOCTYPE html>
-        <html lang="de">
-        <head>
-          <meta charset="UTF-8" />
-          <title>Print</title>
-          ${baseStyles}
-        </head>
-        <body>
-          ${bodyContent}
-          <div class="footer">
-            <span>Peyman Saberi · Hörverstehen Trainer</span>
-            <span>${today}</span>
-          </div>
-          <script>
-            window.onload = function() {
-              setTimeout(function() {
-                window.print();
-              }, 300);
-            };
-          </script>
-        </body>
-        </html>
-      `);
+      doc.write(`<html><head><title>Print</title>${baseStyles}</head><body>${bodyContent}</body></html>`);
       doc.close();
+      setTimeout(() => { iframe.contentWindow?.print(); }, 300);
     }
   };
 
-  // رندر فیدبک با رعایت قانون ۱ (ترجمه مخفی تا زمان تصحیح) و قانون ۲ (حذف توضیحات تکراری و نمایش تک‌توضیح شفاف)
   const renderFeedback = (id: string, translation?: string) => {
     return (
       <div className="space-y-1 pt-1">
-        {/* ترجمه سوال فقط بعد از زدن دکمه تصحیح نمایش داده می‌شود */}
         {submitted && translation && (
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium" dir="rtl">
             ترجمه: {translation}
@@ -957,7 +813,6 @@ ${transcript}
                 <p className={result.details[id].points === 0.5 ? 'text-amber-600 font-bold' : 'text-red-600 font-bold'}>
                   {result.details[id].points === 0.5 ? '◐ Teilweise richtig' : '✗ Falsch'}
                 </p>
-                {/* حذف توضیحات تکراری و نمایش بازخورد دقیق یکتا */}
                 <p className="text-red-600 dark:text-red-400 font-medium" dir="rtl">
                   {result.details[id].feedbackFa}
                 </p>
@@ -971,7 +826,7 @@ ${transcript}
 
   let sectionCounter = 0;
 
-  // ۱. صفحه منوی دو گزینه‌ای (ورودی Hörverstehen)
+  // ۱. منوی اصلی دو گزینه‌ای
   if (viewMode === 'menu') {
     return (
       <div className="max-w-xl mx-auto space-y-6 text-left text-sm text-slate-800 dark:text-slate-100 py-8" dir="ltr">
@@ -979,9 +834,9 @@ ${transcript}
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-300 dark:border-slate-600 w-8 h-8 flex items-center justify-center text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
-            ✕
+            برگشت به منو
           </button>
           <span className="text-xs font-medium text-slate-400">Hörverstehen Hub</span>
         </div>
@@ -1012,7 +867,7 @@ ${transcript}
             <span className="text-3xl group-hover:scale-110 transition">📂</span>
             <div>
               <h3 className="font-bold text-base text-emerald-900 dark:text-emerald-300">تمرینات قبلی (آرشیو)</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مشاهده لیست تمرین‌های ذخیره‌شده و تمرین مجدد بدون نیاز به هوش مصنوعی</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">مشاهده لیست تمرین‌های ذخیره‌شده و تمرین مجدد</p>
             </div>
           </button>
         </div>
@@ -1020,7 +875,7 @@ ${transcript}
     );
   }
 
-  // ۲. صفحه لیست تمرینات قبلی (آرشیو)
+  // ۲. صفحه آرشیو تمرینات
   if (viewMode === 'archive') {
     return (
       <div className="max-w-3xl mx-auto space-y-4 text-left text-sm text-slate-800 dark:text-slate-100" dir="ltr">
@@ -1030,16 +885,9 @@ ${transcript}
             onClick={() => setViewMode('menu')}
             className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            ← بازگشت به منو
+            برگشت به منو
           </button>
           <h2 className="text-base font-bold">📂 آرشیو تمرینات درک شنیداری</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-slate-300 dark:border-slate-600 w-8 h-8 flex items-center justify-center text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            ✕
-          </button>
         </div>
 
         {savedExercises.length === 0 ? (
@@ -1049,7 +897,7 @@ ${transcript}
               onClick={() => setViewMode('creator')}
               className="text-blue-600 dark:text-blue-400 font-semibold underline"
             >
-              همین حالا اولین تمرین را بسازید
+              ساخت تمرین جدید
             </button>
           </div>
         ) : (
@@ -1072,22 +920,27 @@ ${transcript}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
+                      setCurrentArchiveId(item.id);
                       setTranscript(item.transcript);
                       setExamType(item.examType);
                       setLevel(item.level);
                       setExercise(item.exercise);
-                      setAnswers(item.answers || {});
-                      setSubmitted(item.submitted || false);
-                      setResult(item.result || null);
-                      setAudioBlobUrl(item.audioUrl || null);
+                      setAnswers({}); // ورود با فرم سفید و آماده آزمون
+                      setSubmitted(false);
+                      setResult(null);
+                      setAudioGenerated(item.audioGenerated || false);
+                      setSentencePairsCache(item.sentencePairsCache || []);
+                      setHistoryAttempts(item.historyAttempts || []);
                       setViewMode('creator');
                     }}
                     className="rounded-xl bg-blue-600 hover:bg-blue-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition"
                   >
-                    شروع / ادامه تمرین ➔
+                    شروع تمرین ➔
                   </button>
                   <button
                     onClick={() => {
+                      const confirmDelete = window.confirm('آیا از حذف این تمرین از آرشیو اطمینان دارید؟');
+                      if (!confirmDelete) return;
                       const filtered = savedExercises.filter(x => x.id !== item.id);
                       setSavedExercises(filtered);
                       localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(filtered));
@@ -1112,75 +965,94 @@ ${transcript}
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setViewMode('menu')}
-          className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+          onClick={handleBackToMenu}
+          className="rounded-xl border border-slate-300 dark:border-slate-600 px-3.5 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition"
         >
-          ← منوی اصلی
+          برگشت به منو
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          title="Schließen"
-          aria-label="Schließen"
-          className="rounded-full border border-slate-300 dark:border-slate-600 w-8 h-8 flex items-center justify-center text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-        >
-          ✕
-        </button>
+        <span className="text-xs font-medium text-slate-400">Deutsch Hörverstehen · Simulator</span>
       </div>
 
-      {/* باکس ورودی متن و تنظیمات */}
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-5 shadow-sm space-y-3.5">
+      {/* باکس ورودی متن و تنظیمات مرتب‌شده */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-5 shadow-sm space-y-4">
         <div>
           <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
             <span>🎧</span>
             <span>Hörverstehen erstellen</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            نوع آزمون و سطح را انتخاب کنید و متن فایل صوتی را وارد کنید تا آزمون استاندارد ساخته شود.
+            نوع آزمون و سطح را انتخاب کنید و متن فایل صوتی را وارد نمایید.
           </p>
         </div>
 
         <textarea
-          rows={6}
+          rows={5}
           value={transcript}
           onChange={e => setTranscript(e.target.value)}
           className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40 p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           placeholder="Transkript hier einfügen …"
         />
 
-        {/* دکمه ساخت فایل صوتی با قابلیت Play/Pause و موتور صوتی پیشرفته */}
+        {/* پنل صوت با نوار پیشرفت، اسلایدر سرعت و غیرفعال شدن پس از ساخت */}
         {transcript.trim().length >= 10 && (
-          <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button
-              type="button"
-              onClick={handleGenerateAudio}
-              disabled={generatingAudio}
-              className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5"
-            >
-              <span>🔊</span>
-              <span>{generatingAudio ? 'در حال ساخت فایل صوتی…' : 'ساخت فایل صوتی (تلفظ ترانسکریپت)'}</span>
-            </button>
+          <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={handleGenerateAudio}
+                disabled={generatingAudio || audioGenerated}
+                className={`rounded-xl px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 ${
+                  audioGenerated ? 'bg-emerald-600 opacity-80 cursor-default' : 'bg-purple-600 hover:bg-purple-700'
+                }`}
+              >
+                <span>🔊</span>
+                <span>{generatingAudio ? 'در حال ساخت فایل صوتی…' : audioGenerated ? '✓ فایل صوتی ساخته شد' : 'ساخت فایل صوتی'}</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={togglePlayPauseAudio}
-              disabled={!transcript.trim()}
-              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100 transition"
-            >
-              <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
-            </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={togglePlayPauseAudio}
+                  disabled={!audioGenerated}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100 disabled:opacity-40"
+                >
+                  <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
+                </button>
 
-            <span className="text-[11px] text-slate-500 ml-auto">سیستم صوتی مجهز به موتور استاندارد تبدیل متن به گفتار آلمانی.</span>
+                <label className="text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                  <span>سرعت:</span>
+                  <select
+                    value={audioRate}
+                    onChange={(e) => handleRateChange(parseFloat(e.target.value))}
+                    className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2 py-1 text-xs"
+                  >
+                    <option value={0.75}>0.75x</option>
+                    <option value={1.0}>1.0x (معمولی)</option>
+                    <option value={1.25}>1.25x</option>
+                    <option value={1.5}>1.5x</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            {/* نوار پیمایش صوت */}
+            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-purple-600 h-full transition-all duration-300"
+                style={{ width: `${audioProgress}%` }}
+              ></div>
+            </div>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <label className="text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-300">
+        {/* منوی تنظیمات و دکمه ساخت تمرین کاملاً مرتب‌شده */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 items-center">
+          <label className="text-xs font-semibold flex flex-col gap-1 text-slate-600 dark:text-slate-300">
             <span>Prüfungsformat:</span>
             <select
               value={examType}
               onChange={e => setExamType(e.target.value as ExamType)}
-              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium"
+              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3 py-2 text-xs font-medium"
             >
               {(Object.keys(EXAM_LABELS) as ExamType[]).map(type => (
                 <option key={type} value={type}>
@@ -1190,12 +1062,12 @@ ${transcript}
             </select>
           </label>
 
-          <label className="text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-300">
+          <label className="text-xs font-semibold flex flex-col gap-1 text-slate-600 dark:text-slate-300">
             <span>Niveau:</span>
             <select
               value={level}
               onChange={e => setLevel(e.target.value)}
-              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium"
+              className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3 py-2 text-xs font-medium"
             >
               {['A2', 'B1', 'B2', 'C1', 'C2'].map(x => (
                 <option key={x} value={x}>
@@ -1205,16 +1077,17 @@ ${transcript}
             </select>
           </label>
 
-          <button
-            onClick={generate}
-            disabled={loading}
-            className="ml-auto rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
-          >
-            {loading ? 'در حال ساخت تمرین…' : 'ساخت تمرین'}
-          </button>
+          <div className="flex items-end pt-4 sm:pt-0">
+            <button
+              onClick={generate}
+              disabled={loading}
+              className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
+            >
+              {loading ? 'در حال ساخت تمرین…' : 'ساخت تمرین'}
+            </button>
+          </div>
         </div>
 
-        {/* دکمه‌های ابزار کمکی (ترجمه جمله به جمله و استخراج لغات) */}
         {transcript.trim().length >= 20 && (
           <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
@@ -1244,9 +1117,9 @@ ${transcript}
         )}
       </div>
 
-      {/* بدنه آزمون */}
+      {/* بدنه آزمون با فونت‌های درشت‌تر و خواناتر */}
       {exercise && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-6 shadow-sm space-y-5">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-6 shadow-sm space-y-6 text-base">
           <div className="border-b border-slate-200 dark:border-slate-700 pb-3 flex flex-wrap items-baseline justify-between gap-2">
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
@@ -1265,18 +1138,18 @@ ${transcript}
           {exercise.part1TF.length > 0 && (() => {
             sectionCounter++;
             return (
-              <section className="space-y-2.5">
-                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+              <section className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
                   {sectionCounter}. Richtig oder falsch?
                 </h3>
                 {exercise.part1TF.map((q, i) => {
                   const id = `tf-${i}`;
                   return (
-                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
-                      <p className="text-sm leading-snug">
-                        <span className="font-semibold">{i + 1}.</span> {q.statement}
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3.5 space-y-2">
+                      <p className="text-base leading-snug font-medium">
+                        <span className="font-bold">{i + 1}.</span> {q.statement}
                       </p>
-                      <div className="flex gap-6 text-xs sm:text-sm">
+                      <div className="flex gap-6 text-sm">
                         {['Richtig', 'Falsch'].map((label, j) => (
                           <label key={label} className="flex items-center gap-2 cursor-pointer select-none">
                             <input
@@ -1285,9 +1158,9 @@ ${transcript}
                               checked={answers[id] === String(j === 0)}
                               onChange={() => answer(id, String(j === 0))}
                               disabled={submitted}
-                              className="accent-blue-600"
+                              className="accent-blue-600 w-4 h-4"
                             />
-                            <span>{label}</span>
+                            <span className="font-medium">{label}</span>
                           </label>
                         ))}
                       </div>
@@ -1308,18 +1181,18 @@ ${transcript}
           {exercise.part2MC.length > 0 && (() => {
             sectionCounter++;
             return (
-              <section className="space-y-2.5">
-                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+              <section className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
                   {sectionCounter}. Wählen Sie die richtige Lösung (A, B oder C).
                 </h3>
                 {exercise.part2MC.map((q, i) => {
                   const id = `mc-${i}`;
                   return (
-                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
-                      <p className="text-sm font-medium leading-snug">
-                        <span className="font-semibold">{i + 1}.</span> {q.question}
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3.5 space-y-2">
+                      <p className="text-base font-semibold leading-snug">
+                        <span className="font-bold">{i + 1}.</span> {q.question}
                       </p>
-                      <div className="space-y-1.5 pl-1 text-xs sm:text-sm">
+                      <div className="space-y-2 pl-1 text-sm">
                         {q.options.map((opt, optIdx) => (
                           <label key={optIdx} className="flex items-start gap-2 cursor-pointer select-none">
                             <input
@@ -1328,10 +1201,10 @@ ${transcript}
                               checked={answers[id] === String(optIdx)}
                               onChange={() => answer(id, String(optIdx))}
                               disabled={submitted}
-                              className="mt-1 accent-blue-600"
+                              className="mt-1 accent-blue-600 w-4 h-4"
                             />
-                            <span className="leading-snug">
-                              <strong className="font-semibold">{String.fromCharCode(65 + optIdx)})</strong> {opt}
+                            <span className="leading-snug font-medium">
+                              <strong className="font-bold">{String.fromCharCode(65 + optIdx)})</strong> {opt}
                             </span>
                           </label>
                         ))}
@@ -1353,19 +1226,19 @@ ${transcript}
           {exercise.part3Gap.length > 0 && (() => {
             sectionCounter++;
             return (
-              <section className="space-y-2.5">
-                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+              <section className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
                   {sectionCounter}. Ergänzen Sie die Lücken.
                 </h3>
                 {exercise.part3Gap.map((q, i) => {
                   const id = `gap-${i}`;
                   return (
-                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
-                      <p className="text-sm leading-snug">
-                        <span className="font-semibold">{i + 1}.</span> {q.sentence}
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3.5 space-y-2">
+                      <p className="text-base leading-snug font-medium">
+                        <span className="font-bold">{i + 1}.</span> {q.sentence}
                       </p>
                       <input
-                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm"
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3.5 py-2 text-base"
                         value={answers[id] || ''}
                         onChange={e => answer(id, e.target.value)}
                         disabled={submitted}
@@ -1388,23 +1261,23 @@ ${transcript}
           {exercise.part4Short.length > 0 && (() => {
             sectionCounter++;
             return (
-              <section className="space-y-2.5">
-                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+              <section className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
                   {sectionCounter}. Beantworten Sie die Fragen.
                 </h3>
                 {exercise.part4Short.map((q, i) => {
                   const id = `short-${i}`;
                   return (
-                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
-                      <p className="text-sm leading-snug">
-                        <span className="font-semibold">{i + 1}.</span> {q.question}
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3.5 space-y-2">
+                      <p className="text-base leading-snug font-medium">
+                        <span className="font-bold">{i + 1}.</span> {q.question}
                       </p>
                       <textarea
                         rows={2}
                         value={answers[id] || ''}
                         onChange={e => answer(id, e.target.value)}
                         disabled={submitted}
-                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm"
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3.5 py-2 text-base"
                         placeholder="Ihre Antwort auf Deutsch"
                       />
                       {solutions && (
@@ -1420,52 +1293,19 @@ ${transcript}
             );
           })()}
 
-          {/* واژگان */}
-          {exercise.vocabulary.length > 0 && (
-            <section className="space-y-2.5">
-              <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
-                Wortschatz – Erklären Sie die Wörter.
-              </h3>
-              {exercise.vocabulary.map((q, i) => {
-                const id = `v-${i}`;
-                return (
-                  <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2">
-                    <p className="text-sm font-semibold">
-                      {i + 1}. {q.word}
-                    </p>
-                    <input
-                      value={answers[id] || ''}
-                      onChange={e => answer(id, e.target.value)}
-                      disabled={submitted}
-                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm"
-                      placeholder="Bedeutung auf Deutsch"
-                    />
-                    {solutions && (
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                        <strong>Erklärung:</strong> {q.meaning}
-                      </p>
-                    )}
-                    {renderFeedback(id)}
-                  </div>
-                );
-              })}
-            </section>
-          )}
-
           {warningMsg && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-300">
               {warningMsg}
             </div>
           )}
 
-          {/* دکمه‌های پایانی آزمون و چاپ PDF */}
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={handleCheckClick}
                 disabled={grading || submitted}
-                className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
+                className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
               >
                 {grading ? 'Antworten werden bewertet…' : submitted ? 'Antworten überprüft' : 'Antworten überprüfen'}
               </button>
@@ -1473,7 +1313,7 @@ ${transcript}
               <button
                 type="button"
                 onClick={() => setSolutions(v => !v)}
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition"
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition"
               >
                 {solutions ? 'Lösungen ausblenden' : 'Lösungen anzeigen'}
               </button>
@@ -1494,39 +1334,66 @@ ${transcript}
               >
                 📝 Fragen (PDF)
               </button>
-              <button
-                type="button"
-                onClick={() => handlePrintPDF('certificate')}
-                disabled={!result}
-                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-              >
-                📊 Zeugnis (PDF)
-              </button>
             </div>
           </div>
 
-          {/* کارنامه */}
+          {/* کارنامه با جدول ستونی تاریخی برای مقایسه نتایج */}
           {result && (
             <section className="rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/50 p-4 sm:p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-                    Prüfungsergebnis & Gutachten
+                    Prüfungsergebnis & Historischer Vergleich
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {EXAM_LABELS[exercise.examType]} · Niveau {exercise.level}
+                    مقایسه نتایج آزمون در تاریخ‌های مختلف
                   </p>
                 </div>
-
-                <div className="text-right">
-                  <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
-                    {result.score} / {result.maxScore} <span className="text-sm font-semibold text-slate-500">({result.percentage} %)</span>
-                  </div>
-                  <div className={`text-xs font-bold ${result.passed ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {result.gradeLabel} · {result.passed ? 'Bestanden' : 'Nicht bestanden'}
-                  </div>
-                </div>
               </div>
+
+              {/* جدول مقایسه تاریخچه‌ای ستونی */}
+              {historyAttempts.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-200 dark:bg-slate-800">
+                        <th className="p-2 border border-slate-300 dark:border-slate-700">متریک / تاریخ آزمون</th>
+                        {historyAttempts.map((att, idx) => (
+                          <th key={idx} className="p-2 border border-slate-300 dark:border-slate-700 text-center font-bold">
+                            {att.date}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="p-2 border border-slate-300 dark:border-slate-700 font-semibold">امتیاز مکتسبه</td>
+                        {historyAttempts.map((att, idx) => (
+                          <td key={idx} className="p-2 border border-slate-300 dark:border-slate-700 text-center font-bold text-blue-600">
+                            {att.score} / {att.maxScore}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="p-2 border border-slate-300 dark:border-slate-700 font-semibold">درصد موفقیت</td>
+                        {historyAttempts.map((att, idx) => (
+                          <td key={idx} className="p-2 border border-slate-300 dark:border-slate-700 text-center font-bold">
+                            {att.percentage} %
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td className="p-2 border border-slate-300 dark:border-slate-700 font-semibold">ارزیابی / وضعیت</td>
+                        {historyAttempts.map((att, idx) => (
+                          <td key={idx} className={`p-2 border border-slate-300 dark:border-slate-700 text-center font-semibold ${att.passed ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {att.gradeLabel}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               <div className="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 p-3.5 space-y-2 text-xs leading-relaxed">
                 <p className="font-bold text-blue-900 dark:text-blue-300">👨‍🏫 Beurteilung der Lehrkraft:</p>
@@ -1537,17 +1404,10 @@ ${transcript}
               <div className="flex gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => { setSubmitted(false); setResult(null); setSolutions(false); }}
+                  onClick={() => { setSubmitted(false); setResult(null); setSolutions(false); setAnswers({}); }}
                   className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-3.5 py-1.5 text-xs font-semibold"
                 >
-                  Antworten bearbeiten
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAnswers({}); setSubmitted(false); setResult(null); setSolutions(false); }}
-                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-3.5 py-1.5 text-xs font-semibold"
-                >
-                  Erneut üben
+                  تمرین مجدد (فرم سفید)
                 </button>
               </div>
             </section>
@@ -1555,118 +1415,79 @@ ${transcript}
         </div>
       )}
 
-      {/* مودال (پاپ‌آپ) ترجمه جمله به جمله */}
+      {/* مودال ترجمه جمله به جمله با استفاده از کش */}
       {showSentenceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" dir="ltr">
           <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <span>📖</span>
-                <span>Satz-für-Satz Übersetzung (ترجمه جمله به جمله)</span>
+                <span>Satz-für-Satz Übersetzung</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setShowSentenceModal(false)}
-                className="rounded-full w-8 h-8 flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1 text-xs font-semibold"
               >
-                ✕
+                بستن
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
               {loadingSentences ? (
-                <div className="py-12 text-center text-xs text-slate-500">در حال پردازش و ترجمه متن…</div>
-              ) : sentencePairs.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-500">در حال ترجمه متن…</div>
+              ) : sentencePairsCache.length === 0 ? (
                 <div className="py-12 text-center text-xs text-slate-500">متنی یافت نشد.</div>
               ) : (
-                sentencePairs.map((pair, idx) => (
+                sentencePairsCache.map((pair, idx) => (
                   <div key={idx} className="rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 space-y-1.5 bg-slate-50/50 dark:bg-slate-800/30">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white text-left">
-                      {pair.de}
-                    </p>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">
-                      {pair.fa}
-                    </p>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white text-left">{pair.de}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">{pair.fa}</p>
                   </div>
                 ))
               )}
-            </div>
-
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 text-right">
-              <button
-                type="button"
-                onClick={() => setShowSentenceModal(false)}
-                className="rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-2 text-xs font-semibold"
-              >
-                بستن (Zurück)
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* مودال (پاپ‌آپ) استخراج هوشمند واژگان */}
+      {/* مودال استخراج واژگان */}
       {showVocabModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" dir="ltr">
           <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <span>🔤</span>
-                <span>Wortschatz-Extraktor (استخراج هوشمند واژگان)</span>
+                <span>Wortschatz-Extraktor</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setShowVocabModal(false)}
-                className="rounded-full w-8 h-8 flex items-center justify-center border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1 text-xs font-semibold"
               >
-                ✕
+                بستن
               </button>
             </div>
 
-            {/* انتخاب فیلتر سطح */}
-            <div className="flex flex-wrap items-center gap-3 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-              <label className="text-xs font-semibold flex items-center gap-2">
-                <span>حذف سطوح پایین‌تر از:</span>
-                <select
-                  value={vocabMinLevel}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setVocabMinLevel(val);
-                    fetchExtractedVocabs(val);
-                  }}
-                  className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1 text-xs font-medium"
-                >
-                  <option value="A2">A2 (و پایین‌تر را نمی‌خواهم)</option>
-                  <option value="B1">B1 (و پایین‌تر را نمی‌خواهم)</option>
-                  <option value="B2">B2 (و پایین‌تر را نمی‌خواهم)</option>
-                  <option value="C1">C1 (و پایین‌تر را نمی‌خواهم)</option>
-                </select>
-              </label>
-              <span className="text-xs text-slate-500 ml-auto">فقط لغات سطح انتخابی و بالاتر استخراج می‌شوند.</span>
-            </div>
-
-            {/* جدول لغات */}
             <div className="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl">
               {loadingVocabs ? (
-                <div className="py-16 text-center text-xs text-slate-500">در حال استخراج و تحلیل سطح لغات متن…</div>
+                <div className="py-16 text-center text-xs text-slate-500">در حال استخراج لغات…</div>
               ) : extractedVocabs.length === 0 ? (
-                <div className="py-16 text-center text-xs text-slate-500">لغتی با این فیلتر سطح یافت نشد.</div>
+                <div className="py-16 text-center text-xs text-slate-500">لغتی یافت نشد.</div>
               ) : (
                 <table className="w-full text-xs text-left border-collapse">
                   <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0">
                     <tr>
-                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold">Wort (واژه با ارتیکل)</th>
-                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold">Bedeutung (ترجمه فارسی)</th>
-                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold">Niveau</th>
-                      <th className="p-2.5 border-b border-slate-200 dark:border-slate-700 font-bold text-center">Auswahl (انتخاب)</th>
+                      <th className="p-2.5 border-b font-bold">Wort</th>
+                      <th className="p-2.5 border-b font-bold">Bedeutung</th>
+                      <th className="p-2.5 border-b font-bold text-center">Auswahl</th>
                     </tr>
                   </thead>
                   <tbody>
                     {extractedVocabs.map((v, idx) => (
-                      <tr key={idx} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <td className="p-2.5 font-semibold text-slate-900 dark:text-white">{v.word}</td>
-                        <td className="p-2.5 font-medium text-slate-700 dark:text-slate-200" dir="rtl">{v.translation}</td>
-                        <td className="p-2.5"><span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-[10px]">{v.level}</span></td>
+                      <tr key={idx} className="border-b hover:bg-slate-50/50">
+                        <td className="p-2.5 font-semibold">{v.word}</td>
+                        <td className="p-2.5 font-medium" dir="rtl">{v.translation}</td>
                         <td className="p-2.5 text-center">
                           <input
                             type="checkbox"
@@ -1687,28 +1508,18 @@ ${transcript}
             </div>
 
             {copySuccessMsg && (
-              <div className="rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-700 p-3 text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed font-medium">
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-800 font-medium">
                 {copySuccessMsg}
               </div>
             )}
 
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="pt-2 border-t flex items-center justify-between">
               <button
                 type="button"
                 onClick={handleCopySelectedVocabs}
-                disabled={extractedVocabs.filter(v => v.selected).length === 0}
-                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50 transition flex items-center gap-1.5"
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition"
               >
-                <span>📋</span>
-                <span>کپی لیست لغات انتخاب‌شده</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowVocabModal(false)}
-                className="rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-2 text-xs font-semibold"
-              >
-                بستن (Zurück)
+                کپی لیست لغات انتخاب‌شده
               </button>
             </div>
           </div>
