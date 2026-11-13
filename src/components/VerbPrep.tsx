@@ -34,7 +34,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
   const [addLvl, setAddLvl] = useState('B1');
   // practice session
   const [count, setCount] = useState(10);
-  const [sess, setSess] = useState<null | { q: string[]; i: number; ok: number; bad: number; again: Set<string> }>(null);
+  const [sess, setSess] = useState<null | { q: string[]; i: number; ok: number; bad: number; again: Set<string>; goodIds: string[]; badIds: string[] }>(null);
   const [phase, setPhase] = useState<'prep' | 'case' | 'res'>('prep');
   const [pick, setPick] = useState(''); const [typed, setTyped] = useState('');
   const [kase, setKase] = useState<'' | 'A' | 'D'>(''); const [good, setGood] = useState<boolean | null>(null);
@@ -53,7 +53,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
     const later = pool.filter(v => stats[v.id] && stats[v.id].due > now).sort((a, b) => stats[a.id].due - stats[b.id].due);
     const q = [...dueList, ...fresh, ...later].slice(0, count).map(v => v.id);
     if (!q.length) { onShowToast('فعلی برای تمرین نیست.', true); return; }
-    setSess({ q: shuffle(q), i: 0, ok: 0, bad: 0, again: new Set() }); resetQ();
+    setSess({ q: shuffle(q), i: 0, ok: 0, bad: 0, again: new Set(), goodIds: [], badIds: [] }); resetQ();
   };
   const resetQ = () => { setPhase('prep'); setPick(''); setTyped(''); setKase(''); setGood(null); };
   const cur = sess ? byId.get(sess.q[sess.i]) : undefined;
@@ -69,7 +69,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
     const s = { ...(stats[cur.id] || { box: 0, due: 0, ok: 0, bad: 0 }) };
     if (ok) { s.ok++; s.box = Math.min(6, s.box + 1); s.due = Date.now() + GAPS[s.box] * DAY; } else { s.bad++; s.box = 0; s.due = Date.now(); }
     const ns = { ...stats, [cur.id]: s }; setStats(ns); save(STATS_KEY, ns);
-    setSess({ ...sess, ok: sess.ok + (ok ? 1 : 0), bad: sess.bad + (ok ? 0 : 1) });
+    setSess({ ...sess, ok: sess.ok + (ok ? 1 : 0), bad: sess.bad + (ok ? 0 : 1), goodIds: ok ? [...sess.goodIds, cur.id] : sess.goodIds, badIds: ok ? sess.badIds : [...sess.badIds, cur.id] });
     if (!ok) {
       const wrongEx = prepOk ? cur.ex : cur.ex.replace(new RegExp('(^|\\s)' + cur.prep + '(?=[\\s.,!?]|$)', 'i'), `$1${pick || '___'}`);
       addErrors([{ original: wrongEx, corrected: cur.ex, type: 'حرف اضافه و حالت دستوری', why: `${cur.verb} + ${cur.prep} + ${kName(cur.kase)} — ${cur.fa}` }]);
@@ -172,13 +172,33 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void 
         </div>
       )}
 
-      {tab === 'practice' && sess && sess.i >= sess.q.length && (
-        <div className={card + ' text-center'}>
-          <div className="text-4xl">🎉</div><div className="font-extrabold">جلسه تمام شد</div>
-          <div className="text-sm">درست: <b className="text-emerald-600">{sess.ok}</b> — غلط: <b className="text-rose-600">{sess.bad}</b></div>
-          <div className="grid grid-cols-2 gap-2"><button onClick={start} className="h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm">جلسهٔ بعد</button><button onClick={() => setSess(null)} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 font-bold text-sm">بازگشت</button></div>
-        </div>
-      )}
+      {tab === 'practice' && sess && sess.i >= sess.q.length && (() => {
+        const wrong = [...new Set(sess.badIds)];
+        const right = [...new Set(sess.goodIds)].filter(id => !wrong.includes(id));
+        const Col = (title: string, ids: string[], cls: string) => (
+          <div className="space-y-1.5">
+            <div className={`text-xs font-extrabold text-center py-1.5 rounded-lg ${cls}`}>{title} ({ids.length})</div>
+            {ids.length === 0 && <div className="text-center text-xs text-[#5d6676]">—</div>}
+            {ids.map(id => { const v = byId.get(id); if (!v) return null; return (
+              <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-2 text-sm">
+                <div dir="ltr" className="font-sans"><b>{v.verb}</b> <u className="text-[#1f5fbf] dark:text-[#7fb0ff] font-bold">{v.prep}</u></div>
+                <div className="flex items-center gap-1.5 mt-0.5"><span className={`text-[10px] font-bold px-1.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span><span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate">{v.fa}</span></div>
+              </div>
+            ); })}
+          </div>
+        );
+        return (
+          <div className={card}>
+            <div className="text-center"><div className="text-4xl">🎉</div><div className="font-extrabold">جلسه تمام شد</div>
+              <div className="text-sm mt-1">درست: <b className="text-emerald-600">{sess.ok}</b> — غلط: <b className="text-rose-600">{sess.bad}</b></div></div>
+            <div className="grid grid-cols-2 gap-2.5 items-start">
+              {Col('✅ درست‌ها', right, 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300')}
+              {Col('❌ غلط‌ها', wrong, 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300')}
+            </div>
+            <div className="grid grid-cols-2 gap-2"><button onClick={start} className="h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm">جلسهٔ بعد</button><button onClick={() => setSess(null)} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 font-bold text-sm">بازگشت</button></div>
+          </div>
+        );
+      })()}
 
       {tab === 'practice' && sess && cur && sess.i < sess.q.length && (
         <div className="space-y-3">
