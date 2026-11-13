@@ -37,7 +37,6 @@ type GradingResult = {
   details: Record<string, Grade>;
 };
 
-// ساختار تاریخچه نتایج برای مقایسه در کارنامه
 type HistoryAttempt = {
   date: string;
   score: number;
@@ -67,15 +66,14 @@ type SavedExerciseRecord = {
   transcript: string;
   exercise: Exercise;
   sentencePairsCache?: { de: string; fa: string }[];
-  audioGenerated?: boolean;
+  audioUrl?: string;
   answers: Record<string, string>;
   submitted: boolean;
   result: GradingResult | null;
   historyAttempts?: HistoryAttempt[];
 };
 
-const STORAGE_KEY = 'hoeren_trainer_state_v4';
-const ARCHIVE_STORAGE_KEY = 'hoeren_trainer_archive_list_v2';
+const ARCHIVE_STORAGE_KEY = 'hoeren_trainer_archive_list_v3';
 
 const EXAM_LABELS: Record<ExamType, string> = {
   Standard: 'Standard / Allgemein',
@@ -244,19 +242,19 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
-  // استیت‌های صوت و پلیر پیشرفته
-  const [audioGenerated, setAudioGenerated] = useState(false);
+  // استیت‌های صوت و پلیر پیشرفته با موتور Worker
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
   const [audioRate, setAudioRate] = useState(1.0);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // کش ترجمه جمله به جمله
   const [sentencePairsCache, setSentencePairsCache] = useState<{ de: string; fa: string }[]>([]);
   const [historyAttempts, setHistoryAttempts] = useState<HistoryAttempt[]>([]);
 
-  // تاریخچه نتایج برای کارنامه مقایسه‌ای
   const [showSentenceModal, setShowSentenceModal] = useState(false);
   const [loadingSentences, setLoadingSentences] = useState(false);
 
@@ -275,8 +273,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     } catch {}
   }, []);
 
-  // تابع ذخیره یا آپدیت تمرین در آرشیو
-  const persistCurrentToArchive = (curEx: Exercise | null, curTr: string, curAns: Record<string, string>, curSub: boolean, curRes: GradingResult | null, curPairs: { de: string; fa: string }[], isAudioGen: boolean, curHist: HistoryAttempt[]) => {
+  const persistCurrentToArchive = (curEx: Exercise | null, curTr: string, curAns: Record<string, string>, curSub: boolean, curRes: GradingResult | null, curPairs: { de: string; fa: string }[], curAudioUrl: string | null, curHist: HistoryAttempt[]) => {
     if (!curEx) return;
     try {
       const existingList = [...savedExercises];
@@ -295,7 +292,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         transcript: curTr,
         exercise: curEx,
         sentencePairsCache: curPairs,
-        audioGenerated: isAudioGen,
+        audioUrl: curAudioUrl || undefined,
         answers: curAns,
         submitted: curSub,
         result: curRes,
@@ -318,10 +315,9 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     if (!confirmLeave) return;
 
     if (exercise) {
-      persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, audioGenerated, historyAttempts);
+      persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, audioUrl, historyAttempts);
     }
 
-    // ریست کامل صفحه برای ساخت تمرین جدید
     setViewMode('menu');
     setCurrentArchiveId(null);
     setTranscript('');
@@ -329,12 +325,12 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     setAnswers({});
     setSubmitted(false);
     setResult(null);
-    setAudioGenerated(false);
+    setAudioUrl(null);
     setIsPlayingAudio(false);
     setSentencePairsCache([]);
     setHistoryAttempts([]);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
     }
   };
 
@@ -531,7 +527,6 @@ ${JSON.stringify(freeQuestions)}
       setResult(finalRes);
       setSubmitted(true);
 
-      // ثبت تاریخچه این بار امتحان برای مقایسه در کارنامه ستونی
       const todayStr = new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' });
       const newAttempt: HistoryAttempt = {
         date: todayStr + ' (' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')',
@@ -544,7 +539,7 @@ ${JSON.stringify(freeQuestions)}
       const updatedHistory = [...historyAttempts, newAttempt];
       setHistoryAttempts(updatedHistory);
 
-      persistCurrentToArchive(exercise, transcript, answers, true, finalRes, sentencePairsCache, audioGenerated, updatedHistory);
+      persistCurrentToArchive(exercise, transcript, answers, true, finalRes, sentencePairsCache, audioUrl, updatedHistory);
     } catch (e: any) {
       setError(e?.message || 'Die Antworten konnten nicht bewertet werden.');
     } finally {
@@ -566,7 +561,7 @@ ${JSON.stringify(freeQuestions)}
     setSolutions(false);
     setSubmitted(false);
     setResult(null);
-    setAudioGenerated(false);
+    setAudioUrl(null);
     setIsPlayingAudio(false);
     setSentencePairsCache([]);
     setHistoryAttempts([]);
@@ -591,7 +586,7 @@ ${JSON.stringify(freeQuestions)}
       }
 
       setExercise(generatedExercise);
-      persistCurrentToArchive(generatedExercise, transcript, {}, false, null, [], false, []);
+      persistCurrentToArchive(generatedExercise, transcript, {}, false, null, [], null, []);
     } catch (e: any) {
       setError(e?.message || 'ساخت تمرین ناموفق بود.');
     } finally {
@@ -599,84 +594,82 @@ ${JSON.stringify(freeQuestions)}
     }
   };
 
-  // ساخت فایل صوتی واقعی با تنظیم سرعت و نوار پیشرفت
-  const handleGenerateAudio = () => {
-    if (!transcript.trim() || audioGenerated) return;
+  // اتصال به وب‌ورکر سفارشی شما برای تولید صوت با کیفیت بالا
+  const handleGenerateAudio = async () => {
+    if (!transcript.trim() || audioUrl) return;
     setGeneratingAudio(true);
+    setError('');
 
     try {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(transcript);
-        utterance.lang = 'de-DE';
-        utterance.rate = audioRate;
+      const response = await fetch('https://wort-tts.peymansaberi20.workers.de', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: transcript }),
+      });
 
-        utterance.onboundary = (event) => {
-          if (transcript.length > 0) {
-            const pct = Math.min(100, Math.round((event.charIndex / transcript.length) * 100));
-            setAudioProgress(pct);
-          }
-        };
-
-        utterance.onend = () => {
-          setIsPlayingAudio(false);
-          setAudioProgress(100);
-        };
-        utterance.onerror = () => {
-          setIsPlayingAudio(false);
-        };
-
-        utteranceRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
-        setIsPlayingAudio(true);
-        setAudioGenerated(true);
-        setGeneratingAudio(false);
-
-        persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, true, historyAttempts);
-      } else {
-        alert('مرورگر شما از تولید صوت پشتیبانی نمی‌کند.');
-        setGeneratingAudio(false);
+      if (!response.ok) {
+        throw new Error('خطا در ارتباط با موتور تولید صوت.');
       }
-    } catch {
+
+      const blob = await response.blob();
+      const newAudioUrl = URL.createObjectURL(blob);
+      setAudioUrl(newAudioUrl);
+      setGeneratingAudio(false);
+
+      persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, newAudioUrl, historyAttempts);
+    } catch (err: any) {
+      setError(err?.message || 'ساخت فایل صوتی با خطا مواجه شد.');
       setGeneratingAudio(false);
     }
   };
 
   const togglePlayPauseAudio = () => {
-    if ('speechSynthesis' in window) {
-      if (isPlayingAudio) {
-        window.speechSynthesis.pause();
-        setIsPlayingAudio(false);
-      } else {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-          setIsPlayingAudio(true);
-        } else {
-          handleGenerateAudio();
-        }
-      }
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlayingAudio(true);
+      }).catch(() => {});
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      const current = audioRef.current.currentTime;
+      const duration = audioRef.current.duration || 1;
+      setAudioCurrentTime(current);
+      setAudioDuration(duration);
+      setAudioProgress((current / duration) * 100);
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    setAudioProgress(val);
+    if (audioRef.current && audioRef.current.duration) {
+      const newTime = (val / 100) * audioRef.current.duration;
+      audioRef.current.currentTime = newTime;
+      setAudioCurrentTime(newTime);
     }
   };
 
   const handleRateChange = (newRate: number) => {
     setAudioRate(newRate);
-    if ('speechSynthesis' in window && isPlayingAudio) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(transcript);
-      utterance.lang = 'de-DE';
-      utterance.rate = newRate;
-      utterance.onend = () => setIsPlayingAudio(false);
-      window.speechSynthesis.speak(utterance);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = newRate;
     }
   };
 
-  // ترجمه جمله به جمله با چک کردن کش
   const handleOpenSentenceModal = async () => {
     if (!transcript.trim()) return;
     setShowSentenceModal(true);
 
     if (sentencePairsCache.length > 0) {
-      return; // از کش استفاده کن و هوش مصنوعی مصرف نکن
+      return;
     }
 
     setLoadingSentences(true);
@@ -694,7 +687,7 @@ ${transcript}
       const arr = Array.isArray(parsed[0]) ? parsed[0] : Array.isArray(parsed) ? parsed : [];
       const formatted = arr.map((item: any) => ({ de: String(item?.de || ''), fa: String(item?.fa || '') }));
       setSentencePairsCache(formatted);
-      persistCurrentToArchive(exercise, transcript, answers, submitted, result, formatted, audioGenerated, historyAttempts);
+      persistCurrentToArchive(exercise, transcript, answers, submitted, result, formatted, audioUrl, historyAttempts);
     } catch {
       setSentencePairsCache([{ de: transcript, fa: 'خطا در بارگذاری ترجمه جمله به جمله.' }]);
     } finally {
@@ -745,28 +738,23 @@ ${transcript}
     setTimeout(() => setCopySuccessMsg(''), 5000);
   };
 
-  // چاپ PDF با فونت‌های درشت‌تر و خواناتر
   const handlePrintPDF = (mode: 'transcript' | 'questions' | 'certificate') => {
     if (!exercise) return;
-    const today = new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' });
 
     const baseStyles = `
       <style>
         @page { size: A4; margin: 15mm; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1e293b; line-height: 1.5; font-size: 11pt; }
-        .header { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .header { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 15px; }
         .header-title { font-size: 15pt; font-weight: 800; color: #0f172a; margin: 0; }
         .question-box { margin-bottom: 12px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; page-break-inside: avoid; }
         .transcript-body { white-space: pre-wrap; font-size: 11pt; line-height: 1.6; background: #f8fafc; padding: 15px; border: 1px solid #cbd5e1; border-radius: 6px; }
-        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
-        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
-        th { background: #f1f5f9; font-weight: 700; }
       </style>
     `;
 
     let bodyContent = '';
     if (mode === 'transcript') {
-      bodyContent = `<div class="header"><h1>Hörtext / Transkript</h1></div><div class="transcript-body">${escapeHtml(transcript.trim())}</div>`;
+      bodyContent = `<div class="header"><h1 class="header-title">Hörtext / Transkript</h1></div><div class="transcript-body">${escapeHtml(transcript.trim())}</div>`;
     } else if (mode === 'questions') {
       let qHtml = '';
       exercise.part1TF.forEach((q, i) => {
@@ -775,9 +763,7 @@ ${transcript}
       exercise.part2MC.forEach((q, i) => {
         qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.question)}<br/>${q.options.map((o, idx) => `<div>${String.fromCharCode(65 + idx)}) ${escapeHtml(o)}</div>`).join('')}</div>`;
       });
-      bodyContent = `<div class="header"><h1>Prüfungsaufgaben</h1></div>${qHtml}`;
-    } else if (mode === 'certificate' && result) {
-      bodyContent = `<div class="header"><h1>Prüfungszeugnis</h1></div><p>Ergebnis: ${result.score}/${result.maxScore} (${result.percentage}%)</p>`;
+      bodyContent = `<div class="header"><h1 class="header-title">Prüfungsaufgaben</h1></div>${qHtml}`;
     }
 
     const iframe = document.createElement('iframe');
@@ -826,7 +812,6 @@ ${transcript}
 
   let sectionCounter = 0;
 
-  // ۱. منوی اصلی دو گزینه‌ای
   if (viewMode === 'menu') {
     return (
       <div className="max-w-xl mx-auto space-y-6 text-left text-sm text-slate-800 dark:text-slate-100 py-8" dir="ltr">
@@ -875,7 +860,6 @@ ${transcript}
     );
   }
 
-  // ۲. صفحه آرشیو تمرینات
   if (viewMode === 'archive') {
     return (
       <div className="max-w-3xl mx-auto space-y-4 text-left text-sm text-slate-800 dark:text-slate-100" dir="ltr">
@@ -925,10 +909,10 @@ ${transcript}
                       setExamType(item.examType);
                       setLevel(item.level);
                       setExercise(item.exercise);
-                      setAnswers({}); // ورود با فرم سفید و آماده آزمون
+                      setAnswers({});
                       setSubmitted(false);
                       setResult(null);
-                      setAudioGenerated(item.audioGenerated || false);
+                      setAudioUrl(item.audioUrl || null);
                       setSentencePairsCache(item.sentencePairsCache || []);
                       setHistoryAttempts(item.historyAttempts || []);
                       setViewMode('creator');
@@ -959,7 +943,6 @@ ${transcript}
     );
   }
 
-  // ۳. صفحه اصلی ساخت و انجام تمرین
   return (
     <div className="max-w-4xl mx-auto space-y-4 text-left text-sm text-slate-800 dark:text-slate-100" dir="ltr">
       <div className="flex items-center justify-between">
@@ -973,7 +956,6 @@ ${transcript}
         <span className="text-xs font-medium text-slate-400">Deutsch Hörverstehen · Simulator</span>
       </div>
 
-      {/* باکس ورودی متن و تنظیمات مرتب‌شده */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-5 shadow-sm space-y-4">
         <div>
           <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
@@ -993,27 +975,26 @@ ${transcript}
           placeholder="Transkript hier einfügen …"
         />
 
-        {/* پنل صوت با نوار پیشرفت، اسلایدر سرعت و غیرفعال شدن پس از ساخت */}
         {transcript.trim().length >= 10 && (
           <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={handleGenerateAudio}
-                disabled={generatingAudio || audioGenerated}
+                disabled={generatingAudio || !!audioUrl}
                 className={`rounded-xl px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 ${
-                  audioGenerated ? 'bg-emerald-600 opacity-80 cursor-default' : 'bg-purple-600 hover:bg-purple-700'
+                  audioUrl ? 'bg-emerald-600 opacity-80 cursor-default' : 'bg-purple-600 hover:bg-purple-700'
                 }`}
               >
                 <span>🔊</span>
-                <span>{generatingAudio ? 'در حال ساخت فایل صوتی…' : audioGenerated ? '✓ فایل صوتی ساخته شد' : 'ساخت فایل صوتی'}</span>
+                <span>{generatingAudio ? 'در حال ساخت فایل صوتی با کیفیت بالا…' : audioUrl ? '✓ فایل صوتی آماده است' : 'ساخت فایل صوتی'}</span>
               </button>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={togglePlayPauseAudio}
-                  disabled={!audioGenerated}
+                  disabled={!audioUrl}
                   className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100 disabled:opacity-40"
                 >
                   <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
@@ -1035,17 +1016,34 @@ ${transcript}
               </div>
             </div>
 
-            {/* نوار پیمایش صوت */}
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-purple-600 h-full transition-all duration-300"
-                style={{ width: `${audioProgress}%` }}
-              ></div>
+            {/* عنصر صوتی پنهان و نوار پیمایش قابل تنظیم دستی */}
+            {audioUrl && (
+              <audio
+                ref={audioRef}
+                src={audioUrl}
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={() => setIsPlayingAudio(false)}
+                className="hidden"
+              />
+            )}
+
+            <div className="space-y-1">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={audioProgress}
+                onChange={handleSeek}
+                className="w-full accent-purple-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+              />
+              <div className="flex justify-between text-[10px] text-slate-500">
+                <span>{Math.floor(audioCurrentTime)}s</span>
+                <span>{Math.floor(audioDuration)}s</span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* منوی تنظیمات و دکمه ساخت تمرین کاملاً مرتب‌شده */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 items-center">
           <label className="text-xs font-semibold flex flex-col gap-1 text-slate-600 dark:text-slate-300">
             <span>Prüfungsformat:</span>
@@ -1117,7 +1115,6 @@ ${transcript}
         )}
       </div>
 
-      {/* بدنه آزمون با فونت‌های درشت‌تر و خواناتر */}
       {exercise && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-6 shadow-sm space-y-6 text-base">
           <div className="border-b border-slate-200 dark:border-slate-700 pb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -1134,7 +1131,6 @@ ${transcript}
             </span>
           </div>
 
-          {/* بخش ۱: TF */}
           {exercise.part1TF.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1177,7 +1173,6 @@ ${transcript}
             );
           })()}
 
-          {/* بخش ۲: MC */}
           {exercise.part2MC.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1222,7 +1217,6 @@ ${transcript}
             );
           })()}
 
-          {/* بخش ۳: Gap */}
           {exercise.part3Gap.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1257,7 +1251,6 @@ ${transcript}
             );
           })()}
 
-          {/* بخش ۴: Short */}
           {exercise.part4Short.length > 0 && (() => {
             sectionCounter++;
             return (
@@ -1337,7 +1330,6 @@ ${transcript}
             </div>
           </div>
 
-          {/* کارنامه با جدول ستونی تاریخی برای مقایسه نتایج */}
           {result && (
             <section className="rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/50 p-4 sm:p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
@@ -1351,7 +1343,6 @@ ${transcript}
                 </div>
               </div>
 
-              {/* جدول مقایسه تاریخچه‌ای ستونی */}
               {historyAttempts.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs text-left border-collapse">
@@ -1415,7 +1406,6 @@ ${transcript}
         </div>
       )}
 
-      {/* مودال ترجمه جمله به جمله با استفاده از کش */}
       {showSentenceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" dir="ltr">
           <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 overflow-hidden">
@@ -1451,7 +1441,6 @@ ${transcript}
         </div>
       )}
 
-      {/* مودال استخراج واژگان */}
       {showVocabModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6" dir="ltr">
           <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 overflow-hidden">
