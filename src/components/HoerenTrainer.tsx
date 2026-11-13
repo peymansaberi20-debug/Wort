@@ -975,9 +975,9 @@ ${transcript}
                       setExamType(item.examType);
                       setLevel(item.level);
                       setExercise(item.exercise);
-                      setAnswers(item.answers || {});
-                      setSubmitted(item.submitted || false);
-                      setResult(item.result || null);
+                      setAnswers({});
+                      setSubmitted(false);
+                      setResult(null);
                       setAudioUrl(item.audioUrl || null);
                       setSentencePairsCache(item.sentencePairsCache || []);
                       setHistoryAttempts(item.historyAttempts || []);
@@ -1045,7 +1045,6 @@ ${transcript}
           <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                {/* اگر فایل صوتی ابری وجود ندارد، دکمه ساخت صوت ابری نشان داده شود */}
                 {!audioUrl && (
                   <button
                     type="button"
@@ -1058,7 +1057,6 @@ ${transcript}
                   </button>
                 )}
 
-                {/* کلید دوم: پخش فوری با صدای مرورگر */}
                 <button
                   type="button"
                   onClick={handleToggleBrowserSpeech}
@@ -1071,7 +1069,6 @@ ${transcript}
                 </button>
               </div>
 
-              {/* اگر فایل صوتی ابری آماده است، فقط پلیر Play/Pause و تنظیم سرعت نشان داده شود */}
               {audioUrl && (
                 <div className="flex items-center gap-2">
                   <button
@@ -1099,7 +1096,6 @@ ${transcript}
               )}
             </div>
 
-            {/* عنصر صوتی پنهان و نوار پیمایش قابل تنظیم دستی */}
             {audioUrl && (
               <audio
                 ref={audioRef}
@@ -1162,7 +1158,6 @@ ${transcript}
             </select>
           </label>
 
-          {/* اگر از آرشیو آمده‌ایم، دکمه «ساخت تمرین» نباید نمایش داده شود */}
           {!currentArchiveId && (
             <div className="flex items-end pt-4 sm:pt-0">
               <button
