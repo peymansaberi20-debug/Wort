@@ -68,7 +68,7 @@ const EXAM_INSTRUCTIONS: Record<ExamType, string> = {
   Goethe: `
 - Stil: Goethe-Zertifikat Hörverstehen. Fokus auf Global-, Detail- und selektives Verstehen, Meinungen und Absichten der Sprecher.
 - Aufteilung:
-  * part1TF: 4 Richtig/Falsch-Aussagen
+  * part1TF: 4 Richtig/Falsch-Aussagen (Alltags- oder Radiotext-Aussagen)
   * part2MC: 4 Multiple-Choice-Fragen (je 3 Optionen, typisches Goethe-Format mit Distraktoren)
   * part3Gap: 0 Lückensätze (leeres Array [])
   * part4Short: 0 offene Fragen (leeres Array [])
@@ -103,18 +103,10 @@ function getOfficialGradeInfo(percentage: number, examType: ExamType) {
   const passThreshold = examType === 'EPD' ? 60 : 60;
   const passed = percentage >= passThreshold;
 
-  if (percentage >= 90) {
-    return { gradeLabel: 'Sehr gut (1)', passed };
-  }
-  if (percentage >= 80) {
-    return { gradeLabel: 'Gut (2)', passed };
-  }
-  if (percentage >= 70) {
-    return { gradeLabel: 'Befriedigend (3)', passed };
-  }
-  if (percentage >= 60) {
-    return { gradeLabel: 'Ausreichend (4)', passed };
-  }
+  if (percentage >= 90) return { gradeLabel: 'Sehr gut (1)', passed };
+  if (percentage >= 80) return { gradeLabel: 'Gut (2)', passed };
+  if (percentage >= 70) return { gradeLabel: 'Befriedigend (3)', passed };
+  if (percentage >= 60) return { gradeLabel: 'Ausreichend (4)', passed };
   return { gradeLabel: 'Nicht bestanden (5)', passed: false };
 }
 
@@ -223,7 +215,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
-  // بازیابی خودکار از LocalStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -237,12 +228,9 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         if (typeof parsed.submitted === 'boolean') setSubmitted(parsed.submitted);
         if (parsed.result) setResult(parsed.result);
       }
-    } catch {
-      // نادیده گرفتن خطاهای احتمالی storage
-    }
+    } catch {}
   }, []);
 
-  // ذخیره خودکار در LocalStorage
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -257,9 +245,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           result,
         })
       );
-    } catch {
-      // نادیده گرفتن خطای پر شدن حافظه
-    }
+    } catch {}
   }, [transcript, examType, level, exercise, answers, submitted, result]);
 
   const answer = (id: string, value: string) => {
@@ -310,7 +296,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         category: string;
       }[] = [];
 
-      // 1. بخش Richtig / Falsch
       exercise.part1TF.forEach((q, i) => {
         const id = `tf-${i}`;
         const given = answers[id];
@@ -327,7 +312,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         };
       });
 
-      // 2. بخش چندگزینه‌ای (Multiple Choice)
       exercise.part2MC.forEach((q, i) => {
         const id = `mc-${i}`;
         const given = answers[id];
@@ -345,7 +329,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         };
       });
 
-      // 3. سوالات تشریحی، جای‌خالی و واژگان
       const addFree = (
         id: string,
         question: string,
@@ -373,7 +356,6 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         addFree(`v-${i}`, q.word, q.meaning, 'Wortschatz')
       );
 
-      // محاسبه اولیه برای ارسال خلاصه عملکرد به ممتحن
       let aiTeacherComment = '';
       let aiStrengths = '';
       let aiRecommendations = '';
@@ -454,7 +436,6 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         aiRecommendations = String(parsed?.recommendations || '');
       }
 
-      // محاسبه نمرات به تفکیک هر بخش
       const sections: SectionScore[] = [];
       const calcSection = (label: string, ids: string[]) => {
         if (ids.length === 0) return;
@@ -468,26 +449,11 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
         });
       };
 
-      calcSection(
-        'Richtig / Falsch',
-        exercise.part1TF.map((_, i) => `tf-${i}`)
-      );
-      calcSection(
-        'Multiple Choice',
-        exercise.part2MC.map((_, i) => `mc-${i}`)
-      );
-      calcSection(
-        'Lückentext',
-        exercise.part3Gap.map((_, i) => `gap-${i}`)
-      );
-      calcSection(
-        'Offene Fragen',
-        exercise.part4Short.map((_, i) => `short-${i}`)
-      );
-      calcSection(
-        'Wortschatz',
-        exercise.vocabulary.map((_, i) => `v-${i}`)
-      );
+      calcSection('Richtig / Falsch', exercise.part1TF.map((_, i) => `tf-${i}`));
+      calcSection('Multiple Choice', exercise.part2MC.map((_, i) => `mc-${i}`));
+      calcSection('Lückentext', exercise.part3Gap.map((_, i) => `gap-${i}`));
+      calcSection('Offene Fragen', exercise.part4Short.map((_, i) => `short-${i}`));
+      calcSection('Wortschatz', exercise.vocabulary.map((_, i) => `v-${i}`));
 
       const allIds = [
         ...exercise.part1TF.map((_, i) => `tf-${i}`),
@@ -502,20 +468,19 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
       const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
       const { gradeLabel, passed } = getOfficialGradeInfo(percentage, exercise.examType);
 
-      // اگر آزمونی فقط بخش تستی (TF/MC) داشت و پرامپت تشریحی اجرا نشد، بازخورد استاندارد استاد ساخته شود
       if (!aiTeacherComment) {
         if (percentage >= 85) {
-          aiTeacherComment = `Hervorragende Leistung im Prüfungsformat ${EXAM_LABELS[exercise.examType]} (${exercise.level}). Sie haben sowohl globale Zusammenhänge als auch feine Details des Hörtextes sicher erfasst.`;
-          aiStrengths = 'Hohe Genauigkeit bei der Unterscheidung von Haupt- und Nebeninformationen sowie sicheres Erkennen von Ablenkern (Distraktoren).';
-          aiRecommendations = 'Trainieren Sie als Nächstes mit schnelleren Originalaufnahmen oder komplexeren Fachtexten auf dem nächsthöheren Niveau.';
+          aiTeacherComment = `Hervorragende Leistung im Prüfungsformat ${EXAM_LABELS[exercise.examType]} (${exercise.level}).`;
+          aiStrengths = 'Hohe Genauigkeit beim Erfassen von Details und Hauptinformationen.';
+          aiRecommendations = 'Weiter so! Testen Sie komplexere Fachtexte.';
         } else if (percentage >= 60) {
-          aiTeacherComment = `Solide Leistung auf dem Niveau ${exercise.level}. Die wichtigsten Kernaussagen wurden verstanden, bei einigen Detailfragen besteht jedoch noch Optimierungspotenzial.`;
-          aiStrengths = 'Gutes Grundverständnis des Gesamtkontextes und der zentralen Themen des Transkripts.';
-          aiRecommendations = 'Achten Sie beim Hören besonders auf Signalwörter, Verneinungen und feine Bedeutungsunterschiede in den Antwortoptionen.';
+          aiTeacherComment = `Solide Leistung auf dem Niveau ${exercise.level}. Die wichtigsten Kernaussagen wurden verstanden.`;
+          aiStrengths = 'Gutes Grundverständnis des Gesamtzusammenhangs.';
+          aiRecommendations = 'Achten Sie genauer auf Signalwörter und feine Nuancen.';
         } else {
-          aiTeacherComment = `Das Ergebnis liegt noch unter der Bestehensgrenze für ${EXAM_LABELS[exercise.examType]} (${exercise.level}). Eine gezielte Wiederholung des Wortschatzes und der Hörstrategien wird empfohlen.`;
-          aiStrengths = 'Erste Ansätze beim Erfassen einzelner Schlüsselwörter sind erkennbar.';
-          aiRecommendations = 'Lesen Sie das Transkript parallel zum Hören mit, markieren Sie unbekannte Ausdrücke und wiederholen Sie die Übung anschließend ohne Textvorlage.';
+          aiTeacherComment = `Das Ergebnis liegt noch unter der Bestehensgrenze für ${EXAM_LABELS[exercise.examType]}.`;
+          aiStrengths = 'Erste Ansätze beim Erkennen von Schlüsselwörtern.';
+          aiRecommendations = 'Wiederholen Sie den Wortschatz und hören Sie den Text ein weiteres Mal.';
         }
       }
 
@@ -588,7 +553,6 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
     }
   };
 
-  // تولید خروجی PDF تمیز و استاندارد از طریق پنجره پرینت مرورگر
   const handlePrintPDF = (mode: 'transcript' | 'questions' | 'certificate') => {
     if (!exercise) return;
 
@@ -756,7 +720,7 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
                 ${q.options
                   .map(
                     (opt, idx) =>
-                      `<div class="option-item">☐ <strong>${String.fromCharCode(65 + idx)})</strong>${escapeHtml(opt)}</div>`
+                      `<div class="option-item">☐ <strong>${String.fromCharCode(65 + idx)})</strong> ${escapeHtml(opt)}</div>`
                   )
                   .join('')}
               </div>
@@ -829,4 +793,628 @@ Gib ausschließlich gültiges JSON in folgendem Format zurück:
       const appendDetailRow = (label: string, userAns: string, grade?: Grade) => {
         if (!grade) return;
         const statusText =
-          grade.points ===
+          grade.points === 1
+            ? '<span class="pass">✓ Richtig (1 Pkt.)</span>'
+            : grade.points === 0.5
+              ? '<span class="partial">◐ Teilweise (0.5 Pkt.)</span>'
+              : '<span class="fail">✗ Falsch (0 Pkt.)</span>';
+        const noteText =
+          grade.points === 1 ? '—' : escapeHtml(grade.feedback);
+
+        detailRows += `
+          <tr>
+            <td>${escapeHtml(label)}</td>
+            <td>${escapeHtml(userAns || '(Keine Antwort)')}</td>
+            <td>${statusText}</td>
+            <td>${noteText}</td>
+          </tr>`;
+      };
+
+      exercise.part1TF.forEach((q, i) => {
+        const val = answers[`tf-${i}`];
+        const disp = val === 'true' ? 'Richtig' : val === 'false' ? 'Falsch' : '';
+        appendDetailRow(`TF ${i + 1}: ${q.statement}`, disp, result.details[`tf-${i}`]);
+      });
+
+      exercise.part2MC.forEach((q, i) => {
+        const idx = Number(answers[`mc-${i}`]);
+        const disp = !isNaN(idx) && q.options[idx] ? `${String.fromCharCode(65 + idx)}) ${q.options[idx]}` : '';
+        appendDetailRow(`MC ${i + 1}: ${q.question}`, disp, result.details[`mc-${i}`]);
+      });
+
+      exercise.part3Gap.forEach((q, i) => {
+        appendDetailRow(`Lücke ${i + 1}: ${q.sentence}`, answers[`gap-${i}`] || '', result.details[`gap-${i}`]);
+      });
+
+      exercise.part4Short.forEach((q, i) => {
+        appendDetailRow(`Frage ${i + 1}: ${q.question}`, answers[`short-${i}`] || '', result.details[`short-${i}`]);
+      });
+
+      exercise.vocabulary.forEach((q, i) => {
+        appendDetailRow(`Wortschatz ${i + 1}: ${q.word}`, answers[`v-${i}`] || '', result.details[`v-${i}`]);
+      });
+
+      bodyContent = `
+        <div class="header">
+          <div>
+            <h1 class="header-title">Prüfungszeugnis & Auswertung</h1>
+            <div class="header-meta">${escapeHtml(exercise.title)} · ${escapeHtml(EXAM_LABELS[exercise.examType])}</div>
+          </div>
+          <div class="badge">Niveau ${escapeHtml(exercise.level)} · ${today}</div>
+        </div>
+
+        <div class="summary-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div>
+              <span style="font-size:14pt; font-weight:800;">Gesamtergebnis: ${result.score} / ${result.maxScore} Punkte (${result.percentage} %)</span>
+            </div>
+            <div style="font-size:12pt;" class="${result.passed ? 'pass' : 'fail'}">
+              ${escapeHtml(result.gradeLabel)} · ${result.passed ? 'BESTANDEN' : 'NICHT BESTANDEN'}
+            </div>
+          </div>
+          <p style="margin:6px 0;"><strong>Beurteilung der Lehrkraft:</strong> ${escapeHtml(result.teacherComment)}</p>
+          <p style="margin:4px 0;"><strong>Stärken:</strong> ${escapeHtml(result.strengths)}</p>
+          <p style="margin:4px 0;"><strong>Empfehlungen:</strong> ${escapeHtml(result.recommendations)}</p>
+        </div>
+
+        <h2>Teilergebnisse nach Prüfungsbereich</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Prüfungsteil</th>
+              <th>Erreichte Punkte</th>
+              <th>Prozent</th>
+            </tr>
+          </thead>
+          <tbody>${sectionRows}</tbody>
+        </table>
+
+        <h2>Detailauswertung der Aufgaben</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:32%;">Aufgabe</th>
+              <th style="width:22%;">Ihre Antwort</th>
+              <th style="width:18%;">Bewertung</th>
+              <th style="width:28%;">Hinweis / Korrektur</th>
+            </tr>
+          </thead>
+          <tbody>${detailRows}</tbody>
+        </table>
+      `;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="de">
+      <head>
+        <meta charset="UTF-8" />
+        <title>${escapeHtml(exercise.title)} - ${mode.toUpperCase()}</title>
+        ${baseStyles}
+      </head>
+      <body>
+        ${bodyContent}
+        <div class="footer">
+          <span>Peyman Saberi · Deutsch Hörverstehen Trainer</span>
+          <span>Generiert am ${today}</span>
+        </div>
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 250);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const renderFeedback = (id: string) => {
+    if (!submitted || !result?.details[id]) return null;
+    const item = result.details[id];
+
+    if (item.points === 1) {
+      return (
+        <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 pt-0.5">
+          ✓ Richtig
+        </p>
+      );
+    }
+
+    return (
+      <p
+        className={`text-xs font-medium pt-0.5 leading-relaxed ${
+          item.points === 0.5
+            ? 'text-amber-600 dark:text-amber-400'
+            : 'text-red-600 dark:text-red-400'
+        }`}
+      >
+        <span className="font-bold">
+          {item.points === 0.5 ? '◐ Teilweise richtig' : '✗ Falsch'}
+        </span>
+        {' — '}
+        {item.feedback}
+      </p>
+    );
+  };
+
+  let sectionCounter = 0;
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-4 text-left text-sm text-slate-800 dark:text-slate-100" dir="ltr">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onClose}
+          title="Schließen"
+          aria-label="Schließen"
+          className="rounded-full border border-slate-300 dark:border-slate-600 w-8 h-8 flex items-center justify-center text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+        >
+          ✕
+        </button>
+        <span className="text-xs font-medium text-slate-400">
+          Deutsch Hörverstehen · Prüfungs-Simulator
+        </span>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-5 shadow-sm space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+              <span>🎧</span>
+              <span>Hörverstehen erstellen</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              نوع آزمون و سطح را انتخاب کنید و متن فایل صوتی را وارد کنید تا آزمون استاندارد ساخته شود.
+            </p>
+          </div>
+        </div>
+
+        <textarea
+          rows={6}
+          value={transcript}
+          onChange={e => setTranscript(e.target.value)}
+          className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40 p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          placeholder="Transkript hier einfügen …"
+        />
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <label className="text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <span>Prüfungsformat:</span>
+            <select
+              value={examType}
+              onChange={e => setExamType(e.target.value as ExamType)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            >
+              {(Object.keys(EXAM_LABELS) as ExamType[]).map(type => (
+                <option key={type} value={type}>
+                  {EXAM_LABELS[type]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-300">
+            <span>Niveau:</span>
+            <select
+              value={level}
+              onChange={e => setLevel(e.target.value)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            >
+              {['A2', 'B1', 'B2', 'C1', 'C2'].map(x => (
+                <option key={x} value={x}>
+                  {x}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            onClick={generate}
+            disabled={loading}
+            className="ml-auto rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
+          >
+            {loading ? 'در حال ساخت تمرین…' : 'ساخت تمرین'}
+          </button>
+        </div>
+
+        {error && (
+          <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {exercise && (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#1b2029] p-4 sm:p-6 shadow-sm space-y-5">
+          <div className="border-b border-slate-200 dark:border-slate-700 pb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+                {exercise.title}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                HÖRVERSTEHEN · {EXAM_LABELS[exercise.examType]} · Niveau {exercise.level}
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              {exercise.level} · {exercise.examType}
+            </span>
+          </div>
+
+          {exercise.part1TF.length > 0 && (() => {
+            sectionCounter++;
+            return (
+              <section className="space-y-2.5">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                  {sectionCounter}. Richtig oder falsch?
+                </h3>
+                {exercise.part1TF.map((q, i) => {
+                  const id = `tf-${i}`;
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
+                    >
+                      <p className="text-sm leading-snug">
+                        <span className="font-semibold">{i + 1}.</span> {q.statement}
+                      </p>
+                      <div className="flex gap-6 text-xs sm:text-sm">
+                        {['Richtig', 'Falsch'].map((label, j) => (
+                          <label
+                            key={label}
+                            className="flex items-center gap-2 cursor-pointer select-none"
+                          >
+                            <input
+                              type="radio"
+                              name={id}
+                              checked={answers[id] === String(j === 0)}
+                              onChange={() => answer(id, String(j === 0))}
+                              disabled={submitted}
+                              className="accent-blue-600"
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {solutions && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          <strong>Lösung:</strong> {q.answer ? 'Richtig' : 'Falsch'} — {q.explanation}
+                        </p>
+                      )}
+                      {renderFeedback(id)}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })()}
+
+          {exercise.part2MC.length > 0 && (() => {
+            sectionCounter++;
+            return (
+              <section className="space-y-2.5">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                  {sectionCounter}. Wählen Sie die richtige Lösung (A, B oder C).
+                </h3>
+                {exercise.part2MC.map((q, i) => {
+                  const id = `mc-${i}`;
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
+                    >
+                      <p className="text-sm font-medium leading-snug">
+                        <span className="font-semibold">{i + 1}.</span> {q.question}
+                      </p>
+                      <div className="space-y-1.5 pl-1 text-xs sm:text-sm">
+                        {q.options.map((opt, optIdx) => (
+                          <label
+                            key={optIdx}
+                            className="flex items-start gap-2 cursor-pointer select-none"
+                          >
+                            <input
+                              type="radio"
+                              name={id}
+                              checked={answers[id] === String(optIdx)}
+                              onChange={() => answer(id, String(optIdx))}
+                              disabled={submitted}
+                              className="mt-1 accent-blue-600"
+                            />
+                            <span className="leading-snug">
+                              <strong className="font-semibold">{String.fromCharCode(65 + optIdx)})</strong> {opt}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {solutions && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          <strong>Lösung:</strong> {String.fromCharCode(65 + q.answerIndex)}) {q.options[q.answerIndex]} — {q.explanation}
+                        </p>
+                      )}
+                      {renderFeedback(id)}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })()}
+
+          {exercise.part3Gap.length > 0 && (() => {
+            sectionCounter++;
+            return (
+              <section className="space-y-2.5">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                  {sectionCounter}. Ergänzen Sie die Lücken.
+                </h3>
+                {exercise.part3Gap.map((q, i) => {
+                  const id = `gap-${i}`;
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
+                    >
+                      <p className="text-sm leading-snug">
+                        <span className="font-semibold">{i + 1}.</span> {q.sentence}
+                      </p>
+                      <input
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        value={answers[id] || ''}
+                        onChange={e => answer(id, e.target.value)}
+                        disabled={submitted}
+                        placeholder="Antwort auf Deutsch"
+                      />
+                      {solutions && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          <strong>Lösung:</strong> {q.answer}
+                        </p>
+                      )}
+                      {renderFeedback(id)}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })()}
+
+          {exercise.part4Short.length > 0 && (() => {
+            sectionCounter++;
+            return (
+              <section className="space-y-2.5">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                  {sectionCounter}. Beantworten Sie die Fragen.
+                </h3>
+                {exercise.part4Short.map((q, i) => {
+                  const id = `short-${i}`;
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
+                    >
+                      <p className="text-sm leading-snug">
+                        <span className="font-semibold">{i + 1}.</span> {q.question}
+                      </p>
+                      <textarea
+                        rows={2}
+                        value={answers[id] || ''}
+                        onChange={e => answer(id, e.target.value)}
+                        disabled={submitted}
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                        placeholder="Ihre Antwort auf Deutsch"
+                      />
+                      {solutions && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          <strong>Musterantwort:</strong> {q.answer}
+                        </p>
+                      )}
+                      {renderFeedback(id)}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })()}
+
+          {exercise.vocabulary.length > 0 && (
+            <section className="space-y-2.5">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                Wortschatz – Erklären Sie die Wörter.
+              </h3>
+              {exercise.vocabulary.map((q, i) => {
+                const id = `v-${i}`;
+                return (
+                  <div
+                    key={id}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3 space-y-2"
+                  >
+                    <p className="text-sm font-semibold">
+                      {i + 1}. {q.word}
+                    </p>
+                    <input
+                      value={answers[id] || ''}
+                      onChange={e => answer(id, e.target.value)}
+                      disabled={submitted}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="Bedeutung auf Deutsch"
+                    />
+                    {solutions && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        <strong>Erklärung:</strong> {q.meaning}
+                      </p>
+                    )}
+                    {renderFeedback(id)}
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
+          {warningMsg && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-300">
+              {warningMsg}
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleCheckClick}
+                disabled={grading || submitted}
+                className="rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm disabled:opacity-50 transition"
+              >
+                {grading
+                  ? 'Antworten werden bewertet…'
+                  : submitted
+                    ? 'Antworten überprüft'
+                    : 'Antworten überprüfen'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSolutions(v => !v)}
+                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition"
+              >
+                {solutions ? 'Lösungen ausblenden' : 'Lösungen anzeigen'}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handlePrintPDF('transcript')}
+                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
+                title="Transkript als PDF drucken"
+              >
+                <span>📄</span>
+                <span>Transkript (PDF)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePrintPDF('questions')}
+                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5"
+                title="Prüfungsfragen als PDF drucken"
+              >
+                <span>📝</span>
+                <span>Fragen (PDF)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePrintPDF('certificate')}
+                disabled={!result}
+                className="rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1.5"
+                title="Zeugnis / Ergebnis als PDF drucken"
+              >
+                <span>📊</span>
+                <span>Zeugnis (PDF)</span>
+              </button>
+            </div>
+          </div>
+
+          {result && (
+            <section className="rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/50 p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                    Prüfungsergebnis & Gutachten
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {EXAM_LABELS[exercise.examType]} · Niveau {exercise.level}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+                    {result.score} / {result.maxScore}{' '}
+                    <span className="text-sm font-semibold text-slate-500">
+                      ({result.percentage} %)
+                    </span>
+                  </div>
+                  <div
+                    className={`text-xs font-bold ${
+                      result.passed
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {result.gradeLabel} · {result.passed ? 'Bestanden' : 'Nicht bestanden'}
+                  </div>
+                </div>
+              </div>
+
+              {result.sections.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {result.sections.map((sec, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] px-3 py-2 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-medium text-slate-600 dark:text-slate-300">
+                        {sec.label}
+                      </span>
+                      <span className="font-bold text-slate-800 dark:text-slate-100">
+                        {sec.earned}/{sec.total} ({sec.percentage}%)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 p-3.5 space-y-2 text-xs leading-relaxed">
+                <p className="font-bold text-blue-900 dark:text-blue-300">
+                  👨‍🏫 Beurteilung der Lehrkraft:
+                </p>
+                <p className="text-slate-700 dark:text-slate-200">
+                  {result.teacherComment}
+                </p>
+                {result.strengths && (
+                  <p className="text-slate-700 dark:text-slate-300">
+                    <strong className="text-emerald-700 dark:text-emerald-400">Stärken:</strong>{' '}
+                    {result.strengths}
+                  </p>
+                )}
+                {result.recommendations && (
+                  <p className="text-slate-700 dark:text-slate-300">
+                    <strong className="text-amber-700 dark:text-amber-400">Empfehlungen:</strong>{' '}
+                    {result.recommendations}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitted(false);
+                    setResult(null);
+                    setSolutions(false);
+                  }}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] hover:bg-slate-100 dark:hover:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold transition"
+                >
+                  Antworten bearbeiten
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAnswers({});
+                    setSubmitted(false);
+                    setResult(null);
+                    setSolutions(false);
+                  }}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] hover:bg-slate-100 dark:hover:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold transition"
+                >
+                  Erneut üben (Alles zurücksetzen)
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
