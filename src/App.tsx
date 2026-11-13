@@ -642,6 +642,7 @@ export default function App() {
                 setActiveExercise(mode);
                 if (mode === null) setPracticeWordIds(null);
               }}
+              onStartHard={ids => { setPracticeWordIds(ids); setExerciseHidden(false); setActiveExercise('hard'); }}
               onRecordResult={handleRecordResult}
               onOpenHelp={setActiveHelpTopic}
               onShowToast={showToast}
