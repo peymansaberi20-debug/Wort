@@ -53,9 +53,9 @@ const STORAGE_KEY = 'hoeren_trainer_state_v3';
 const EXAM_LABELS: Record<ExamType, string> = {
   Standard: 'Standard / Allgemein',
   Goethe: 'Goethe-Zertifikat',
-  OESD: 'ÖSD (Österreichisches Sprachdiplom)',
+  OESD: 'ÖSD',
   Telc: 'telc Deutsch',
-  EPD: 'EPD (Ergänzungsprüfung Deutsch – Uni Wien / VWU)',
+  EPD: 'EPD (Uni Wien / VWU)',
 };
 
 const EXAM_INSTRUCTIONS: Record<ExamType, string> = {
