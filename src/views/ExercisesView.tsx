@@ -22,6 +22,7 @@ import { IconBtn } from '../components/IconBtn';
 import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lucide-react';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
+import { HoerenTrainer } from '../components/HoerenTrainer';
 
 export type ExerciseMode =
   | 'flash'
@@ -47,7 +48,8 @@ export type ExerciseMode =
   | 'puzzle'
   | 'dikt'
   | 'errnb'
-  | 'vprep';
+  | 'vprep'
+  | 'hoeren';
 
 export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string; desc: string }> = {
   flash: { title: 'فلش‌کارت', icon: '🃏', desc: 'کارت واژه با الگوریتم تکرار فاصله‌دار لایتنر' },
@@ -74,6 +76,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   dikt: { title: 'دیکته (Diktat)', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' }
+  hoeren: {  title: 'Hörverstehen',  icon: '🎧',  desc: 'Hörtexte, Richtig/Falsch und Lückentexte'},
 };
 
 /**
@@ -83,7 +86,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
  */
 /** Two exercise-menu tabs: every exercise belongs to exactly one tab — nothing lost, nothing duplicated. */ 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'dict', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep'];  
+const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep', 'hoeren'];  
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -1938,7 +1941,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       👁 مشاهدهٔ ترجمه
     </button>
   );
-
+  if (activeMode === 'hoeren') {
+    return (
+      <HoerenTrainer onClose={() => onSelectMode(null)} />
+   );
+ }
   if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
