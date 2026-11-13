@@ -85,7 +85,7 @@ function normalize(data: any): Exercise {
   };
 }
 
-export const HoerenTrainer: React.FC = () => {
+export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [transcript, setTranscript] = useState('');
   const [level, setLevel] = useState('B1');
   const [exercise, setExercise] = useState<Exercise | null>(null);
@@ -183,7 +183,7 @@ export const HoerenTrainer: React.FC = () => {
   );
 
   return (
-    <div className="space-y-5 text-right" dir="auto">
+    <div className="space-y-5 text-left" dir="ltr">
       <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-4 space-y-3">
         <h2 className="text-xl font-extrabold">🎧 Hörverstehen erstellen</h2>
         <p className="text-sm text-slate-500">
