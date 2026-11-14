@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
-import { speak, stopSpeaking } from '../utils/audio';
+import { speak, stopSpeaking, getTtsWorkerBase } from '../utils/audio';
 
 type ExamType = 'Standard' | 'Goethe' | 'OESD' | 'Telc' | 'EPD';
 
@@ -75,6 +75,9 @@ type SavedExerciseRecord = {
 };
 
 const ARCHIVE_STORAGE_KEY = 'hoeren_trainer_archive_list_v3';
+
+// Cloud-TTS-Worker (wird verwendet, falls in den Einstellungen keiner eingetragen ist)
+const DEFAULT_TTS_WORKER = 'https://wort-tts.peymansaberi20.workers.dev';
 
 const EXAM_LABELS: Record<ExamType, string> = {
   Standard: 'Standard / Allgemein',
@@ -225,6 +228,38 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/** Teilt einen Text in satzweise Stücke (für Cloud-TTS und Browser-Stimme, v.a. iOS). */
+function splitForTts(text: string, max = 350): string[] {
+  const sentences = text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const chunks: string[] = [];
+  let cur = '';
+  for (const s of sentences) {
+    if (cur && (cur + s).length > max) {
+      chunks.push(cur.trim());
+      cur = '';
+    }
+    cur += s;
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  // Einzelne überlange Sätze hart teilen
+  const result: string[] = [];
+  for (const c of chunks) {
+    if (c.length <= max * 1.6) {
+      result.push(c);
+    } else {
+      for (let i = 0; i < c.length; i += max) result.push(c.slice(i, i + max));
+    }
+  }
+  return result;
+}
+
+function fmtTime(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive'>('menu');
   const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>([]);
@@ -243,9 +278,10 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [error, setError] = useState('');
   const [warningMsg, setWarningMsg] = useState('');
 
-  // استیت‌های صوت و پلیر پیشرفته
+  // استیت‌های صوت و پلیر
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [audioGenProgress, setAudioGenProgress] = useState('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
@@ -253,6 +289,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [audioRate, setAudioRate] = useState(1.0);
   const [browserSpeaking, setBrowserSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechToken = useRef(0);
 
   const [sentencePairsCache, setSentencePairsCache] = useState<{ de: string; fa: string }[]>([]);
   const [historyAttempts, setHistoryAttempts] = useState<HistoryAttempt[]>([]);
@@ -275,6 +312,32 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     } catch {}
   }, []);
 
+  // Beim Verlassen der Komponente alles stoppen
+  useEffect(() => {
+    return () => {
+      speechToken.current++;
+      stopSpeaking();
+    };
+  }, []);
+
+  // Wenn sich die Audio-Quelle ändert: Player-Zustand zurücksetzen
+  useEffect(() => {
+    setIsPlayingAudio(false);
+    setAudioProgress(0);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
+  }, [audioUrl]);
+
+  const stopAllPlayback = () => {
+    speechToken.current++;
+    stopSpeaking();
+    setBrowserSpeaking(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    setIsPlayingAudio(false);
+  };
+
   const persistCurrentToArchive = (curEx: Exercise | null, curTr: string, curAns: Record<string, string>, curSub: boolean, curRes: GradingResult | null, curPairs: { de: string; fa: string }[], curAudioUrl: string | null, curHist: HistoryAttempt[]) => {
     if (!curEx) return;
     try {
@@ -294,7 +357,8 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         transcript: curTr,
         exercise: curEx,
         sentencePairsCache: curPairs,
-        audioUrl: curAudioUrl || undefined,
+        // blob:-Adressen sind nur für diese Sitzung gültig → nicht speichern
+        audioUrl: curAudioUrl && !curAudioUrl.startsWith('blob:') ? curAudioUrl : undefined,
         answers: curAns,
         submitted: curSub,
         result: curRes,
@@ -320,6 +384,7 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, audioUrl, historyAttempts);
     }
 
+    stopAllPlayback();
     setViewMode('menu');
     setCurrentArchiveId(null);
     setTranscript('');
@@ -328,14 +393,8 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     setSubmitted(false);
     setResult(null);
     setAudioUrl(null);
-    setIsPlayingAudio(false);
-    setBrowserSpeaking(false);
-    stopSpeaking();
     setSentencePairsCache([]);
     setHistoryAttempts([]);
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
   };
 
   const answer = (id: string, value: string) => {
@@ -432,8 +491,9 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         const gradingPrompt = `
 Du bist ein erfahrener Prüfer für Deutsch als Fremdsprache (${EXAM_LABELS[exercise.examType]}, Niveau ${exercise.level}).
 Bewerte die Antworten fair und gib Erklärungen und Feedback AUCH AUF PERSISCH (فارسی).
+Vergib pro Aufgabe genau 0, 0.5 oder 1 Punkt. Bei der Kategorie "Wortschatz" soll die Antwort die Bedeutung des Wortes sinngemäß erklären (Deutsch oder Persisch ist erlaubt).
 
-JSON-Ausgabeformat (streng einhalten):
+JSON-Ausgabeformat (streng einhalten, ohne Markdown):
 {
   "results": [
     {
@@ -464,7 +524,9 @@ ${JSON.stringify(freeQuestions)}
         freeQuestions.forEach(q => {
           const graded = aiById.get(q.id);
           const points = Number(graded?.points);
-          const validPoints = [0, 0.5, 1].includes(points) ? points : 0;
+          // Leere Antwort = immer 0 Punkte
+          const hasAnswer = (q.userAnswer || '').trim().length > 0;
+          const validPoints = hasAnswer && [0, 0.5, 1].includes(points) ? points : 0;
           pointsById[q.id] = validPoints;
           details[q.id] = {
             correct: validPoints === 1,
@@ -557,6 +619,7 @@ ${JSON.stringify(freeQuestions)}
       return;
     }
 
+    stopAllPlayback();
     setLoading(true);
     setError('');
     setWarningMsg('');
@@ -565,10 +628,6 @@ ${JSON.stringify(freeQuestions)}
     setSolutions(false);
     setSubmitted(false);
     setResult(null);
-    setAudioUrl(null);
-    setIsPlayingAudio(false);
-    setBrowserSpeaking(false);
-    stopSpeaking();
     setSentencePairsCache([]);
     setHistoryAttempts([]);
     setCurrentArchiveId(null);
@@ -592,7 +651,8 @@ ${JSON.stringify(freeQuestions)}
       }
 
       setExercise(generatedExercise);
-      persistCurrentToArchive(generatedExercise, transcript, {}, false, null, [], null, []);
+      // Das bereits erzeugte Audio (falls vorhanden) bleibt erhalten, da der Text derselbe ist
+      persistCurrentToArchive(generatedExercise, transcript, {}, false, null, [], audioUrl, []);
     } catch (e: any) {
       setError(e?.message || 'ساخت تمرین ناموفق بود.');
     } finally {
@@ -600,59 +660,109 @@ ${JSON.stringify(freeQuestions)}
     }
   };
 
-  // تولید صوت با کیفیت بالا (ابری)
+  // تولید صوت با کیفیت بالا (موتور ابری) — متن جمله‌به‌جمله به Worker فرستاده و به هم چسبانده می‌شود
   const handleGenerateAudio = async () => {
-    if (!transcript.trim() || audioUrl) return;
+    if (!transcript.trim() || audioUrl || generatingAudio) return;
+    stopAllPlayback();
     setGeneratingAudio(true);
+    setAudioGenProgress('');
     setError('');
 
     try {
-      const response = await fetch('https://wort-tts.peymansaberi20.workers.de', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: transcript }),
-      });
+      const base = getTtsWorkerBase() || DEFAULT_TTS_WORKER;
+      const chunks = splitForTts(transcript);
+      const blobs: Blob[] = [];
 
-      if (!response.ok) {
-        throw new Error('خطا در ارتباط با موتور تولید صوت.');
+      for (let i = 0; i < chunks.length; i++) {
+        setAudioGenProgress(`${i + 1} / ${chunks.length}`);
+        const chunk = chunks[i];
+
+        // Zuerst GET (wie in audio.ts), bei Fehler POST als Reserve
+        let res: Response | null = null;
+        try {
+          res = await fetch(`${base}/?lang=de&text=${encodeURIComponent(chunk)}`);
+        } catch {
+          res = null;
+        }
+        if (!res || !res.ok) {
+          res = await fetch(base, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: chunk, lang: 'de' }),
+          });
+        }
+        if (!res.ok) {
+          throw new Error('خطا در ارتباط با موتور تولید صدا.');
+        }
+        const blob = await res.blob();
+        if (blob.size < 200) {
+          throw new Error('موتور تولید صدا فایل صوتی معتبر برنگرداند.');
+        }
+        blobs.push(blob);
       }
 
-      const blob = await response.blob();
-      const newAudioUrl = URL.createObjectURL(blob);
+      const newAudioUrl = URL.createObjectURL(new Blob(blobs, { type: 'audio/mpeg' }));
       setAudioUrl(newAudioUrl);
-      setGeneratingAudio(false);
-
-      persistCurrentToArchive(exercise, transcript, answers, submitted, result, sentencePairsCache, newAudioUrl, historyAttempts);
     } catch (err: any) {
       setError(err?.message || 'ساخت فایل صوتی با خطا مواجه شد.');
+    } finally {
       setGeneratingAudio(false);
+      setAudioGenProgress('');
     }
   };
 
-  // پخش آنی با صدای پیش‌فرض مرورگر
+  // پخش آنی با صدای پیش‌فرض مرورگر (جمله‌به‌جمله، مناسب iOS)
   const handleToggleBrowserSpeech = () => {
     if (browserSpeaking) {
+      speechToken.current++;
       stopSpeaking();
       setBrowserSpeaking(false);
-    } else {
-      if (!transcript.trim()) return;
-      setBrowserSpeaking(true);
-      speak(transcript, {
-        rate: audioRate,
-        onEnd: () => setBrowserSpeaking(false),
-        onErr: () => setBrowserSpeaking(false)
-      });
+      return;
     }
+    if (!transcript.trim()) return;
+
+    // پخش فایل ابری را متوقف کن
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    setIsPlayingAudio(false);
+
+    const chunks = splitForTts(transcript, 250);
+    const token = ++speechToken.current;
+    setBrowserSpeaking(true);
+
+    const playNext = (i: number) => {
+      if (token !== speechToken.current) return;
+      if (i >= chunks.length) {
+        setBrowserSpeaking(false);
+        return;
+      }
+      speak(chunks[i], {
+        rate: audioRate,
+        forceBrowser: true,
+        onEnd: () => playNext(i + 1),
+        onErr: () => {
+          if (token === speechToken.current) setBrowserSpeaking(false);
+        },
+      });
+    };
+
+    playNext(0);
   };
 
   const togglePlayPauseAudio = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !audioUrl) return;
     if (isPlayingAudio) {
       audioRef.current.pause();
       setIsPlayingAudio(false);
     } else {
+      // صدای مرورگر را متوقف کن
+      if (browserSpeaking) {
+        speechToken.current++;
+        stopSpeaking();
+        setBrowserSpeaking(false);
+      }
+      audioRef.current.playbackRate = audioRate;
       audioRef.current.play().then(() => {
         setIsPlayingAudio(true);
       }).catch(() => {});
@@ -662,17 +772,19 @@ ${JSON.stringify(freeQuestions)}
   const handleTimeUpdate = () => {
     if (audioRef.current) {
       const current = audioRef.current.currentTime;
-      const duration = audioRef.current.duration || 1;
+      const duration = audioRef.current.duration;
       setAudioCurrentTime(current);
-      setAudioDuration(duration);
-      setAudioProgress((current / duration) * 100);
+      if (Number.isFinite(duration) && duration > 0) {
+        setAudioDuration(duration);
+        setAudioProgress((current / duration) * 100);
+      }
     }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
     setAudioProgress(val);
-    if (audioRef.current && audioRef.current.duration) {
+    if (audioRef.current && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
       const newTime = (val / 100) * audioRef.current.duration;
       audioRef.current.currentTime = newTime;
       setAudioCurrentTime(newTime);
@@ -788,6 +900,15 @@ ${transcript}
       exercise.part2MC.forEach((q, i) => {
         qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.question)}<br/>${q.options.map((o, idx) => `<div>${String.fromCharCode(65 + idx)}) ${escapeHtml(o)}</div>`).join('')}</div>`;
       });
+      exercise.part3Gap.forEach((q, i) => {
+        qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.sentence)}<br/>______________________________</div>`;
+      });
+      exercise.part4Short.forEach((q, i) => {
+        qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.question)}<br/><br/>______________________________<br/><br/>______________________________</div>`;
+      });
+      exercise.vocabulary.forEach((q, i) => {
+        qHtml += `<div class="question-box"><strong>${i + 1}.</strong> ${escapeHtml(q.word)}: ______________________________</div>`;
+      });
       bodyContent = `<div class="header"><h1 class="header-title">Prüfungsaufgaben</h1></div>${qHtml}`;
     } else if (mode === 'certificate') {
       let historyRows = '';
@@ -844,7 +965,11 @@ ${transcript}
       doc.open();
       doc.write(`<html><head><title>Print</title>${baseStyles}</head><body>${bodyContent}</body></html>`);
       doc.close();
-      setTimeout(() => { iframe.contentWindow?.print(); }, 300);
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        // iframe nach dem Drucken wieder entfernen
+        setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 2000);
+      }, 300);
     }
   };
 
@@ -970,15 +1095,20 @@ ${transcript}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
+                      stopAllPlayback();
                       setCurrentArchiveId(item.id);
                       setTranscript(item.transcript);
                       setExamType(item.examType);
                       setLevel(item.level);
                       setExercise(item.exercise);
                       setAnswers({});
+                      setSolutions(false);
                       setSubmitted(false);
                       setResult(null);
-                      setAudioUrl(item.audioUrl || null);
+                      setError('');
+                      setWarningMsg('');
+                      // alte blob:-Adressen aus früheren Versionen sind ungültig
+                      setAudioUrl(item.audioUrl && !item.audioUrl.startsWith('blob:') ? item.audioUrl : null);
                       setSentencePairsCache(item.sentencePairsCache || []);
                       setHistoryAttempts(item.historyAttempts || []);
                       setViewMode('creator');
@@ -1036,93 +1166,109 @@ ${transcript}
         <textarea
           rows={5}
           value={transcript}
-          onChange={e => setTranscript(e.target.value)}
+          onChange={e => {
+            setTranscript(e.target.value);
+            // Text geändert → vorhandenes Audio passt nicht mehr
+            if (audioUrl) {
+              stopAllPlayback();
+              setAudioUrl(null);
+            }
+          }}
           className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40 p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           placeholder="Transkript hier einfügen …"
         />
 
         {transcript.trim().length >= 10 && (
           <div className="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {!audioUrl && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateAudio}
-                    disabled={generatingAudio}
-                    className="rounded-xl px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
-                  >
-                    <span>🔊</span>
-                    <span>{generatingAudio ? 'در حال ساخت فایل صوتی با کیفیت بالا…' : 'ساخت فایل صوتی باکیفیت'}</span>
-                  </button>
-                )}
-
+            {/* دو گزینه تولید/پخش صدا */}
+            <div className="flex flex-wrap items-center gap-2">
+              {!audioUrl && (
                 <button
                   type="button"
-                  onClick={handleToggleBrowserSpeech}
-                  className={`rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 ${
-                    browserSpeaking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600'
-                  }`}
+                  onClick={handleGenerateAudio}
+                  disabled={generatingAudio}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
                 >
-                  <span>🗣️</span>
-                  <span>{browserSpeaking ? 'توقف صدای مرورگر' : 'پخش با صدای مرورگر (آنی)'}</span>
+                  <span>🔊</span>
+                  <span>
+                    {generatingAudio
+                      ? `در حال ساخت فایل صوتی… ${audioGenProgress}`
+                      : 'ساخت فایل صوتی باکیفیت'}
+                  </span>
                 </button>
-              </div>
-
-              {/* کنترل‌های صوت همیشه در صورت وجود صوت یا امکان پخش فعال هستند */}
-              {audioUrl && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={togglePlayPauseAudio}
-                    className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-4 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-100 shadow-sm"
-                  >
-                    <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
-                  </button>
-
-                  <label className="text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                    <span>سرعت:</span>
-                    <select
-                      value={audioRate}
-                      onChange={(e) => handleRateChange(parseFloat(e.target.value))}
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1 text-xs font-medium"
-                    >
-                      <option value={0.75}>0.75x</option>
-                      <option value={1.0}>1.0x (معمولی)</option>
-                      <option value={1.25}>1.25x</option>
-                      <option value={1.5}>1.5x</option>
-                    </select>
-                  </label>
-                </div>
               )}
+
+              <button
+                type="button"
+                onClick={handleToggleBrowserSpeech}
+                className={`rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-sm transition flex items-center gap-1.5 ${
+                  browserSpeaking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600'
+                }`}
+              >
+                <span>🗣️</span>
+                <span>{browserSpeaking ? 'توقف صدای مرورگر' : 'پخش با صدای مرورگر (آنی)'}</span>
+              </button>
             </div>
 
-            {audioUrl && (
-              <audio
-                ref={audioRef}
-                src={audioUrl}
-                onTimeUpdate={handleTimeUpdate}
-                onEnded={() => setIsPlayingAudio(false)}
-                className="hidden"
-              />
-            )}
+            {/* پلیر: همیشه نمایش داده می‌شود، تا آماده شدن صدا غیرفعال است */}
+            <div className={`space-y-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#232934] p-3 ${audioUrl ? '' : 'opacity-60'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={togglePlayPauseAudio}
+                  disabled={!audioUrl}
+                  className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-4 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-100 shadow-sm disabled:cursor-not-allowed"
+                >
+                  <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
+                </button>
 
-            {audioUrl && (
-              <div className="space-y-1.5 pt-1">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={audioProgress}
-                  onChange={handleSeek}
-                  className="w-full accent-purple-600 cursor-pointer h-2.5 bg-slate-200 dark:bg-slate-700 rounded-lg shadow-inner"
-                />
-                <div className="flex justify-between text-[11px] font-semibold text-slate-500">
-                  <span>{Math.floor(audioCurrentTime)}s</span>
-                  <span>{Math.floor(audioDuration)}s</span>
-                </div>
+                <label className="text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                  <span>سرعت:</span>
+                  <select
+                    value={audioRate}
+                    onChange={e => handleRateChange(parseFloat(e.target.value))}
+                    className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-2.5 py-1 text-xs font-medium"
+                  >
+                    <option value={0.75}>0.75x</option>
+                    <option value={1.0}>1.0x (معمولی)</option>
+                    <option value={1.25}>1.25x</option>
+                    <option value={1.5}>1.5x</option>
+                  </select>
+                </label>
               </div>
-            )}
+
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={audioProgress}
+                onChange={handleSeek}
+                disabled={!audioUrl}
+                className="w-full accent-purple-600 cursor-pointer h-2.5 bg-slate-200 dark:bg-slate-700 rounded-lg shadow-inner disabled:cursor-not-allowed"
+              />
+              <div className="flex justify-between text-[11px] font-semibold text-slate-500">
+                <span>{fmtTime(audioCurrentTime)}</span>
+                <span>{audioUrl ? fmtTime(audioDuration) : 'هنوز فایل صوتی ساخته نشده'}</span>
+              </div>
+            </div>
+
+            <audio
+              ref={audioRef}
+              src={audioUrl || undefined}
+              onLoadedMetadata={() => {
+                if (audioRef.current) {
+                  audioRef.current.playbackRate = audioRate;
+                  const d = audioRef.current.duration;
+                  setAudioDuration(Number.isFinite(d) ? d : 0);
+                }
+              }}
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={() => setIsPlayingAudio(false)}
+              onPause={() => setIsPlayingAudio(false)}
+              onPlay={() => setIsPlayingAudio(true)}
+              className="hidden"
+            />
           </div>
         )}
 
@@ -1372,6 +1518,40 @@ ${transcript}
             );
           })()}
 
+          {exercise.vocabulary.length > 0 && (() => {
+            sectionCounter++;
+            return (
+              <section className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
+                  {sectionCounter}. Wortschatz: Was bedeuten diese Wörter?
+                </h3>
+                {exercise.vocabulary.map((q, i) => {
+                  const id = `v-${i}`;
+                  return (
+                    <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/40 dark:bg-slate-800/20 p-3.5 space-y-2">
+                      <p className="text-base leading-snug font-medium">
+                        <span className="font-bold">{i + 1}.</span> {q.word}
+                      </p>
+                      <input
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900/50 px-3.5 py-2 text-base"
+                        value={answers[id] || ''}
+                        onChange={e => answer(id, e.target.value)}
+                        disabled={submitted}
+                        placeholder="Bedeutung (Deutsch oder Persisch)"
+                      />
+                      {solutions && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                          <strong>Lösung:</strong> {q.meaning}
+                        </p>
+                      )}
+                      {renderFeedback(id)}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })()}
+
           {warningMsg && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-300">
               {warningMsg}
@@ -1488,7 +1668,7 @@ ${transcript}
               <div className="flex gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => { setSubmitted(false); setResult(null); setSolutions(false); setAnswers({}); }}
+                  onClick={() => { setSubmitted(false); setResult(null); setSolutions(false); setAnswers({}); setWarningMsg(''); }}
                   className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1b2029] px-3.5 py-1.5 text-xs font-semibold"
                 >
                   تمرین مجدد (فرم سفید)
@@ -1575,9 +1755,9 @@ ${transcript}
                             type="checkbox"
                             checked={v.selected}
                             onChange={() => {
-                              const updated = [...extractedVocabs];
-                              updated[idx].selected = !updated[idx].selected;
-                              setExtractedVocabs(updated);
+                              setExtractedVocabs(prev =>
+                                prev.map((item, i) => (i === idx ? { ...item, selected: !item.selected } : item))
+                              );
                             }}
                             className="w-4 h-4 accent-blue-600 cursor-pointer"
                           />
