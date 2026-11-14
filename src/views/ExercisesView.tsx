@@ -690,7 +690,7 @@ const buildHardQueue = (ws: Word[], limit = 20): string[] => {
   const day = Math.floor(Date.now() / 86400000);
   const mk = (w: Word, sub: string) => sub === 'synant' ? synAntKey(w) : sub === 'adjdecl' ? adjKey(w) : `${w.id}::${sub}`;
   const subsFor = (w: Word): string[] => {
-    const subs = ['flashFa', 'flashDe', 'dict', 'prod'];
+    const subs = ['flashDe', 'flashFa', 'dict', 'prod'];
     if (w.cloze || w.ans) subs.push('cloze');
     if (w.art) subs.push('art');
     if (w.pl) subs.push('plural');
@@ -1469,6 +1469,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const renderUnifiedWordCard = (w: Word, opts?: { hideConj?: boolean }) => {
     return (
       <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 text-right">
+        {/* 8. واژه آلمانی اصلی بالا، بعد ترجمه فارسی و سپس بقیه مطابق پروفایل */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-800 pb-2">
           <div className="flex items-center gap-2" dir="ltr">
             {w.art && (
@@ -1497,22 +1498,34 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         </div>
 
-        {(w.syn || w.ant) && (
-          <div className="flex flex-wrap items-center gap-4 text-sm md:text-base">
-            {w.syn && (
-              <div>
-                <span className="font-bold text-emerald-700 dark:text-emerald-400">مترادف: </span>
-                <span className="font-semibold" dir="ltr">{w.syn}</span>
-                {w.synFa && <span className="text-[#5d6676]"> ({w.synFa})</span>}
-              </div>
-            )}
-            {w.ant && (
-              <div>
-                <span className="font-bold text-red-600 dark:text-red-400">متضاد: </span>
-                <span className="font-semibold" dir="ltr">{w.ant}</span>
-                {w.antFa && <span className="text-[#5d6676]"> ({w.antFa})</span>}
-              </div>
-            )}
+        {w.pl && (
+          <div className="flex items-baseline gap-2 py-1.5 px-2.5 rounded-xl border bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 text-purple-900 dark:text-purple-200">
+            <span className="text-xs font-extrabold w-20 flex-shrink-0">جمع (Plural)</span>
+            <span className="flex-1 min-w-0 text-sm md:text-base font-sans" dir="ltr">{w.pl}</span>
+          </div>
+        )}
+
+        {w.en && (
+          <div className="flex items-baseline gap-2 py-1.5 px-2.5 rounded-xl border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200">
+            <span className="text-xs font-extrabold w-20 flex-shrink-0">انگلیسی</span>
+            <span className="flex-1 min-w-0 text-sm md:text-base font-sans" dir="ltr">{w.en}</span>
+          </div>
+        )}
+
+        {/* 2. مترادف و متضاد با ترجمه در دو خط جداگانه */}
+        {w.syn && (
+          <div className="flex flex-col gap-1 py-2 px-2.5 rounded-xl border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200">
+            <span className="text-xs font-extrabold">مترادف</span>
+            <span className="font-semibold text-sm" dir="ltr">{w.syn}</span>
+            {w.synFa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{w.synFa}</span>}
+          </div>
+        )}
+
+        {w.ant && (
+          <div className="flex flex-col gap-1 py-2 px-2.5 rounded-xl border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-900 dark:text-red-200">
+            <span className="text-xs font-extrabold">متضاد</span>
+            <span className="font-semibold text-sm" dir="ltr">{w.ant}</span>
+            {w.antFa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{w.antFa}</span>}
           </div>
         )}
 
@@ -1974,11 +1987,18 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   return (
     <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      {/* 4. حالت تمام‌صفحه و تمرکز (Focus Mode): خلوت‌تر و مرتب */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
+          {/* 5. نشانگر وضعیت جعبه لایتنر و استریک */}
+          {isFlashType && (currentItem as Word)?.stage !== undefined && (
+            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono">
+              جعبه {(currentItem as Word).stage || 1}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2" dir="ltr">
@@ -2026,8 +2046,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         <div className="flex items-center justify-between text-xs text-[#5d6676] dark:text-[#a3adbd]">
           <span className="font-medium">
             سؤال {currentIndex + 1} از {queue.length}
+            {/* 4. فقط ثانیه شمار دیده شود */}
             {timerCfg.on && timeLeft !== null && !timerAnswered && (
-              <span className="mr-2 px-2 py-0.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold font-mono">
+              <span className="mr-2 px-2.5 py-0.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold font-mono animate-pulse">
                 ⏱ {Math.max(0, timeLeft)}s
               </span>
             )}
@@ -2056,19 +2077,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const artCls = w.art === 'der' ? 'text-blue-600 dark:text-blue-400' : w.art === 'die' ? 'text-pink-600 dark:text-pink-400' : 'text-emerald-600 dark:text-emerald-400';
           const speakWord = (e: React.MouseEvent) => { e.stopPropagation(); speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); };
           
-          const Row = (label: string, val: React.ReactNode, colorClass: string) => (
-            <div className={`flex items-baseline gap-2 py-2 px-2.5 rounded-xl border mb-1.5 last:mb-0 text-right ${colorClass}`}>
-              <span className="text-xs font-extrabold w-20 flex-shrink-0">{label}</span>
-              <span className="flex-1 min-w-0 text-sm md:text-base leading-6 break-words">{val || <span className="text-slate-400">—</span>}</span>
-            </div>
-          );
-
-          const de = (t: string) => <span dir="ltr" className="font-sans">{t}</span>;
-          const pair = (a: string, b: string) => (a ? <>{de(a)}{b ? <span className="opacity-80"> — {b}</span> : null}</> : null);
-          const exFirst = w.def || w.ex;
-          const faceCls = 'fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-lg bg-white dark:bg-[#1b2029] ';
           const gradeBtn = (g: 0 | 1 | 2 | 3, label: string, cls: string) => (
-            <button onClick={() => handleFlashGrade(g)} className={`${cls} border rounded-xl py-2 px-1 flex flex-col items-center leading-tight active:scale-95 transition`}>
+            <button onClick={() => handleFlashGrade(g)} className={`${cls} border rounded-xl py-2 px-1 flex flex-col items-center leading-tight active:scale-95 transition shadow-xs`}>
               <span className="text-sm font-bold">{label}</span>
               <span className="text-[10px] font-medium opacity-75 mt-0.5">{intervalPreview(w, g, settings?.ivlMod || 1.0)}</span>
             </button>
@@ -2076,42 +2086,57 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
           return (
             <div className="space-y-3">
-              <div key={currentKey} className="fc-scene" style={{ height: 'min(46dvh, 420px)', minHeight: 290 }}>
-                <div className={'fc-card h-full ' + (isCardRevealed ? 'flipped' : '')}>
-                  <div className={faceCls + 'flex flex-col items-center justify-center gap-2 p-5 text-center cursor-pointer'} onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
+              {/* 6. انیمیشن‌های نرم‌تر و افکت‌های لمسی (Haptic / Micro-interactions) */}
+              <div key={currentKey} className="fc-scene transition-all duration-300" style={{ height: 'min(42dvh, 380px)', minHeight: 260 }}>
+                {/* 7. وقتی سمت ترجمه می‌آید دوباره کلیک می‌کنم نمی‌چرخد سمت روی کارت */}
+                <div className={'fc-card h-full transition-transform duration-500 ' + (isCardRevealed ? 'flipped' : '')}>
+                  <div className="fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-white dark:bg-[#1b2029] flex flex-col items-center justify-center gap-3 p-6 text-center cursor-pointer select-none" onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
                     {!isFaDir ? (
                       <>
                         <div className="flex items-center justify-center gap-2 flex-wrap" dir="ltr">
-                          {w.art && <span className={`px-2.5 py-0.5 rounded-lg font-bold text-lg ${artCls}`}>{w.art}</span>}
+                          {w.art && <span className={`px-3 py-1 rounded-xl font-bold text-xl ${artCls}`}>{w.art}</span>}
                           <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
-                          <button onClick={speakWord} className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-base flex items-center justify-center">🔊</button>
+                          <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
                         </div>
-                        {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
+                        {w.pos && <span className="text-xs text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
                     ) : (
                       <>
                         <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
-                        {w.pos && <span className="text-xs text-[#5d6676]">{w.pos}</span>}
+                        {w.pos && <span className="text-xs text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
                     )}
-                    <span className="absolute bottom-3 text-[11px] text-[#5d6676] dark:text-[#a3adbd]">برای دیدن پشت کارت بزن ↻</span>
+                    <span className="absolute bottom-4 text-xs font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">برای دیدن پشت کارت بزن ↻</span>
                   </div>
 
-                  <div className={faceCls + 'fc-back p-4 overflow-y-auto bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029]'}>
+                  {/* 3. باکس پشت کارت فیکس بدون اسکرول مزاحم و ۹. فقط ترجمه و مثال اول (تعریف) */}
+                  <div className="fc-face fc-back rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029] p-5 flex flex-col justify-center items-center text-center select-none" onClick={e => e.stopPropagation()}>
                     {!isFaDir ? (
-                      <div className="text-2xl md:text-3xl font-extrabold text-center pb-3 text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
+                      <div className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 mb-3" dir="rtl">{w.fa}</div>
                     ) : (
-                      <div className="flex items-center justify-center gap-2 pb-3 flex-wrap" dir="ltr">
+                      <div className="flex items-center justify-center gap-2 flex-wrap mb-3" dir="ltr">
                         {w.art && <span className={`font-bold text-lg ${artCls}`}>{w.art}</span>}
                         <span className="text-3xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
                         <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
                       </div>
                     )}
-                    {Row('جمع (Plural)', w.pl ? de(w.pl) : null, 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 text-purple-900 dark:text-purple-200')}
-                    {Row('انگلیسی', w.en ? de(w.en) : null, 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200')}
-                    {Row('مترادف', pair(w.syn, w.synFa), 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200')}
-                    {Row('متضاد', pair(w.ant, w.antFa), 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-900 dark:text-red-200')}
-                    {Row(w.def ? 'تعریف' : 'مثال', exFirst ? <>{de(exFirst)}{!w.def && w.exFa ? <div className="text-sm font-medium text-slate-800 dark:text-slate-200 mt-1 pt-1 border-t border-amber-200/50" dir="rtl">{w.exFa}</div> : null}</> : null, 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200')}
+
+                    {w.def && (
+                      <div className="w-full max-w-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 p-3 rounded-2xl text-sm mb-2" dir="ltr">
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">تعریف (Bedeutung): </span>
+                        <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
+                      </div>
+                    )}
+
+                    {w.ex && (
+                      <div className="w-full max-w-md bg-white dark:bg-[#1b2029] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between gap-2" dir="ltr">
+                          <p className="text-xs md:text-sm font-semibold text-slate-800 dark:text-slate-200 text-left">{w.ex}</p>
+                          <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-xs">🔊</button>
+                        </div>
+                        {w.exFa && <p className="text-xs text-slate-600 dark:text-slate-300 text-right font-medium">{w.exFa}</p>}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2119,34 +2144,38 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {!isCardRevealed ? (
                 <button
                   onClick={handleRevealCard}
-                  className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md hover:opacity-95 transition"
+                  className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md active:scale-[0.99] transition"
                 >
                   🔄 {isFaDir ? 'چرخاندن کارت (لغت آلمانی)' : 'چرخاندن کارت (ترجمه)'}
                 </button>
               ) : (
                 <>
-                  {qMode === 'free' ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => handleFreeKnow(0)} className="bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 py-2.5 rounded-xl font-bold text-sm">❌ هنوز نه</button>
-                      <button onClick={() => handleFreeKnow(1)} className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 py-2.5 rounded-xl font-bold text-sm">✅ بلدم</button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {gradeBtn(0, 'دوباره', 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-900')}
-                      {gradeBtn(1, 'سخت', 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900')}
-                      {gradeBtn(2, 'خوب', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900')}
-                      {gradeBtn(3, 'آسان', 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-900')}
-                    </div>
-                  )}
+                  {/* 1. توضیحات بیشتر بیاد بالای دکمه‌ها توی دل کارت ولی زدم روش دکمه‌ها برن پایین و اطلاعات نمایش داده بشن */}
+                  <div className="space-y-3 pt-2">
+                    <button
+                      onClick={() => setMoreOpen(o => !o)}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 hover:bg-blue-100 py-2.5 rounded-xl transition shadow-xs"
+                    >
+                      {moreOpen ? '▲ بستن توضیحات کامل' : '▼ مثال و توضیحات بیشتر (سایر اطلاعات)'}
+                    </button>
 
-                  <button
-                    onClick={() => setMoreOpen(o => !o)}
-                    className="mx-auto flex items-center gap-1.5 text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 px-3.5 py-1.5 rounded-full"
-                  >
-                    {moreOpen ? '▲ بستن توضیحات' : '▼ مثال و توضیحات بیشتر'}
-                  </button>
-                  <div className={`overflow-hidden transition-all duration-500 ease-out ${moreOpen ? 'max-h-[4000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                    {moreOpen && renderUnifiedWordCard(w)}
+                    <div className={`overflow-hidden transition-all duration-300 ease-out ${moreOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                      {moreOpen && renderUnifiedWordCard(w)}
+                    </div>
+
+                    {qMode === 'free' ? (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button onClick={() => handleFreeKnow(0)} className="bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 py-3 rounded-xl font-bold text-sm shadow-xs active:scale-95 transition">❌ هنوز نه</button>
+                        <button onClick={() => handleFreeKnow(1)} className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 py-3 rounded-xl font-bold text-sm shadow-xs active:scale-95 transition">✅ بلدم</button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-1.5 pt-1">
+                        {gradeBtn(0, 'دوباره', 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-900')}
+                        {gradeBtn(1, 'سخت', 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900')}
+                        {gradeBtn(2, 'خوب', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900')}
+                        {gradeBtn(3, 'آسان', 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-900')}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
