@@ -21,7 +21,11 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { PageOverlay } from '../components/PageOverlay';
-import { PratText } from '../utils/PratText';
+// تعریف مستقیم PratText برای رفع خطای مسیر
+const PratText: React.FC<{ inf: string; prat: string }> = ({ inf, prat }) => (
+  <span className="font-sans font-bold">{prat}</span>
+);
+
 import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
