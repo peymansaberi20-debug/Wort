@@ -1,3 +1,8 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AppSettings, CaseQuestion, ExerciseTimerCfg, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
@@ -1487,7 +1492,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </button>
           </div>
 
-          <div className="text-base md:text-lg font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">
+          <div className="text-lg md:text-xl font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">
             {w.fa}
           </div>
         </div>
@@ -1496,14 +1501,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           <div className="flex flex-wrap items-center gap-4 text-sm md:text-base">
             {w.syn && (
               <div>
-                <span className="font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">مترادف: </span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">مترادف: </span>
                 <span className="font-semibold" dir="ltr">{w.syn}</span>
                 {w.synFa && <span className="text-[#5d6676]"> ({w.synFa})</span>}
               </div>
             )}
             {w.ant && (
               <div>
-                <span className="font-bold text-amber-600 dark:text-amber-400">متضاد: </span>
+                <span className="font-bold text-red-600 dark:text-red-400">متضاد: </span>
                 <span className="font-semibold" dir="ltr">{w.ant}</span>
                 {w.antFa && <span className="text-[#5d6676]"> ({w.antFa})</span>}
               </div>
@@ -1512,8 +1517,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         )}
 
         {w.def && (
-          <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-900 p-2.5 rounded-xl text-sm" dir="ltr">
-            <span className="text-[10px] font-bold text-[#4338ca] dark:text-[#a5b4fc] uppercase">Bedeutung: </span>
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900 p-2.5 rounded-xl text-sm" dir="ltr">
+            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">Bedeutung / تعریف: </span>
             <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
           </div>
         )}
@@ -1521,7 +1526,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {(w.ex || w.ex2) && (
           <div className="space-y-2 pt-1">
             {w.ex && (
-              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40 space-y-1">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
                   <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
                     {w.ex}
@@ -1529,14 +1534,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
                 </div>
                 {w.exFa && (
-                  <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] text-right" dir="rtl">
+                  <p className="text-sm md:text-base text-slate-700 dark:text-slate-200 text-right font-medium" dir="rtl">
                     {w.exFa}
                   </p>
                 )}
               </div>
             )}
             {w.ex2 && (
-              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800 space-y-1">
+              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40 space-y-1">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
                   <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
                     {w.ex2}
@@ -1544,7 +1549,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <button onClick={() => speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
                 </div>
                 {w.ex2Fa && (
-                  <p className="text-xs md:text-sm text-[#5d6676] dark:text-[#a3adbd] text-right" dir="rtl">
+                  <p className="text-sm md:text-base text-slate-700 dark:text-slate-200 text-right font-medium" dir="rtl">
                     {w.ex2Fa}
                   </p>
                 )}
@@ -2050,14 +2055,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const isFaDir = currentCardDir === 'fa';
           const artCls = w.art === 'der' ? 'text-blue-600 dark:text-blue-400' : w.art === 'die' ? 'text-pink-600 dark:text-pink-400' : 'text-emerald-600 dark:text-emerald-400';
           const speakWord = (e: React.MouseEvent) => { e.stopPropagation(); speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); };
-          const Row = (label: string, val: React.ReactNode) => (
-            <div className="flex items-baseline gap-2 py-1.5 border-b border-slate-200/70 dark:border-slate-700/60 last:border-0 text-right">
-              <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] w-14 flex-shrink-0">{label}</span>
-              <span className="flex-1 min-w-0 text-sm leading-6 break-words">{val || <span className="text-slate-400">—</span>}</span>
+          
+          const Row = (label: string, val: React.ReactNode, colorClass: string) => (
+            <div className={`flex items-baseline gap-2 py-2 px-2.5 rounded-xl border mb-1.5 last:mb-0 text-right ${colorClass}`}>
+              <span className="text-xs font-extrabold w-20 flex-shrink-0">{label}</span>
+              <span className="flex-1 min-w-0 text-sm md:text-base leading-6 break-words">{val || <span className="text-slate-400">—</span>}</span>
             </div>
           );
+
           const de = (t: string) => <span dir="ltr" className="font-sans">{t}</span>;
-          const pair = (a: string, b: string) => (a ? <>{de(a)}{b ? <span className="text-[#5d6676] dark:text-[#a3adbd]"> — {b}</span> : null}</> : null);
+          const pair = (a: string, b: string) => (a ? <>{de(a)}{b ? <span className="opacity-80"> — {b}</span> : null}</> : null);
           const exFirst = w.def || w.ex;
           const faceCls = 'fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-lg bg-white dark:bg-[#1b2029] ';
           const gradeBtn = (g: 0 | 1 | 2 | 3, label: string, cls: string) => (
@@ -2092,19 +2099,19 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                   <div className={faceCls + 'fc-back p-4 overflow-y-auto bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029]'}>
                     {!isFaDir ? (
-                      <div className="text-2xl md:text-3xl font-extrabold text-center pb-2 text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
+                      <div className="text-2xl md:text-3xl font-extrabold text-center pb-3 text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
                     ) : (
-                      <div className="flex items-center justify-center gap-2 pb-2 flex-wrap" dir="ltr">
+                      <div className="flex items-center justify-center gap-2 pb-3 flex-wrap" dir="ltr">
                         {w.art && <span className={`font-bold text-lg ${artCls}`}>{w.art}</span>}
                         <span className="text-3xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
                         <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
                       </div>
                     )}
-                    {Row('جمع', w.pl ? de(w.pl) : null)}
-                    {Row('انگلیسی', w.en ? de(w.en) : null)}
-                    {Row('مترادف', pair(w.syn, w.synFa))}
-                    {Row('متضاد', pair(w.ant, w.antFa))}
-                    {Row(w.def ? 'تعریف' : 'مثال', exFirst ? <>{de(exFirst)}{!w.def && w.exFa ? <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{w.exFa}</div> : null}</> : null)}
+                    {Row('جمع (Plural)', w.pl ? de(w.pl) : null, 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 text-purple-900 dark:text-purple-200')}
+                    {Row('انگلیسی', w.en ? de(w.en) : null, 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200')}
+                    {Row('مترادف', pair(w.syn, w.synFa), 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200')}
+                    {Row('متضاد', pair(w.ant, w.antFa), 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-900 dark:text-red-200')}
+                    {Row(w.def ? 'تعریف' : 'مثال', exFirst ? <>{de(exFirst)}{!w.def && w.exFa ? <div className="text-sm font-medium text-slate-800 dark:text-slate-200 mt-1 pt-1 border-t border-amber-200/50" dir="rtl">{w.exFa}</div> : null}</> : null, 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200')}
                   </div>
                 </div>
               </div>
