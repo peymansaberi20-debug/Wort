@@ -14,6 +14,7 @@ import { checkConjAnswer, splitConj } from '../utils/conjugation';
 /** Splits the six forms into two rows of three: [1..3] left column, [4..6] right column. */
 const splitConjColumns = (forms: string[]): [string[], string[]] =>
   [forms.slice(0, 3), forms.slice(3, 6)];
+
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { SchreibenCorrector } from '../components/SchreibenCorrector';
@@ -21,11 +22,6 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { PageOverlay } from '../components/PageOverlay';
-// تعریف مستقیم PratText برای رفع خطای مسیر
-const PratText: React.FC<{ inf: string; prat: string }> = ({ inf, prat }) => (
-  <span className="font-sans font-bold">{prat}</span>
-);
-
 import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
@@ -33,6 +29,11 @@ import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lu
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { HoerenTrainer } from '../components/HoerenTrainer';
+
+// تعریف مستقیم PratText برای نمایش شکل Präteritum بدون خطای مسیر
+const PratText: React.FC<{ inf: string; prat: string }> = ({ prat }) => (
+  <span className="font-sans font-bold">{prat}</span>
+);
 
 export type ExerciseMode =
   | 'flash'
@@ -55,6 +56,7 @@ export type ExerciseMode =
   | 'sent'
   | 'freesent'
   | 'schreiben'
+  | 'schreiben_exam'
   | 'puzzle'
   | 'dikt'
   | 'errnb'
@@ -68,7 +70,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   review: { title: 'مرور سررسیدها', icon: '🔁', desc: 'فقط واژه‌هایی که تاریخ مرور آن‌ها فرا رسیده' },
   cloze: { title: 'جای‌خالی', icon: '✍️', desc: 'تکمیل جمله با واژه یا عبارت درست' },
   art: { title: 'آرتیکل', icon: '🎨', desc: 'تشخیص der / die / das برای اسامی' },
-  dict: { title: 'دیکته و شنیدار', icon: '🎧', desc: 'شنیدن تلفظ و نوشتن املای آلمانی' },
+  dict: { title: 'دیکته و شنیدار', icon: '🎧', desc: 'شنیدن تلفظ واژه و نوشتن املای آلمانی' },
   plural: { title: 'جمع اسم‌ها', icon: '🔢', desc: 'نوشتن شکل جمع اسامی آلمانی' },
   conj: { title: 'صرف فعل', icon: '🔤', desc: 'صرف فعل برای ضمایر مختلف با هایلایت پایانه و تغییر ریشه' },
   tense: { title: 'زمان فعل', icon: '⏳', desc: 'تمرین زمان‌های Präteritum و Perfekt' },
@@ -81,7 +83,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   hard: { title: 'تمرین ترکیبی واژه‌های سخت', icon: '🩸', desc: 'هر واژهٔ سخت در قالب‌های مختلف و با چیدمان تصادفی' },
   sent: { title: 'تولید جمله', icon: '🗣', desc: 'جمله‌سازی با واژه و بررسی ساختار' },
   freesent: { title: 'تولید جملهٔ آزاد', icon: '✒️', desc: 'هر جمله‌ای بساز؛ تصحیح کامل گرامر، حروف ربط، حرف اضافه و حالت، آرتیکل و صرف صفت با نمره' },
-  schreiben: { title: 'تصحیح نوشتار (Schreiben)', icon: '📝', desc: 'عکس متن دست‌نویس (چند صفحه) را بفرست؛ تصحیح کامل با تفکر آلمانی، سبک، نوع متن و منطق' },
+  schreiben: { title: 'Schreiben prüfen', icon: '📸', desc: 'عکس دست‌نویس (چند صفحه)، فایل یا متن خودت را بفرست؛ تصحیح کامل با تفکر آلمانی، سبک و گرامر' },
+  schreiben_exam: { title: 'Schreiben Prüfung', icon: '📝', desc: 'انتخاب سطح و سناریوی استاندارد آزمون (ایمیل رسمی، وبلاگ، درخواست کار) و نمره‌دهی' },
   puzzle: { title: 'چیدن جمله (Satzbau)', icon: '🧩', desc: 'کلمه‌های درهم‌ریختهٔ جمله‌های مثال خودت را به ترتیب درست آلمانی بچین' },
   dikt: { title: 'دیکته (Diktat)', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
@@ -89,8 +92,13 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' }
 };
 
-const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'dict', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'freesent', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep', 'hoeren'];  
+const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
+const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'puzzle', 'vprep'];
+const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
+const HOEREN_MODES: ExerciseMode[] = ['hoeren', 'dict', 'dikt'];
+
+const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep';
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -117,7 +125,7 @@ export const MistakeComparison: React.FC<MistakeComparisonProps> = ({ user, expe
   if (!report.expected) return null;
 
   return (
-    <div className="p-3 rounded-xl bg-white dark:bg-[#141923] border border-red-200 dark:border-red-900/60 text-right space-y-2 text-sm md:text-base">
+    <div className="p-3.5 rounded-xl bg-white dark:bg-[#141923] border border-red-200 dark:border-red-900/60 text-right space-y-2 text-sm md:text-base">
       <div className="font-bold text-slate-700 dark:text-slate-200">
         🔍 مقایسهٔ پاسخ شما با شکل درست{label ? ` — ${label}` : ''}
       </div>
@@ -536,12 +544,12 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
       {report && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className={`px-3 py-1 rounded-xl text-sm font-extrabold ${report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'}`}>
+            <span className={`px-3.5 py-1 rounded-xl text-sm font-extrabold ${report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'}`}>
               نمره: {report.score}/100
             </span>
             {report.issues.length === 0 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
           </div>
-          <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
+          <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
           {report.understood_fa && (
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-sm leading-7">
               <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت آلمانی‌زبان: </b>{report.understood_fa}
@@ -552,21 +560,21 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
             <div className="space-y-2">
               {report.issues.map((it, i) => (
                 <div key={i} className="p-3 rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
-                  <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold ${FREE_ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
+                  <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold ${FREE_ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
                   {(it.wrong || it.correct) && (
-                    <div className="flex flex-wrap items-baseline gap-2 text-sm" dir="ltr">
+                    <div className="flex flex-wrap items-baseline gap-2 text-base" dir="ltr">
                       {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
                       {it.wrong && it.correct && <span className="text-slate-400">→</span>}
                       {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
                     </div>
                   )}
-                  {it.why_fa && <div className="text-xs leading-6 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
+                  {it.why_fa && <div className="text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
                 </div>
               ))}
             </div>
           )}
 
-          <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
+          <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
           {report.tip_fa && (
             <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm leading-7">
               <b className="text-indigo-700 dark:text-indigo-300">💡 نکته: </b>{report.tip_fa}
@@ -575,11 +583,11 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
 
           {report.corrected_de && (
             <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
-              <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
+              <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
               <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
               <button
                 onClick={() => setShadowOpen(true)}
-                className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-1.5"
               >
                 🎙 تمرین تلفظ این جمله
               </button>
@@ -590,14 +598,14 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
           )}
 
           <div className="pt-1 border-t border-slate-200 dark:border-slate-800 space-y-2">
-            <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی دربارهٔ این جمله یا تصحیحش داری؟ بپرس:</div>
+            <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی دربارهٔ این جمله یا تصحیحش داری؟ بپرس:</div>
             {chat.map((m, i) => (
               <div key={i} className="space-y-1">
                 <div className="flex justify-start">
-                  <div className="max-w-[85%] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl rounded-se-sm px-3 py-2 text-sm text-slate-800 dark:text-slate-100">{m.q}</div>
+                  <div className="max-w-[85%] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl rounded-se-sm px-3.5 py-2 text-sm text-slate-800 dark:text-slate-100">{m.q}</div>
                 </div>
                 <div className="flex justify-end">
-                  <div className={`max-w-[92%] rounded-2xl rounded-ss-sm px-3 py-2 text-sm leading-7 whitespace-pre-wrap border ${m.err ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300' : 'bg-white dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-slate-800 dark:text-slate-100'}`}>{m.a}</div>
+                  <div className={`max-w-[92%] rounded-2xl rounded-ss-sm px-3.5 py-2 text-sm leading-7 whitespace-pre-wrap border ${m.err ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300' : 'bg-white dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-slate-800 dark:text-slate-100'}`}>{m.a}</div>
                 </div>
               </div>
             ))}
@@ -607,12 +615,12 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
                 onChange={e => setChatQ(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); void askChat(); } }}
                 placeholder="سوالت را اینجا بنویس…"
-                className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none resize-none"
+                className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm outline-none resize-none"
               />
               <button
                 onClick={() => void askChat()}
                 disabled={chatBusy || !chatQ.trim()}
-                className="bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-40 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition"
+                className="bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition"
               >
                 {chatBusy ? '⏳' : '➤ ارسال'}
               </button>
@@ -777,7 +785,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const topRef = useRef<HTMLDivElement>(null);
   const words = useMemo(() => {
     const cats = settings?.activeCats;
-    const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'errnb' || activeMode === 'vprep';
+    const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || isSelfContainedMode(activeMode);
     if (exempt || !cats || cats.length === 0 || (practiceWordIds && practiceWordIds.length > 0)) return allWords;
     const allowed = new Set(cats);
     return allWords.filter(w => allowed.has(w.cat));
@@ -1002,7 +1010,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       qIds = pool.slice().sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'sent') {
       qIds = shuffleArr<Word>(pool).slice(0, 10).map(w => w.id);
-    } else if (activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'puzzle' || activeMode === 'dikt' || activeMode === 'errnb' || activeMode === 'vprep') {
+    } else if (isSelfContainedMode(activeMode)) {
       qIds = ['freesent-self'];
     }
 
@@ -1025,7 +1033,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     if (activeMode === 'case') {
       return ALL_CASEQ.find(q => q.id === id) || null;
     }
-    if (activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'puzzle' || activeMode === 'dikt' || activeMode === 'errnb' || activeMode === 'vprep') {
+    if (isSelfContainedMode(activeMode)) {
       return FREE_SENT_WORD;
     }
     return words.find(w => w.id === id) || null;
@@ -1392,7 +1400,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       setRevealedCardId(currentItem.id);
     } else if (qMode === 'sent') {
       setSentTimeUp(n => n + 1);
-    } else if ((qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) {
+    } else if (isSelfContainedMode(qMode)) {
       // free practice
     } else if (qMode === 'art') {
       answerArt('');
@@ -1520,9 +1528,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
         {/* معادل انگلیسی */}
         {w.en && (
-          <div className="flex items-baseline gap-2 py-2 px-3 rounded-2xl border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/80 dark:border-blue-900 text-blue-900 dark:text-blue-200">
-            <span className="text-xs font-extrabold w-24 flex-shrink-0">معادل انگلیسی 🇬🇧</span>
-            <span className="flex-1 min-w-0 text-sm md:text-base font-sans font-bold" dir="ltr">{w.en}</span>
+          <div className="flex items-baseline gap-2 py-2.5 px-3.5 rounded-2xl border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/80 dark:border-blue-900 text-blue-900 dark:text-blue-200">
+            <span className="text-sm font-extrabold w-28 flex-shrink-0">معادل انگلیسی 🇬🇧</span>
+            <span className="flex-1 min-w-0 text-base font-sans font-bold" dir="ltr">{w.en}</span>
           </div>
         )}
 
@@ -1532,15 +1540,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             {w.syn && (
               <div className="flex flex-col gap-1 p-3 rounded-2xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200">
                 <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-300">مترادف (Synonym)</span>
-                <span className="font-bold text-sm" dir="ltr">{w.syn}</span>
-                {w.synFa && <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">{w.synFa}</span>}
+                <span className="font-bold text-base" dir="ltr">{w.syn}</span>
+                {w.synFa && <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">{w.synFa}</span>}
               </div>
             )}
             {w.ant && (
               <div className="flex flex-col gap-1 p-3 rounded-2xl border bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/80 dark:border-rose-900 text-rose-900 dark:text-rose-200">
                 <span className="text-xs font-extrabold text-rose-700 dark:text-rose-300">متضاد (Antonym)</span>
-                <span className="font-bold text-sm" dir="ltr">{w.ant}</span>
-                {w.antFa && <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">{w.antFa}</span>}
+                <span className="font-bold text-base" dir="ltr">{w.ant}</span>
+                {w.antFa && <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">{w.antFa}</span>}
               </div>
             )}
           </div>
@@ -1548,16 +1556,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
         {/* جمع اسم (Plural) */}
         {w.pl && (
-          <div className="flex items-baseline gap-2 py-2 px-3 rounded-2xl border bg-purple-50/50 dark:bg-purple-950/20 border-purple-200/80 dark:border-purple-900 text-purple-900 dark:text-purple-200">
-            <span className="text-xs font-extrabold w-24 flex-shrink-0">شکل جمع (Plural)</span>
-            <span className="flex-1 min-w-0 text-sm md:text-base font-sans font-bold" dir="ltr">{w.pl}</span>
+          <div className="flex items-baseline gap-2 py-2.5 px-3.5 rounded-2xl border bg-purple-50/50 dark:bg-purple-950/20 border-purple-200/80 dark:border-purple-900 text-purple-900 dark:text-purple-200">
+            <span className="text-sm font-extrabold w-28 flex-shrink-0">شکل جمع (Plural)</span>
+            <span className="flex-1 min-w-0 text-base font-sans font-bold" dir="ltr">{w.pl}</span>
           </div>
         )}
 
         {/* تعریف آلمانی */}
         {w.def && (
-          <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900 p-3.5 rounded-2xl text-sm" dir="ltr">
-            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide block mb-1">Bedeutung & Definition</span>
+          <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900 p-3.5 rounded-2xl text-base" dir="ltr">
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide block mb-1">Bedeutung & Definition</span>
             <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
           </div>
         )}
@@ -1565,14 +1573,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {/* مثال‌های کاربردی */}
         {(w.ex || w.ex2) && (
           <div className="space-y-2.5">
-            <div className="text-xs font-extrabold text-slate-700 dark:text-slate-300 px-1">📝 مثال‌های کاربردی (Praxisbeispiele)</div>
+            <div className="text-sm font-extrabold text-slate-700 dark:text-slate-300 px-1">📝 مثال‌های کاربردی (Praxisbeispiele)</div>
             {w.ex && (
               <div className="bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
-                  <p className="text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
+                  <p className="text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
                     {w.ex}
                   </p>
-                  <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
+                  <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-base">🔊</button>
                 </div>
                 {w.exFa && (
                   <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">
@@ -1584,10 +1592,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             {w.ex2 && (
               <div className="bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
-                  <p className="text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
+                  <p className="text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
                     {w.ex2}
                   </p>
-                  <button onClick={() => speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
+                  <button onClick={() => speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-base">🔊</button>
                 </div>
                 {w.ex2Fa && (
                   <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">
@@ -1608,7 +1616,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <div className="flex-1 min-w-[140px] space-y-1.5">
                 {col.map((f, i) => (
                   <div key={offset + i} className="flex items-baseline justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-0" dir="ltr">
-                    <span className="text-xs font-bold text-slate-400 flex-shrink-0">{P6[offset + i]}</span>
+                    <span className="text-sm font-bold text-slate-400 flex-shrink-0">{P6[offset + i]}</span>
                     <span className="min-w-0 text-right">
                       <HighlightedVerbForm verb={w.de} form={f} pronounIndex={offset + i} sep={w.sep} />
                     </span>
@@ -1618,8 +1626,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             );
             return (
               <div className="space-y-2">
-                <div className="text-xs font-extrabold text-slate-700 dark:text-slate-300 px-1">🔄 جدول صرف فعل (Konjugation)</div>
-                <div className="text-sm bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div className="text-sm font-extrabold text-slate-700 dark:text-slate-300 px-1">🔄 جدول صرف فعل (Konjugation)</div>
+                <div className="text-base bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                   <div className="flex flex-col sm:flex-row gap-4" dir="ltr">
                     {renderCol(colL, 0)}
                     <div className="hidden sm:block w-px bg-slate-200 dark:bg-slate-800 self-stretch" />
@@ -1636,14 +1644,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" dir="ltr">
             {w.prat && (
               <div className="rounded-2xl p-3 border bg-amber-50/50 border-amber-200 text-amber-900 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-100">
-                <div className="text-[10px] font-bold opacity-75 mb-0.5">Präteritum (گذشته ساده)</div>
-                <div className="text-sm font-bold"><PratText inf={w.de} prat={w.prat} /></div>
+                <div className="text-xs font-bold opacity-75 mb-0.5">Präteritum (گذشته ساده)</div>
+                <div className="text-base font-bold"><PratText inf={w.de} prat={w.prat} /></div>
               </div>
             )}
             {w.perf && (
               <div className="rounded-2xl p-3 border bg-sky-50/50 border-sky-200 text-sky-900 dark:bg-sky-950/20 dark:border-sky-900 dark:text-sky-100">
-                <div className="text-[10px] font-bold opacity-75 mb-0.5">Perfekt (گذشته نقلی)</div>
-                <div className="text-sm font-bold font-sans">{w.perf}</div>
+                <div className="text-xs font-bold opacity-75 mb-0.5">Perfekt (گذشته نقلی)</div>
+                <div className="text-base font-bold font-sans">{w.perf}</div>
               </div>
             )}
           </div>
@@ -1658,7 +1666,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   };
         
-  const [mainTab, setMainTab] = useState<'flash' | 'wortschatz' | 'grammatik' | 'skills'>('flash');
+  const [mainTab, setMainTab] = useState<'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren'>('flash');
   const [showHard, setShowHard] = useState(false);   
 
   if (!activeMode) {
@@ -1667,34 +1675,41 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     return (
       <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
-        <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs font-bold">
+        <div className="grid grid-cols-5 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold">
           <button
             onClick={() => setMainTab('flash')}
-            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
           >
-            <span className="text-base">🃏</span>
-            <span>فلش‌کارت</span>
+            <span className="text-lg">🃏</span>
+            <span className="truncate max-w-full">Lernkarten</span>
           </button>
           <button
             onClick={() => setMainTab('wortschatz')}
-            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
           >
-            <span className="text-base">📚</span>
-            <span>واژگان</span>
+            <span className="text-lg">📚</span>
+            <span className="truncate max-w-full">Wortschatz</span>
           </button>
           <button
             onClick={() => setMainTab('grammatik')}
-            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
           >
-            <span className="text-base">🧩</span>
-            <span>گرامر</span>
+            <span className="text-lg">🧩</span>
+            <span className="truncate max-w-full">Grammatik</span>
           </button>
           <button
-            onClick={() => setMainTab('skills')}
-            className={`py-2 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'skills' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            onClick={() => setMainTab('schreiben')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
           >
-            <span className="text-base">🎧</span>
-            <span>مهارت‌ها</span>
+            <span className="text-lg">✍️</span>
+            <span className="truncate max-w-full">Schreiben</span>
+          </button>
+          <button
+            onClick={() => setMainTab('hoeren')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">🎧</span>
+            <span className="truncate max-w-full">Hörverstehen</span>
           </button>
         </div>
 
@@ -1709,7 +1724,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div className="min-w-0 flex-1">
                   <div className="text-2xl font-extrabold">جعبه لایتنر و فلش‌کارت</div>
                   <div className="text-sm text-white/85 mt-1">مرور هوشمند واژگان با تکرار فاصله‌دار استاندارد</div>
-                  <div className="text-xs text-white/75 mt-3 flex flex-wrap gap-2">
+                  <div className="text-sm text-white/85 mt-3 flex flex-wrap gap-2">
                     <span className="bg-white/15 rounded-full px-3 py-1">📚 {words.length} واژه آماده مرور</span>
                     {activeCatCount > 0 && <span className="bg-white/15 rounded-full px-3 py-1">🗂 {activeCatCount} دستهٔ فعال</span>}
                   </div>
@@ -1725,8 +1740,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               >
                 <span className="text-3xl">🔁</span>
                 <div>
-                  <div className="font-bold text-sm">مرور سررسیدها</div>
-                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">فقط واژه‌های نیازمند مرور امروز</div>
+                  <div className="font-bold text-base">مرور سررسیدها</div>
+                  <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] mt-0.5">فقط واژه‌های نیازمند مرور امروز</div>
                 </div>
               </button>
               <button
@@ -1735,21 +1750,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               >
                 <span className="text-3xl">🌟</span>
                 <div>
-                  <div className="font-bold text-sm">جلسه روزانه</div>
-                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">ترکیب سررسیدها + لغات جدید</div>
+                  <div className="font-bold text-base">جلسه روزانه</div>
+                  <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] mt-0.5">ترکیب سررسیدها + لغات جدید</div>
                 </div>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <button
-                onClick={() => onSelectMode('errnb')}
+                onClick={() => onSelectMode('free')}
                 className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3 shadow-xs"
               >
-                <span className="text-3xl">📓</span>
+                <span className="text-3xl">📚</span>
                 <div>
-                  <div className="font-bold text-sm">دفتر خطاها</div>
-                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">مرور جمله‌های غلطِ خودت</div>
+                  <div className="font-bold text-base">مرور آزاد دسته</div>
+                  <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] mt-0.5">مرور کل یک دسته بدون اثر بر لایتنر</div>
                 </div>
               </button>
               <button
@@ -1758,8 +1773,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               >
                 <span className="text-3xl">🩸</span>
                 <div>
-                  <div className="font-bold text-sm">واژه‌های پر اشتباه ({hardWordsCount})</div>
-                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-0.5">تمرین اختصاصی واژه‌های سخت</div>
+                  <div className="font-bold text-base">واژه‌های پر اشتباه ({hardWordsCount})</div>
+                  <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] mt-0.5">تمرین اختصاصی واژه‌های سخت</div>
                 </div>
               </button>
             </div>
@@ -1767,23 +1782,23 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         )}
 
         {mainTab === 'wortschatz' && (
-          <div className="space-y-2.5">
-            {WORTSCHATZ_MODES.filter(m => m !== 'flash' && m !== 'review' && m !== 'daily').map(mode => {
+          <div className="space-y-3">
+            {WORTSCHATZ_MODES.filter(m => m !== 'flash' && m !== 'review' && m !== 'daily' && m !== 'free').map(mode => {
               const info = EXERCISE_NAMES[mode];
               return (
                 <div
                   key={mode}
                   onClick={() => onSelectMode(mode)}
-                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <span className="text-2xl flex-shrink-0">{info.icon}</span>
                     <div className="min-w-0">
-                      <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
-                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                      <b className="text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-sm text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
                     </div>
                   </div>
-                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0">شروع ▶</span>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold flex-shrink-0">شروع ▶</span>
                 </div>
               );
             })}
@@ -1791,48 +1806,71 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         )}
 
         {mainTab === 'grammatik' && (
-          <div className="space-y-2.5">
-            {GRAMMATIK_MODES.filter(m => m !== 'hoeren' && m !== 'schreiben' && m !== 'puzzle' && m !== 'dikt' && m !== 'errnb').map(mode => {
+          <div className="space-y-3">
+            {GRAMMATIK_MODES.map(mode => {
               const info = EXERCISE_NAMES[mode];
               return (
                 <div
                   key={mode}
                   onClick={() => onSelectMode(mode)}
-                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <span className="text-2xl flex-shrink-0">{info.icon}</span>
                     <div className="min-w-0">
-                      <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
-                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                      <b className="text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-sm text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
                     </div>
                   </div>
-                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0">شروع ▶</span>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold flex-shrink-0">شروع ▶</span>
                 </div>
               );
             })}
           </div>
         )}
 
-        {mainTab === 'skills' && (
-          <div className="space-y-2.5">
-            {(['hoeren', 'schreiben', 'puzzle', 'dikt', 'errnb', 'vprep'] as ExerciseMode[]).map(mode => {
+        {mainTab === 'schreiben' && (
+          <div className="space-y-3">
+            {SCHREIBEN_MODES.map(mode => {
               const info = EXERCISE_NAMES[mode];
-              if (!info) return null;
               return (
                 <div
                   key={mode}
                   onClick={() => onSelectMode(mode)}
-                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <span className="text-2xl flex-shrink-0">{info.icon}</span>
                     <div className="min-w-0">
-                      <b className="text-sm md:text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
-                      <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] truncate block">{info.desc}</span>
+                      <b className="text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-sm text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
                     </div>
                   </div>
-                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex-shrink-0">شروع ▶</span>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold flex-shrink-0">شروع ▶</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {mainTab === 'hoeren' && (
+          <div className="space-y-3">
+            {HOEREN_MODES.map(mode => {
+              const info = EXERCISE_NAMES[mode];
+              return (
+                <div
+                  key={mode}
+                  onClick={() => onSelectMode(mode)}
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className="text-2xl flex-shrink-0">{info.icon}</span>
+                    <div className="min-w-0">
+                      <b className="text-base text-slate-900 dark:text-slate-100 block">{info.title}</b>
+                      <span className="text-sm text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
+                    </div>
+                  </div>
+                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-sm font-bold flex-shrink-0">شروع ▶</span>
                 </div>
               );
             })}
@@ -1887,18 +1925,18 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </h2>
           <button
             onClick={() => onSelectMode(null)}
-            className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold"
+            className="text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold"
           >
             ↩ بازگشت
           </button>
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5">تمرین مخصوص یک دستهٔ خاص (اختیاری):</label>
+          <label className="block text-sm font-bold mb-1.5">تمرین مخصوص یک دستهٔ خاص (اختیاری):</label>
           <select
             value={flashCat}
             onChange={e => setFlashCat(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2 text-xs md:text-sm outline-none"
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-sm outline-none"
           >
             <option value="">همهٔ دسته‌ها (کلیت واژگان)</option>
             {categories.map(([c, n]) => (
@@ -1910,14 +1948,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-bold mb-1.5">کدام جهت را می‌خواهید تمرین کنید؟</label>
+          <label className="block text-sm font-bold mb-1.5">کدام جهت را می‌خواهید تمرین کنید؟</label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               onClick={() => {
                 setFlashDir('de');
                 setIsFlashConfigured(true);
               }}
-              className="py-3 px-3 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white rounded-xl font-bold text-xs md:text-sm shadow-xs transition"
+              className="py-3 px-3 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white rounded-xl font-bold text-sm shadow-xs transition"
             >
               🇩🇪 آلمانی ← فارسی
             </button>
@@ -1926,7 +1964,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 setFlashDir('fa');
                 setIsFlashConfigured(true);
               }}
-              className="py-3 px-3 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white rounded-xl font-bold text-xs md:text-sm shadow-xs transition"
+              className="py-3 px-3 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white rounded-xl font-bold text-sm shadow-xs transition"
             >
               🇮🇷 فارسی ← آلمانی
             </button>
@@ -1935,7 +1973,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 setFlashDir('rand');
                 setIsFlashConfigured(true);
               }}
-              className="py-3 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs md:text-sm shadow-xs transition"
+              className="py-3 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm shadow-xs transition"
             >
               🔀 تصادفی مستقل هر کارت
             </button>
@@ -1952,22 +1990,22 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5 text-right max-w-xl mx-auto">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <h2 className="text-base md:text-lg font-bold flex items-center gap-2"><span>📚</span> مرور آزاد دسته</h2>
-          <button onClick={() => onSelectMode(null)} className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold">↩ بازگشت</button>
+          <button onClick={() => onSelectMode(null)} className="text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold">↩ بازگشت</button>
         </div>
         <div>
-          <label className="block text-xs font-bold mb-1.5">دستهٔ واژگان</label>
-          <select value={freeCat} onChange={e => { setFreeCat(e.target.value); }} className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2 text-sm">
+          <label className="block text-sm font-bold mb-1.5">دستهٔ واژگان</label>
+          <select value={freeCat} onChange={e => { setFreeCat(e.target.value); }} className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-sm">
             <option value="">همهٔ دسته‌ها ({words.length} واژه)</option>
             {categories.map(([cat, count]) => <option key={cat} value={cat}>{cat} ({count} واژه)</option>)}
           </select>
-          <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] mt-1.5">{selectedCount} واژه در این انتخاب؛ مستقل از سررسید و جعبه‌های لایتنر.</p>
+          <p className="text-sm text-[#5d6676] dark:text-[#a3adbd] mt-1.5">{selectedCount} واژه در این انتخاب؛ مستقل از سررسید و جعبه‌های لایتنر.</p>
         </div>
         <div>
-          <label className="block text-xs font-bold mb-1.5">جهت تمرین</label>
+          <label className="block text-sm font-bold mb-1.5">جهت تمرین</label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button onClick={() => { setFreeDir('de'); setFreeRnd(false); }} className={`py-3 px-3 rounded-xl font-bold text-xs md:text-sm transition ${!freeRnd && freeDir === 'de' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🇩🇪 آلمانی ← فارسی</button>
-            <button onClick={() => { setFreeDir('fa'); setFreeRnd(false); }} className={`py-3 px-3 rounded-xl font-bold text-xs md:text-sm transition ${!freeRnd && freeDir === 'fa' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🇮🇷 فارسی ← آلمانی</button>
-            <button onClick={() => { setFreeRnd(true); }} className={`py-3 px-3 rounded-xl font-bold text-xs md:text-sm transition ${freeRnd ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🔀 تصادفی برای هر کارت</button>
+            <button onClick={() => { setFreeDir('de'); setFreeRnd(false); }} className={`py-3 px-3 rounded-xl font-bold text-sm transition ${!freeRnd && freeDir === 'de' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🇩🇪 آلمانی ← فارسی</button>
+            <button onClick={() => { setFreeDir('fa'); setFreeRnd(false); }} className={`py-3 px-3 rounded-xl font-bold text-sm transition ${!freeRnd && freeDir === 'fa' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🇮🇷 فارسی ← آلمانی</button>
+            <button onClick={() => { setFreeRnd(true); }} className={`py-3 px-3 rounded-xl font-bold text-sm transition ${freeRnd ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}>🔀 تصادفی برای هر کارت</button>
           </div>
         </div>
         <button disabled={selectedCount === 0} onClick={() => {
@@ -1994,7 +2032,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     <button
       type="button"
       onClick={() => setFaShown(true)}
-      className="px-3 py-1 rounded-full bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-800 text-[11px] font-bold transition"
+      className="px-3.5 py-1 rounded-full bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-800 text-xs font-bold transition"
     >
       👁 مشاهدهٔ ترجمه
     </button>
@@ -2011,7 +2049,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">
           تبریک! تمرین به پایان رسید.
         </h3>
-        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+        <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
           {queue.length === 0 && (activeMode === 'synant' || activeMode === 'n2v' || activeMode === 'v2n')
             ? activeMode === 'synant'
               ? 'هنوز هیچ واژه‌ای در کتابخانه، مترادف یا متضاد ثبت‌شده ندارد (یا در دسته‌های فعال فعلی نیست). این تمرین از فیلدهای «مترادف» و «متضاد» واژه‌ها استفاده می‌کند.'
@@ -2020,7 +2058,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </p>
         <button
           onClick={() => onSelectMode(null)}
-          className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl font-bold text-xs md:text-sm shadow-md"
+          className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-md"
         >
           بازگشت به مرکز تمرین‌ها
         </button>
@@ -2044,16 +2082,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
         <div className="flex items-center gap-2" dir="ltr">
           <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
-          {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
-           <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
+          {!isSelfContainedMode(qMode) && (
+            <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
           )}
-          {activeMode !== 'case' && qMode !== 'sent' && (qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && currentItem && (
+          {activeMode !== 'case' && qMode !== 'sent' && !isSelfContainedMode(qMode) && currentItem && (
             <>
               <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
               <IconBtn onClick={() => setShadowWord(currentItem as Word)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
             </>
           )}
-          {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
+          {!isSelfContainedMode(qMode) && (
             <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
           )}
           {activeMode !== 'hard' && qMode && (
@@ -2076,7 +2114,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         />
       )}
 
-      {(qMode !== 'freesent' && qMode !== 'schreiben' && qMode !== 'puzzle' && qMode !== 'dikt' && qMode !== 'errnb' && qMode !== 'vprep') && (
+      {!isSelfContainedMode(qMode) && (
       <div className="space-y-1.5">
         <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
           <div
@@ -2084,7 +2122,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        <div className="flex items-center justify-between text-xs text-[#5d6676] dark:text-[#a3adbd]">
+        <div className="flex items-center justify-between text-xs sm:text-sm text-[#5d6676] dark:text-[#a3adbd]">
           <span className="font-medium">
             سؤال {currentIndex + 1} از {queue.length}
             {timerCfg.on && timeLeft !== null && !timerAnswered && (
@@ -2101,7 +2139,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
         {activeMode === 'hard' && qMode && (
           <div className="flex justify-center">
-            <span className="px-3 py-1 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-[11px] font-bold">
+            <span className="px-3 py-1 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-xs font-bold">
               {currentSub === 'flashFa'
                 ? '🎴 فلش‌کارت فارسی ← آلمانی'
                 : currentSub === 'flashDe'
@@ -2118,9 +2156,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const speakWord = (e: React.MouseEvent) => { e.stopPropagation(); speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); };
           
           const gradeBtn = (g: 0 | 1 | 2 | 3, label: string, cls: string) => (
-            <button onClick={() => handleFlashGrade(g)} className={`${cls} border rounded-xl py-2 px-1 flex flex-col items-center leading-tight active:scale-95 transition shadow-xs`}>
+            <button onClick={() => handleFlashGrade(g)} className={`${cls} border rounded-xl py-2.5 px-1 flex flex-col items-center leading-tight active:scale-95 transition shadow-xs`}>
               <span className="text-sm font-bold">{label}</span>
-              <span className="text-[10px] font-medium opacity-75 mt-0.5">{intervalPreview(w, g, settings?.ivlMod || 1.0)}</span>
+              <span className="text-xs font-medium opacity-75 mt-0.5">{intervalPreview(w, g, settings?.ivlMod || 1.0)}</span>
             </button>
           );
 
@@ -2136,15 +2174,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                           <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
                           <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
                         </div>
-                        {w.pos && <span className="text-xs text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
+                        {w.pos && <span className="text-sm text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
                     ) : (
                       <>
                         <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
-                        {w.pos && <span className="text-xs text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
+                        {w.pos && <span className="text-sm text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
                     )}
-                    <span className="absolute bottom-4 text-xs font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">برای دیدن پشت کارت بزن ↻</span>
+                    <span className="absolute bottom-4 text-xs sm:text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">برای دیدن پشت کارت بزن ↻</span>
                   </div>
 
                   <div className="fc-face fc-back rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029] p-5 flex flex-col justify-center items-center text-center select-none" onClick={() => { if (isCardRevealed) setRevealedCardId(null); }}>
@@ -2160,7 +2198,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                     {w.def && (
                       <div className="w-full max-w-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 p-3 rounded-2xl text-sm mb-2" dir="ltr">
-                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">تعریف (Bedeutung): </span>
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">تعریف (Bedeutung): </span>
                         <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
                       </div>
                     )}
@@ -2168,13 +2206,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     {w.ex && (
                       <div className="w-full max-w-md bg-white dark:bg-[#1b2029] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1">
                         <div className="flex items-center justify-between gap-2" dir="ltr">
-                          <p className="text-xs md:text-sm font-semibold text-slate-800 dark:text-slate-200 text-left">{w.ex}</p>
-                          <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-xs">🔊</button>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 text-left">{w.ex}</p>
+                          <button onClick={(e) => { e.stopPropagation(); speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); }} className="text-sm">🔊</button>
                         </div>
-                        {w.exFa && <p className="text-xs text-slate-600 dark:text-slate-300 text-right font-medium">{w.exFa}</p>}
+                        {w.exFa && <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium">{w.exFa}</p>}
                       </div>
                     )}
-                    <span className="absolute bottom-3 text-[11px] font-semibold text-slate-400">برای بازگشت به روی کارت کلیک کنید</span>
+                    <span className="absolute bottom-3 text-xs font-semibold text-slate-400">برای بازگشت به روی کارت کلیک کنید</span>
                   </div>
                 </div>
               </div>
@@ -2191,7 +2229,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="space-y-3 pt-2">
                     <button
                       onClick={() => setMoreOpen(o => !o)}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 hover:bg-blue-100 py-2.5 rounded-xl transition shadow-xs"
+                      className="w-full flex items-center justify-center gap-1.5 text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 hover:bg-blue-100 py-2.5 rounded-xl transition shadow-xs"
                     >
                       {moreOpen ? '▲ بستن توضیحات کامل' : '▼ مثال و توضیحات بیشتر (سایر اطلاعات)'}
                     </button>
@@ -2224,11 +2262,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           const w = currentItem as Word;
           return (
             <div className="space-y-4 text-center">
-              <p className="text-xs text-[#5d6676]">آرتیکل درست برای این اسم کدام است؟</p>
+              <p className="text-sm text-[#5d6676]">آرتیکل درست برای این اسم کدام است؟</p>
               <div className="text-3xl font-extrabold font-sans py-2" dir="ltr">
                 {w.de}
               </div>
-              <div className="text-sm font-semibold text-[#1f5fbf]">{faVisible ? w.fa : faButton}</div>
+              <div className="text-base font-semibold text-[#1f5fbf]">{faVisible ? w.fa : faButton}</div>
 
               {!answerResult ? (
                 <div className="grid grid-cols-3 gap-3 pt-2 max-w-sm mx-auto">
@@ -2256,7 +2294,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   {renderUnifiedWordCard(w)}
                   <button
                     onClick={advanceQuestion}
-                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs"
+                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs"
                   >
                     سؤال بعدی ⬅
                   </button>
@@ -2275,7 +2313,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <div className="space-y-4 text-center">
               <p className="text-sm font-semibold text-[#5d6676]">
                 دو جای خالی زیر را کامل کنید (حرف اضافه و آرتیکل):
-                <span className="mr-2 px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-[11px] font-bold">
+                <span className="mr-2 px-2.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-xs font-bold">
                   سطح {(currentItem as CaseQuestion).cs || 1}
                 </span>
               </p>
@@ -2284,7 +2322,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 {q.s}
               </div>
 
-              <div className="text-xs text-[#5d6676]">
+              <div className="text-sm text-[#5d6676]">
                 کلمه مرجع: <span className="font-bold font-sans" dir="ltr">({bareNoun})</span>
                 {' — '}
                 {faVisible ? q.fa : faButton}
@@ -2292,7 +2330,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
               {!answerResult ? (
                 <div className="space-y-3 pt-2 max-w-md mx-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-right">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-right">
                     <div>
                       <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
                         ۱. حرف اضافه (Preposition):
@@ -2331,7 +2369,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="flex items-center justify-center gap-2 pt-1">
                     <button
                       onClick={handleCheckCaseAnswer}
-                      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs flex-1"
+                      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs flex-1"
                     >
                       بررسی دو پاسخ
                     </button>
@@ -2339,7 +2377,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     <button
                       onClick={() => setHintLevel(prev => Math.min(2, prev + 1))}
                       disabled={remainingHints === 0}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition ${
+                      className={`px-3.5 py-2.5 rounded-xl text-sm font-bold border transition ${
                         remainingHints > 0
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
                           : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
@@ -2381,14 +2419,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   {caseResult && !caseResult.artOk && (
                     <MistakeComparison label="آرتیکل" user={caseArtInput} expected={q.artAns} />
                   )}
-                  <div className="p-3 bg-slate-50 dark:bg-[#141923] rounded-xl text-xs text-right space-y-1">
+                  <div className="p-3 bg-slate-50 dark:bg-[#141923] rounded-xl text-sm text-right space-y-1">
                     <p><b>قاعده:</b> {q.r}</p>
                     <p dir="ltr" className="font-semibold text-slate-800 dark:text-slate-200">{q.ex}</p>
                     <p className="text-[#5d6676]">{q.exFa}</p>
                   </div>
                   <button
                     onClick={advanceQuestion}
-                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs"
+                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs"
                   >
                     سؤال بعدی ⬅
                   </button>
@@ -2398,7 +2436,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           );
         })()}
 
-        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl'  || qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) && (() => {
+        {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl' || qMode === 'sent' || isSelfContainedMode(qMode)) && (() => {
           const w = currentItem as Word;
           const remainingHints = Math.max(0, 2 - hintLevel);
 
@@ -2410,7 +2448,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-2xl font-bold font-sans py-1 text-slate-900 dark:text-slate-100" dir="ltr">
                     {P6[conjPron]} _____
                   </div>
-                  <div className="text-xs text-[#5d6676] flex flex-wrap items-center justify-center gap-2">
+                  <div className="text-sm text-[#5d6676] flex flex-wrap items-center justify-center gap-2">
                     <span>
                       مصدر: <span className="font-bold font-sans" dir="ltr">{w.de}</span>
                     </span>
@@ -2425,7 +2463,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-2xl font-bold font-sans py-1 text-slate-900 dark:text-slate-100" dir="ltr">
                     {w.de}
                   </div>
-                  <div className="text-xs text-[#5d6676]">
+                  <div className="text-sm text-[#5d6676]">
                     {faVisible ? <>ترجمه: <span className="font-bold">{w.fa}</span></> : faButton}
                   </div>
                 </div>
@@ -2437,7 +2475,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-xl md:text-2xl font-bold font-sans py-2 text-slate-900 dark:text-slate-100 leading-relaxed" dir="ltr">
                     {w.cloze || `${w.de} _____`}
                   </div>
-                  <div className="text-xs text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
+                  <div className="text-sm text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
                 </div>
               )}
 
@@ -2447,7 +2485,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-2xl font-bold font-sans py-1" dir="ltr">
                     {fullWord(w)}
                   </div>
-                  <div className="text-xs text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
+                  <div className="text-sm text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
                 </div>
               )}
 
@@ -2460,7 +2498,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   >
                     🔊
                   </button>
-                  <div className="text-xs text-[#5d6676]">{faVisible ? `معنی: ${w.fa}` : faButton}</div>
+                  <div className="text-sm text-[#5d6676]">{faVisible ? `معنی: ${w.fa}` : faButton}</div>
                 </div>
               )}
 
@@ -2475,13 +2513,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                       <span className="text-2xl md:text-3xl font-extrabold font-sans" dir="ltr">{fullWord(w)}</span>
                       <button
                         onClick={() => speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
-                        className="w-8 h-8 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
+                        className="w-9 h-9 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
                       >
                         🔊
                       </button>
                     </div>
-                    <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible ? w.fa : faButton}</div>
-                    <span className={`inline-block px-3 py-0.5 rounded-full text-[11px] font-bold ${
+                    <div className="text-base font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible ? w.fa : faButton}</div>
+                    <span className={`inline-block px-3 py-0.5 rounded-full text-xs font-bold ${
                       isAnt ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'
                     }`}>
                       {isAnt ? '↔️ متضاد' : '🟰 مترادف'}
@@ -2501,14 +2539,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     <>
                       <p className="text-sm font-semibold text-[#5d6676]">
                         شکل درست صفتِ داخل پرانتز را در جای خالی بنویسید (فقط صفت، با پایانهٔ مناسب):
-                        <span className="mr-2 px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-[11px] font-bold">
+                        <span className="mr-2 px-2.5 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 text-xs font-bold">
                           سطح {adjInfo.item.level}
                         </span>
                       </p>
                       <div dir="ltr" className="text-xl md:text-2xl font-bold font-sans leading-relaxed text-center">
                         {answerResult ? adjInfo.item.full : adjInfo.item.sentence.replace('_____', `_____ (${adjInfo.item.base})`)}
                       </div>
-                      <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">
+                      <div className="text-base font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">
                         {faVisible ? (adjInfo.src.fa || w.fa) : faButton}
                       </div>
                     </>
@@ -2529,13 +2567,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     </span>
                     <button
                       onClick={() => speak(qMode === 'n2v' ? fullWord(w) : w.de, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
-                      className="w-8 h-8 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
+                      className="w-9 h-9 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
                     >
                       🔊
                     </button>
                   </div>
-                  <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible ? w.fa : faButton}</div>
-                  <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-bold bg-violet-100 text-violet-800">
+                  <div className="text-base font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible ? w.fa : faButton}</div>
+                  <span className="inline-block px-3 py-0.5 rounded-full text-xs font-bold bg-violet-100 text-violet-800">
                     {qMode === 'n2v' ? '🔁 اسم ← فعل' : '🔂 فعل ← اسم'}
                   </span>
                 </div>
@@ -2565,6 +2603,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'schreiben' && (
                 <SchreibenCorrector
                   key={currentKey}
+                  variant="pruefen"
+                  onShowToast={onShowToast}
+                />
+              )}
+              {qMode === 'schreiben_exam' && (
+                <SchreibenCorrector
+                  key={currentKey}
+                  variant="pruefung"
                   onShowToast={onShowToast}
                 />
               )}
@@ -2579,11 +2625,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="text-2xl md:text-3xl font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff] py-1">
                     {w.fa}
                   </div>
-                  <p className="text-xs text-[#5d6676]">نوع کلمه: {w.pos}</p>
+                  <p className="text-sm text-[#5d6676]">نوع کلمه: {w.pos}</p>
                 </div>
               )}
 
-              {(qMode === 'sent' || (qMode === 'freesent' || qMode === 'schreiben' || qMode === 'puzzle' || qMode === 'dikt' || qMode === 'errnb' || qMode === 'vprep')) ? null : !answerResult ? (
+              {(qMode === 'sent' || isSelfContainedMode(qMode)) ? null : !answerResult ? (
                 <div className="space-y-3 pt-2 max-w-sm mx-auto">
                   <input
                     type="text"
@@ -2600,7 +2646,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={handleCheckAnswer}
-                      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs flex-1"
+                      className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs flex-1"
                     >
                       بررسی پاسخ
                     </button>
@@ -2608,7 +2654,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     <button
                       onClick={() => setHintLevel(prev => Math.min(2, prev + 1))}
                       disabled={remainingHints === 0}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition ${
+                      className={`px-3.5 py-2.5 rounded-xl text-sm font-bold border transition ${
                         remainingHints > 0
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300'
                           : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
@@ -2666,7 +2712,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                   <button
                     onClick={advanceQuestion}
-                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs"
+                    className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs"
                   >
                     سؤال بعدی ⬅
                   </button>
@@ -2715,14 +2761,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <button
                     key={v}
                     onClick={() => { setTimerSecDraft(null); onUpdateSettings?.({ timers: { ...(settings?.timers || {}), [qMode]: { on: true, sec: v } } }); }}
-                    className="flex-1 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold"
+                    className="flex-1 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-bold"
                   >
                     {v}s
                   </button>
                 ))}
               </div>
             </div>
-            <p className="text-xs leading-6 text-[#5d6676] dark:text-[#a3adbd]">
+            <p className="text-sm leading-6 text-[#5d6676] dark:text-[#a3adbd]">
               وقتی زمان تمام شود: در فلش‌کارت پاسخ نشان داده می‌شود و در تمرین‌های نوشتاری یا انتخابی، پاسخ فعلی شما بررسی می‌شود (اگر خالی باشد، اشتباه حساب می‌شود). این تنظیم فقط برای همین تمرین است و ذخیره می‌ماند.
             </p>
           </div>
