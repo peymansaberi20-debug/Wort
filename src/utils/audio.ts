@@ -3,6 +3,8 @@ export interface SpeakOptions {
   rate?: number;
   vreg?: string;
   voiceName?: string;
+  /** true = ausschließlich Browser-Stimme (kein Cloud-Worker) */
+  forceBrowser?: boolean;
   onEnd?: () => void;
   onErr?: (msg: string) => void;
 }
@@ -132,8 +134,12 @@ export async function speak(
   options?: SpeakOptions | ((msg: string) => void)
 ): Promise<void> {
   const synth = getSpeechSynthesis();
+  const forceBrowser =
+    typeof options === 'object' && options !== null && options.forceBrowser === true;
+
   // Cloud first: if a worker is configured, prefer the high-quality mp3 (works identically on iOS).
-  if (getTtsWorkerBase()) {
+  // Skipped when the caller explicitly wants the browser voice.
+  if (!forceBrowser && getTtsWorkerBase()) {
     const optsCloud: SpeakOptions = typeof options === 'object' && options !== null ? options : {};
     stopSpeaking();
     if (speakCloud(text, optsCloud)) return;
