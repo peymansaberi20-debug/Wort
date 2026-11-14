@@ -208,7 +208,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              این خروج فقط بستن برنامه است — حساب ابری شما فعال می‌ماند.
+              این خروج فقط بستن برنامه است— حساب ابری شما فعال می‌ماند.
             </p>
           </div>
         </div>,
