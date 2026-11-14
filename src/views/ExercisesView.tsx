@@ -21,7 +21,7 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { PageOverlay } from '../components/PageOverlay';
-import { PratText } from '../components/PratText';
+import { PratText } from '../utils/PratText';
 import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
@@ -73,7 +73,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   prod: { title: 'فارسی ← آلمانی (تایپی)', icon: '🔁', desc: 'دیدن ترجمه و نوشتن کامل واژه آلمانی' },
   synant: { title: 'مترادف و متضاد', icon: '↔️', desc: 'نوشتن مترادف یا متضاد واژهٔ داده‌شده' },
   n2v: { title: 'اسم ← فعل', icon: '🔁', desc: 'از روی اسم، فعل هم‌خانواده را بنویسید' },
-  v2n: { title: 'فعل ← اسم', icon: '🔂', desc: 'از روی فعل، اسم هم‌خانواده را (با آرتیکل) بنویسید' },
+  v2n: { title: 'فعل ← اسم', icon: '🂂', desc: 'از روی فعل، اسم هم‌خانواده را (با آرتیکل) بنویسید' },
   hard: { title: 'تمرین ترکیبی واژه‌های سخت', icon: '🩸', desc: 'هر واژهٔ سخت در قالب‌های مختلف و با چیدمان تصادفی' },
   sent: { title: 'تولید جمله', icon: '🗣', desc: 'جمله‌سازی با واژه و بررسی ساختار' },
   freesent: { title: 'تولید جملهٔ آزاد', icon: '✒️', desc: 'هر جمله‌ای بساز؛ تصحیح کامل گرامر، حروف ربط، حرف اضافه و حالت، آرتیکل و صرف صفت با نمره' },
@@ -770,6 +770,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onStartHard,
   dailyProgress
 }) => {
+  const topRef = useRef<HTMLDivElement>(null);
   const words = useMemo(() => {
     const cats = settings?.activeCats;
     const exempt = !activeMode || activeMode === 'flash' || activeMode === 'free' || activeMode === 'freesent' || activeMode === 'schreiben' || activeMode === 'errnb' || activeMode === 'vprep';
@@ -1145,6 +1146,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setHintLevel(0);
     setFaShown(false);
     setConjPron(Math.floor(Math.random() * 6));
+    setMoreOpen(false);
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleFlashGrade = (grade: number) => {
@@ -1468,12 +1475,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   const renderUnifiedWordCard = (w: Word, opts?: { hideConj?: boolean }) => {
     return (
-      <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 text-right">
-        {/* 8. واژه آلمانی اصلی بالا، بعد ترجمه فارسی و سپس بقیه مطابق پروفایل */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-800 pb-2">
+      <div className="bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 md:p-5 space-y-4 text-right shadow-sm">
+        {/* هدر مشابه پروفایل واژه */}
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-l from-slate-100 to-indigo-50/50 dark:from-slate-800 dark:to-indigo-950/30 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {w.lvl && <span className="px-2.5 py-0.5 rounded-lg font-bold text-xs bg-amber-400 text-amber-950 shadow-xs">{w.lvl}</span>}
+            {w.pos && <span className="px-2.5 py-0.5 rounded-lg font-bold text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 shadow-xs">{w.pos}</span>}
+            {w.cat && <span className="px-2.5 py-0.5 rounded-lg font-bold text-xs bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 shadow-xs">{w.cat}</span>}
+          </div>
+        </div>
+
+        {/* واژه آلمانی و فارسی */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-[#1b2029] p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-2" dir="ltr">
             {w.art && (
-              <span className={`px-2 py-0.5 rounded-lg font-bold text-sm ${
+              <span className={`px-2.5 py-1 rounded-xl font-bold text-base ${
                 w.art === 'der' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
                 w.art === 'die' ? 'bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300' :
                 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
@@ -1481,88 +1497,96 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 {w.art}
               </span>
             )}
-            <span className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-slate-100 font-sans">
+            <span className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans">
               {w.de}
             </span>
             <button
               onClick={() => speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
-              className="w-7 h-7 rounded-full bg-white dark:bg-slate-800 text-sm flex items-center justify-center shadow-xs"
+              className="w-9 h-9 rounded-full bg-white dark:bg-slate-800 text-sm flex items-center justify-center shadow-xs hover:scale-105 transition"
               title="تلفظ"
             >
               🔊
             </button>
           </div>
 
-          <div className="text-lg md:text-xl font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">
+          <div className="text-xl md:text-2xl font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">
             {w.fa}
           </div>
         </div>
 
-        {w.pl && (
-          <div className="flex items-baseline gap-2 py-1.5 px-2.5 rounded-xl border bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900 text-purple-900 dark:text-purple-200">
-            <span className="text-xs font-extrabold w-20 flex-shrink-0">جمع (Plural)</span>
-            <span className="flex-1 min-w-0 text-sm md:text-base font-sans" dir="ltr">{w.pl}</span>
-          </div>
-        )}
-
+        {/* معادل انگلیسی */}
         {w.en && (
-          <div className="flex items-baseline gap-2 py-1.5 px-2.5 rounded-xl border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-200">
-            <span className="text-xs font-extrabold w-20 flex-shrink-0">انگلیسی</span>
-            <span className="flex-1 min-w-0 text-sm md:text-base font-sans" dir="ltr">{w.en}</span>
+          <div className="flex items-baseline gap-2 py-2 px-3 rounded-2xl border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/80 dark:border-blue-900 text-blue-900 dark:text-blue-200">
+            <span className="text-xs font-extrabold w-24 flex-shrink-0">معادل انگلیسی 🇬🇧</span>
+            <span className="flex-1 min-w-0 text-sm md:text-base font-sans font-bold" dir="ltr">{w.en}</span>
           </div>
         )}
 
-        {/* 2. مترادف و متضاد با ترجمه در دو خط جداگانه */}
-        {w.syn && (
-          <div className="flex flex-col gap-1 py-2 px-2.5 rounded-xl border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200">
-            <span className="text-xs font-extrabold">مترادف</span>
-            <span className="font-semibold text-sm" dir="ltr">{w.syn}</span>
-            {w.synFa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{w.synFa}</span>}
+        {/* مترادف و متضاد با ترجمه در دو خط جداگانه */}
+        {(w.syn || w.ant) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {w.syn && (
+              <div className="flex flex-col gap-1 p-3 rounded-2xl border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200">
+                <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-300">مترادف (Synonym)</span>
+                <span className="font-bold text-sm" dir="ltr">{w.syn}</span>
+                {w.synFa && <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">{w.synFa}</span>}
+              </div>
+            )}
+            {w.ant && (
+              <div className="flex flex-col gap-1 p-3 rounded-2xl border bg-rose-50/50 dark:bg-rose-950/20 border-rose-200/80 dark:border-rose-900 text-rose-900 dark:text-rose-200">
+                <span className="text-xs font-extrabold text-rose-700 dark:text-rose-300">متضاد (Antonym)</span>
+                <span className="font-bold text-sm" dir="ltr">{w.ant}</span>
+                {w.antFa && <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">{w.antFa}</span>}
+              </div>
+            )}
           </div>
         )}
 
-        {w.ant && (
-          <div className="flex flex-col gap-1 py-2 px-2.5 rounded-xl border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-900 dark:text-red-200">
-            <span className="text-xs font-extrabold">متضاد</span>
-            <span className="font-semibold text-sm" dir="ltr">{w.ant}</span>
-            {w.antFa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{w.antFa}</span>}
+        {/* جمع اسم (Plural) */}
+        {w.pl && (
+          <div className="flex items-baseline gap-2 py-2 px-3 rounded-2xl border bg-purple-50/50 dark:bg-purple-950/20 border-purple-200/80 dark:border-purple-900 text-purple-900 dark:text-purple-200">
+            <span className="text-xs font-extrabold w-24 flex-shrink-0">شکل جمع (Plural)</span>
+            <span className="flex-1 min-w-0 text-sm md:text-base font-sans font-bold" dir="ltr">{w.pl}</span>
           </div>
         )}
 
+        {/* تعریف آلمانی */}
         {w.def && (
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900 p-2.5 rounded-xl text-sm" dir="ltr">
-            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">Bedeutung / تعریف: </span>
+          <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900 p-3.5 rounded-2xl text-sm" dir="ltr">
+            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide block mb-1">Bedeutung & Definition</span>
             <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
           </div>
         )}
 
+        {/* مثال‌های کاربردی */}
         {(w.ex || w.ex2) && (
-          <div className="space-y-2 pt-1">
+          <div className="space-y-2.5">
+            <div className="text-xs font-extrabold text-slate-700 dark:text-slate-300 px-1">📝 مثال‌های کاربردی (Praxisbeispiele)</div>
             {w.ex && (
-              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+              <div className="bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
-                  <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
+                  <p className="text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
                     {w.ex}
                   </p>
                   <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
                 </div>
                 {w.exFa && (
-                  <p className="text-sm md:text-base text-slate-700 dark:text-slate-200 text-right font-medium" dir="rtl">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">
                     {w.exFa}
                   </p>
                 )}
               </div>
             )}
             {w.ex2 && (
-              <div className="bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+              <div className="bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
-                  <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-slate-200 text-left">
+                  <p className="text-sm md:text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
                     {w.ex2}
                   </p>
                   <button onClick={() => speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-sm">🔊</button>
                 </div>
                 {w.ex2Fa && (
-                  <p className="text-sm md:text-base text-slate-700 dark:text-slate-200 text-right font-medium" dir="rtl">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium" dir="rtl">
                     {w.ex2Fa}
                   </p>
                 )}
@@ -1571,6 +1595,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </div>
         )}
 
+        {/* جدول صرف فعل */}
         {w.conj && !opts?.hideConj && (
           (() => {
             const forms = splitConj(w.conj);
@@ -1578,7 +1603,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             const renderCol = (col: string[], offset: number) => (
               <div className="flex-1 min-w-[140px] space-y-1.5">
                 {col.map((f, i) => (
-                  <div key={offset + i} className="flex items-baseline justify-between gap-2" dir="ltr">
+                  <div key={offset + i} className="flex items-baseline justify-between gap-2 py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-0" dir="ltr">
                     <span className="text-xs font-bold text-slate-400 flex-shrink-0">{P6[offset + i]}</span>
                     <span className="min-w-0 text-right">
                       <HighlightedVerbForm verb={w.de} form={f} pronounIndex={offset + i} sep={w.sep} />
@@ -1588,27 +1613,41 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               </div>
             );
             return (
-              <div className="text-sm md:text-base bg-white dark:bg-[#1b2029] p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                <div className="flex gap-4" dir="ltr">
-                  {renderCol(colL, 0)}
-                  <div className="w-px bg-slate-200 dark:border-slate-800 self-stretch" />
-                  {renderCol(colR, 3)}
+              <div className="space-y-2">
+                <div className="text-xs font-extrabold text-slate-700 dark:text-slate-300 px-1">🔄 جدول صرف فعل (Konjugation)</div>
+                <div className="text-sm bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <div className="flex flex-col sm:flex-row gap-4" dir="ltr">
+                    {renderCol(colL, 0)}
+                    <div className="hidden sm:block w-px bg-slate-200 dark:bg-slate-800 self-stretch" />
+                    {renderCol(colR, 3)}
+                  </div>
                 </div>
               </div>
             );
           })()
         )}
 
+        {/* زمان‌های گذشته */}
         {(w.prat || w.perf) && (
-          <div className="grid grid-cols-2 gap-2" dir="ltr">
-            {w.prat && <div className="rounded-xl px-3 py-2 border bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-100"><div className="text-[10px] font-bold opacity-70">Präteritum</div><div className="text-sm font-bold"><PratText inf={w.de} prat={w.prat} /></div></div>}
-            {w.perf && <div className="rounded-xl px-3 py-2 border bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950/30 dark:border-sky-900 dark:text-sky-100"><div className="text-[10px] font-bold opacity-70">Perfekt</div><div className="text-sm font-bold font-sans">{w.perf}</div></div>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" dir="ltr">
+            {w.prat && (
+              <div className="rounded-2xl p-3 border bg-amber-50/50 border-amber-200 text-amber-900 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-100">
+                <div className="text-[10px] font-bold opacity-75 mb-0.5">Präteritum (گذشته ساده)</div>
+                <div className="text-sm font-bold"><PratText inf={w.de} prat={w.prat} /></div>
+              </div>
+            )}
+            {w.perf && (
+              <div className="rounded-2xl p-3 border bg-sky-50/50 border-sky-200 text-sky-900 dark:bg-sky-950/20 dark:border-sky-900 dark:text-sky-100">
+                <div className="text-[10px] font-bold opacity-75 mb-0.5">Perfekt (گذشته نقلی)</div>
+                <div className="text-sm font-bold font-sans">{w.perf}</div>
+              </div>
+            )}
           </div>
         )}
         
         {w.img && (
-          <div className="text-center pt-1">
-            <img src={w.img} alt={w.de} className="max-h-40 mx-auto rounded-xl object-contain shadow-xs" />
+          <div className="text-center pt-2">
+            <img src={w.img} alt={w.de} className="max-h-48 mx-auto rounded-2xl object-contain shadow-xs border border-slate-200 dark:border-slate-800" />
           </div>
         )}
       </div>
@@ -1623,7 +1662,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const hardWordsCount = allWords.filter(w => (w.bad || 0) > 3).length;
 
     return (
-      <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
         <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs font-bold">
           <button
             onClick={() => setMainTab('flash')}
@@ -1678,7 +1717,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 onClick={() => onSelectMode('review')}
-                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3 shadow-xs"
               >
                 <span className="text-3xl">🔁</span>
                 <div>
@@ -1688,7 +1727,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               </button>
               <button
                 onClick={() => onSelectMode('daily')}
-                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3 shadow-xs"
               >
                 <span className="text-3xl">🌟</span>
                 <div>
@@ -1701,7 +1740,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <button
                 onClick={() => onSelectMode('errnb')}
-                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3 shadow-xs"
               >
                 <span className="text-3xl">📓</span>
                 <div>
@@ -1711,7 +1750,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               </button>
               <button
                 onClick={() => setShowHard(true)}
-                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3"
+                className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] text-right transition flex items-center gap-3 shadow-xs"
               >
                 <span className="text-3xl">🩸</span>
                 <div>
@@ -1836,7 +1875,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   if (activeMode === 'flash' && !isFlashConfigured) {
     return (
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-4 text-right max-w-xl mx-auto">
+      <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-4 text-right max-w-xl mx-auto">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
             <span>🃏</span>
@@ -1906,7 +1945,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const selectedCount = words.filter(w => !freeCat || w.cat === freeCat).length;
 
     return (
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5 text-right max-w-xl mx-auto">
+      <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5 text-right max-w-xl mx-auto">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <h2 className="text-base md:text-lg font-bold flex items-center gap-2"><span>📚</span> مرور آزاد دسته</h2>
           <button onClick={() => onSelectMode(null)} className="text-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 px-3 py-1 rounded-xl font-semibold">↩ بازگشت</button>
@@ -1963,7 +2002,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
+      <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
         <span className="text-4xl block">🎉</span>
         <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">
           تبریک! تمرین به پایان رسید.
@@ -1986,14 +2025,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   }
 
   return (
-    <div className="space-y-4 text-right max-w-2xl mx-auto pb-10">
-      {/* 4. حالت تمام‌صفحه و تمرکز (Focus Mode): خلوت‌تر و مرتب */}
+    <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
-          {/* 5. نشانگر وضعیت جعبه لایتنر و استریک */}
           {isFlashType && (currentItem as Word)?.stage !== undefined && (
             <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono">
               جعبه {(currentItem as Word).stage || 1}
@@ -2046,7 +2083,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         <div className="flex items-center justify-between text-xs text-[#5d6676] dark:text-[#a3adbd]">
           <span className="font-medium">
             سؤال {currentIndex + 1} از {queue.length}
-            {/* 4. فقط ثانیه شمار دیده شود */}
             {timerCfg.on && timeLeft !== null && !timerAnswered && (
               <span className="mr-2 px-2.5 py-0.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-bold font-mono animate-pulse">
                 ⏱ {Math.max(0, timeLeft)}s
@@ -2086,9 +2122,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
           return (
             <div className="space-y-3">
-              {/* 6. انیمیشن‌های نرم‌تر و افکت‌های لمسی (Haptic / Micro-interactions) */}
               <div key={currentKey} className="fc-scene transition-all duration-300" style={{ height: 'min(42dvh, 380px)', minHeight: 260 }}>
-                {/* 7. وقتی سمت ترجمه می‌آید دوباره کلیک می‌کنم نمی‌چرخد سمت روی کارت */}
                 <div className={'fc-card h-full transition-transform duration-500 ' + (isCardRevealed ? 'flipped' : '')}>
                   <div className="fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-white dark:bg-[#1b2029] flex flex-col items-center justify-center gap-3 p-6 text-center cursor-pointer select-none" onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
                     {!isFaDir ? (
@@ -2109,8 +2143,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     <span className="absolute bottom-4 text-xs font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">برای دیدن پشت کارت بزن ↻</span>
                   </div>
 
-                  {/* 3. باکس پشت کارت فیکس بدون اسکرول مزاحم و ۹. فقط ترجمه و مثال اول (تعریف) */}
-                  <div className="fc-face fc-back rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029] p-5 flex flex-col justify-center items-center text-center select-none" onClick={e => e.stopPropagation()}>
+                  <div className="fc-face fc-back rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029] p-5 flex flex-col justify-center items-center text-center select-none" onClick={() => { if (isCardRevealed) setRevealedCardId(null); }}>
                     {!isFaDir ? (
                       <div className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 mb-3" dir="rtl">{w.fa}</div>
                     ) : (
@@ -2137,6 +2170,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                         {w.exFa && <p className="text-xs text-slate-600 dark:text-slate-300 text-right font-medium">{w.exFa}</p>}
                       </div>
                     )}
+                    <span className="absolute bottom-3 text-[11px] font-semibold text-slate-400">برای بازگشت به روی کارت کلیک کنید</span>
                   </div>
                 </div>
               </div>
@@ -2150,7 +2184,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </button>
               ) : (
                 <>
-                  {/* 1. توضیحات بیشتر بیاد بالای دکمه‌ها توی دل کارت ولی زدم روش دکمه‌ها برن پایین و اطلاعات نمایش داده بشن */}
                   <div className="space-y-3 pt-2">
                     <button
                       onClick={() => setMoreOpen(o => !o)}
@@ -2231,7 +2264,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
         {qMode === 'case' && (() => {
           const q = currentItem as CaseQuestion;
-          const bareNoun = q.n.replace(/^(der|die|das|den|dem|des)\s+/i, '').trim();
+          const bareNoun = q.n.replace(/^(der|die|das)\s+/i, '').trim();
           const remainingHints = Math.max(0, 2 - hintLevel);
 
           return (
