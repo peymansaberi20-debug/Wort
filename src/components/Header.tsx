@@ -43,18 +43,35 @@ export const Header: React.FC<HeaderProps> = ({
   }, [menuOpen]);
 
   const go = (t: string) => { setMenuOpen(false); onNavigate?.(t); };
-  const sec = (t: string) => <div className="px-3.5 pt-3 pb-1 text-[10px] font-bold text-[#5d6676] dark:text-[#a3adbd] tracking-wide">{t}</div>;
+  
+  // سرتیتر دسته‌بندی‌ها با طراحی کارت‌مانند و مدرن
+  const sec = (t: string) => (
+    <div className="px-4 pt-3.5 pb-1.5 text-[11px] font-extrabold text-slate-400 dark:text-slate-500 tracking-wider">
+      {t}
+    </div>
+  );
+
+  // آیتم‌های مدرن منو با کارت‌های کوچک، آیکون‌های رنگی و هاور نرم
   const row = (icon: string, label: string, desc: string, run: () => void, badge?: string) => (
-    <button key={label} onClick={run} className="w-full px-3.5 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 transition text-right">
-      <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{icon}</span>
-      <span className="flex-1 min-w-0">
-        <span className="block text-sm font-bold text-slate-800 dark:text-slate-100">{label}</span>
-        {desc && <span className="block text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">{desc}</span>}
+    <button
+      key={label}
+      onClick={run}
+      className="w-full px-3.5 py-2.5 my-0.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 active:bg-slate-100 transition text-right rounded-xl group"
+    >
+      <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/60 group-hover:text-blue-600 flex items-center justify-center text-lg flex-shrink-0 transition shadow-xs">
+        {icon}
       </span>
-      {badge && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0">{badge}</span>}
+      <span className="flex-1 min-w-0">
+        <span className="block text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">{label}</span>
+        {desc && <span className="block text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{desc}</span>}
+      </span>
+      {badge && (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 flex-shrink-0 shadow-xs">
+          {badge}
+        </span>
+      )}
     </button>
   );
-  const menuItem = 'w-full px-3.5 h-12 flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-right';
 
   return (
     <header className="sticky top-0 z-20 bg-gradient-to-l from-[#6b4fd8] via-[#4a5ac9] to-[#1f5fbf] text-white shadow-lg flex items-center justify-between gap-2 px-3 md:px-5 h-16 md:h-[4.5rem]">
@@ -110,50 +127,66 @@ export const Header: React.FC<HeaderProps> = ({
 
         {menuOpen && (
           <>
-            <div className="fixed inset-0 z-20 bg-black/30 md:bg-transparent" onClick={() => setMenuOpen(false)} />
+            <div className="fixed inset-0 z-20 bg-black/40 backdrop-blur-xs md:bg-transparent" onClick={() => setMenuOpen(false)} />
             <div
-              className="fixed md:absolute z-30 inset-x-3 md:inset-x-auto top-[4.25rem] md:top-full md:mt-2 md:left-0 md:w-80 max-h-[calc(100vh-5.5rem)] overflow-y-auto bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl pb-2"
+              className="fixed md:absolute z-30 inset-x-3 md:inset-x-auto top-[4.25rem] md:top-full md:mt-2 md:left-0 md:w-80 max-h-[calc(100vh-5.5rem)] overflow-y-auto bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700/80 rounded-3xl shadow-2xl p-2.5 space-y-1"
               dir="rtl"
             >
               {sec('حساب')}
-              {row('☁️', 'فضای ابری', cloudEmail ? cloudEmail : 'ورود و همگام‌سازی', () => { setMenuOpen(false); onOpenCloud(); })}
+              <div className="bg-slate-50/70 dark:bg-[#141923]/60 rounded-2xl p-1 border border-slate-100 dark:border-slate-800/80">
+                {row('☁️', 'فضای ابری', cloudEmail ? cloudEmail : 'ورود و همگام‌سازی', () => { setMenuOpen(false); onOpenCloud(); })}
+              </div>
 
               {sec('داده‌ها')}
-              {row('💾', 'ذخیره و پشتیبان‌گیری', 'پشتیبان کامل، CSV، Anki', () => go('backup'), backupDue ? 'یادآوری' : undefined)}
-              {row('♻️', 'بازیابی پشتیبان', 'برگرداندن از فایل JSON', () => go('restore'))}
-              {row('📥', 'ورود واژگان', 'Excel، CSV یا JSON', () => go('io'))}
+              <div className="bg-slate-50/70 dark:bg-[#141923]/60 rounded-2xl p-1 border border-slate-100 dark:border-slate-800/80 space-y-0.5">
+                {row('💾', 'ذخیره و پشتیبان‌گیری', 'پشتیبان کامل، CSV، Anki', () => go('backup'), backupDue ? 'یادآوری' : undefined)}
+                {row('♻️', 'بازیابی پشتیبان', 'برگرداندن از فایل JSON', () => go('restore'))}
+                {row('📥', 'ورود واژگان', 'Excel، CSV یا JSON', () => go('io'))}
+              </div>
 
               {sec('تنظیمات')}
-              {row('🎨', 'پوسته', THEME_LABEL[theme], () => onToggleTheme())}
-              {row('🃏', 'ظاهر و فلش‌کارت', 'جهت کارت و نمایش', () => go('set:appearance'))}
-              {row('🎓', 'یادگیری و مرور', 'سقف روزانه، الگوریتم، تایمر', () => go('set:learning'))}
-              {row('🔊', 'صدا و تلفظ', 'صدا، سرعت و لهجه', () => go('set:audio'))}
-              {row('🎯', 'هدف روزانه و یادآوری', 'هدف و دورهٔ پشتیبان‌گیری', () => go('set:goal'))}
-              {row('🤖', 'اتصال به هوش مصنوعی', 'کلید Gemini', () => go('set:ai'))}
-              {row('⚙️', 'همهٔ تنظیمات', 'نمای کامل', () => go('set'))}
-              {row('⚠️', 'مدیریت داده‌ها', 'پاک‌سازی سابقه و واژگان', () => go('set:data'))}
+              <div className="bg-slate-50/70 dark:bg-[#141923]/60 rounded-2xl p-1 border border-slate-100 dark:border-slate-800/80 space-y-0.5">
+                {row('🎨', 'پوسته', THEME_LABEL[theme], () => onToggleTheme())}
+                {row('🃏', 'ظاهر و فلش‌کارت', 'جهت کارت و نمایش', () => go('set:appearance'))}
+                {row('🎓', 'یادگیری و مرور', 'سقف روزانه، الگوریتم، تایمر', () => go('set:learning'))}
+                {row('🔊', 'صدا و تلفظ', 'صدا، سرعت و لهجه', () => go('set:audio'))}
+                {row('🎯', 'هدف روزانه و یادآوری', 'هدف و دورهٔ پشتیبان‌گیری', () => go('set:goal'))}
+                {row('🤖', 'اتصال به هوش مصنوعی', 'کلید Gemini', () => go('set:ai'))}
+                {row('⚙️', 'همهٔ تنظیمات', 'نمای کامل', () => go('set'))}
+                {row('⚠️', 'مدیریت داده‌ها', 'پاک‌سازی سابقه و واژگان', () => go('set:data'))}
+              </div>
 
               {sec('برنامه')}
-              {row('ℹ️', 'درباره برنامه', 'نسخه و سازنده', () => { setMenuOpen(false); onAbout(); })}
-              <button
-                onClick={() => { setMenuOpen(false); if (!isStandalone()) { onSaveAndExit(); return; } setConfirmExit(true); }}
-                className={menuItem + ' border-t border-slate-100 dark:border-slate-800 mt-1'}
-              >
-                <Save size={17} className="text-[#1f5fbf] flex-shrink-0" />
-                <span className="flex-1 font-bold">ذخیره و خروج</span>
-              </button>
-              <div className="text-center text-[10px] text-[#5d6676] dark:text-[#a3adbd] pt-1" dir="ltr">WörterBuch · Peyman Saberi</div>
+              <div className="bg-slate-50/70 dark:bg-[#141923]/60 rounded-2xl p-1 border border-slate-100 dark:border-slate-800/80 space-y-0.5">
+                {row('ℹ️', 'درباره برنامه', 'نسخه و سازنده', () => { setMenuOpen(false); onAbout(); })}
+                <button
+                  onClick={() => { setMenuOpen(false); if (!isStandalone()) { onSaveAndExit(); return; } setConfirmExit(true); }}
+                  className="w-full px-3.5 py-2.5 my-0.5 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-950/40 active:bg-red-100 transition text-right rounded-xl group text-red-600 dark:text-red-400"
+                >
+                  <span className="w-9 h-9 rounded-xl bg-red-100/70 dark:bg-red-950/60 flex items-center justify-center text-lg flex-shrink-0 transition shadow-xs">
+                    <Save size={17} className="flex-shrink-0" />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs font-bold">ذخیره و خروج</span>
+                    <span className="block text-[10px] text-red-500/80 truncate mt-0.5">خروج امن از اپلیکیشن</span>
+                  </span>
+                </button>
+              </div>
+
+              <div className="text-center text-[10px] text-slate-400 dark:text-slate-500 pt-2 pb-1" dir="ltr">
+                WörterBuch · Peyman Saberi
+              </div>
             </div>
           </>
         )}
       </div>
 
-      {/* ── PWA exit confirm — portal to body (independent of header stacking) ── */}
+      {/* ── PWA exit confirm — portal to body ── */}
       {confirmExit && createPortal(
         <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" dir="rtl" role="alertdialog" aria-modal="true">
-          <div className="w-full max-w-sm rounded-2xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-3">
+          <div className="w-full max-w-sm rounded-3xl border border-amber-200 dark:border-amber-900 bg-white dark:bg-[#1b2029] p-6 shadow-2xl space-y-4">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">خروج از برنامه</h2>
-            <p className="text-sm leading-7 text-slate-700 dark:text-slate-200">
+            <p className="text-xs sm:text-sm leading-7 text-slate-700 dark:text-slate-200">
               داده‌های شما ذخیره شده است. آیا می‌خواهید از برنامه خارج شوید؟
             </p>
             <div className="grid grid-cols-2 gap-2 pt-1">
@@ -163,18 +196,18 @@ export const Header: React.FC<HeaderProps> = ({
                   try { window.close(); } catch { /* ignore */ }
                   setTimeout(() => { if (!window.closed) onSaveAndExit(); }, 150);
                 }}
-                className="h-11 rounded-xl bg-[#1f5fbf] hover:bg-[#194ea0] text-white text-sm font-bold transition"
+                className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
               >
                 تأیید خروج
               </button>
               <button
                 onClick={() => setConfirmExit(false)}
-                className="h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold transition"
+                className="h-11 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition"
               >
                 انصراف
               </button>
             </div>
-            <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               این خروج فقط بستن برنامه است — حساب ابری شما فعال می‌ماند.
             </p>
           </div>
