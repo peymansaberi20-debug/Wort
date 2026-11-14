@@ -57,9 +57,15 @@ export const SchreibenCorrector: React.FC<{ onShowToast: (m: string, e?: boolean
     setGeneratingPrompt(true);
     setPromptData(null);
     try {
-      const p = `You are a German exam examiner (Goethe/ÖSD). Create a realistic Schreiben task for level ${targetLevel} about: "${topObj.title} (${topObj.desc})".
+      const p = `You are a strict German exam designer (like ÖSD/Goethe for levels B1/B2). Create an exact exam Aufgabe card for: "${topObj.title} (${topObj.desc})" at level ${targetLevel}.
+The output must strictly mirror official exam formats (like Blog-Eintrag Stellungnahme or Formelles E-Mail with specific word counts, points to cover, and grammar requirements).
+
 Return ONLY valid JSON with no markdown formatting:
-{"taskDe": "The prompt instruction in German (Aufgabenstellung with 3-4 bullet points to cover)", "taskFa": "ترجمه و راهنمای فارسی سناریو", "point1": "نکته ۱", "point2": "نکته ۲", "point3": "نکته ۳"}`;
+{
+  "taskDe": "The exact exam instruction in German, including a realistic quote/blog excerpt or scenario (e.g. 'In einem Blog zum Thema... finden Sie folgende Meinung:' or formal email context), required word count (e.g. 100-120 Wörter or 40-50 Wörter), and clear instructions on what points to explain and which grammar structures (Nebensätze, Konnektoren) to use.",
+  "taskFa": "ترجمه و راهنمای فارسی سناریو و خواسته آزمون",
+  "points": ["نکته یا پوینت اول که باید در متن نوشته شود", "نکته دوم", "نکته سوم (گرامر یا ساختار دستوری خاص)"]
+}`;
       const out = await generateWithGemini(p, { json: true, timeoutMs: 25000, retries: 1 });
       const r: any = parseAI(out)[0] || {};
       setPromptData({
@@ -68,11 +74,12 @@ Return ONLY valid JSON with no markdown formatting:
         points: [r.point1, r.point2, r.point3].filter(Boolean)
       });
     } catch {
-      onShowToast('دریافت سناریو ناموفق بود؛ خودت می‌توانی آزاد بنویسی.', true);
+      onShowToast('دریافت سناریو ناموفق بود.', true);
     } finally {
       setGeneratingPrompt(false);
     }
   };
+
 
   const runCheck = async () => {
     const s = text.trim();
