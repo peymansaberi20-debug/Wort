@@ -43,7 +43,6 @@ import { dstr, today } from './utils/dates';
 import { isDuplicateEntry } from './utils/duplicates';
 import { ImportDecision, applyImportPlan, mergeWordUpdate } from './utils/vocabMerge';
 import { getTtsWorkerBase } from './utils/audio';
-import { HoerenTrainer } from './components/HoerenTrainer';
 
 const isDuplicateVocabularyEntry = isDuplicateEntry;
 
@@ -158,7 +157,7 @@ export default function App() {
     setIsWordManagerOpen(false);
     setIsDuplicateModalOpen(false);
 
-        if (activeExercise) {
+    if (activeExercise) {
       // Keep the running exercise alive: hide it instead of destroying it.
       // Leaving the exercise happens only through the exercise's own exit action.
       setExerciseHidden(tab !== 'prac');
@@ -256,7 +255,7 @@ export default function App() {
       return;
     }
 
-        // Phase 3: build the new word up front so its profile can be opened after save
+    // Phase 3: build the new word up front so its profile can be opened after save
     const newWord = isEdit ? null : (norm({ ...wordData, added: Date.now() }) as Word);
 
     setState(prev => {
@@ -277,11 +276,11 @@ export default function App() {
             id: old.id
           }) as Word;
         }
-            } else {
+      } else {
         if (newWord) nextWords.push(newWord);
       }
       showToast(isEdit ? 'تغییرات واژه ذخیره شد.' : 'واژه با موفقیت به کتابخانه افزوده شد.');
-            return { ...prev, words: nextWords };
+      return { ...prev, words: nextWords };
     });
     // Phase 3: after adding or editing a word, open its profile; closing it returns to the vocabulary view
     if (newWord) {
@@ -742,6 +741,7 @@ export default function App() {
                   settings={state.set}
                   activeMode={null}
                   onSelectMode={setActiveExercise}
+                  onStartHard={ids => { setPracticeWordIds(ids); setExerciseHidden(false); setActiveExercise('hard'); }}
                   onRecordResult={handleRecordResult}
                   onOpenHelp={setActiveHelpTopic}
                   onShowToast={showToast}
