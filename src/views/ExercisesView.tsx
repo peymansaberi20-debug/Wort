@@ -2070,18 +2070,18 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   return (
     <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-slate-100 truncate">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
           {isFlashType && (currentItem as Word)?.stage !== undefined && (
-            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono">
+            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono flex-shrink-0">
               جعبه {(currentItem as Word).stage || 1}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2" dir="ltr">
+        <div className="flex items-center gap-2 flex-shrink-0" dir="ltr">
           <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
           {!isSelfContainedMode(qMode) && (
             <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
