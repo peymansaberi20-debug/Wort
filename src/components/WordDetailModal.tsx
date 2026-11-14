@@ -8,6 +8,7 @@ import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
 import { ShadowingModal } from './ShadowingModal';
+import { PratText } from './PratText';
 import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
 
 interface WordDetailModalProps {
@@ -228,7 +229,7 @@ const seg = pluralSegments2();
               </div>
               <div className="text-xs space-y-1" dir="ltr">
                 <div className="text-slate-500 text-[11px]">3. Person (er/sie/es):</div>
-                <div className="font-bold text-sm text-amber-700 dark:text-amber-300">{word.prat}</div>
+                <div className="font-bold text-sm text-amber-700 dark:text-amber-300"><PratText inf={word.de} prat={word.prat} /></div>
               </div>
             </div>
           )}
