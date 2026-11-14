@@ -631,7 +631,7 @@ ${JSON.stringify(freeQuestions)}
     }
   };
 
-  // پخش آنی با صدای پیش‌فرض مرورگر (جهت دور زدن زمان‌بر بودن سرور)
+  // پخش آنی با صدای پیش‌فرض مرورگر
   const handleToggleBrowserSpeech = () => {
     if (browserSpeaking) {
       stopSpeaking();
@@ -1069,12 +1069,13 @@ ${transcript}
                 </button>
               </div>
 
+              {/* کنترل‌های صوت همیشه در صورت وجود صوت یا امکان پخش فعال هستند */}
               {audioUrl && (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={togglePlayPauseAudio}
-                    className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100"
+                    className="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-4 py-2 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-100 shadow-sm"
                   >
                     <span>{isPlayingAudio ? '⏸ Pause' : '▶ Play'}</span>
                   </button>
@@ -1084,7 +1085,7 @@ ${transcript}
                     <select
                       value={audioRate}
                       onChange={(e) => handleRateChange(parseFloat(e.target.value))}
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2 py-1 text-xs"
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-[#232934] px-2.5 py-1 text-xs font-medium"
                     >
                       <option value={0.75}>0.75x</option>
                       <option value={1.0}>1.0x (معمولی)</option>
@@ -1107,16 +1108,16 @@ ${transcript}
             )}
 
             {audioUrl && (
-              <div className="space-y-1">
+              <div className="space-y-1.5 pt-1">
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={audioProgress}
                   onChange={handleSeek}
-                  className="w-full accent-purple-600 cursor-pointer h-2 bg-slate-200 dark:bg-slate-700 rounded-lg"
+                  className="w-full accent-purple-600 cursor-pointer h-2.5 bg-slate-200 dark:bg-slate-700 rounded-lg shadow-inner"
                 />
-                <div className="flex justify-between text-[10px] text-slate-500">
+                <div className="flex justify-between text-[11px] font-semibold text-slate-500">
                   <span>{Math.floor(audioCurrentTime)}s</span>
                   <span>{Math.floor(audioDuration)}s</span>
                 </div>
