@@ -16,6 +16,7 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { PageOverlay } from '../components/PageOverlay';
+import { PratText } from '../components/PratText';
 import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
@@ -680,23 +681,35 @@ const synAntKey = (w: Word, sub = 'synant'): string => {
   return `${w.id}::${sub}::${kind}`;
 };
 
-const buildHardQueue = (ws: Word[]): string[] => {
-  const keys: string[] = [];
-  ws.forEach(w => {
+const buildHardQueue = (ws: Word[], limit = 20): string[] => {
+  const day = Math.floor(Date.now() / 86400000);
+  const mk = (w: Word, sub: string) => sub === 'synant' ? synAntKey(w) : sub === 'adjdecl' ? adjKey(w) : `${w.id}::${sub}`;
+  const subsFor = (w: Word): string[] => {
     const subs = ['flashFa', 'flashDe', 'dict', 'prod'];
     if (w.cloze || w.ans) subs.push('cloze');
-    const extras: string[] = [];
-    if (w.art) extras.push('art');
-    if (w.pl) extras.push('plural');
-    if (w.conj) extras.push('conj');
-    if (w.prat || w.perf) extras.push('tense');
-    if (splitList(w.syn).length || splitList(w.ant).length) extras.push('synant');
-    if (isAdjPos(w.pos) && adjSources(w, true).length > 0) extras.push('adjdecl');
-    [...subs, ...shuffleArr(extras).slice(0, 2)].forEach(sub => {
-      const key = sub === 'synant' ? synAntKey(w) : sub === 'adjdecl' ? adjKey(w) : `${w.id}::${sub}`;
-      if (key) keys.push(key);
-    });
-  });
+    if (w.art) subs.push('art');
+    if (w.pl) subs.push('plural');
+    if (w.conj) subs.push('conj');
+    if (w.prat || w.perf) subs.push('tense');
+    if (splitList(w.syn).length || splitList(w.ant).length) subs.push('synant');
+    if (isAdjPos(w.pos) && adjSources(w, true).length > 0) subs.push('adjdecl');
+    return subs;
+  };
+  const sorted = [...ws].sort((a, b) => (b.bad || 0) - (a.bad || 0));
+  const n = sorted.length;
+  const chosen = n > limit ? Array.from({ length: limit }, (_, i) => sorted[(day * limit + i) % n]) : sorted;
+  const rotated = chosen.map((w, wi) => { const s0 = subsFor(w); const off = (day + wi) % s0.length; return [...s0.slice(off), ...s0.slice(0, off)]; });
+  const keys: string[] = [];
+  for (let round = 0; keys.length < limit; round++) {
+    let added = false;
+    for (let wi = 0; wi < chosen.length && keys.length < limit; wi++) {
+      const sub = rotated[wi][round];
+      if (!sub) continue;
+      const key = mk(chosen[wi], sub);
+      if (key) { keys.push(key); added = true; }
+    }
+    if (!added) break;
+  }
   const idOf = (k: string) => k.split('::')[0];
   const subOf = (k: string) => k.split('::')[1];
   const rest = shuffleArr(keys);
@@ -876,7 +889,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           ? practiceWordIds
           : words.filter(w => (w.bad || 0) > 3).map(w => w.id)
       );
-      qIds = buildHardQueue(words.filter(w => wanted.has(w.id)));
+      qIds = buildHardQueue(words.filter(w => wanted.has(w.id)), settings?.rv || 20);
     } else if (practiceWordIds && practiceWordIds.length > 0) {
       qIds = [...practiceWordIds];
       if (activeMode === 'synant') {
@@ -1566,6 +1579,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               </div>
             );
           })()
+        )}
+
+        {(w.prat || w.perf) && (
+          <div className="grid grid-cols-2 gap-2" dir="ltr">
+            {w.prat && <div className="rounded-xl px-3 py-2 border bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-100"><div className="text-[10px] font-bold opacity-70">Präteritum</div><div className="text-sm font-bold"><PratText inf={w.de} prat={w.prat} /></div></div>}
+            {w.perf && <div className="rounded-xl px-3 py-2 border bg-sky-50 border-sky-200 text-sky-900 dark:bg-sky-950/30 dark:border-sky-900 dark:text-sky-100"><div className="text-[10px] font-bold opacity-70">Perfekt</div><div className="text-sm font-bold font-sans">{w.perf}</div></div>}
+          </div>
         )}
         
         {w.img && (
@@ -2653,7 +2673,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             onImageChange={(w, img) => (inLibrary ? onImageChange?.(w, img) : notSaved())}
           />
         );
-      })}
+      })()}
     </div>
   );
 };
