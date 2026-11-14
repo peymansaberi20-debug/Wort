@@ -1675,43 +1675,44 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     return (
       <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
-        <div className="grid grid-cols-5 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold">
-          <button
-            onClick={() => setMainTab('flash')}
-            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-          >
-            <span className="text-lg">🃏</span>
-            <span className="truncate max-w-full">Lernkarten</span>
-          </button>
-          <button
-            onClick={() => setMainTab('wortschatz')}
-            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-          >
-            <span className="text-lg">📚</span>
-            <span className="truncate max-w-full">Wortschatz</span>
-          </button>
-          <button
-            onClick={() => setMainTab('grammatik')}
-            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-          >
-            <span className="text-lg">🧩</span>
-            <span className="truncate max-w-full">Grammatik</span>
-          </button>
-          <button
-            onClick={() => setMainTab('schreiben')}
-            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-          >
-            <span className="text-lg">✍️</span>
-            <span className="truncate max-w-full">Schreiben</span>
-          </button>
-          <button
-            onClick={() => setMainTab('hoeren')}
-            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-          >
-            <span className="text-lg">🎧</span>
-            <span className="truncate max-w-full">Hörverstehen</span>
-          </button>
-        </div>
+  <div className="grid grid-cols-5 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-[11px] sm:text-xs font-bold">
+  <button
+    onClick={() => setMainTab('flash')}
+    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+  >
+    <span className="text-base sm:text-lg">🃏</span>
+    <span className="truncate max-w-full px-0.5">Lernkarten</span>
+  </button>
+  <button
+    onClick={() => setMainTab('wortschatz')}
+    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+  >
+    <span className="text-base sm:text-lg">📚</span>
+    <span className="truncate max-w-full px-0.5">Wortschatz</span>
+  </button>
+  <button
+    onClick={() => setMainTab('grammatik')}
+    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+  >
+    <span className="text-base sm:text-lg">🧩</span>
+    <span className="truncate max-w-full px-0.5">Grammatik</span>
+  </button>
+  <button
+    onClick={() => setMainTab('schreiben')}
+    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+  >
+    <span className="text-base sm:text-lg">✍️</span>
+    <span className="truncate max-w-full px-0.5">Schreiben</span>
+  </button>
+  <button
+    onClick={() => setMainTab('hoeren')}
+    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+  >
+    <span className="text-base sm:text-lg">🎧</span>
+    <span className="truncate max-w-full px-0.5">Hörverstehen</span>
+  </button>
+</div>
+
 
         {mainTab === 'flash' && (
           <div className="space-y-3">
