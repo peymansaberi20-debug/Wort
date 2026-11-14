@@ -24,16 +24,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onClearAllWords,
   onShowToast
 }) => {
-  // Server-side Gemini AI status check
   const [testStatus, setTestStatus] = useState('');
   const [testing, setTesting] = useState(false);
-
-  // Available German voices
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-
-  // Destructive delete confirmation step
   const [deleteStep, setDeleteStep] = useState<number>(0);
-  // Cloud TTS worker settings
   const [ttsWorkerDraft, setTtsWorkerDraft] = useState<string>(() => getTtsWorkerBase() || '');
   const [prewarmBusy, setPrewarmBusy] = useState(false);
   const [prewarmDone, setPrewarmDone] = useState(0);
@@ -59,7 +53,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
   const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
 
-  // Load voices asynchronously
   useEffect(() => {
     const updateVoices = () => {
       const v = getGermanVoices();
@@ -84,28 +77,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }, [isVoiceGuideOpen]);
 
   const categories = useMemo(() => getCategories(words), [words]);
-
-  const handleTestAi = async () => {
-    setTesting(true);
-    setTestStatus('در حال بررسی هوش مصنوعی انتخاب‌شده...');
-    try {
-      const p = getActiveProvider();
-      const key = getApiKey(p);
-      if (!key) {
-        setTestStatus(`⚠️ برای «${PROVIDERS[p].label}» هنوز کلیدی وارد نشده است.`);
-        onShowToast('ابتدا کلید API را وارد کنید.', true);
-      } else {
-        const r = await testConnection(p, key);
-        setTestStatus(`${r.ok ? '✅' : '❌'} ${r.message} (مدل: ${getModel(p)})`);
-        onShowToast(r.message, !r.ok);
-      }
-    } catch (err: any) {
-      setTestStatus(`❌ ${describeAiError(err)}`);
-      onShowToast('خطا در آزمون اتصال', true);
-    } finally {
-      setTesting(false);
-    }
-  };
 
   const handleTestVoice = () => {
     stopSpeaking();
@@ -148,40 +119,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const show = (k: string) => !section || section === k;
 
   return (
-    <div className="space-y-6 text-right max-w-3xl mx-auto pb-12" dir="rtl">
+    <div className="space-y-6 text-right max-w-3xl mx-auto pb-16" dir="rtl">
       {show('appearance') && (
-        <div className="bg-white dark:bg-[#1b2029] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-5 transition-all">
-          <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-            <span className="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-lg shadow-inner">🎨</span>
+        <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+          <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl shadow-inner">🎨</div>
             <div>
-              <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">پوسته و جهت فلش‌کارت‌ها</h3>
+              <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">پوسته و جهت فلش‌کارت‌ها</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">شخصی‌سازی ظاهر برنامه و نحوه نمایش کارت‌های یادگیری</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm">
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 پوستهٔ برنامه:
               </label>
               <select
                 value={settings.theme || 'light'}
                 onChange={e => onUpdateSettings({ theme: e.target.value as 'light' | 'dark' })}
-                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="light">☀️ روشن (پیش‌فرض)</option>
                 <option value="dark">🌙 تیره (Dark Mode)</option>
               </select>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 جهت پیش‌فرض نمایش فلش‌کارت‌ها:
               </label>
               <select
                 value={settings.dir || 'de'}
                 onChange={e => onUpdateSettings({ dir: e.target.value as 'de' | 'fa' | 'rand' })}
-                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="de">🇩🇪 آلمانی ← فارسی</option>
                 <option value="fa">🇮🇷 فارسی ← آلمانی</option>
@@ -194,18 +165,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {show('learning') && (
         <>
-          <div className="bg-white dark:bg-[#1b2029] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-5 transition-all">
-            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-              <span className="w-9 h-9 rounded-2xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-lg shadow-inner">📊</span>
+          <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+            <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl shadow-inner">📊</div>
               <div>
-                <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">محدودیت‌های روزانه و ترتیب جلسه</h3>
+                <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">محدودیت‌های روزانه و ترتیب جلسه</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">تنظیم سهمیه لغات جدید، سقف مرور و چینش کارت‌ها</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
-              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   سهمیه کلمه جدید در روز:
                 </label>
                 <input
@@ -214,13 +185,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   max={500}
                   value={settings.nw ?? 10}
                   onChange={e => onUpdateSettings({ nw: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">۰ تا ۵۰۰ (۰ = بدون لغت جدید)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">۰ تا ۵۰۰ (۰ = بدون لغت جدید)</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   حداکثر مرور در روز:
                 </label>
                 <input
@@ -229,19 +200,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   max={500}
                   value={settings.rv ?? 20}
                   onChange={e => onUpdateSettings({ rv: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">۰ تا ۵۰۰ (۰ = بدون محدودیت مرور)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">۰ تا ۵۰۰ (۰ = بدون محدودیت مرور)</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   ترتیب چینش کارت‌ها:
                 </label>
                 <select
                   value={settings.order || 'due'}
                   onChange={e => onUpdateSettings({ order: e.target.value as any })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
                 >
                   <option value="due">🔁 اول سررسیدها، سپس جدیدها</option>
                   <option value="new">🌟 اول واژگان جدید</option>
@@ -252,10 +223,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Category Filter for Study Session */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
               <div>
-                <label className="block font-bold text-xs md:text-sm text-slate-800 dark:text-slate-200">
+                <label className="block text-xs md:text-sm font-bold text-slate-800 dark:text-slate-200">
                   فیلتر دسته‌های فعال در جلسات روزانه:
                 </label>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -263,7 +233,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-3 bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 rounded-2xl">
+              <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto p-3.5 bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 rounded-2xl">
                 {categories.length === 0 ? (
                   <span className="text-xs text-slate-400">هنوز دسته‌ای ایجاد نشده است.</span>
                 ) : (
@@ -291,25 +261,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Review Algorithm & Difficult Words */}
-          <div className="bg-white dark:bg-[#1b2029] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-5 transition-all">
-            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-              <span className="w-9 h-9 rounded-2xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-lg shadow-inner">🧠</span>
+          <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+            <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner">🧠</div>
               <div>
-                <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">الگوریتم تکرار فاصله‌دار و واژه‌های دشوار</h3>
+                <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">الگوریتم تکرار فاصله‌دار و واژه‌های دشوار</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">تنظیم ضرایب لایتنر و مدیریت لغات سخت (Leeches)</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
-              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   ضریب فاصلهٔ مرور (ivlMod):
                 </label>
                 <select
                   value={settings.ivlMod ?? 1}
                   onChange={e => onUpdateSettings({ ivlMod: parseFloat(e.target.value) || 1 })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
                 >
                   <option value="0.8">0.8 (حالت سخت‌گیرانه - فواصل کوتاه‌تر)</option>
                   <option value="1">1.0 (حالت عادی استاندارد)</option>
@@ -317,8 +286,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </select>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   آستانهٔ خطای واژهٔ دشوار (leechN):
                 </label>
                 <input
@@ -327,19 +296,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   max={20}
                   value={settings.leechN ?? 4}
                   onChange={e => onUpdateSettings({ leechN: Math.max(2, Math.min(20, parseInt(e.target.value) || 4)) })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">تعداد خطاهای مکرر (۲ تا ۲۰)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">تعداد خطاهای مکرر (۲ تا ۲۰)</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   واکنش به واژه‌های دشوار:
                 </label>
                 <select
                   value={settings.leechAct || 'mark'}
                   onChange={e => onUpdateSettings({ leechAct: e.target.value as 'mark' | 'suspend' })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
                 >
                   <option value="mark">فقط نشانه‌گذاری با 🩸 (بدون تعلیق)</option>
                   <option value="suspend">نشانه‌گذاری و تعلیق از جلسات روزانه</option>
@@ -348,17 +317,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Flashcard Timer */}
-          <div className="bg-white dark:bg-[#1b2029] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-4 transition-all">
-            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-              <span className="w-9 h-9 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-lg shadow-inner">⏱️</span>
+          <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 transition-all">
+            <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shadow-inner">⏱️</div>
               <div>
-                <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">تایمر تمرین‌ها</h3>
+                <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">تایمر تمرین‌ها</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">راهنمای تنظیم زمان‌سنج اختصاصی هر بخش</p>
               </div>
             </div>
 
-            <p className="text-xs md:text-sm leading-7 text-slate-600 dark:text-slate-300 bg-slate-50/70 dark:bg-[#141923]/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <p className="text-xs md:text-sm leading-8 text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-[#141923]/70 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-800">
               تایمر هر تمرین جداگانه تنظیم می‌شود: داخل هر تمرین، آیکن ⏱ را در نوار بالا (قبل از آیکن شناسنامهٔ واژه) بزنید، تایمر را روشن یا خاموش کنید و مدت آن را تعیین کنید. تنظیم هر تمرین ذخیره می‌ماند. «تمرین ترکیبی واژه‌های سخت» از تایمر همان تمرین اصلی هر سؤال پیروی می‌کند.
             </p>
           </div>
@@ -366,16 +334,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       {show('audio') && (
-        <div className="bg-white dark:bg-[#1b2029] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-5 transition-all">
-          <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-            <span className="w-9 h-9 rounded-2xl bg-sky-50 dark:bg-sky-950/50 flex items-center justify-center text-lg shadow-inner">🔊</span>
+        <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+          <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center text-xl shadow-inner">🔊</div>
             <div>
-              <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">تلفظ و تنظیمات صوتی آلمانی</h3>
+              <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">تلفظ و تنظیمات صوتی آلمانی</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">مدیریت صداهای ابری، لهجه و سرعت گفتار</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-sky-200/80 dark:border-sky-900/60 bg-sky-50/40 dark:bg-sky-950/20 p-4 md:p-5 space-y-3 shadow-inner">
+          <div className="rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/40 dark:bg-sky-950/20 p-5 space-y-3.5 shadow-inner">
             <div className="flex items-center gap-2">
               <b className="text-sm text-sky-900 dark:text-sky-200">☁️ صدای ابری باکیفیت (پیشنهادی — مخصوصاً برای iOS)</b>
             </div>
@@ -389,7 +357,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 placeholder="https://wort-tts.peymansaberi20.workers.dev"
                 value={ttsWorkerDraft}
                 onChange={e => setTtsWorkerDraft(e.target.value)}
-                className="flex-1 min-w-[240px] bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs outline-none font-mono transition focus:ring-2 focus:ring-blue-500/20"
+                className="flex-1 min-w-[240px] bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs outline-none font-mono transition focus:ring-2 focus:ring-blue-500/20"
               />
               <button
                 type="button"
@@ -404,7 +372,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <button
                 type="button"
                 onClick={handleTestVoice}
-                className="border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition"
+                className="border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 transition"
               >
                 🔊 تست با این آدرس
               </button>
@@ -423,15 +391,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {prewarmError && <div className="text-[11px] text-red-600 dark:text-red-400">{prewarmError}</div>}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs md:text-sm">
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 لهجهٔ آلمانی (منطقه):
               </label>
               <select
                 value={settings.vreg || ''}
                 onChange={e => onUpdateSettings({ vreg: e.target.value })}
-                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="">خودکار / پیش‌فرض سیستم</option>
                 <option value="de-DE">آلمانی آلمان (de-DE)</option>
@@ -440,14 +408,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </select>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 صدای گوینده (Speech Voice):
               </label>
               <select
                 value={settings.voice || ''}
                 onChange={e => onUpdateSettings({ voice: e.target.value })}
-                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="">انتخاب خودکار صدای آلمانی</option>
                 {availableVoices.map(v => (
@@ -458,8 +426,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </select>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 سرعت گفتار: {settings.rate ?? 0.85}x
               </label>
               <input
@@ -479,8 +447,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
-          <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
-            <label className="flex items-center gap-3 cursor-pointer text-xs md:text-sm font-semibold select-none p-3 rounded-xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition">
+          <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <label className="flex items-center gap-3 cursor-pointer text-xs md:text-sm font-semibold select-none p-3.5 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition">
               <input
                 type="checkbox"
                 checked={!!settings.auto}
@@ -490,7 +458,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="text-slate-800 dark:text-slate-200">پخش خودکار تلفظ کلمه هنگام باز شدن کارت</span>
             </label>
 
-            <label className="flex items-center gap-3 cursor-pointer text-xs md:text-sm font-semibold select-none p-3 rounded-xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition">
+            <label className="flex items-center gap-3 cursor-pointer text-xs md:text-sm font-semibold select-none p-3.5 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition">
               <input
                 type="checkbox"
                 checked={!!settings.autoEx}
@@ -501,7 +469,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
@@ -527,18 +495,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       {show('goal') && (
-        <div className="bg-white dark:bg-[#1b2029] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-5 transition-all">
-          <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-4">
-            <span className="w-9 h-9 rounded-2xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-lg shadow-inner">🎯</span>
+        <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+          <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl shadow-inner">🎯</div>
             <div>
-              <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">هدف روزانه و یادآوری پشتیبان‌گیری</h3>
+              <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">هدف روزانه و یادآوری پشتیبان‌گیری</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">تنظیم تعداد کارت‌های هدف و دوره‌های پشتیبان‌گیری از داده‌ها</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm">
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 هدف مطالعه روزانه (تعداد کارت):
               </label>
               <input
@@ -547,19 +515,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 max={500}
                 value={settings.goal ?? 20}
                 onChange={e => onUpdateSettings({ goal: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
-                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
+                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
               />
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 block">۰ تا ۵۰۰ (۰ = غیرفعال)</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">۰ تا ۵۰۰ (۰ = غیرفعال)</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800 space-y-2">
-              <label className="block font-bold text-slate-800 dark:text-slate-200">
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 دوره یادآوری پشتیبان‌گیری:
               </label>
               <select
                 value={settings.bkDays ?? 7}
                 onChange={e => onUpdateSettings({ bkDays: parseInt(e.target.value) || 0 })}
-                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
+                className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="0">غیرفعال</option>
                 <option value="3">هر ۳ روز یک‌بار</option>
@@ -572,28 +540,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* Gemini AI Integration Modal / Card */}
       {isVoiceGuideOpen && (
         <div
-          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onMouseDown={event => { if (event.target === event.currentTarget) setIsVoiceGuideOpen(false); }}
         >
-          <section role="dialog" aria-modal="true" aria-labelledby="voice-guide-title" dir="rtl" className="w-full max-w-2xl max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#1b2029] text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-3xl p-5 sm:p-6 shadow-2xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="voice-guide-title" dir="rtl" className="w-full max-w-2xl max-h-[85dvh] overflow-y-auto bg-white dark:bg-[#1b2029] text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3 mb-4">
               <div>
                 <h2 id="voice-guide-title" className="text-base sm:text-lg font-extrabold">راهنمای نصب و طبیعی کردن صدا</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">نام منوها بسته به نسخهٔ سیستم‌عامل و دستگاه ممکن است کمی متفاوت باشد.</p>
               </div>
-              <button type="button" autoFocus onClick={() => setIsVoiceGuideOpen(false)} aria-label="بستن راهنما" className="shrink-0 rounded-xl px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold transition">✕ بستن</button>
+              <button type="button" autoFocus onClick={() => setIsVoiceGuideOpen(false)} aria-label="بستن راهنما" className="shrink-0 rounded-xl px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold transition">✕ بستن</button>
             </div>
-            <p className="text-xs sm:text-sm leading-7 mb-4 text-slate-700 dark:text-slate-300">برنامه از صداهای آلمانی نصب‌شده روی دستگاه استفاده می‌کند. کیفیت و دسترسی به صداها به سیستم‌عامل، مرورگر و صداهایی که مرورگر در اختیار برنامه می‌گذارد بستگی دارد؛ برنامه نمی‌تواند صدایی را که مرورگر ارائه نمی‌کند مستقیماً انتخاب کنید.</p>
+            <p className="text-xs sm:text-sm leading-7 mb-4 text-slate-700 dark:text-slate-300">برنامه از صداهای آلمانی نصب‌شده روی دستگاه استفاده می‌کند. کیفیت و دسترسی به صداها به سیستم‌عامل، مرورگر و صداهایی که مرورگر در اختیار برنامه می‌گذارد بستگی دارد؛ برنامه نمی‌تواند صدایی را که مرورگر ارائه نمی‌کند مستقیماً انتخاب کند.</p>
             <div className="space-y-3 text-xs sm:text-sm leading-7">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-3.5 bg-slate-50/50 dark:bg-[#141923]/40"><b>📱 آیفون و آیپد</b><p className="text-slate-600 dark:text-slate-400 mt-1">Settings → Accessibility → Spoken Content → Voices → German. اگر گزینهٔ Enhanced یا Premium موجود بود، آن را دانلود کنید.</p></div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-3.5 bg-slate-50/50 dark:bg-[#141923]/40"><b>🤖 اندروید</b><p className="text-slate-600 dark:text-slate-400 mt-1">Settings → System → Languages &amp; input → Text-to-speech output. موتور گفتار Google را انتخاب کنید و در تنظیمات آن، دادهٔ صدای آلمانی را نصب کنید.</p></div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-3.5 bg-slate-50/50 dark:bg-[#141923]/40"><b>🪟 ویندوز</b><p className="text-slate-600 dark:text-slate-400 mt-1">Microsoft Edge ممکن است در صورت پشتیبانی، صداهای آنلاین با کیفیت بالاتر ارائه کند. در Windows 11 مسیر Settings → Time &amp; language → Speech → Manage voices → Add voices → German را بررسی کنید.</p></div>
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-3.5 bg-slate-50/50 dark:bg-[#141923]/40"><b>🍎 macOS</b><p className="text-slate-600 dark:text-slate-400 mt-1">System Settings → Accessibility → Spoken Content → System voice → Manage Voices. در صورت وجود، صدای آلمانی با کیفیت بالاتر را دانلود کنید.</p></div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 bg-slate-50/60 dark:bg-[#141923]/50"><b>📱 آیفون و آیپد</b><p className="text-slate-600 dark:text-slate-400 mt-1">Settings → Accessibility → Spoken Content → Voices → German. اگر گزینهٔ Enhanced یا Premium موجود بود، آن را دانلود کنید.</p></div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 bg-slate-50/60 dark:bg-[#141923]/50"><b>🤖 اندروید</b><p className="text-slate-600 dark:text-slate-400 mt-1">Settings → System → Languages &amp; input → Text-to-speech output. موتور گفتار Google را انتخاب کنید و در تنظیمات آن، دادهٔ صدای آلمانی را نصب کنید.</p></div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 bg-slate-50/60 dark:bg-[#141923]/50"><b>🪟 ویندوز</b><p className="text-slate-600 dark:text-slate-400 mt-1">Microsoft Edge ممکن است در صورت پشتیبانی، صداهای آنلاین با کیفیت بالاتر ارائه کند. در Windows 11 مسیر Settings → Time &amp; language → Speech → Manage voices → Add voices → German را بررسی کنید.</p></div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 bg-slate-50/60 dark:bg-[#141923]/50"><b>🍎 macOS</b><p className="text-slate-600 dark:text-slate-400 mt-1">System Settings → Accessibility → Spoken Content → System voice → Manage Voices. در صورت وجود، صدای آلمانی با کیفیت بالاتر را دانلود کنید.</p></div>
             </div>
-            <div className="mt-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 p-4 text-xs sm:text-sm leading-7 text-blue-900 dark:text-blue-200">
+            <div className="mt-5 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 p-4 text-xs sm:text-sm leading-7 text-blue-900 dark:text-blue-200">
               برای صدای طبیعی‌تر، سرعت را حدود <b dir="ltr">0.8–0.9</b> تنظیم کنید، از دکمهٔ «تست صدا» استفاده کنید و پس از نصب صدای جدید، صفحهٔ برنامه را تازه‌سازی کنید. نام یا کیفیت مشخصی از صدا در همهٔ دستگاه‌ها تضمین‌شده نیست.
             </div>
           </section>
@@ -603,11 +570,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {show('ai') && <GeminiKeyCard />}
 
       {show('data') && (
-        <div className="bg-white dark:bg-[#1b2029] border border-red-200/80 dark:border-red-900/50 rounded-3xl p-5 md:p-6 shadow-sm space-y-5 transition-all">
-          <div className="flex items-center gap-3 border-b border-red-100 dark:border-red-950/80 pb-4">
-            <span className="w-9 h-9 rounded-2xl bg-red-50 dark:bg-red-950/50 flex items-center justify-center text-lg shadow-inner">⚠️</span>
+        <div className="bg-white dark:bg-[#1b2029] border border-red-200/90 dark:border-red-900/50 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+          <div className="flex items-center gap-3.5 border-b border-red-100 dark:border-red-950 pb-4">
+            <div className="w-10 h-10 rounded-2xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center text-xl shadow-inner">⚠️</div>
             <div>
-              <h3 className="font-bold text-base md:text-lg text-red-700 dark:text-red-400">مدیریت داده‌ها و عملیات حساس</h3>
+              <h3 className="font-extrabold text-base md:text-lg text-red-700 dark:text-red-400">مدیریت داده‌ها و عملیات حساس</h3>
               <p className="text-xs text-red-600/80 dark:text-red-400/80 mt-0.5">بخش مدیریت سوابق و حذف اطلاعات (نیازمند دقت)</p>
             </div>
           </div>
@@ -615,9 +582,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             لطفاً پیش از انجام این عملیات، در صورت نیاز از منوی ⋮ ← «ذخیره و پشتیبان‌گیری» یک فایل پشتیبان دریافت کنید.
           </p>
 
-          <div className="space-y-3 pt-1">
-            {/* Action 1: Clear Review History */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50/70 dark:bg-[#141923]/60 border border-slate-100 dark:border-slate-800">
+          <div className="space-y-3.5 pt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800">
               <div>
                 <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100 block">
                   پاک کردن سابقهٔ مرور (Reset Review History)
@@ -634,8 +600,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
 
-            {/* Action 2: Delete All Vocabulary */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-red-50/40 dark:bg-red-950/20 border border-red-200/80 dark:border-red-900/40">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-red-50/50 dark:bg-red-950/20 border border-red-200/90 dark:border-red-900/40">
               <div>
                 <b className="text-xs md:text-sm text-red-800 dark:text-red-300 block">
                   حذف کامل واژگان (Delete All Vocabulary)
