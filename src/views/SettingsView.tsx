@@ -24,10 +24,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onClearAllWords,
   onShowToast
 }) => {
+  // Server-side Gemini AI status check
   const [testStatus, setTestStatus] = useState('');
   const [testing, setTesting] = useState(false);
+
+  // Available German voices
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // Destructive delete confirmation step
   const [deleteStep, setDeleteStep] = useState<number>(0);
+  // Cloud TTS worker settings
   const [ttsWorkerDraft, setTtsWorkerDraft] = useState<string>(() => getTtsWorkerBase() || '');
   const [prewarmBusy, setPrewarmBusy] = useState(false);
   const [prewarmDone, setPrewarmDone] = useState(0);
@@ -53,6 +59,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
   const [isVoiceGuideOpen, setIsVoiceGuideOpen] = useState(false);
 
+  // Load voices asynchronously
   useEffect(() => {
     const updateVoices = () => {
       const v = getGermanVoices();
@@ -77,6 +84,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }, [isVoiceGuideOpen]);
 
   const categories = useMemo(() => getCategories(words), [words]);
+
+  const handleTestAi = async () => {
+    setTesting(true);
+    setTestStatus('در حال بررسی هوش مصنوعی انتخاب‌شده...');
+    try {
+      const p = getActiveProvider();
+      const key = getApiKey(p);
+      if (!key) {
+        setTestStatus(`⚠️ برای «${PROVIDERS[p].label}» هنوز کلیدی وارد نشده است.`);
+        onShowToast('ابتدا کلید API را وارد کنید.', true);
+      } else {
+        const r = await testConnection(p, key);
+        setTestStatus(`${r.ok ? '✅' : '❌'} ${r.message} (مدل: ${getModel(p)})`);
+        onShowToast(r.message, !r.ok);
+      }
+    } catch (err: any) {
+      setTestStatus(`❌ ${describeAiError(err)}`);
+      onShowToast('خطا در آزمون اتصال', true);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const handleTestVoice = () => {
     stopSpeaking();
@@ -119,7 +148,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const show = (k: string) => !section || section === k;
 
   return (
-    <div className="space-y-6 text-right max-w-3xl mx-auto pb-16" dir="rtl">
+    <div className="space-y-6 text-right max-w-3xl mx-auto pb-12" dir="rtl">
       {show('appearance') && (
         <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
           <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -185,9 +214,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   max={500}
                   value={settings.nw ?? 10}
                   onChange={e => onUpdateSettings({ nw: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">۰ تا ۵۰۰ (۰ = بدون لغت جدید)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">۰ تا ۵۰۰ (۰ = بدون لغت جدید)</span>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
@@ -200,9 +229,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   max={500}
                   value={settings.rv ?? 20}
                   onChange={e => onUpdateSettings({ rv: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
-                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">۰ تا ۵۰۰ (۰ = بدون محدودیت مرور)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">۰ تا ۵۰۰ (۰ = بدون محدودیت مرور)</span>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
@@ -223,6 +252,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
+            {/* Category Filter for Study Session */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
               <div>
                 <label className="block text-xs md:text-sm font-bold text-slate-800 dark:text-slate-200">
@@ -261,6 +291,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
+          {/* Review Algorithm & Difficult Words */}
           <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
             <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner">🧠</div>
@@ -298,7 +329,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onChange={e => onUpdateSettings({ leechN: Math.max(2, Math.min(20, parseInt(e.target.value) || 4)) })}
                   className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">تعداد خطاهای مکرر (۲ تا ۲۰)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">تعداد خطاهای مکرر (۲ تا ۲۰)</span>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
@@ -317,6 +348,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
 
+          {/* Flashcard Timer */}
           <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4 transition-all">
             <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shadow-inner">⏱️</div>
@@ -517,7 +549,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 onChange={e => onUpdateSettings({ goal: Math.max(0, Math.min(500, parseInt(e.target.value) || 0)) })}
                 className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
               />
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center">۰ تا ۵۰۰ (۰ = غیرفعال)</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">۰ تا ۵۰۰ (۰ = غیرفعال)</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
