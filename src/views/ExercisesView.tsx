@@ -70,7 +70,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   review: { title: 'مرور سررسیدها', icon: '🔁', desc: 'فقط واژه‌هایی که تاریخ مرور آن‌ها فرا رسیده' },
   cloze: { title: 'جای‌خالی', icon: '✍️', desc: 'تکمیل جمله با واژه یا عبارت درست' },
   art: { title: 'آرتیکل', icon: '🎨', desc: 'تشخیص der / die / das برای اسامی' },
-  dict: { title: 'دیکته و شنیدار', icon: '🎧', desc: 'شنیدن تلفظ واژه و نوشتن املای آلمانی' },
+  dict: { title: 'دیکته واژه', icon: '🔊', desc: 'تمرین شنیدار و تشخیص واژگان از روی صدا' },
   plural: { title: 'جمع اسم‌ها', icon: '🔢', desc: 'نوشتن شکل جمع اسامی آلمانی' },
   conj: { title: 'صرف فعل', icon: '🔤', desc: 'صرف فعل برای ضمایر مختلف با هایلایت پایانه و تغییر ریشه' },
   tense: { title: 'زمان فعل', icon: '⏳', desc: 'تمرین زمان‌های Präteritum و Perfekt' },
@@ -86,7 +86,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   schreiben: { title: 'Schreiben prüfen', icon: '📸', desc: 'عکس دست‌نویس (چند صفحه)، فایل یا متن خودت را بفرست؛ تصحیح کامل با تفکر آلمانی، سبک و گرامر' },
   schreiben_exam: { title: 'Schreiben Prüfung', icon: '📝', desc: 'انتخاب سطح و سناریوی استاندارد آزمون (ایمیل رسمی، وبلاگ، درخواست کار) و نمره‌دهی' },
   puzzle: { title: 'چیدن جمله (Satzbau)', icon: '🧩', desc: 'کلمه‌های درهم‌ریختهٔ جمله‌های مثال خودت را به ترتیب درست آلمانی بچین' },
-  dikt: { title: 'دیکته (Diktat)', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
+  dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' }
@@ -98,7 +98,7 @@ const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesen
 const HOEREN_MODES: ExerciseMode[] = ['hoeren', 'dict', 'dikt'];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren';
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -1675,44 +1675,46 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     return (
       <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
-  <div className="grid grid-cols-5 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-[11px] sm:text-xs font-bold">
-  <button
-    onClick={() => setMainTab('flash')}
-    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-  >
-    <span className="text-base sm:text-lg">🃏</span>
-    <span className="truncate max-w-full px-0.5">Lernkarten</span>
-  </button>
-  <button
-    onClick={() => setMainTab('wortschatz')}
-    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-  >
-    <span className="text-base sm:text-lg">📚</span>
-    <span className="truncate max-w-full px-0.5">Wortschatz</span>
-  </button>
-  <button
-    onClick={() => setMainTab('grammatik')}
-    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-  >
-    <span className="text-base sm:text-lg">🧩</span>
-    <span className="truncate max-w-full px-0.5">Grammatik</span>
-  </button>
-  <button
-    onClick={() => setMainTab('schreiben')}
-    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-  >
-    <span className="text-base sm:text-lg">✍️</span>
-    <span className="truncate max-w-full px-0.5">Schreiben</span>
-  </button>
-  <button
-    onClick={() => setMainTab('hoeren')}
-    className={`py-2 px-0.5 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-  >
-    <span className="text-base sm:text-lg">🎧</span>
-    <span className="truncate max-w-full px-0.5">Hörverstehen</span>
-  </button>
-</div>
-
+        {/* Sticky top main tabs */}
+        <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2">
+          <div className="grid grid-cols-5 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
+            <button
+              onClick={() => setMainTab('flash')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">🃏</span>
+              <span className="truncate max-w-full">Lernkarten</span>
+            </button>
+            <button
+              onClick={() => setMainTab('wortschatz')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">📚</span>
+              <span className="truncate max-w-full">Wortschatz</span>
+            </button>
+            <button
+              onClick={() => setMainTab('grammatik')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">🧩</span>
+              <span className="truncate max-w-full">Grammatik</span>
+            </button>
+            <button
+              onClick={() => setMainTab('schreiben')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">✍️</span>
+              <span className="truncate max-w-full">Schreiben</span>
+            </button>
+            <button
+              onClick={() => setMainTab('hoeren')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">🎧</span>
+              <span className="truncate max-w-full">Hören</span>
+            </button>
+          </div>
+        </div>
 
         {mainTab === 'flash' && (
           <div className="space-y-3">
@@ -2070,18 +2072,18 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   return (
     <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-slate-100 truncate">
+        <div className="flex items-center gap-2">
+          <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
           {isFlashType && (currentItem as Word)?.stage !== undefined && (
-            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono flex-shrink-0">
+            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono">
               جعبه {(currentItem as Word).stage || 1}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0" dir="ltr">
+        <div className="flex items-center gap-2" dir="ltr">
           <IconBtn onClick={() => onSelectMode(null)} title="خروج از تمرین"><X size={18} className="text-red-500" /></IconBtn>
           {!isSelfContainedMode(qMode) && (
             <IconBtn onClick={handleOpenWordProfile} title="شناسنامه واژه"><BookOpen size={18} className="text-violet-500" /></IconBtn>
