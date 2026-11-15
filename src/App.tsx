@@ -764,6 +764,36 @@ export default function App() {
                   onSelectWord={setSelectedWord}
                   onOpenWordManager={() => setIsWordManagerOpen(true)}
                   openCatMgrSignal={catMgrSignal}
+                  renderGroupImport={close => (
+                    <GroupImportView
+                      words={state.words}
+                      onAddEnrichedWords={ws => setState(prev => ({ ...prev, words: [...prev.words, ...ws] }))}
+                      onClose={close}
+                      onShowToast={showToast}
+                    />
+                  )}
+                  renderManager={close => (
+                    <WordManagerModal
+                      words={state.words}
+                      onOpenCategoryManager={() => { close(); setCatMgrSignal(n => n + 1); }}
+                      onClose={close}
+                      onMoveWords={handleBatchMoveWords}
+                      onBatchDelete={handleBatchDeleteWords}
+                      onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}
+                      onOpenQualityControl={() => setIsQualityModalOpen(true)}
+                      qualityIssueCount={qualityIssueCount}
+                    />
+                  )}
+                  renderQuality={close => (
+                    <QualityControlModal
+                      words={state.words}
+                      ignoredIds={extData.ok || {}}
+                      onClose={close}
+                      onEditWord={handleEditWord}
+                      onIgnoreWord={handleIgnoreQualityWord}
+                      onDeleteWord={handleDeleteWord}
+                    />
+                  )}
                   onOpenGroupImport={() => setShowGroupImport(true)}
                   onOpenQualityModal={() => setIsQualityModalOpen(true)}
                   onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}                  
