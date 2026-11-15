@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
-import { Clock } from 'lucide-react';
+import { Clock, BookOpen, Archive, PlusCircle, CheckCircle, Award, Printer, ArrowRight } from 'lucide-react';
 
 interface LesenTrainerProps {
   onClose: () => void;
@@ -29,66 +29,148 @@ interface ReadingPart {
 }
 
 interface ReadingExam {
+  id?: string;
+  org: string;
+  level: string;
   title: string;
   durationMinutes: number;
   parts: ReadingPart[];
+  createdAt?: string;
+}
+
+interface ExamResultRecord {
+  id: string;
+  examId: string;
+  examTitle: string;
+  org: string;
+  level: string;
+  date: string;
+  score: number;
+  total: number;
+  percentage: number;
+  userAnswers: Record<number, string>;
 }
 
 const EXAM_SPECS: Record<string, Record<string, { duration: number; structure: string }>> = {
   ÖSD: {
-    A1: { duration: 30, structure: '2 Teile: Kurze Mitteilungen/Anzeigen (Richtig/Falsch) und Alltags-Informationen (Multiple Choice).' },
-    A2: { duration: 40, structure: '2 Teile: Zeitungsanzeigen zuordnen und ein Informationstext mit Multiple-Choice-Aufgaben.' },
-    B1: { duration: 65, structure: '4 Teile: Teil 1 (Überschriften zuordnen), Teil 2 (Pressetext - Detailverstehen), Teil 3 (Situationen/Anzeigen zuordnen), Teil 4 (Lückentext/Sprachbausteine).' },
-    B2: { duration: 90, structure: '4 Teile: Teil 1 (Längerer Sachtext/Kommentar - komplexe Multiple-Choice-Fragen), Teil 2 (Überschriften/Abschnitte zuordnen), Teil 3 (Lückentext mit Satzteilen/Wörtern), Teil 4 (Lexik/Grammatik im Kontext).' },
-    C1: { duration: 90, structure: '4 Teile: Wissenschaftliche/feuilletonistische Texte, präzises Detail- und Schlussfolgerungsverstehen, komplexe Textrekonstruktion.' }
+    A1: { duration: 30, structure: '2 Teile: Kurze Mitteilungen/Anzeigen und Alltagstexte.' },
+    A2: { duration: 40, structure: '2 Teile: Zeitungsanzeigen zuordnen und Informationstext.' },
+    B1: { duration: 65, structure: '4 Teile: Überschriften, Pressetext, Anzeigen und Sprachbausteine.' },
+    B2: { duration: 90, structure: '4 Teile: Sachtext, Komplexes Leseverstehen und Grammatik im Kontext.' },
+    C1: { duration: 90, structure: '4 Teile: Wissenschaftliche und feuilletonistische Texte.' }
   },
   Goethe: {
-    A1: { duration: 25, structure: '3 Teile: Kurze E-Mails/Notizen, Informationsschilder und Hinweistafeln.' },
-    A2: { duration: 30, structure: '4 Teile: Zeitungsartikel, Veranstaltungskalender, E-Mails und Online-Anzeigen.' },
-    B1: { duration: 65, structure: '5 Teile: Teil 1 (Blogbeitrag - Richtig/Falsch), Teil 2 (2 Pressetexte - Multiple Choice), Teil 3 (Anzeigen zuordnen), Teil 4 (Leserbriefe/Meinungen - Ja/Nein), Teil 5 (Hausordnung/Regeln - Multiple Choice).' },
-    B2: { duration: 65, structure: '5 Teile: Teil 1 (Forumsbeiträge zuordnen), Teil 2 (Magazinartikel - Absätze zuordnen), Teil 3 (Kommentar/Essay - Multiple Choice), Teil 4 (Leserbriefe/Standpunkte zuordnen), Teil 5 (Vertrags-/Ordnungstext).' },
-    C1: { duration: 70, structure: '4 Teile: Anspruchsvolle Sachtexte, Rekonstruktion von Textlücken, Meinungszuordnung und detaillierte Textanalyse.' }
+    A1: { duration: 25, structure: '3 Teile: E-Mails, Schilder und Hinweistafeln.' },
+    A2: { duration: 30, structure: '4 Teile: Artikel, Veranstaltungskalender und Online-Anzeigen.' },
+    B1: { duration: 65, structure: '5 Teile: Blogbeitrag, Pressetexte, Anzeigen, Leserbriefe und Regeln.' },
+    B2: { duration: 65, structure: '5 Teile: Forumsbeiträge, Magazinartikel und Essay.' },
+    C1: { duration: 70, structure: '4 Teile: Anspruchsvolle Sachtexte und Textrekonstruktion.' }
   },
   telc: {
-    A1: { duration: 25, structure: '3 Teile: Kurze Notizen, Anzeigen und Schilder.' },
-    A2: { duration: 30, structure: '3 Teile: Alltagsmitteilungen, Anzeigen und kurze Artikel.' },
-    B1: { duration: 90, structure: '3 Teile Leseverstehen + 2 Teile Sprachbausteine: Globalverstehen (Überschriften), Detailverstehen (Pressetext), Selektives Verstehen (Anzeigen) und Grammatik/Wortschatz-Lückentext.' },
-    B2: { duration: 90, structure: '3 Teile Leseverstehen + 2 Teile Sprachbausteine: Globalverstehen (komplexe Überschriften), Detailverstehen (langer Sachtext), Selektives Verstehen (Situationen/Anzeigen) und Sprachbausteine (Wortschatz & Strukturen).' },
-    C1: { duration: 90, structure: '4 Teile: Textrekonstruktion, selektives Verstehen, Detailverstehen wissenschaftlicher Texte und Sprachbausteine.' }
+    A1: { duration: 25, structure: '3 Teile: Notizen, Anzeigen und Schilder.' },
+    A2: { duration: 30, structure: '3 Teile: Alltagsmitteilungen und kurze Artikel.' },
+    B1: { duration: 90, structure: '3 Teile Leseverstehen + 2 Teile Sprachbausteine.' },
+    B2: { duration: 90, structure: '3 Teile Leseverstehen + 2 Teile Sprachbausteine.' },
+    C1: { duration: 90, structure: '4 Teile: Textrekonstruktion und wissenschaftliche Texte.' }
   },
   EPD: {
-    B2: { duration: 90, structure: 'Universitäres Prüfungsformat (Wien): Wissenschaftsorientierter Sachtext mit komplexen Verständnisfragen, Textkohärenz und akademischem Wortschatz.' },
-    C1: { duration: 90, structure: 'Universitäres Prüfungsformat (Wien): Akademischer Fachtext, komplexe Argumentationsstrukturen, Schlussfolgerungen und Sprachstrukturen.' }
+    B2: { duration: 90, structure: 'Universitäres Prüfungsformat (Wien): Wissenschaftsorientierter Sachtext.' },
+    C1: { duration: 90, structure: 'Universitäres Prüfungsformat (Wien): Akademischer Fachtext.' }
   }
 };
 
+const ARCHIVE_KEY = 'wb_lesen_exam_archive_v1';
+const RESULTS_KEY = 'wb_lesen_results_v1';
+
 export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
-  const [step, setStep] = useState<'setup' | 'reading' | 'result'>('setup');
+  // نماهای اصلی: منوی اولیه، سازنده، انتخاب از آرشیو، اجرای آزمون، کارنامه
+  const [view, setView] = useState<'menu' | 'creator' | 'archive_levels' | 'archive_exams' | 'exam_active' | 'result'>('menu');
+  
+  // فیلترهای سازنده
   const [examOrg, setExamOrg] = useState<'ÖSD' | 'Goethe' | 'telc' | 'EPD'>('ÖSD');
   const [examLevel, setExamLevel] = useState<'A1' | 'A2' | 'B1' | 'B2' | 'C1'>('B2');
 
+  // داده‌های آرشیو و ذخیره‌سازی
+  const [archiveExams, setArchiveExams] = useState<ReadingExam[]>([]);
+  const [examResults, setExamResults] = useState<ExamResultRecord[]>([]);
+  const [selectedArchiveLevel, setSelectedArchiveLevel] = useState<string>('');
+  const [selectedArchiveOrg, setSelectedArchiveOrg] = useState<string>('');
+
+  // حالت‌های اجرای آزمون فعلی
   const [isLoading, setIsLoading] = useState(false);
-  const [examData, setExamData] = useState<ReadingExam | null>(null);
+  const [currentExam, setCurrentExam] = useState<ReadingExam | null>(null);
   const [activePartIdx, setActivePartIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
 
+  // بارگذاری آرشیو و نتایج از حافظه محلی
+  useEffect(() => {
+    try {
+      const savedExams = localStorage.getItem(ARCHIVE_KEY);
+      if (savedExams) setArchiveExams(JSON.parse(savedExams));
+
+      const savedResults = localStorage.getItem(RESULTS_KEY);
+      if (savedResults) setExamResults(JSON.parse(savedResults));
+    } catch {
+      // خطا در خواندن حافظه
+    }
+  }, []);
+
+  // ذخیره آرشیو در حافظه
+  const saveExamToArchive = (exam: ReadingExam) => {
+    try {
+      const updated = [exam, ...archiveExams.filter(e => e.id !== exam.id)];
+      setArchiveExams(updated);
+      localStorage.setItem(ARCHIVE_KEY, JSON.stringify(updated));
+    } catch {
+      // خطا در ذخیره
+    }
+  };
+
+  // ذخیره نتیجه آزمون در حافظه (اختصاصی کاربر)
+  const saveExamResult = (exam: ReadingExam, answers: Record<number, string>) => {
+    const allQ: ReadingQuestion[] = exam.parts.flatMap(p => p.questions || []);
+    const correctCount = allQ.filter(q => answers[q.id] === q.correct).length;
+    const percentage = Math.round((correctCount / Math.max(1, allQ.length)) * 100);
+
+    const newRecord: ExamResultRecord = {
+      id: 'res_' + Date.now(),
+      examId: exam.id || 'ex_default',
+      examTitle: exam.title,
+      org: exam.org,
+      level: exam.level,
+      date: new Date().toLocaleDateString('fa-IR') + ' ' + new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+      score: correctCount,
+      total: allQ.length,
+      percentage,
+      userAnswers: answers
+    };
+
+    try {
+      const updated = [newRecord, ...examResults];
+      setExamResults(updated);
+      localStorage.setItem(RESULTS_KEY, JSON.stringify(updated));
+    } catch {
+      // خطا در ذخیره نتیجه
+    }
+  };
+
   // مدیریت تایمر آزمون
   useEffect(() => {
-    if (step !== 'reading' || isLoading || secondsLeft <= 0) return;
+    if (view !== 'exam_active' || isLoading || secondsLeft <= 0) return;
     const timer = setInterval(() => {
       setSecondsLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
           onShowToast('زمان آزمون به پایان رسید!', true);
-          setStep('result');
+          finishExam();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [step, isLoading, secondsLeft, onShowToast]);
+  }, [view, isLoading, secondsLeft]);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -96,7 +178,6 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  // استخراج ایمن آبجکت آزمون از پاسخ هوش مصنوعی
   const extractExamObject = (raw: string): ReadingExam | null => {
     try {
       const parsed = parseAI(raw);
@@ -105,9 +186,8 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
         return obj as ReadingExam;
       }
     } catch {
-      // ادامه به روش استخراج مستقیم
+      // ناموفق
     }
-
     try {
       const firstBrace = raw.indexOf('{');
       const lastBrace = raw.lastIndexOf('}');
@@ -123,53 +203,49 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
     return null;
   };
 
-  const startExam = async () => {
-    setStep('reading');
+  // تولید آزمون جدید با هوش مصنوعی
+  const generateNewExam = async () => {
+    setView('exam_active');
     setIsLoading(true);
     setUserAnswers({});
     setActivePartIdx(0);
-    setExamData(null);
+    setCurrentExam(null);
 
     const spec = EXAM_SPECS[examOrg]?.[examLevel] || {
       duration: examLevel === 'A1' || examLevel === 'A2' ? 30 : 65,
-      structure: 'Offizielles mehrteiliges Prüfungsformat mit authentischen Texten.'
+      structure: 'Offizielles mehrteiliges Prüfungsformat.'
     };
 
     const wordCountTarget =
       examLevel === 'A1' ? '80-120 words per part' :
       examLevel === 'A2' ? '130-180 words per part' :
       examLevel === 'B1' ? '220-300 words per part' :
-      '320-450 words per part (sophisticated vocabulary, complex subordinate clauses, passive voice, nominalizations, realistic journalistic/academic style)';
+      '320-450 words per part (authentic journalistic/academic style)';
 
-    const prompt = `You are an official German exam developer for ${examOrg}. Create an authentic, rigorous, exam-level Reading Comprehension test (Leseverstehen) strictly calibrated to CEFR Level ${examLevel}.
-
-EXAM FORMAT SPECIFICATION:
+    const prompt = `You are an official German exam developer for ${examOrg}. Create an authentic, rigorous Reading Comprehension test (Leseverstehen) calibrated to CEFR Level ${examLevel}.
 - Organization: ${examOrg}
 - Level: ${examLevel}
-- Official Structure Reference: ${spec.structure}
-- Text Length & Complexity Requirement: ${wordCountTarget}.
-- IMPORTANT: Do NOT write simple beginner sentences if level is B1, B2, or C1! Use authentic, challenging, nuanced German appropriate for ${examLevel} with plausible distractors where the learner must read carefully to distinguish subtle differences in meaning.
+- Structure: ${spec.structure}
+- Length: ${wordCountTarget}.
 
-Create 3 distinct exam parts (Teile) reflecting the real ${examOrg} ${examLevel} module (e.g., Teil 1: Sachtext / Detailverstehen, Teil 2: Meinungen / Leserbriefe / Zuordnung, Teil 3: Sprachbausteine / Lückentext im Kontext).
-Each part must have 4 questions (total 12 questions, numbered sequentially 1 to 12).
-
-Return ONLY a valid JSON object (no markdown fences, no commentary) with this exact schema:
+Create 3 distinct exam parts (Teile) with 4 questions each (total 12 questions numbered sequentially 1 to 12).
+Return ONLY a valid JSON object (no markdown, no extra text):
 {
-  "title": "${examOrg} Zertifikat ${examLevel} – Leseverstehen",
+  "title": "${examOrg} ${examLevel} – Leseverstehen",
   "durationMinutes": ${spec.duration},
   "parts": [
     {
       "partNumber": 1,
       "partTitle": "Teil 1: ...",
-      "instruction": "Clear German exam instruction for this part",
-      "text": "Full authentic German reading text for Teil 1...",
+      "instruction": "Instruction in German",
+      "text": "Reading text in German...",
       "questions": [
         {
           "id": 1,
-          "question": "Detailed question or statement in German",
+          "question": "Question in German",
           "options": ["Option A", "Option B", "Option C"],
           "correct": "Exact matching string from options",
-          "explanation": "Kurze Begründung mit Textbeleg auf Deutsch + توضیح کوتاه فارسی"
+          "explanation": "Begründung auf Deutsch + توضیح فارسی"
         }
       ]
     }
@@ -180,65 +256,98 @@ Return ONLY a valid JSON object (no markdown fences, no commentary) with this ex
       const res = await generateWithGemini(prompt, { json: true, timeoutMs: 60000, retries: 1 });
       const extracted = extractExamObject(res);
 
-      if (!extracted) {
-        throw new Error('ساختار آزمون دریافتی ناقص بود.');
-      }
+      if (!extracted) throw new Error('ساختار آزمون دریافتی ناقص بود.');
 
-      // اطمینان از یکتا بودن شماره سوالات
+      extracted.id = 'exam_' + Date.now();
+      extracted.org = examOrg;
+      extracted.level = examLevel;
+      extracted.createdAt = new Date().toLocaleDateString('fa-IR');
+
       let qCounter = 1;
       extracted.parts.forEach(p => {
-        if (Array.isArray(p.questions)) {
-          p.questions.forEach(q => {
-            q.id = qCounter++;
-          });
-        }
+        p.questions?.forEach(q => { q.id = qCounter++; });
       });
 
-      setExamData(extracted);
+      setCurrentExam(extracted);
       setSecondsLeft((extracted.durationMinutes || spec.duration) * 60);
+      saveExamToArchive(extracted);
     } catch (e: any) {
-      onShowToast(e?.message || 'خطا در تولید آزمون با هوش مصنوعی. لطفاً دوباره تلاش کنید.', true);
-      setStep('setup');
+      onShowToast(e?.message || 'خطا در تولید آزمون. لطفاً دوباره تلاش کنید.', true);
+      setView('menu');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // شروع تمرین از آرشیو
+  const startArchivedExam = (exam: ReadingExam) => {
+    setCurrentExam(exam);
+    setUserAnswers({});
+    setActivePartIdx(0);
+    setSecondsLeft((exam.durationMinutes || 60) * 60);
+    setView('exam_active');
   };
 
   const handleSelectOption = (qId: number, option: string) => {
     setUserAnswers(prev => ({ ...prev, [qId]: option }));
   };
 
-  const allQuestions: ReadingQuestion[] = examData?.parts?.flatMap(p => p.questions || []) || [];
-  const answeredCount = allQuestions.filter(q => !!userAnswers[q.id]).length;
-  const totalScore = allQuestions.filter(q => userAnswers[q.id] === q.correct).length;
+  const finishExam = () => {
+    if (currentExam) {
+      saveExamResult(currentExam, userAnswers);
+    }
+    setView('result');
+  };
 
   const availableLevels: ('A1' | 'A2' | 'B1' | 'B2' | 'C1')[] =
     examOrg === 'EPD' ? ['B2', 'C1'] : ['A1', 'A2', 'B1', 'B2', 'C1'];
 
-  const handleOrgChange = (newOrg: 'ÖSD' | 'Goethe' | 'telc' | 'EPD') => {
-    setExamOrg(newOrg);
-    if (newOrg === 'EPD' && examLevel !== 'B2' && examLevel !== 'C1') {
-      setExamLevel('B2');
-    }
-  };
-
-  const currentSpec = EXAM_SPECS[examOrg]?.[examLevel];
-
   return (
     <div className="space-y-4 text-right max-w-3xl mx-auto pb-10" dir="rtl">
-      {/* مرحله ۱: انتخاب آزمون و سطح */}
-      {step === 'setup' && (
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-5 text-right">
-          <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <span className="text-3xl">📖</span>
-            <div>
-              <h2 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">
-                آزمون‌های درک مطلب (Lesen – Prüfungstraining)
-              </h2>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                شبیه‌سازی استاندارد و چندبخشی منطبق بر ساختار رسمی آزمون‌ها
-              </p>
+      
+      {/* 1. نمای اولیه (منوی اصلی مشابه تب Hören) */}
+      {view === 'menu' && (
+        <div className="space-y-3">
+          <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">✨</span>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">ساخت تمرین جدید (Lesen)</h3>
+                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">تولید آزمون‌های استاندارد درک مطلب با هوش مصنوعی</p>
+              </div>
             </div>
+            <button
+              onClick={() => setView('creator')}
+              className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs transition"
+            >
+              شروع ساخت ▶
+            </button>
+          </div>
+
+          <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">📂</span>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">تمرینات قبلی (آرشیو آزمون‌ها)</h3>
+                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">دسترسی به تمام آزمون‌های ساخته‌شده و سوابق مقایسه‌ای</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setView('archive_levels')}
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs transition"
+            >
+              مشاهده آرشیو ▶
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. سازنده تمرین جدید (انتخاب سازمان و سطح) */}
+      {view === 'creator' && (
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-5 text-right">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h2 className="font-extrabold text-base text-slate-900 dark:text-slate-100">تنظیمات آزمون Lesen</h2>
+            <button onClick={() => setView('menu')} className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت</button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -246,13 +355,17 @@ Return ONLY a valid JSON object (no markdown fences, no commentary) with this ex
               <label className="block text-xs font-bold mb-1.5">سازمان برگزاری آزمون:</label>
               <select
                 value={examOrg}
-                onChange={e => handleOrgChange(e.target.value as any)}
+                onChange={e => {
+                  const org = e.target.value as any;
+                  setExamOrg(org);
+                  if (org === 'EPD' && examLevel !== 'B2' && examLevel !== 'C1') setExamLevel('B2');
+                }}
                 className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold outline-none"
               >
                 <option value="ÖSD">ÖSD (اتریش و بین‌المللی)</option>
                 <option value="Goethe">Goethe-Zertifikat (گته)</option>
                 <option value="telc">telc Deutsch (تلک)</option>
-                <option value="EPD">EPD (آزمون دانشگاهی وین)</option>
+                <option value="EPD">EPD (دانشگاهی وین)</option>
               </select>
             </div>
 
@@ -263,123 +376,131 @@ Return ONLY a valid JSON object (no markdown fences, no commentary) with this ex
                 onChange={e => setExamLevel(e.target.value as any)}
                 className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold outline-none"
               >
-                {availableLevels.map(lvl => (
-                  <option key={lvl} value={lvl}>
-                    سطح {lvl}
-                  </option>
-                ))}
+                {availableLevels.map(lvl => <option key={lvl} value={lvl}>سطح {lvl}</option>)}
               </select>
             </div>
           </div>
 
-          {/* نمایش مشخصات ساختار رسمی آزمون انتخاب‌شده */}
-          {currentSpec && (
-            <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/70 space-y-1.5 text-xs">
-              <div className="font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff] flex items-center justify-between">
-                <span>📋 ساختار رسمی {examOrg} ({examLevel})</span>
-                <span>⏱ زمان استاندارد: {currentSpec.duration} دقیقه</span>
-              </div>
-              <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans" dir="ltr">
-                {currentSpec.structure}
-              </p>
-            </div>
-          )}
-
           <button
-            onClick={() => void startExam()}
-            className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3.5 rounded-xl font-bold text-sm shadow-md transition active:scale-[0.99]"
+            onClick={() => void generateNewExam()}
+            className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3.5 rounded-xl font-bold text-sm shadow-md transition"
           >
-            ساخت و شروع آزمون استاندارد {examOrg} ({examLevel}) ▶
+            تولید و شروع آزمون استاندارد 🚀
           </button>
         </div>
       )}
 
-      {/* مرحله ۲: اجرای آزمون چندبخشی */}
-      {step === 'reading' && (
+      {/* 3. مرحله اول آرشیو: انتخاب سطح (خط‌های زیر هم) */}
+      {view === 'archive_levels' && (
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-4 text-right">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h2 className="font-extrabold text-base">انتخاب سطح از آرشیو تمرینات</h2>
+            <button onClick={() => setView('menu')} className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت</button>
+          </div>
+
+          <div className="space-y-2">
+            {['A1', 'A2', 'B1', 'B2', 'C1'].map(lvl => {
+              const count = archiveExams.filter(e => e.level === lvl).length;
+              return (
+                <button
+                  key={lvl}
+                  onClick={() => { setSelectedArchiveLevel(lvl); setView('archive_exams'); }}
+                  className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 flex items-center justify-between hover:border-[#1f5fbf] transition"
+                >
+                  <span className="font-extrabold text-base text-slate-900 dark:text-slate-100">سطح {lvl}</span>
+                  <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-[#1f5fbf] dark:text-[#7fb0ff] text-xs font-bold">
+                    {count} آزمون آماده
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 4. مرحله دوم آرشیو: لیست آزمون‌های آن سطح */}
+      {view === 'archive_exams' && (
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-4 text-right">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h2 className="font-extrabold text-base">آزمون‌های سطح {selectedArchiveLevel}</h2>
+            <button onClick={() => setView('archive_levels')} className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت</button>
+          </div>
+
+          <div className="space-y-3">
+            {archiveExams.filter(e => e.level === selectedArchiveLevel).length === 0 ? (
+              <div className="py-12 text-center text-sm text-[#5d6676]">هیچ آزمونی در این سطح ذخیره نشده است. ابتدا یک آزمون جدید بسازید.</div>
+            ) : (
+              archiveExams.filter(e => e.level === selectedArchiveLevel).map(exam => (
+                <div
+                  key={exam.id}
+                  onClick={() => startArchivedExam(exam)}
+                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141923] flex items-center justify-between cursor-pointer hover:border-[#1f5fbf] transition"
+                >
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{exam.title}</h4>
+                    <span className="text-xs text-[#5d6676]">سازمان: {exam.org} • تاریخ ساخت: {exam.createdAt || 'اخ اخ'}</span>
+                  </div>
+                  <span className="bg-[#1f5fbf] text-white px-4 py-2 rounded-xl text-xs font-bold">شروع آزمون ▶</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 5. اجرای آزمون */}
+      {view === 'exam_active' && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5">
-          {/* هدر وضعیت آزمون و تایمر */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <span className="font-extrabold text-sm md:text-base text-[#1f5fbf] dark:text-[#7fb0ff] block">
-                {examData?.title || `آزمون ${examOrg} – سطح ${examLevel}`}
+                {currentExam?.title}
               </span>
-              {!isLoading && examData && (
-                <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                  پاسخ داده‌شده: {answeredCount} از {allQuestions.length} سؤال
-                </span>
-              )}
             </div>
-
             <div className="flex items-center gap-2">
               {!isLoading && secondsLeft > 0 && (
-                <span className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs font-mono font-bold flex items-center gap-1.5">
-                  <Clock size={14} />
-                  {formatTime(secondsLeft)}
+                <span className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 text-amber-800 text-xs font-mono font-bold flex items-center gap-1.5">
+                  <Clock size={14} /> {formatTime(secondsLeft)}
                 </span>
               )}
-              <button
-                onClick={() => setStep('setup')}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-              >
-                انصراف
-              </button>
+              <button onClick={() => setView('menu')} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">انصراف</button>
             </div>
           </div>
 
           {isLoading ? (
             <div className="py-20 text-center space-y-3">
               <span className="text-4xl animate-bounce block">📝</span>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                در حال طراحی متن‌های تحلیلی و سؤالات استاندارد سطح {examLevel} ({examOrg})...
-              </p>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                تولید چند بخش آزمونی متناسب با سطح انتخابی ممکن است ۱۰ تا ۲۰ ثانیه زمان ببرد.
-              </p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">در حال آماده‌سازی آزمون...</p>
             </div>
-          ) : examData && examData.parts[activePartIdx] ? (
+          ) : currentExam && currentExam.parts[activePartIdx] ? (
             <div className="space-y-6">
-              {/* ناوبری بین بخش‌های آزمون (Teil 1, Teil 2, Teil 3) */}
               <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl">
-                {examData.parts.map((part, idx) => {
-                  const partAnswered = part.questions.filter(q => !!userAnswers[q.id]).length;
-                  return (
-                    <button
-                      key={part.partNumber || idx}
-                      onClick={() => setActivePartIdx(idx)}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center gap-0.5 ${
-                        activePartIdx === idx
-                          ? 'bg-[#1f5fbf] text-white shadow-xs'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <span>Teil {part.partNumber || idx + 1}</span>
-                      <span className="text-[10px] opacity-80">
-                        ({partAnswered}/{part.questions.length})
-                      </span>
-                    </button>
-                  );
-                })}
+                {currentExam.parts.map((part, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActivePartIdx(idx)}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold transition flex flex-col items-center ${activePartIdx === idx ? 'bg-[#1f5fbf] text-white shadow-xs' : 'text-slate-700 dark:text-slate-300'}`}
+                  >
+                    <span>Teil {part.partNumber || idx + 1}</span>
+                  </button>
+                ))}
               </div>
 
-              {/* محتوای بخش فعال */}
               {(() => {
-                const currentPart = examData.parts[activePartIdx];
+                const currentPart = currentExam.parts[activePartIdx];
                 return (
                   <div className="space-y-5">
-                    {/* دستورالعمل بخش */}
-                    <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/70 text-xs md:text-sm font-semibold text-indigo-950 dark:text-indigo-200" dir="ltr">
+                    <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-xs md:text-sm font-semibold text-indigo-950 dark:text-indigo-200" dir="ltr">
                       <div className="font-extrabold mb-1">{currentPart.partTitle}</div>
                       <div>{currentPart.instruction}</div>
                     </div>
 
-                    {/* متن اصلی */}
-                    <div className="p-4 md:p-5 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="p-4 md:p-5 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800">
                       <p className="text-sm md:text-base font-sans leading-7 text-slate-900 dark:text-slate-100 whitespace-pre-line text-left" dir="ltr">
                         {currentPart.text}
                       </p>
                     </div>
 
-                    {/* سوالات این بخش */}
                     <div className="space-y-4">
                       {currentPart.questions.map(q => (
                         <div key={q.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 bg-white dark:bg-[#1b2029]">
@@ -387,23 +508,15 @@ Return ONLY a valid JSON object (no markdown fences, no commentary) with this ex
                             {q.id}. {q.question}
                           </p>
                           <div className="space-y-2" dir="ltr">
-                            {Array.isArray(q.options) && q.options.map((opt, optIdx) => {
+                            {q.options.map((opt, optIdx) => {
                               const isSelected = userAnswers[q.id] === opt;
-                              const letter = String.fromCharCode(65 + optIdx);
                               return (
                                 <button
                                   key={optIdx}
                                   onClick={() => handleSelectOption(q.id, opt)}
-                                  className={`w-full py-2.5 px-3.5 rounded-xl text-xs md:text-sm font-semibold border transition text-left flex items-start gap-2.5 ${
-                                    isSelected
-                                      ? 'bg-[#1f5fbf] text-white border-[#1f5fbf] shadow-xs'
-                                      : 'bg-slate-50 dark:bg-[#141923] border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-[#1f5fbf]'
-                                  }`}
+                                  className={`w-full py-2.5 px-3.5 rounded-xl text-xs md:text-sm font-semibold border transition text-left flex items-start gap-2.5 ${isSelected ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-slate-50 dark:bg-[#141923] border-slate-200 text-slate-800 dark:text-slate-200'}`}
                                 >
-                                  <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                                    {letter}
-                                  </span>
-                                  <span className="flex-1">{opt}</span>
+                                  <span>{opt}</span>
                                 </button>
                               );
                             })}
@@ -415,33 +528,15 @@ Return ONLY a valid JSON object (no markdown fences, no commentary) with this ex
                 );
               })()}
 
-              {/* دکمه‌های جابه‌جایی بین بخش‌ها و تحویل نهایی */}
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 {activePartIdx > 0 ? (
-                  <button
-                    onClick={() => setActivePartIdx(prev => prev - 1)}
-                    className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs md:text-sm font-bold"
-                  >
-                    ▶ بخش قبلی
-                  </button>
-                ) : (
-                  <div />
-                )}
+                  <button onClick={() => setActivePartIdx(prev => prev - 1)} className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بخش قبلی</button>
+                ) : <div />}
 
-                {activePartIdx < examData.parts.length - 1 ? (
-                  <button
-                    onClick={() => setActivePartIdx(prev => prev + 1)}
-                    className="bg-[#1f5fbf] text-white px-5 py-3 rounded-xl font-bold text-xs md:text-sm shadow-xs"
-                  >
-                    بخش بعدی (Teil {activePartIdx + 2}) ◀
-                  </button>
+                {activePartIdx < currentExam.parts.length - 1 ? (
+                  <button onClick={() => setActivePartIdx(prev => prev + 1)} className="bg-[#1f5fbf] text-white px-5 py-3 rounded-xl font-bold text-xs">بخش بعدی ◀</button>
                 ) : (
-                  <button
-                    onClick={() => setStep('result')}
-                    className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold text-xs md:text-sm shadow-md"
-                  >
-                    پایان آزمون و مشاهده کارنامه ✓
-                  </button>
+                  <button onClick={finishExam} className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold text-xs">پایان آزمون و مشاهده کارنامه ✓</button>
                 )}
               </div>
             </div>
@@ -449,79 +544,70 @@ Return ONLY a valid JSON object (no markdown fences, no commentary) with this ex
         </div>
       )}
 
-      {/* مرحله ۳: کارنامه تحلیلی و استناد متنی */}
-      {step === 'result' && examData && (
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-6 text-right">
+      {/* 6. کارنامه قابل چاپ (سازگار با iOS) و جدول مقایسه نتایج */}
+      {view === 'result' && currentExam && (
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-6 text-right print:bg-white print:text-black">
+          <div className="flex items-center justify-between print:hidden">
+            <button onClick={() => setView('menu')} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت به منو</button>
+            <button onClick={() => window.print()} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1.5">
+              <Printer size={16} /> چاپ کارنامه (PDF / iOS)
+            </button>
+          </div>
+
           <div className="text-center space-y-2 border-b border-slate-100 dark:border-slate-800 pb-5">
             <span className="text-4xl block">🎓</span>
-            <h3 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">
-              کارنامه آزمون {examOrg} – سطح {examLevel}
-            </h3>
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {totalScore} از {allQuestions.length} امتیاز ({Math.round((totalScore / Math.max(1, allQuestions.length)) * 100)}٪)
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">کارنامه رسمی آزمون Lesen</h3>
+            <p className="text-xs text-[#5d6676]">{currentExam.title}</p>
+          </div>
+
+          {/* جدول مقایسه تلاش‌های قبلی در ستون‌های مجزا */}
+          <div className="space-y-3 pt-2">
+            <h4 className="font-extrabold text-sm text-[#1f5fbf]">📊 مقایسه تلاش‌ها و سوابق این آزمون:</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-center border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 dark:bg-slate-800">
+                    <th className="p-2 border border-slate-200 dark:border-slate-700">تاریخ ثبت</th>
+                    {examResults.filter(r => r.examId === currentExam.id).map((res, i) => (
+                      <th key={res.id} className="p-2 border border-slate-200 dark:border-slate-700">تلاش {i + 1}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="p-2 border border-slate-200 dark:border-slate-700 font-bold">درصد موفقیت</td>
+                    {examResults.filter(r => r.examId === currentExam.id).map(res => (
+                      <td key={res.id} className="p-2 border border-slate-200 dark:border-slate-700 font-extrabold text-emerald-600">
+                        {res.percentage}% ({res.score}/{res.total})
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-              حد نصاب قبولی در آزمون‌های رسمی {examOrg} معمولاً ۶۰٪ است.
-            </p>
           </div>
 
-          <div className="space-y-5">
-            {examData.parts.map((part, pIdx) => (
-              <div key={pIdx} className="space-y-3">
-                <h4 className="font-extrabold text-sm text-[#1f5fbf] dark:text-[#7fb0ff]" dir="ltr">
-                  {part.partTitle}
-                </h4>
-                {part.questions.map(q => {
-                  const userAns = userAnswers[q.id];
-                  const isCorrect = userAns === q.correct;
-                  return (
-                    <div
-                      key={q.id}
-                      className={`p-4 rounded-2xl border text-xs md:text-sm space-y-2 ${
-                        isCorrect
-                          ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900'
-                          : 'bg-red-50/70 dark:bg-red-950/30 border-red-200 dark:border-red-900'
-                      }`}
-                    >
-                      <div className="font-bold text-slate-900 dark:text-slate-100 text-left" dir="ltr">
-                        {q.id}. {q.question}
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <div>
-                          پاسخ شما:{' '}
-                          <strong className={isCorrect ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'} dir="ltr">
-                            {userAns || 'بدون پاسخ'}
-                          </strong>
-                        </div>
-                        {!isCorrect && (
-                          <div>
-                            پاسخ صحیح:{' '}
-                            <strong className="text-emerald-700 dark:text-emerald-300" dir="ltr">
-                              {q.correct}
-                            </strong>
-                          </div>
-                        )}
-                      </div>
-                      {q.explanation && (
-                        <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                          💡 <strong>توضیح و استناد متنی:</strong> {q.explanation}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+          {/* بررسی جزئیات پاسخ‌ها */}
+          <div className="space-y-4 pt-4">
+            <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">بررسی سوالات و پاسخ‌های شما:</h4>
+            {currentExam.parts.flatMap(p => p.questions).map(q => {
+              const userAns = userAnswers[q.id];
+              const isCorrect = userAns === q.correct;
+              return (
+                <div key={q.id} className={`p-4 rounded-2xl border text-xs space-y-1.5 ${isCorrect ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200' : 'bg-red-50 dark:bg-red-950/30 border-red-200'}`}>
+                  <div className="font-bold text-slate-900 dark:text-slate-100 text-left" dir="ltr">{q.id}. {q.question}</div>
+                  <div className="flex gap-4">
+                    <span>پاسخ شما: <strong className={isCorrect ? 'text-emerald-700' : 'text-red-600'} dir="ltr">{userAns || 'نداده'}</strong></span>
+                    {!isCorrect && <span>پاسخ صحیح: <strong className="text-emerald-700" dir="ltr">{q.correct}</strong></span>}
+                  </div>
+                  {q.explanation && <div className="text-[11px] text-slate-600 dark:text-slate-400 pt-1">💡 {q.explanation}</div>}
+                </div>
+              );
+            })}
           </div>
-
-          <button
-            onClick={() => setStep('setup')}
-            className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3.5 rounded-xl font-bold text-sm shadow-md"
-          >
-            شروع آزمون خواندن جدید 🔄
-          </button>
         </div>
       )}
+
     </div>
   );
 };
