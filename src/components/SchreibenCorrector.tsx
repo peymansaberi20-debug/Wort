@@ -291,6 +291,10 @@ RULES:
               onChange={e => setTargetLevel(e.target.value)}
               className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none"
             >
+              <option value="A2">سطح A2</option>
+              <option value="B1">سطح B1</option>
+              <option value="B2">سطح B2</option>
+            </select>
           </div>
           <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
             می‌توانی از متن دست‌نویس خودت عکس بگیری، تصویر از گالری/سیستم انتخاب کنی یا متن را پایین تایپ کنی.
