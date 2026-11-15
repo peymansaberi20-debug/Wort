@@ -29,9 +29,11 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onClose, onShowToast
     setUserAnswers({});
     setScore(null);
 
+    let parsedData: any = null;
+
     try {
       const prompt = `You are an expert German language test creator. Create a formal reading comprehension test (${examOrg} style, Level ${examLevel}).
-Return ONLY a valid JSON object with this structure:
+Return ONLY a valid JSON object with this exact structure, containing NO markdown blocks or extra text:
 {
   "title": "Exam Title in German",
   "text": "A realistic reading text in German appropriate for level ${examLevel} (approx. 150-200 words).",
@@ -58,12 +60,14 @@ Return ONLY a valid JSON object with this structure:
 }`;
 
       const res = await generateWithGemini(prompt, { json: true, timeoutMs: 35000 });
-      const data = parseAI(res);
-      setExamData(data);
+      parsedData = parseAI(res);
     } catch (e: any) {
-      onShowToast('خطا در دریافت آزمون خواندن از هوش مصنوعی.', true);
-      // نمونه Fallback در صورت خطای شبکه
-      setExamData({
+      onShowToast('خطا در ارتباط با هوش مصنوعی. استفاده از داده‌های پیش‌فرض.', true);
+    }
+
+    // بررسی ایمنی داده‌های دریافتی برای جلوگیری از خطای map
+    if (!parsedData || !Array.isArray(parsedData.questions) || parsedData.questions.length === 0) {
+      parsedData = {
         title: `${examOrg} Leseverstehen (${examLevel})`,
         text: 'Wohnen in Wien ist sehr beliebt. Viele Menschen suchen eine Wohnung mit guter Anbindung an die öffentlichen Verkehrsmittel. Besonders Studenten bevorzugen kleine WG-Zimmer im Zentrum.',
         questions: [
@@ -80,10 +84,11 @@ Return ONLY a valid JSON object with this structure:
             correct: 'Kleine WG-Zimmer'
           }
         ]
-      });
-    } finally {
-      setIsLoading(false);
+      };
     }
+
+    setExamData(parsedData);
+    setIsLoading(false);
   };
 
   // ثبت پاسخ کاربر
@@ -93,7 +98,7 @@ Return ONLY a valid JSON object with this structure:
 
   // ارزیابی و پایان آزمون
   const evaluateExam = () => {
-    if (!examData || !examData.questions) return;
+    if (!examData || !Array.isArray(examData.questions)) return;
     let correctCount = 0;
     examData.questions.forEach((q: any) => {
       if (userAnswers[q.id] === q.correct) {
@@ -149,7 +154,7 @@ Return ONLY a valid JSON object with this structure:
           </div>
 
           <button
-            onClick={startExam}
+            onClick={() => void startExam()}
             className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3.5 rounded-xl font-bold text-sm shadow-md transition"
           >
             شروع تمرین Lesen ({examOrg} - {examLevel}) ▶
@@ -190,13 +195,13 @@ Return ONLY a valid JSON object with this structure:
               {/* بخش سوالات چهارگزینه‌ای */}
               <div className="space-y-4">
                 <h4 className="font-extrabold text-sm text-slate-800 dark:text-slate-200">سوالات درک مطلب:</h4>
-                {examData.questions.map((q: any, idx: number) => (
-                  <div key={q.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2.5">
+                {Array.isArray(examData.questions) && examData.questions.map((q: any, idx: number) => (
+                  <div key={q.id || idx} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2.5">
                     <p className="text-sm font-bold text-slate-900 dark:text-slate-100" dir="ltr">
                       {idx + 1}. {q.question}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" dir="ltr">
-                      {q.options.map((opt: string) => {
+                      {Array.isArray(q.options) && q.options.map((opt: string) => {
                         const isSelected = userAnswers[q.id] === opt;
                         return (
                           <button
@@ -235,16 +240,16 @@ Return ONLY a valid JSON object with this structure:
             <span className="text-4xl block">🏆</span>
             <h3 className="text-lg font-extrabold text-slate-900 dark:text-slate-100">نتیجه آزمون Lesen</h3>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              {score} از {examData.questions.length} پاسخ درست
+              {score} از {Array.isArray(examData.questions) ? examData.questions.length : 0} پاسخ درست
             </p>
           </div>
 
           <div className="space-y-3 pt-2">
-            {examData.questions.map((q: any, idx: number) => {
+            {Array.isArray(examData.questions) && examData.questions.map((q: any, idx: number) => {
               const userAns = userAnswers[q.id];
               const isCorrect = userAns === q.correct;
               return (
-                <div key={q.id} className={`p-3.5 rounded-xl border text-xs space-y-1 ${isCorrect ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200' : 'bg-red-50 dark:bg-red-950/30 border-red-200'}`}>
+                <div key={q.id || idx} className={`p-3.5 rounded-xl border text-xs space-y-1 ${isCorrect ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200' : 'bg-red-50 dark:bg-red-950/30 border-red-200'}`}>
                   <div className="font-bold text-slate-900 dark:text-slate-100" dir="ltr">
                     {idx + 1}. {q.question}
                   </div>
