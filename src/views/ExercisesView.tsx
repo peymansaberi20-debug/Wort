@@ -1725,6 +1725,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <span className="text-lg">🗣️</span>
               <span className="text-[10px] sm:text-xs leading-tight">Sprechen</span>
             </button>
+            <button
+              onClick={() => setMainTab('lesen')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'lesen' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">📖</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Lesen</span>
+            </button>
           </div>
         </div>
 
