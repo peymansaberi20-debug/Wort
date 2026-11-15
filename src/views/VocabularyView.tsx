@@ -44,6 +44,9 @@ interface VocabularyViewProps {
   onOpenWordManager: () => void;
   onOpenGroupImport: () => void;
   openCatMgrSignal?: number;
+  renderGroupImport?: (close: () => void) => React.ReactNode;
+  renderManager?: (close: () => void) => React.ReactNode;
+  renderQuality?: (close: () => void) => React.ReactNode;
   onOpenDuplicateDetector?: () => void;
   onOpenQualityModal?: () => void;
   onOpenHelp: (topic: string) => void;
@@ -62,6 +65,9 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   onOpenWordManager,
   onOpenGroupImport,
   openCatMgrSignal,
+  renderGroupImport,
+  renderManager,
+  renderQuality,
   onOpenDuplicateDetector,
   onOpenQualityModal,
   onOpenHelp,
@@ -89,7 +95,10 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   // Add / Edit form state
   const isEditing = !!editingWordId;
   const editingWord = isEditing ? words.find(w => w.id === editingWordId) : null;
-  const [isFormOpen, setIsFormOpen] = useState(isEditing);
+  // Tabs: list / add (also edit) / group import / compare / manage / quality — all shown inline, no popups
+  const [tab, setTab] = useState<'list' | 'add' | 'group' | 'compare' | 'manage' | 'quality'>(isEditing ? 'add' : 'list');
+  const isFormOpen = tab === 'add';
+  const setIsFormOpen = (v: boolean) => setTab(v ? 'add' : 'list');
 
   // Form Fields
   const [formDe, setFormDe] = useState(editingWord?.de || '');
@@ -738,26 +747,31 @@ Answer ONLY a JSON array, no code fence, no commentary:
 
   return (
     <div className="space-y-4 text-right">
-      {/* Sticky main action bar: 5 big icons in one line */}
+      {/* Tab bar (same look as the exercises tabs) */}
       <div className="sticky top-16 md:top-[4.5rem] z-10 -mx-1 px-1 py-2 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur">
-        <div className="grid grid-cols-5 gap-1.5">
-          {[
-            { icon: '➕', label: 'افزودن تکی', onClick: () => { if (isFormOpen && isEditing) resetForm(); else setIsFormOpen(!isFormOpen); } },
-            { icon: '📦', label: 'افزودن گروهی', onClick: () => onOpenGroupImport() },
-            { icon: '⚖️', label: 'مقایسه لغت‌ها', onClick: () => setCompareOpen(true) },
-            { icon: '🗂', label: 'مدیریت گروهی', onClick: () => onOpenWordManager() },
-            { icon: '✅', label: 'کنترل کیفیت', onClick: () => onOpenQualityModal?.() }
-          ].map(b => (
-            <button key={b.label} type="button" onClick={b.onClick}
-              className="min-w-0 h-[70px] rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50 dark:bg-slate-800/80 flex flex-col items-center justify-center gap-0.5 active:scale-95 transition">
-              <span className="text-[28px] leading-none" aria-hidden="true">{b.icon}</span>
-              <span className="text-[10px] font-bold leading-tight text-center text-slate-800 dark:text-slate-100 px-0.5">{b.label}</span>
+        <div className="grid grid-cols-6 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a]">
+          {([
+            { id: 'list', icon: '📚', label: 'لیست واژگان' },
+            { id: 'add', icon: isEditing ? '✏️' : '➕', label: isEditing ? 'ویرایش واژه' : 'افزودن تکی' },
+            { id: 'group', icon: '📦', label: 'افزودن گروهی' },
+            { id: 'compare', icon: '⚖️', label: 'مقایسه لغت‌ها' },
+            { id: 'manage', icon: '🗂', label: 'مدیریت گروهی' },
+            { id: 'quality', icon: '✅', label: 'کنترل کیفیت' }
+          ] as const).map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`min-w-0 py-2 px-0.5 rounded-xl flex flex-col items-center gap-0.5 transition ${tab === t.id ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-xl leading-none" aria-hidden="true">{t.icon}</span>
+              <span className="text-[10px] font-bold leading-tight text-center">{t.label}</span>
             </button>
           ))}
         </div>
       </div>
       {/* Phase 3: empty-search suggestion — opens the existing creation workflow */}
-{noResults && (
+{tab === 'list' && noResults && (
 <div className="mb-3 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-sm">
 <div className="font-bold text-slate-800 dark:text-slate-100 mb-1">
 با این جستجو واژه‌ای یافت نشد.
@@ -794,8 +808,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
 )}
 {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/60 overflow-y-auto p-3 md:p-6">
-        <div className="max-w-3xl mx-auto bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-2xl space-y-4">
+        <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b pb-3">
             <div className="flex items-center gap-2">
               <span className="text-xl">{isEditing ? '✏️' : '➕'}</span>
@@ -1284,7 +1297,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             </button>
           </div>
         </div>
-        </div>
       )}
 
 
@@ -1293,6 +1305,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         "در قسمت واژگان ، جستجو توی یک خط مستقل بیاد
         و سه تا تنظیم جستجو کنار هم و تو یک خط زیر همون جستجو قرار بگیرن"
       */}
+      {tab === 'list' && (
       <div className="space-y-2.5 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
         {/* Line 1: Search input by itself */}
         <div>
@@ -1348,6 +1361,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           </select>
         </div>
       </div>
+
+      )}
 
       {/* Category Management Modal: hidden until the pale-blue action button is pressed */}
       {categoryManagerOpen && (
@@ -1445,6 +1460,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         </div>
       )}
 
+      {tab === 'list' && (<>
       {/*
         Fulfills User Request #27 and Part F duplicate button
       */}
@@ -1614,14 +1630,24 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           })
         )}
       </div>
-      <WordCompareModal
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
-        words={words}
-        onSaveWord={onSaveWord}
-        onSelectWord={onSelectWord}
-        onShowToast={onShowToast}
-      />
+      </>)}
+
+      {/* The former popups are shown inline inside their own tab */}
+      {tab === 'group' && renderGroupImport && <div className="embed-host">{renderGroupImport(() => setTab('list'))}</div>}
+      {tab === 'compare' && (
+        <div className="embed-host">
+          <WordCompareModal
+            open
+            onClose={() => setTab('list')}
+            words={words}
+            onSaveWord={onSaveWord}
+            onSelectWord={onSelectWord}
+            onShowToast={onShowToast}
+          />
+        </div>
+      )}
+      {tab === 'manage' && renderManager && <div className="embed-host">{renderManager(() => setTab('list'))}</div>}
+      {tab === 'quality' && renderQuality && <div className="embed-host">{renderQuality(() => setTab('list'))}</div>}
       {aiChoicePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-4">
