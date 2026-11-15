@@ -29,6 +29,7 @@ import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lu
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { HoerenTrainer } from '../components/HoerenTrainer';
+import { SprechenTrainer } from '../components/SprechenTrainer';
 
 // تعریف مستقیم PratText برای نمایش شکل Präteritum بدون خطای مسیر
 const PratText: React.FC<{ inf: string; prat: string }> = ({ prat }) => (
