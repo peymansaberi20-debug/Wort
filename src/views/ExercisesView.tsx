@@ -1716,6 +1716,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <span className="text-lg">🎧</span>
               <span className="text-[10px] sm:text-xs leading-tight">Hören</span>
             </button>
+            <button
+              onClick={() => setMainTab('sprechen')}
+              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'sprechen' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              <span className="text-lg">🗣️</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Sprechen</span>
+            </button>
           </div>
         </div>
 
@@ -1882,7 +1889,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             })}
           </div>
         )}
-
+        
+        {mainTab === 'sprechen' && (
+           <SprechenTrainer
+             onClose={() => onSelectMode(null)}
+             onShowToast={onShowToast}
+          />
+       )}
+        
         {showHard && (() => {
           const hardWords = allWords.filter(w => (w.bad || 0) > 3).sort((a, b) => (b.bad || 0) - (a.bad || 0));
           const artCls = (a: string) => a === 'der' ? 'bg-blue-100 text-blue-800' : a === 'die' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
