@@ -61,7 +61,9 @@ export type ExerciseMode =
   | 'dikt'
   | 'errnb'
   | 'vprep'
-  | 'hoeren';
+  | 'hoeren'
+  | 'hoeren_new'
+  | 'hoeren_archive';
 
 export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string; desc: string }> = {
   flash: { title: 'فلش‌کارت', icon: '🃏', desc: 'کارت واژه با الگوریتم تکرار فاصله‌دار لایتنر' },
@@ -89,14 +91,15 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' },
-  hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' }
+  hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
+  hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
+  hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
 };
 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
 const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'puzzle', 'vprep'];
 const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
-const HOEREN_MODES: ExerciseMode[] = ['hoeren', 'dict', 'dikt'];
-
+const HOEREN_MODES: ExerciseMode[] = ['hoeren_new', 'hoeren_archive', 'dict', 'dikt'];
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
   m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren';
 
@@ -2041,10 +2044,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     </button>
   );
 
-  if (activeMode === 'hoeren') {
-    return <HoerenTrainer onClose={() => onSelectMode(null)} />;
+  if (activeMode === 'hoeren' || activeMode === 'hoeren_new' || activeMode === 'hoeren_archive') {
+    return (
+      <HoerenTrainer
+        initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
+        onClose={() => onSelectMode(null)}
+      />
+    );
   }
-
+    
   if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
     return (
       <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
