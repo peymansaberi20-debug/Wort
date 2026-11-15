@@ -128,3 +128,9 @@ body.green-tint::before {
 .fc-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .fc-back { transform: rotateY(180deg); }
 @media (prefers-reduced-motion: reduce) { .fc-card { transition: none; } }
+
+/* Vocabulary tabs: show former popups inline */
+.embed-host > .fixed { position: static !important; inset: auto !important; z-index: auto !important; background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; padding: 0 !important; display: block !important; height: auto !important; max-height: none !important; overflow: visible !important; }
+.embed-host > .fixed > div { max-width: 100% !important; max-height: none !important; width: 100% !important; margin: 0 !important; }
+.embed-host .sticky { position: static !important; }
+
