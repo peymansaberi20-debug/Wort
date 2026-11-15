@@ -7,6 +7,30 @@ import React, { useState, useRef } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { ShadowingModal } from './ShadowingModal';
 import { Camera, ImagePlus, Trash2 } from 'lucide-react';
+import { generateWithImages } from '../utils/aiProvider';
+
+/** Shrinks a photo to max 1800px JPEG so the upload stays small and reliable. */
+const shrinkImage = (file: File): Promise<{ dataUrl: string; mimeType: string; base64: string }> =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      const ctx = c.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('canvas')); return; }
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      const d = c.toDataURL('image/jpeg', 0.82);
+      URL.revokeObjectURL(url);
+      resolve({ dataUrl: d, mimeType: 'image/jpeg', base64: d.split(',')[1] });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img')); };
+    img.src = url;
+  });
 
 interface SchreibenReport {
   transcribed_de?: string;
@@ -66,29 +90,18 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   const [chatQ, setChatQ] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
 
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach(file => {
-      if (!file.type.startsWith('image/')) {
-        onShowToast('لطفاً فقط فایل تصویری انتخاب کنید.', true);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const res = String(reader.result || '');
-        const [header, base64] = res.split(',');
-        const mimeMatch = header.match(/data:(.*?);/);
-        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-        if (base64) {
-          setImages(prev => [...prev, { dataUrl: res, mimeType, base64 }]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
     e.target.value = '';
+    if (files.length === 0) { onShowToast('لطفاً فقط فایل تصویری انتخاب کنید.', true); return; }
+    try {
+      const shrunk = await Promise.all(files.map(shrinkImage));
+      setImages(prev => [...prev, ...shrunk].slice(0, 8));
+    } catch {
+      onShowToast('خواندن تصویر ممکن نشد.', true);
+    }
   };
+
 
   const removeImage = (idx: number) => {
     setImages(prev => prev.filter((_, i) => i !== idx));
@@ -154,11 +167,9 @@ RULES:
 [{"transcribed_de":"${hasImages ? 'exact transcribed German text from images' : ''}","understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
 
     try {
-      const options: any = { json: true, timeoutMs: 55000, retries: 1 };
-      if (hasImages) {
-        options.images = images.map(img => ({ data: img.base64, mimeType: img.mimeType }));
-      }
-      const out = await generateWithGemini(prompt, options);
+      const out = hasImages
+        ? await (generateWithImages as any)(prompt, images.map(img => ({ mimeType: img.mimeType, data: img.base64 })), { json: true, timeoutMs: 120000, retries: 1 })
+        : await generateWithGemini(prompt, { json: true, timeoutMs: 55000, retries: 1 });
       const r: any = parseAI(out)[0] || {};
       if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
       setReport({
