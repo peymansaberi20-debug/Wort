@@ -182,7 +182,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         )}
       </div>
 
-      {/* مدال جزئیات وشناسنامه واژه */}
+      {/* مدال جزئیات و شناسنامه واژه */}
       {selectedWord && (
         <WordDetailModal
           word={words.find(x => x.id === selectedWord.id) || selectedWord}
