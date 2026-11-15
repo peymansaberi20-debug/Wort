@@ -279,8 +279,10 @@ RULES:
             </div>
           )}
         </div>
-      ) : (
-        /* بخش انتخاب عکس / دوربین فقط در حالت Schreiben prüfen */
+      ) : null}
+
+      {/* عکس / دوربین: در هر دو حالت (در حالت آزمون، بعد از دریافت سناریو) */}
+      {(!isExamMode || promptData) && (
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📸 ارسال عکس دست‌نویس یا فایل (چند صفحه)</span>
@@ -289,10 +291,6 @@ RULES:
               onChange={e => setTargetLevel(e.target.value)}
               className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none"
             >
-              <option value="A2">سطح A2</option>
-              <option value="B1">سطح B1</option>
-              <option value="B2">سطح B2</option>
-            </select>
           </div>
           <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
             می‌توانی از متن دست‌نویس خودت عکس بگیری، تصویر از گالری/سیستم انتخاب کنی یا متن را پایین تایپ کنی.
