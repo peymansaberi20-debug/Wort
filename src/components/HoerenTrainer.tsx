@@ -260,8 +260,8 @@ function fmtTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive'>('menu');
+export const HoerenTrainer: React.FC<{ onClose: () => void; initialView?: 'menu' | 'creator' | 'archive' }> = ({ onClose, initialView = 'menu' }) => {
+  const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive'>(initialView);
   const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>([]);
   const [currentArchiveId, setCurrentArchiveId] = useState<string | null>(null);
 
@@ -385,7 +385,9 @@ export const HoerenTrainer: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
 
     stopAllPlayback();
-    setViewMode('menu');
+    if (initialView === 'archive') setViewMode('archive');
+    else if (initialView === 'creator') onClose();
+    else setViewMode('menu');
     setCurrentArchiveId(null);
     setTranscript('');
     setExercise(null);
@@ -1057,7 +1059,7 @@ ${transcript}
         <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
           <button
             type="button"
-            onClick={() => setViewMode('menu')}
+            onClick={() => (initialView === 'menu' ? setViewMode('menu') : onClose())}
             className="rounded-xl border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             برگشت به منو
