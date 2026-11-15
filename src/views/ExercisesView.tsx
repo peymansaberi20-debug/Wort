@@ -30,6 +30,7 @@ import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { HoerenTrainer } from '../components/HoerenTrainer';
 import { SprechenTrainer } from '../components/SprechenTrainer';
+import { LesenTrainer } from '../components/LesenTrainer';
 
 // تعریف مستقیم PratText برای نمایش شکل Präteritum بدون خطای مسیر
 const PratText: React.FC<{ inf: string; prat: string }> = ({ prat }) => (
@@ -1895,6 +1896,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
            <SprechenTrainer
              onClose={() => onSelectMode(null)}
              onShowToast={onShowToast}
+          />
+       )}
+        {mainTab === 'lesen' && (
+           <LesenTrainer
+             onClose={() => onSelectMode(null)}
+             onShowToast={showToast}
           />
        )}
         
