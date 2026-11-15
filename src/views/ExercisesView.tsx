@@ -160,66 +160,99 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [mainTab, setMainTab] = useState<'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen'>('flash');
   const [showHard, setShowHard] = useState(false);   
 
+  // مدیریت نمایش درست کامپوننت‌های مستقل مانند Sprechen، Lesen و Hören
+  if (mainTab === 'sprechen') {
+    return (
+      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+        {renderTabHeader()}
+        <SprechenTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} />
+      </div>
+    );
+  }
+
+  if (mainTab === 'lesen') {
+    return (
+      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+        {renderTabHeader()}
+        <LesenTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} />
+      </div>
+    );
+  }
+
+  if (mainTab === 'hoeren') {
+    return (
+      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+        {renderTabHeader()}
+        <HoerenTrainer onClose={() => onSelectMode(null)} />
+      </div>
+    );
+  }
+
+  function renderTabHeader() {
+    return (
+      <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2">
+        <div className="grid grid-cols-7 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
+          <button
+            onClick={() => setMainTab('flash')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">🃏</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Lernkarten</span>
+          </button>
+          <button
+            onClick={() => setMainTab('wortschatz')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">📚</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Wortschatz</span>
+          </button>
+          <button
+            onClick={() => setMainTab('grammatik')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">🧩</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Grammatik</span>
+          </button>
+          <button
+            onClick={() => setMainTab('schreiben')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">✍️</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Schreiben</span>
+          </button>
+          <button
+            onClick={() => setMainTab('hoeren')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">🎧</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Hören</span>
+          </button>
+          <button
+            onClick={() => setMainTab('sprechen')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'sprechen' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">🗣️</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Sprechen</span>
+          </button>
+          <button
+            onClick={() => setMainTab('lesen')}
+            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'lesen' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            <span className="text-lg">📖</span>
+            <span className="text-[10px] sm:text-xs leading-tight">Lesen</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!activeMode) {
     const activeCatCount = settings?.activeCats?.length || 0;
     const hardWordsCount = allWords.filter(w => (w.bad || 0) > 3).length;
 
     return (
       <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
-        {/* نوار تب‌های اصلی بالای صفحه */}
-        <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2">
-          <div className="grid grid-cols-7 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
-            <button
-              onClick={() => setMainTab('flash')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">🃏</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Lernkarten</span>
-            </button>
-            <button
-              onClick={() => setMainTab('wortschatz')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">📚</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Wortschatz</span>
-            </button>
-            <button
-              onClick={() => setMainTab('grammatik')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">🧩</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Grammatik</span>
-            </button>
-            <button
-              onClick={() => setMainTab('schreiben')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">✍️</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Schreiben</span>
-            </button>
-            <button
-              onClick={() => setMainTab('hoeren')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">🎧</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Hören</span>
-            </button>
-            <button
-              onClick={() => setMainTab('sprechen')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'sprechen' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">🗣️</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Sprechen</span>
-            </button>
-            <button
-              onClick={() => setMainTab('lesen')}
-              className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'lesen' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
-            >
-              <span className="text-lg">📖</span>
-              <span className="text-[10px] sm:text-xs leading-tight">Lesen</span>
-            </button>
-          </div>
-        </div>
+        {renderTabHeader()}
 
         {mainTab === 'flash' && (
           <div className="space-y-3">
@@ -368,7 +401,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               return (
                 <div
                   key={mode}
-                  onClick={() => onSelectMode(mode)}
+                  onClick={() => {
+                    if (mode === 'hoeren_new' || mode === 'hoeren_archive') {
+                      setMainTab('hoeren');
+                    } else {
+                      onSelectMode(mode);
+                    }
+                  }}
                   className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 hover:border-[#1f5fbf] transition flex items-center justify-between gap-3 cursor-pointer shadow-xs"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
@@ -383,20 +422,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               );
             })}
           </div>
-        )}
-        
-        {mainTab === 'sprechen' && (
-           <SprechenTrainer
-             onClose={() => onSelectMode(null)}
-             onShowToast={onShowToast}
-          />
-        )}
-        
-        {mainTab === 'lesen' && (
-           <LesenTrainer
-             onClose={() => onSelectMode(null)}
-             onShowToast={onShowToast}
-          />
         )}
       </div>
     );
