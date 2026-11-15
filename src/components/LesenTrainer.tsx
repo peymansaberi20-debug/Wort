@@ -5,11 +5,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
-import { Clock, BookOpen, Archive, PlusCircle, CheckCircle, Award, Printer, ArrowRight } from 'lucide-react';
+import { speak, stopSpeaking } from '../utils/audio';
+import { Clock, Printer, Volume2, Square, Eye, EyeOff, PlusCircle, Lightbulb, PauseCircle } from 'lucide-react';
 
 interface LesenTrainerProps {
   onClose: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  onOpenAddWord?: (initialWord: string, onDone: () => void) => void;
 }
 
 interface ReadingQuestion {
@@ -24,6 +26,7 @@ interface ReadingPart {
   partNumber: number;
   partTitle: string;
   instruction: string;
+  strategyTip?: string;
   text: string;
   questions: ReadingQuestion[];
 }
@@ -82,52 +85,58 @@ const EXAM_SPECS: Record<string, Record<string, { duration: number; structure: s
 const ARCHIVE_KEY = 'wb_lesen_exam_archive_v1';
 const RESULTS_KEY = 'wb_lesen_results_v1';
 
-export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
-  // نماهای اصلی: منوی اولیه، سازنده، انتخاب از آرشیو، اجرای آزمون، کارنامه
+export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onOpenAddWord }) => {
   const [view, setView] = useState<'menu' | 'creator' | 'archive_levels' | 'archive_exams' | 'exam_active' | 'result'>('menu');
-  
-  // فیلترهای سازنده
+
   const [examOrg, setExamOrg] = useState<'ÖSD' | 'Goethe' | 'telc' | 'EPD'>('ÖSD');
   const [examLevel, setExamLevel] = useState<'A1' | 'A2' | 'B1' | 'B2' | 'C1'>('B2');
 
-  // داده‌های آرشیو و ذخیره‌سازی
   const [archiveExams, setArchiveExams] = useState<ReadingExam[]>([]);
   const [examResults, setExamResults] = useState<ExamResultRecord[]>([]);
   const [selectedArchiveLevel, setSelectedArchiveLevel] = useState<string>('');
-  const [selectedArchiveOrg, setSelectedArchiveOrg] = useState<string>('');
 
-  // حالت‌های اجرای آزمون فعلی
   const [isLoading, setIsLoading] = useState(false);
   const [currentExam, setCurrentExam] = useState<ReadingExam | null>(null);
   const [activePartIdx, setActivePartIdx] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
 
-  // بارگذاری آرشیو و نتایج از حافظه محلی
+  // وضعیت‌های جدید: توقف تایمر، نمایش متن هر بخش و پخش صوتی
+  const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
+  const [visibleTexts, setVisibleTexts] = useState<Record<number, boolean>>({});
+  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  const [selectedWordModal, setSelectedWordModal] = useState<{ word: string; meaning?: string; loading?: boolean } | null>(null);
+
   useEffect(() => {
     try {
       const savedExams = localStorage.getItem(ARCHIVE_KEY);
       if (savedExams) setArchiveExams(JSON.parse(savedExams));
-
       const savedResults = localStorage.getItem(RESULTS_KEY);
       if (savedResults) setExamResults(JSON.parse(savedResults));
     } catch {
-      // خطا در خواندن حافظه
+      // ignore
     }
+    return () => {
+      stopSpeaking();
+    };
   }, []);
 
-  // ذخیره آرشیو در حافظه
+  // توقف صدا هنگام تغییر بخش یا خروج از صفحه آزمون
+  useEffect(() => {
+    stopSpeaking();
+    setIsPlayingAudio(false);
+  }, [activePartIdx, view]);
+
   const saveExamToArchive = (exam: ReadingExam) => {
     try {
       const updated = [exam, ...archiveExams.filter(e => e.id !== exam.id)];
       setArchiveExams(updated);
       localStorage.setItem(ARCHIVE_KEY, JSON.stringify(updated));
     } catch {
-      // خطا در ذخیره
+      // ignore
     }
   };
 
-  // ذخیره نتیجه آزمون در حافظه (اختصاصی کاربر)
   const saveExamResult = (exam: ReadingExam, answers: Record<number, string>) => {
     const allQ: ReadingQuestion[] = exam.parts.flatMap(p => p.questions || []);
     const correctCount = allQ.filter(q => answers[q.id] === q.correct).length;
@@ -151,13 +160,13 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
       setExamResults(updated);
       localStorage.setItem(RESULTS_KEY, JSON.stringify(updated));
     } catch {
-      // خطا در ذخیره نتیجه
+      // ignore
     }
   };
 
-  // مدیریت تایمر آزمون
+  // تایمر هوشمند با قابلیت توقف کامل هنگام افزودن واژه
   useEffect(() => {
-    if (view !== 'exam_active' || isLoading || secondsLeft <= 0) return;
+    if (view !== 'exam_active' || isLoading || secondsLeft <= 0 || isTimerPaused) return;
     const timer = setInterval(() => {
       setSecondsLeft(prev => {
         if (prev <= 1) {
@@ -170,7 +179,7 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [view, isLoading, secondsLeft]);
+  }, [view, isLoading, secondsLeft, isTimerPaused]);
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -182,33 +191,26 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
     try {
       const parsed = parseAI(raw);
       const obj = Array.isArray(parsed) ? parsed[0] : parsed;
-      if (obj && Array.isArray(obj.parts) && obj.parts.length > 0) {
-        return obj as ReadingExam;
-      }
-    } catch {
-      // ناموفق
-    }
+      if (obj && Array.isArray(obj.parts) && obj.parts.length > 0) return obj as ReadingExam;
+    } catch { /* ignore */ }
     try {
       const firstBrace = raw.indexOf('{');
       const lastBrace = raw.lastIndexOf('}');
       if (firstBrace !== -1 && lastBrace > firstBrace) {
         const directObj = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
-        if (directObj && Array.isArray(directObj.parts) && directObj.parts.length > 0) {
-          return directObj as ReadingExam;
-        }
+        if (directObj && Array.isArray(directObj.parts) && directObj.parts.length > 0) return directObj as ReadingExam;
       }
-    } catch {
-      // ناموفق
-    }
+    } catch { /* ignore */ }
     return null;
   };
 
-  // تولید آزمون جدید با هوش مصنوعی
   const generateNewExam = async () => {
     setView('exam_active');
     setIsLoading(true);
     setUserAnswers({});
     setActivePartIdx(0);
+    setVisibleTexts({});
+    setIsTimerPaused(false);
     setCurrentExam(null);
 
     const spec = EXAM_SPECS[examOrg]?.[examLevel] || {
@@ -229,6 +231,8 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast }) => {
 - Length: ${wordCountTarget}.
 
 Create 3 distinct exam parts (Teile) with 4 questions each (total 12 questions numbered sequentially 1 to 12).
+For each part, also include "strategyTip": a practical, concise exam-solving strategy in Persian (فوت‌وفن تست‌زنی این بخش به فارسی).
+
 Return ONLY a valid JSON object (no markdown, no extra text):
 {
   "title": "${examOrg} ${examLevel} – Leseverstehen",
@@ -238,6 +242,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
       "partNumber": 1,
       "partTitle": "Teil 1: ...",
       "instruction": "Instruction in German",
+      "strategyTip": "راهنمای استراتژی حل این بخش به فارسی...",
       "text": "Reading text in German...",
       "questions": [
         {
@@ -255,7 +260,6 @@ Return ONLY a valid JSON object (no markdown, no extra text):
     try {
       const res = await generateWithGemini(prompt, { json: true, timeoutMs: 60000, retries: 1 });
       const extracted = extractExamObject(res);
-
       if (!extracted) throw new Error('ساختار آزمون دریافتی ناقص بود.');
 
       extracted.id = 'exam_' + Date.now();
@@ -279,11 +283,12 @@ Return ONLY a valid JSON object (no markdown, no extra text):
     }
   };
 
-  // شروع تمرین از آرشیو
   const startArchivedExam = (exam: ReadingExam) => {
     setCurrentExam(exam);
     setUserAnswers({});
     setActivePartIdx(0);
+    setVisibleTexts({});
+    setIsTimerPaused(false);
     setSecondsLeft((exam.durationMinutes || 60) * 60);
     setView('exam_active');
   };
@@ -293,10 +298,72 @@ Return ONLY a valid JSON object (no markdown, no extra text):
   };
 
   const finishExam = () => {
-    if (currentExam) {
-      saveExamResult(currentExam, userAnswers);
-    }
+    stopSpeaking();
+    setIsPlayingAudio(false);
+    if (currentExam) saveExamResult(currentExam, userAnswers);
     setView('result');
+  };
+
+  // کنترل پخش و توقف صوتی متن هر بخش
+  const handleToggleAudio = (text: string) => {
+    if (isPlayingAudio) {
+      stopSpeaking();
+      setIsPlayingAudio(false);
+    } else {
+      setIsPlayingAudio(true);
+      speak(text, {
+        onEnd: () => setIsPlayingAudio(false)
+      });
+    }
+  };
+
+  // کلیک روی هر کلمه آلمانی: توقف تایمر و باز شدن پنجره سریع واژه + ارسال به لایتنر
+  const handleWordClick = async (rawToken: string) => {
+    const cleanWord = rawToken.replace(/[.,!?;:"„“()[\]—–-]/g, '').trim();
+    if (!cleanWord || cleanWord.length < 2) return;
+
+    // توقف فوری زمان آزمون
+    setIsTimerPaused(true);
+    setSelectedWordModal({ word: cleanWord, loading: true });
+
+    try {
+      const prompt = `Translate the German word "${cleanWord}" (level ${examLevel}) to Persian with article (if noun) or infinitive (if verb) and 1 short example. Return ONLY JSON: [{"meaning": "معنی فارسی + آرتیکل/مصدر"}]`;
+      const res = await generateWithGemini(prompt, { json: true, timeoutMs: 12000, retries: 0 });
+      const parsed = parseAI(res)[0];
+      setSelectedWordModal({
+        word: cleanWord,
+        meaning: parsed?.meaning || 'معنی یافت نشد',
+        loading: false
+      });
+    } catch {
+      setSelectedWordModal({
+        word: cleanWord,
+        meaning: 'امکان دریافت ترجمه فوری نبود؛ می‌توانید مستقیماً به لایتنر اضافه کنید.',
+        loading: false
+      });
+    }
+  };
+
+  // رندر متن به صورت کلمات قابل کلیک برای هایلایت و ذخیره در لایتنر
+  const renderInteractiveText = (text: string) => {
+    const paragraphs = text.split('\n');
+    return paragraphs.map((para, pIdx) => (
+      <p key={pIdx} className="mb-3 last:mb-0 leading-8">
+        {para.split(/(\s+)/).map((token, tIdx) => {
+          if (/^\s+$/.test(token)) return <span key={tIdx}>{token}</span>;
+          return (
+            <span
+              key={tIdx}
+              onClick={() => void handleWordClick(token)}
+              title="برای مشاهده معنی و افزودن به لایتنر کلیک کنید (زمان متوقف می‌شود)"
+              className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 hover:text-slate-950 dark:hover:text-white transition"
+            >
+              {token}
+            </span>
+          );
+        })}
+      </p>
+    ));
   };
 
   const availableLevels: ('A1' | 'A2' | 'B1' | 'B2' | 'C1')[] =
@@ -305,7 +372,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
   return (
     <div className="space-y-4 text-right max-w-3xl mx-auto pb-10" dir="rtl">
       
-      {/* 1. نمای اولیه (منوی اصلی مشابه تب Hören) */}
+      {/* 1. نمای اولیه (مشابه تب Hören) */}
       {view === 'menu' && (
         <div className="space-y-3">
           <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 flex items-center justify-between shadow-xs">
@@ -313,7 +380,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
               <span className="text-3xl">✨</span>
               <div>
                 <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">ساخت تمرین جدید (Lesen)</h3>
-                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">تولید آزمون‌های استاندارد درک مطلب با هوش مصنوعی</p>
+                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">تولید آزمون‌های استاندارد درک مطلب با هوش مصنوعی و قابلیت Hör-Lesen</p>
               </div>
             </div>
             <button
@@ -342,7 +409,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         </div>
       )}
 
-      {/* 2. سازنده تمرین جدید (انتخاب سازمان و سطح) */}
+      {/* 2. سازنده تمرین جدید */}
       {view === 'creator' && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-5 text-right">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -390,7 +457,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         </div>
       )}
 
-      {/* 3. مرحله اول آرشیو: انتخاب سطح (خط‌های زیر هم) */}
+      {/* 3. آرشیو: سطوح */}
       {view === 'archive_levels' && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-4 text-right">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -418,7 +485,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         </div>
       )}
 
-      {/* 4. مرحله دوم آرشیو: لیست آزمون‌های آن سطح */}
+      {/* 4. آرشیو: لیست آزمون‌های سطح انتخاب‌شده */}
       {view === 'archive_exams' && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-4 text-right">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -428,7 +495,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
 
           <div className="space-y-3">
             {archiveExams.filter(e => e.level === selectedArchiveLevel).length === 0 ? (
-              <div className="py-12 text-center text-sm text-[#5d6676]">هیچ آزمونی در این سطح ذخیره نشده است. ابتدا یک آزمون جدید بسازید.</div>
+              <div className="py-12 text-center text-sm text-[#5d6676]">هیچ آزمونی در این سطح ذخیره نشده است.</div>
             ) : (
               archiveExams.filter(e => e.level === selectedArchiveLevel).map(exam => (
                 <div
@@ -438,7 +505,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
                 >
                   <div>
                     <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{exam.title}</h4>
-                    <span className="text-xs text-[#5d6676]">سازمان: {exam.org} • تاریخ ساخت: {exam.createdAt || 'اخ اخ'}</span>
+                    <span className="text-xs text-[#5d6676]">سازمان: {exam.org} • تاریخ ساخت: {exam.createdAt}</span>
                   </div>
                   <span className="bg-[#1f5fbf] text-white px-4 py-2 rounded-xl text-xs font-bold">شروع آزمون ▶</span>
                 </div>
@@ -448,9 +515,10 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         </div>
       )}
 
-      {/* 5. اجرای آزمون */}
+      {/* 5. اجرای آزمون (با استراتژی حل، حالت Hör-Lesen و هایلایت واژگان) */}
       {view === 'exam_active' && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-5">
+          {/* هدر و تایمر با وضعیت توقف */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <span className="font-extrabold text-sm md:text-base text-[#1f5fbf] dark:text-[#7fb0ff] block">
@@ -459,8 +527,14 @@ Return ONLY a valid JSON object (no markdown, no extra text):
             </div>
             <div className="flex items-center gap-2">
               {!isLoading && secondsLeft > 0 && (
-                <span className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 text-amber-800 text-xs font-mono font-bold flex items-center gap-1.5">
-                  <Clock size={14} /> {formatTime(secondsLeft)}
+                <span className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 ${
+                  isTimerPaused
+                    ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 text-rose-700 dark:text-rose-300'
+                    : 'bg-amber-50 dark:bg-amber-950/50 border-amber-200 text-amber-800 dark:text-amber-200'
+                }`}>
+                  {isTimerPaused ? <PauseCircle size={14} /> : <Clock size={14} />}
+                  {formatTime(secondsLeft)}
+                  {isTimerPaused && <span className="text-[10px] font-sans">(متوقف)</span>}
                 </span>
               )}
               <button onClick={() => setView('menu')} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">انصراف</button>
@@ -470,10 +544,11 @@ Return ONLY a valid JSON object (no markdown, no extra text):
           {isLoading ? (
             <div className="py-20 text-center space-y-3">
               <span className="text-4xl animate-bounce block">📝</span>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">در حال آماده‌سازی آزمون...</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">در حال طراحی متن‌ها، فایل صوتی و استراتژی آزمون...</p>
             </div>
           ) : currentExam && currentExam.parts[activePartIdx] ? (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              {/* تب‌های جابه‌جایی بین بخش‌ها */}
               <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl">
                 {currentExam.parts.map((part, idx) => (
                   <button
@@ -488,19 +563,77 @@ Return ONLY a valid JSON object (no markdown, no extra text):
 
               {(() => {
                 const currentPart = currentExam.parts[activePartIdx];
+                const isTextShown = !!visibleTexts[activePartIdx];
+
                 return (
                   <div className="space-y-5">
+                    {/* باکس فوت‌وفن و استراتژی آزمون (Prüfungstipp) */}
+                    <div className="p-3.5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/80 text-xs space-y-1">
+                      <div className="font-extrabold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <Lightbulb size={15} />
+                        <span>استراتژی و تکنیک حل سریع این بخش:</span>
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-200 leading-relaxed">
+                        {currentPart.strategyTip || 'ابتدا کلیدواژه‌های سؤالات را بخوانید و سپس در متن به دنبال مترادف‌ها و مفهوم اصلی بگردید.'}
+                      </p>
+                    </div>
+
+                    {/* دستورالعمل رسمی آلمانی */}
                     <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-xs md:text-sm font-semibold text-indigo-950 dark:text-indigo-200" dir="ltr">
                       <div className="font-extrabold mb-1">{currentPart.partTitle}</div>
                       <div>{currentPart.instruction}</div>
                     </div>
 
-                    <div className="p-4 md:p-5 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800">
-                      <p className="text-sm md:text-base font-sans leading-7 text-slate-900 dark:text-slate-100 whitespace-pre-line text-left" dir="ltr">
-                        {currentPart.text}
-                      </p>
+                    {/* پخش‌کننده صوتی و کنترل نمایش متن (حالت ترکیبی Hör-Lesen) */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-l from-blue-50 to-indigo-50/60 dark:from-[#161e2e] dark:to-[#1a2236] border border-blue-200 dark:border-blue-900/60 space-y-3">
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-2xl">🎧</span>
+                        <div className="flex-1">
+                          <h4 className="font-extrabold text-xs md:text-sm text-slate-900 dark:text-slate-100">
+                            پیشنهاد تقویتی: ابتدا به فایل صوتی گوش دهید و مهارت Hören خود را بسنجید!
+                          </h4>
+                          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] mt-0.5">
+                            متن این بخش به صورت پیش‌فرض مخفی است. هر زمان نیاز داشتید می‌توانید متن را باز یا بسته کنید.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAudio(currentPart.text)}
+                          className={`px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 shadow-xs transition ${
+                            isPlayingAudio
+                              ? 'bg-rose-600 hover:bg-rose-700'
+                              : 'bg-[#1f5fbf] hover:bg-[#194ea0]'
+                          }`}
+                        >
+                          {isPlayingAudio ? <><Square size={14} /> توقف پخش صدا</> : <><Volume2 size={15} /> پخش صوتی متن</>}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setVisibleTexts(prev => ({ ...prev, [activePartIdx]: !prev[activePartIdx] }))}
+                          className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 shadow-xs hover:bg-slate-50 transition"
+                        >
+                          {isTextShown ? <><EyeOff size={15} /> مخفی کردن متن</> : <><Eye size={15} /> نمایش متن</>}
+                        </button>
+                      </div>
                     </div>
 
+                    {/* متن قابل کلیک و هایلایت واژگان (در صورت باز بودن نمایش متن) */}
+                    {isTextShown && (
+                      <div className="p-4 md:p-5 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 space-y-2 animate-fadeIn">
+                        <div className="text-[11px] text-[#1f5fbf] dark:text-[#7fb0ff] font-bold flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-2 mb-2">
+                          <span>💡 روی هر کلمه در متن کلیک کنید تا معنی آن را ببینید و به لایتنر اضافه کنید (تایمر متوقف می‌شود).</span>
+                        </div>
+                        <div className="text-sm md:text-base font-sans text-slate-900 dark:text-slate-100 text-left select-text" dir="ltr">
+                          {renderInteractiveText(currentPart.text)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* سوالات این بخش */}
                     <div className="space-y-4">
                       {currentPart.questions.map(q => (
                         <div key={q.id} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 bg-white dark:bg-[#1b2029]">
@@ -528,6 +661,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
                 );
               })()}
 
+              {/* ناوبری پایین صفحه */}
               <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                 {activePartIdx > 0 ? (
                   <button onClick={() => setActivePartIdx(prev => prev - 1)} className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بخش قبلی</button>
@@ -541,6 +675,72 @@ Return ONLY a valid JSON object (no markdown, no extra text):
               </div>
             </div>
           ) : null}
+        </div>
+      )}
+
+      {/* مودال هایلایت واژه و افزودن به لایتنر (تایمر در این حالت متوقف است) */}
+      {selectedWordModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => { setSelectedWordModal(null); setIsTimerPaused(false); }}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 space-y-4 shadow-xl text-right"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <span className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                <PauseCircle size={14} /> زمان آزمون متوقف شد
+              </span>
+              <button
+                onClick={() => { setSelectedWordModal(null); setIsTimerPaused(false); }}
+                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-center space-y-2 py-2">
+              <div className="flex items-center justify-center gap-2" dir="ltr">
+                <span className="text-2xl font-extrabold font-sans text-slate-900 dark:text-slate-100">
+                  {selectedWordModal.word}
+                </span>
+                <button
+                  onClick={() => speak(selectedWordModal.word)}
+                  className="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 text-sm flex items-center justify-center"
+                >
+                  🔊
+                </button>
+              </div>
+              <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">
+                {selectedWordModal.loading ? 'در حال دریافت معنی...' : selectedWordModal.meaning}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              {onOpenAddWord && (
+                <button
+                  onClick={() => {
+                    const w = selectedWordModal.word;
+                    setSelectedWordModal(null);
+                    onOpenAddWord(w, () => {
+                      // پس از ذخیره و بستن فرم افزودن واژه، تایمر دوباره فعال می‌شود
+                      setIsTimerPaused(false);
+                    });
+                  }}
+                  className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <PlusCircle size={15} /> افزودن به جعبه لایتنر
+                </button>
+              )}
+              <button
+                onClick={() => { setSelectedWordModal(null); setIsTimerPaused(false); }}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold"
+              >
+                ادامه آزمون
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -560,7 +760,6 @@ Return ONLY a valid JSON object (no markdown, no extra text):
             <p className="text-xs text-[#5d6676]">{currentExam.title}</p>
           </div>
 
-          {/* جدول مقایسه تلاش‌های قبلی در ستون‌های مجزا */}
           <div className="space-y-3 pt-2">
             <h4 className="font-extrabold text-sm text-[#1f5fbf]">📊 مقایسه تلاش‌ها و سوابق این آزمون:</h4>
             <div className="overflow-x-auto">
@@ -587,7 +786,6 @@ Return ONLY a valid JSON object (no markdown, no extra text):
             </div>
           </div>
 
-          {/* بررسی جزئیات پاسخ‌ها */}
           <div className="space-y-4 pt-4">
             <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100">بررسی سوالات و پاسخ‌های شما:</h4>
             {currentExam.parts.flatMap(p => p.questions).map(q => {
