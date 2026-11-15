@@ -1683,35 +1683,35 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'flash' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
             >
               <span className="text-lg">🃏</span>
-              <span className="truncate max-w-full">Lernkarten</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Lernkarten</span>
             </button>
             <button
               onClick={() => setMainTab('wortschatz')}
               className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'wortschatz' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
             >
               <span className="text-lg">📚</span>
-              <span className="truncate max-w-full">Wortschatz</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Wortschatz</span>
             </button>
             <button
               onClick={() => setMainTab('grammatik')}
               className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'grammatik' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
             >
               <span className="text-lg">🧩</span>
-              <span className="truncate max-w-full">Grammatik</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Grammatik</span>
             </button>
             <button
               onClick={() => setMainTab('schreiben')}
               className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'schreiben' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
             >
               <span className="text-lg">✍️</span>
-              <span className="truncate max-w-full">Schreiben</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Schreiben</span>
             </button>
             <button
               onClick={() => setMainTab('hoeren')}
               className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === 'hoeren' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
             >
               <span className="text-lg">🎧</span>
-              <span className="truncate max-w-full">Hören</span>
+              <span className="text-[10px] sm:text-xs leading-tight">Hören</span>
             </button>
           </div>
         </div>
