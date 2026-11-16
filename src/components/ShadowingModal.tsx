@@ -8,7 +8,8 @@ import { IconBtn } from './IconBtn';
 import { X, Mic, Square, Play, Trash2, Volume2, Wand2 } from 'lucide-react';
 
 interface ShadowingModalProps {
-  word: Word;
+  /** Optional when freeText is given (e.g. from Schreiben correction). */
+  word?: Word;
   onClose: () => void;
   /** Optional free text (e.g. corrected sentence) — replaces the word-based picker. */
   freeText?: string;
@@ -26,13 +27,15 @@ const fmtDur = (d: number | null) => (d != null && isFinite(d) ? `${d.toFixed(1)
 export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, freeText }) => {
   const parts: { key: string; label: string; text: string }[] = freeText
     ? [{ key: 'free', label: 'جملهٔ اصلاح‌شده', text: freeText }]
-    : [
-        { key: 'de', label: 'واژه', text: fullWord(word) },
-        ...(word.ex ? [{ key: 'ex', label: 'تعریف', text: word.ex }] : []),
-        ...(word.ex2 ? [{ key: 'ex2', label: 'مثال کاربردی', text: word.ex2 }] : [])
-      ];
+    : word
+      ? [
+          { key: 'de', label: 'واژه', text: fullWord(word) },
+          ...(word.ex ? [{ key: 'ex', label: 'تعریف', text: word.ex }] : []),
+          ...(word.ex2 ? [{ key: 'ex2', label: 'مثال کاربردی', text: word.ex2 }] : [])
+        ]
+      : [];
   const [part, setPart] = useState(freeText ? 'free' : 'de');
-  const text = parts.find(p => p.key === part)?.text || fullWord(word);
+  const text = parts.find(p => p.key === part)?.text || parts[0]?.text || freeText || '';
 
   const [recBusy, setRecBusy] = useState(false);
   const [recUrl, setRecUrl] = useState<string | null>(null);
@@ -48,25 +51,27 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
   const [analysis, setAnalysis] = useState<{ frames: number; eSample: number[]; eMine: number[]; offset: number; minePeak: number; samplePeak: number; mineRms: number; sampleRms: number; hints: string[] } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  /** Extracts RMS-energy contour (32 buckets, aligned to 2s window). */
+  /** Extracts RMS-energy contour (32 buckets). */
   const analyzeAudio = async (src: string): Promise<number[]> => {
     const AC: any = (window as any).AudioContext || (window as any).webkitAudioContext;
     const ac = new AC();
-    const buf = await fetch(src).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b));
-    const ch = buf.getChannelData(0);
-    const sr = buf.sampleRate;
-    const frames = 32;
-    const win = Math.max(1, Math.floor(ch.length / frames));
-    const out: number[] = [];
-    for (let f = 0; f < frames; f++) {
-      let sum = 0;
-      const start = f * win, end = Math.min(ch.length, start + win);
-      let n = 0;
-      for (let i = start; i < end; i++) { sum += ch[i] * ch[i]; n++; }
-      out.push(n ? Math.sqrt(sum / n) : 0);
+    try {
+      const buf = await fetch(src).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b));
+      const ch = buf.getChannelData(0);
+      const frames = 32;
+      const win = Math.max(1, Math.floor(ch.length / frames));
+      const out: number[] = [];
+      for (let f = 0; f < frames; f++) {
+        let sum = 0;
+        const start = f * win, end = Math.min(ch.length, start + win);
+        let n = 0;
+        for (let i = start; i < end; i++) { sum += ch[i] * ch[i]; n++; }
+        out.push(n ? Math.sqrt(sum / n) : 0);
+      }
+      return out;
+    } finally {
+      try { void ac.close?.(); } catch { /* ignore */ }
     }
-    void sr;
-    return out;
   };
 
   const runAnalysis = async () => {
@@ -75,7 +80,8 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
     const sampleSrc = base ? `${base}/?lang=de&text=${encodeURIComponent(text)}` : '';
     try {
       const eMine = await analyzeAudio(recUrl);
-      const eSample = sampleSrc ? await analyzeAudio(sampleSrc) : [];
+      let eSample: number[] = [];
+      try { eSample = sampleSrc ? await analyzeAudio(sampleSrc) : []; } catch { eSample = []; }
       // best alignment offset (sample may start later/earlier than my recording)
       let bestOff = 0;
       if (eSample.length) {
@@ -97,12 +103,12 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
       const hints: string[] = [];
       if (eSample.length) {
         if (mineRms < sampleRms * 0.45) hints.push('🎤 صدای ضبط خیلی آرام‌تر از نمونه است — میکروفون را نزدیک‌تر بگیر یا بلندتر بگو.');
-        else if (mineRms > sampleRms * 1.8) hints.push('🔊 صدای ضبط خیلی بلندتر از نمونه است (چهیست/دست‌کشیده).');
+        else if (mineRms > sampleRms * 1.8) hints.push('🔊 صدای ضبط خیلی بلندتر از نمونه است.');
         if (bestOff > 2) hints.push('⏱ شروع تو دیرتر از نمونه است — هم‌زمان با نمونه شروع کن.');
         if (bestOff < -2) hints.push('⏱ زودتر از نمونه شروع کرده‌ای.');
         let weakEnd = true;
         for (let i = eMine.length - 6; i < eMine.length; i++) if (eMine[i] > mineRms * 0.5) weakEnd = false;
-        if (weakEnd && eSample.length && eSample.slice(-6).some(x => x > sampleRms * 0.5)) hints.push('📉 انتهای جمله انرژی‌اش افتاده — پایان جمله را با همان نیرو بگو (نمونه تا آخر پرانرژی است).');
+        if (weakEnd && eSample.slice(-6).some(x => x > sampleRms * 0.5)) hints.push('📉 انتهای جمله انرژی‌اش افتاده — پایان جمله را با همان نیرو بگو.');
       }
       setAnalysis({ frames: eMine.length, eSample, eMine, offset: bestOff, minePeak, samplePeak, mineRms, sampleRms, hints });
     } catch {
@@ -119,12 +125,12 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
     const W = cv.width, H = cv.height;
     ctx.clearRect(0, 0, W, H);
     const maxV = Math.max(0.0001, analysis.minePeak, analysis.samplePeak);
-    const draw = (arr: number[], color: string, off: number) => {
+    const draw = (arr: number[], color: string) => {
       ctx.beginPath();
       arr.forEach((v, i) => {
-        const x = ((i + off + arr.length) % (arr.length * 2)) / (arr.length * 2) * W;
+        const x = (i / Math.max(1, arr.length - 1)) * W;
         const y = H - 6 - (v / maxV) * (H - 14);
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       });
       ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
     };
@@ -138,10 +144,9 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
           ctx.fillRect((i / analysis.eMine.length) * W, 0, W / analysis.eMine.length + 1, H);
         }
       }
-      draw(analysis.eSample, '#10b981', 0);
+      draw(analysis.eSample, '#10b981');
     }
-    draw(analysis.eMine, '#3b82f6', 0);
-    // legend
+    draw(analysis.eMine, '#3b82f6');
     ctx.fillStyle = '#10b981'; ctx.fillRect(8, 6, 10, 3);
     ctx.fillStyle = '#3b82f6'; ctx.fillRect(8, 14, 10, 3);
     ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif';
@@ -149,14 +154,15 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
   }, [analysis]);
 
   useEffect(() => {
-    setReport(null); setErr(''); setRecUrl(null); setRecDur(null); setPart('de');
-  }, [word.id]);
+    setReport(null); setErr(''); setRecUrl(null); setRecDur(null); setAnalysis(null);
+    setPart(freeText ? 'free' : 'de');
+  }, [word?.id, freeText]);
 
   // sample duration from cloud mp3 metadata (if worker configured)
   useEffect(() => {
     setSampleDur(null);
     const base = getTtsWorkerBase();
-    if (!base) return;
+    if (!base || !text) return;
     const a = new Audio(`${base}/?lang=de&text=${encodeURIComponent(text)}`);
     const onMeta = () => { if (isFinite(a.duration)) setSampleDur(a.duration); };
     a.addEventListener('loadedmetadata', onMeta);
@@ -164,7 +170,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
   }, [text]);
 
   useEffect(() => {
-    if (!recUrl) { setRecDur(null); return; }
+    if (!recUrl) { setRecDur(null); setAnalysis(null); return; }
     const a = new Audio(recUrl);
     const onMeta = () => { if (isFinite(a.duration)) setRecDur(a.duration); };
     a.addEventListener('loadedmetadata', onMeta);
@@ -172,7 +178,14 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
     return () => a.removeEventListener('loadedmetadata', onMeta);
   }, [recUrl]);
 
+  // stop recording/audio when the modal closes
+  useEffect(() => () => {
+    stopSpeaking();
+    try { if (recRef.current?.state === 'recording') recRef.current.stop(); } catch { /* ignore */ }
+  }, []);
+
   const playSample = () => {
+    if (!text) return;
     const base = getTtsWorkerBase();
     stopSpeaking();
     if (base) {
@@ -199,8 +212,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
       rec.ondataavailable = e => { if (e.data.size) chunksRef.current.push(e.data); };
       rec.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
-        if (recUrl) URL.revokeObjectURL(recUrl);
-        setRecUrl(URL.createObjectURL(new Blob(chunksRef.current, { type: mime || 'audio/webm' })));
+        setRecUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(new Blob(chunksRef.current, { type: mime || 'audio/webm' })); });
         setRecBusy(false);
       };
       recRef.current = rec;
@@ -222,7 +234,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
   };
 
   const askAi = async () => {
-    if (aiBusy) return;
+    if (aiBusy || !text) return;
     setAiBusy(true); setAiErr(''); setReport(null);
     try {
       const out = await generateWithGemini(`You are a German pronunciation coach for Persian-speaking learners.\nTarget text: "${text}"\nReturn ONLY a JSON array with exactly one object, no markdown:\n[{"ipa":"IPA transcription of the text","syllables":[{"syl":"German syllable in order","stress":true}],"tips_fa":["2-4 short Persian tips: sounds, stress and rhythm Persian speakers typically get wrong in THIS text"],"trap_fa":"one short Persian line: the single most important thing to get right"}]\nRules: syllables in German order; exactly one stress=true (main stressed syllable); Persian explanations concise; German stays German.`, { json: true, timeoutMs: 30000, retries: 1 });
@@ -258,22 +270,24 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
 
         <div className="p-4 md:p-5 space-y-4">
           {/* text picker */}
-          <div className="flex flex-wrap gap-1.5">
-            {parts.map(p => (
-              <button key={p.key} onClick={() => setPart(p.key)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${part === p.key ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div dir="ltr" className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4 font-sans font-bold text-lg text-slate-900 dark:text-slate-100 text-center">
-            {text}
+          {parts.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {parts.map(p => (
+                <button key={p.key} onClick={() => setPart(p.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${part === p.key ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <div dir="ltr" className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-2xl p-4 font-sans font-bold text-lg text-slate-900 dark:text-slate-100 text-center whitespace-pre-wrap max-h-48 overflow-y-auto">
+            {text || '—'}
           </div>
 
           {/* controls */}
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={playSample}
-              className="h-12 rounded-xl bg-[#1f5fbf] hover:bg-[#194ea0] text-white text-sm font-bold transition flex items-center justify-center gap-2">
+            <button onClick={playSample} disabled={!text}
+              className="h-12 rounded-xl bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-50 text-white text-sm font-bold transition flex items-center justify-center gap-2">
               <Volume2 size={17} /> بشنو (نمونه)
             </button>
             {recBusy ? (
@@ -329,7 +343,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
           )}
 
           {/* AI coach */}
-          <button onClick={() => void askAi()} disabled={aiBusy}
+          <button onClick={() => void askAi()} disabled={aiBusy || !text}
             className="w-full h-12 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">
             {aiBusy ? <><span className="inline-block animate-spin">⏳</span><span>در حال آماده‌سازی راهنما…</span></> : <><Wand2 size={17} /><span>🤖 راهنمای تلفظ این متن</span></>}
           </button>
