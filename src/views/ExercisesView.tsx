@@ -491,14 +491,14 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
     const s = text.trim();
     if (!s || busy) return;
     setBusy(true); setErrMsg(''); setReport(null);
-    const prompt = `You are an expert German teacher who checks BOTH grammar AND meaning/logic ("deutsches Denken") for Persian-speaking learners. Evaluate the sentence.\n\nINPUT: "${s}"\n\nCHECK:\n1) Meaning & logic FIRST: does the sentence make sense? Is the connector logically correct for the intended meaning? obwohl = concession AGAINST the expectation, trotzdem = nevertheless, weil = reason. If the logic contradicts the connector (e.g. "wenig Geld, obwohl große Reise" — the money is a REASON against the trip), that is a serious error: fix the connector or the logic and explain.\n2) Grammar and verb conjugation.\n3) Connectors and clause order (Hauptsatz/Nebensatz, verb position).\n4) Prepositions and required cases.\n5) Articles, gender, adjective endings.\n6) Word order.\n7) Spelling and capitalization.\n8) Naturalness and register.\n\nRULES:\n- Correct genuine errors only; preserve meaning as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".\n- Score 0-100 (integer): meaning/logic errors cost the most.\n- Explanations and the tip: concise Persian, no repetition.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
+    const prompt = `You are an expert German teacher who checks BOTH grammar AND meaning/logic ("deutsches Denken") for Persian-speaking learners. Evaluate the sentence.\n\nINPUT: "${s}"\n\nCHECK:\n1) Meaning & logic FIRST: does the sentence make sense? Is the connector logically correct for the intended meaning? obwohl = concession AGAINST the expectation, trotzdem = nevertheless, weil = reason. If the logic contradicts the connector (e.g. "wenig Geld, obwohl große Reise" — the money is a REASON against the trip), that is a serious error: fix the connector or the logic and explain.\n2) Grammar and verb conjugation.\n3) Connectors and clause order (Hauptsatz/Nebensatz, verb position).\n4) Prepositions and required cases.\n5) Articles, gender, adjective endings.\n6) Word order.\n7) Spelling and capitalization.\n8) Naturalness and register.\n\nRULES:\n- Correct genuine errors only; preserve meaning as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".\n- Score 0-100 (integer): meaning/logic errors cost the most.\n- Explanations and the tip: concise Persian, no repetition.\n- A greeting, a single word or a fragment without a verb is NOT a sentence: score ≤ 20, add an issue of type "معنا و منطق جمله", and understood_fa must say there is no real message.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
     try {
       const out = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
       const r: any = parseAI(out)[0] || {};
       if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
       setReport({
         understood_fa: String(r.understood_fa || ''),
-        score: Math.max(0, Math.min(100, Math.round(Number(r.score)))),
+        score: Math.min(Math.max(0, Math.min(100, Math.round(Number(r.score)))), germanTokens(s).length < 3 ? 20 : 100),
         corrected_de: String(r.corrected_de || ''),
         issues: Array.isArray(r.issues) ? r.issues : [],
         tip_fa: String(r.tip_fa || '')
@@ -564,7 +564,7 @@ const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => 
             <span className={`px-3.5 py-1 rounded-xl text-sm font-extrabold ${report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'}`}>
               نمره: {report.score}/100
             </span>
-            {report.issues.length === 0 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
+            {report.issues.length === 0 && report.score >= 80 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
           </div>
           <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
           {report.understood_fa && (
@@ -774,6 +774,7 @@ interface ExercisesViewProps {
   onUpdateSettings?: (patch: Partial<AppSettings>) => void;
   onStartHard?: (ids: string[]) => void;
   dailyProgress?: { d: string; n: number; r: number };
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
 }
 
 const ALLOC_KEY = 'wb_flash_new_alloc';
@@ -797,7 +798,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   paused,
   onUpdateSettings,
   onStartHard,
-  dailyProgress
+  dailyProgress,
+  onQuickAddWord
 }) => {
   const topRef = useRef<HTMLDivElement>(null);
   const words = useMemo(() => {
@@ -1683,21 +1685,22 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   };
         
-  const [mainTab, setMainTab] = useState<MainTab>('flash');
+  const [mainTab, setMainTab] = useState<MainTab>(() => (sessionStorage.getItem('wb_main_tab') as MainTab) || 'flash');
+  useEffect(() => { try { sessionStorage.setItem('wb_main_tab', mainTab); } catch { /* ignore */ } }, [mainTab]);
   const [showHard, setShowHard] = useState(false);
 
   // ⚠️ همهٔ hookها باید بالاتر از این خط باشند؛ از اینجا به بعد return زودهنگام داریم.
   const renderTabHeader = () => (
     <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2">
-      <div className="grid grid-cols-7 gap-1 p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
+      <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
         {MAIN_TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setMainTab(t.id)}
-            className={`py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === t.id ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
+            className={`flex-1 min-w-[68px] shrink-0 py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === t.id ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
           >
             <span className="text-lg">{t.icon}</span>
-            <span className="text-[10px] sm:text-xs leading-tight">{t.label}</span>
+            <span className="text-[11px] sm:text-xs leading-tight whitespace-nowrap">{t.label}</span>
           </button>
         ))}
       </div>
@@ -1718,7 +1721,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
-        <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} />
+        <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />
       </div>
     );
   }
@@ -1727,9 +1730,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
-        {/* دیکتهٔ واژه و جمله از مسیر activeMode اجرا می‌شوند و منوی HoerenTrainer آن‌ها را ندارد */}
+        {/* هر تمرین Hören در صفحهٔ جدا باز می‌شود (از مسیر activeMode) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {HOEREN_MODES.filter(m => m === 'dict' || m === 'dikt').map(mode => {
+          {HOEREN_MODES.map(mode => {
             const info = EXERCISE_NAMES[mode];
             return (
               <button
@@ -1746,7 +1749,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             );
           })}
         </div>
-        <HoerenTrainer onClose={() => setMainTab('flash')} />
       </div>
     );
   }
