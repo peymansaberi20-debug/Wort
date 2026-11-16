@@ -6,12 +6,13 @@
 import React, { useState, useEffect } from 'react';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { speak, stopSpeaking } from '../utils/audio';
+import type { Word } from '../types';
 import { Clock, Printer, Volume2, Square, Eye, EyeOff, PlusCircle, Lightbulb, PauseCircle } from 'lucide-react';
 
 interface LesenTrainerProps {
   onClose: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
-  onOpenAddWord?: (initialWord: string, onDone: () => void) => void;
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
 }
 
 interface ReadingQuestion {
@@ -85,7 +86,7 @@ const EXAM_SPECS: Record<string, Record<string, { duration: number; structure: s
 const ARCHIVE_KEY = 'wb_lesen_exam_archive_v1';
 const RESULTS_KEY = 'wb_lesen_results_v1';
 
-export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onOpenAddWord }) => {
+export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuickAddWord }) => {
   const [view, setView] = useState<'menu' | 'creator' | 'archive_levels' | 'archive_exams' | 'exam_active' | 'result'>('menu');
 
   const [examOrg, setExamOrg] = useState<'ÖSD' | 'Goethe' | 'telc' | 'EPD'>('ÖSD');
@@ -105,6 +106,7 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onOpenA
   const [isTimerPaused, setIsTimerPaused] = useState<boolean>(false);
   const [visibleTexts, setVisibleTexts] = useState<Record<number, boolean>>({});
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  const [addForm, setAddForm] = useState<{ de: string; art: string; fa: string; ex: string } | null>(null);
   const [selectedWordModal, setSelectedWordModal] = useState<{ word: string; meaning?: string; loading?: boolean } | null>(null);
 
   useEffect(() => {
@@ -625,7 +627,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
                     {isTextShown && (
                       <div className="p-4 md:p-5 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 space-y-2 animate-fadeIn">
                         <div className="text-[11px] text-[#1f5fbf] dark:text-[#7fb0ff] font-bold flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-2 mb-2">
-                          <span>💡 روی هر کلمه در متن کلیک کنید تا معنی آن را ببینید و به لایتنر اضافه کنید (تایمر متوقف می‌شود).</span>
+                          <span>💡 روی هر کلمه در متن کلیک کنید تا معنی آن را ببینید و به واژه‌نامه اضافه کنید (تایمر متوقف می‌شود).</span>
                         </div>
                         <div className="text-sm md:text-base font-sans text-slate-900 dark:text-slate-100 text-left select-text" dir="ltr">
                           {renderInteractiveText(currentPart.text)}
@@ -678,7 +680,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         </div>
       )}
 
-      {/* مودال هایلایت واژه و افزودن به لایتنر (تایمر در این حالت متوقف است) */}
+      {/* مودال هایلایت واژه (تایمر در این حالت متوقف است) */}
       {selectedWordModal && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
@@ -718,19 +720,17 @@ Return ONLY a valid JSON object (no markdown, no extra text):
             </div>
 
             <div className="flex gap-2">
-              {onOpenAddWord && (
+              {onQuickAddWord && (
                 <button
                   onClick={() => {
                     const w = selectedWordModal.word;
+                    const m = selectedWordModal.loading ? '' : (selectedWordModal.meaning || '');
                     setSelectedWordModal(null);
-                    onOpenAddWord(w, () => {
-                      // پس از ذخیره و بستن فرم افزودن واژه، تایمر دوباره فعال می‌شود
-                      setIsTimerPaused(false);
-                    });
+                    setAddForm({ de: w, art: '', fa: m, ex: '' });
                   }}
                   className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs"
                 >
-                  <PlusCircle size={15} /> افزودن به جعبه لایتنر
+                  <PlusCircle size={15} /> افزودن به واژه‌نامه
                 </button>
               )}
               <button
@@ -739,6 +739,27 @@ Return ONLY a valid JSON object (no markdown, no extra text):
               >
                 ادامه آزمون
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* پنجرهٔ افزودن واژه به کتابخانه */}
+      {addForm && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#1b2029] rounded-3xl p-5 space-y-3 text-right" dir="rtl">
+            <h3 className="font-extrabold text-sm">➕ افزودن واژه به کتابخانه</h3>
+            <div className="flex gap-2" dir="ltr">
+              <select value={addForm.art} onChange={e => setAddForm({ ...addForm, art: e.target.value })} className="border rounded-xl px-2 bg-slate-50 dark:bg-[#141923]">
+                <option value="">—</option><option>der</option><option>die</option><option>das</option>
+              </select>
+              <input value={addForm.de} onChange={e => setAddForm({ ...addForm, de: e.target.value })} className="flex-1 border rounded-xl px-3 py-2 font-sans bg-slate-50 dark:bg-[#141923]" />
+            </div>
+            <input value={addForm.fa} onChange={e => setAddForm({ ...addForm, fa: e.target.value })} placeholder="معنی فارسی" className="w-full border rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-[#141923]" />
+            <input dir="ltr" value={addForm.ex} onChange={e => setAddForm({ ...addForm, ex: e.target.value })} placeholder="Beispielsatz (optional)" className="w-full border rounded-xl px-3 py-2 text-sm font-sans bg-slate-50 dark:bg-[#141923]" />
+            <div className="flex gap-2">
+              <button onClick={() => { if (onQuickAddWord?.({ de: addForm.de.trim(), art: addForm.art, fa: addForm.fa.trim(), ex: addForm.ex.trim(), cat: 'Lesen', lvl: examLevel })) { setAddForm(null); setIsTimerPaused(false); } }} className="flex-1 bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">ذخیره</button>
+              <button onClick={() => { setAddForm(null); setIsTimerPaused(false); }} className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">انصراف</button>
             </div>
           </div>
         </div>
