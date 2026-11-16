@@ -77,6 +77,7 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const [partIdx, setPartIdx] = useState(0);
   const [report, setReport] = useState<Report | null>(null);
   const [partSecondsLeft, setPartSecondsLeft] = useState<number>(180);
+  const [showFa, setShowFa] = useState(false);
 
   const msgsRef = useRef<Msg[]>([]);
   const busyRef = useRef(false);
@@ -214,6 +215,7 @@ Return ONLY JSON: {"reply":"...","ok":true,"corrected":"...","issues":[{"wrong":
   const startExam = async () => {
     unlockAudio();
     setScreen('exam'); setReport(null); setErr(''); setMsgs([]); setPartIdx(0); setBusy(true); busyRef.current = true;
+    setShowFa(false);
     let list: Part[] = [];
     try {
       const res = await generateWithGemini(`Design an official German speaking exam simulation for ${examType} at level ${examLevel} (standard Goethe/telc format for Germany). Exactly 3 parts.
@@ -239,6 +241,7 @@ Return ONLY JSON: {"parts":[{"type":"dialog|monolog","title_de":"Teil 1: ...","t
     stopListening(); stopTalking();
     if (partIdx >= parts.length - 1) { void evaluate(); return; }
     const i = partIdx + 1;
+    setShowFa(false);
     setPartIdx(i);
     setPartSecondsLeft((parts[i].minutes || 3) * 60);
     const op = parts[i].opening || parts[i].task_de;
@@ -253,7 +256,8 @@ Return ONLY JSON: {"parts":[{"type":"dialog|monolog","title_de":"Teil 1: ...","t
     setBusy(true); busyRef.current = true; setErr('');
     const exam = screenRef.current === 'exam';
     try {
-      const res = await generateWithGemini(`Evaluate candidate's German speaking transcript (${exam ? `${examType} ${examLevel}` : `level ${prefs.level}`}).
+      const transcript = list.map(m => `${m.who === 'ai' ? 'Examiner' : 'Candidate'}: ${m.text}`).join('\n');
+      const res = await generateWithGemini(`TRANSCRIPT:\n${transcript}\n\nBe strict and honest: judge ONLY the Candidate's lines; very short or off-task answers get low scores. Evaluate candidate's German speaking transcript (${exam ? `${examType} ${examLevel}` : `level ${prefs.level}`}).
 Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"task":0,"interaction":0,"vocab":0,"grammar":0},"summary_fa":"...","strengths_fa":["..."],"improvements_fa":["..."],"corrections":[{"original":"...","corrected":"...","why_fa":"..."}],"model_answer_de":"model answer 4-6 sentences"}`, { json: true, timeoutMs: 60000, retries: 1 });
       const r = obj(res);
       const c = r.criteria || {};
@@ -308,18 +312,17 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
                       <div key={k} className="text-xs leading-6">
                         <span dir="ltr" className="font-sans"><s className="text-rose-600">{x.wrong}</s> → <b className="text-emerald-700">{x.correct}</b></span>
                         <div className="text-[#5d6676]">{x.why_fa}</div>
+                        <button
+                          onClick={() => {
+                            addErrors([{ original: x.wrong, corrected: x.correct, type: 'گرامر مکالمه', why: x.why_fa }]);
+                            onShowToast('خطا به دفترچه خطاها افزوده شد ✓');
+                          }}
+                          className="mt-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center gap-1"
+                        >
+                          <PlusCircle size={12} /> افزودن این خطا به دفتر خطاها
+                        </button>
                       </div>
                     ))}
-                    {/* ارتقا ۱: دکمه افزودن مستقیم خطا به دفتر خطاها */}
-                    <button
-                      onClick={() => {
-                        addErrors([{ original: x.wrong, corrected: x.correct, type: 'گرامر مکالمه', why: x.why_fa }]);
-                        onShowToast('خطا به دفترچه خطاها افزوده شد ✓');
-                      }}
-                      className="mt-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center gap-1"
-                    >
-                      <PlusCircle size={12} /> افزودن این خطا به دفتر خطاها
-                    </button>
                   </>
                 )}
               </div>
@@ -399,17 +402,20 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
 
       {screen === 'exam' && (
         <div className={card + ' space-y-3'}>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <b className="text-sm">🎓 آزمون {examType} ({examLevel}) — {parts[partIdx]?.title_de}</b>
-              <p className="text-xs text-[#5d6676]">{parts[partIdx]?.task_fa}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1 min-w-0">
+              <b className="text-sm">🎓 {examType} {examLevel} — Teil {partIdx + 1} von {parts.length}</b>
+              <p className="text-base font-extrabold font-sans" dir="ltr">{parts[partIdx]?.task_de}</p>
+              {showFa
+                ? <p className="text-xs text-[#9aa3b2]">{parts[partIdx]?.task_fa}</p>
+                : <button onClick={() => setShowFa(true)} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش فارسی</button>}
             </div>
-            {/* ارتقا ۳: تایمر معکوس برای مدیریت زمان آزمون */}
-            <div className="flex items-center gap-2">
+            {/* تایمر معکوس برای مدیریت زمان آزمون */}
+            <div className="flex items-center gap-2 shrink-0">
               <span className="px-3 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 text-amber-800 text-xs font-mono font-bold flex items-center gap-1">
                 <Clock size={13} /> {formatTime(partSecondsLeft)}
               </span>
-              <button onClick={nextPart} className="px-3 py-1.5 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold">بخش بعدی ◀</button>
+              <button onClick={nextPart} disabled={busy} className="px-3 py-1.5 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold">{partIdx >= parts.length - 1 ? 'پایان آزمون ✓' : 'بخش بعدی ◀'}</button>
             </div>
           </div>
           {Chat}
@@ -422,10 +428,23 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
             <span className="text-3xl">🏆</span>
             <h3 className="font-extrabold text-base">کارنامه ارزیابی مکالمه</h3>
             <div className="text-2xl font-black text-emerald-600">{report.score}/100 ({report.passed ? 'قبول ✓' : 'تلاش مجدد'})</div>
+            {report.level_estimate && <div className="text-xs text-[#5d6676]">سطح تخمینی: {report.level_estimate}</div>}
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+            {([['task', 'انجام تکلیف'], ['interaction', 'تعامل'], ['vocab', 'واژگان'], ['grammar', 'گرامر']] as const).map(([k, l]) => (
+              <div key={k} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex justify-between"><span>{l}</span><span>{report.criteria[k]}/25</span></div>
+            ))}
           </div>
           <p className="text-sm leading-7">{report.summary_fa}</p>
+          {report.strengths_fa.length > 0 && <div className="text-sm"><b className="text-emerald-700">✅ نقاط قوت</b><ul className="list-disc pr-5 leading-7">{report.strengths_fa.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
+          {report.improvements_fa.length > 0 && <div className="text-sm"><b className="text-amber-700">⚠️ نقاط قابل بهبود</b><ul className="list-disc pr-5 leading-7">{report.improvements_fa.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
+          {report.corrections.length > 0 && <div className="space-y-2">{report.corrections.map((c, i) => (
+            <div key={i} className="p-2.5 rounded-xl border text-xs space-y-1">
+              <div dir="ltr" className="font-sans"><s className="text-rose-600">{c.original}</s> → <b className="text-emerald-700">{c.corrected}</b></div>
+              <div className="text-[#5d6676]">{c.why_fa}</div>
+            </div>))}</div>}
 
-          {/* ارتقا ۲: پخش صوتی پاسخ نمونه (Model Answer Audio Player) */}
+          {/* پخش صوتی پاسخ نمونه */}
           {report.model_answer_de && (
             <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 space-y-2">
               <div className="flex items-center justify-between">
