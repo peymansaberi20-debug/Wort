@@ -144,11 +144,7 @@ export default function App() {
     if (tab !== currentTab || activeExercise) {
       setHistoryStack(prev => [...prev.slice(-25), currentTab]);
     }
-    //
-    // Fulfills User Request #5:
-    // "الان وقتی ویرایش رو میزنم وارد ویرایش واژه میشه،
-    // اگر از پایین مثلا داشبورد انتخاب کنم و برم داشبورد ، اون فرم ویرایش بسته نمیشه و باز میمونه توی قسمت واژگان ، این ایراد رو حتما رفع کن ."
-    //
+    // Closing the word edit form when leaving the vocabulary tab
     if (editingWordId && tab !== 'lib') {
       setEditingWordId(null);
     }
@@ -303,6 +299,16 @@ export default function App() {
       }
     }
     setEditingWordId(null);
+  };
+
+  // Quick add from exercises (e.g. Lesen): adds a word without leaving the exercise. Returns true on success.
+  const handleQuickAddWord = (data: Partial<Word>): boolean => {
+    if (!data.de) return false;
+    if (isDuplicateVocabularyEntry(data, state.words)) { showToast('این واژه قبلاً در کتابخانه وجود دارد.', true); return false; }
+    const nw = norm({ ...data, added: Date.now() }) as Word;
+    setState(prev => ({ ...prev, words: [...prev.words, nw] }));
+    showToast('واژه به کتابخانه افزوده شد.');
+    return true;
   };
 
   // Centralized deletion request: no record is removed until the user confirms.
@@ -740,6 +746,7 @@ export default function App() {
                   words={state.words}
                   settings={state.set}
                   activeMode={null}
+                  onQuickAddWord={handleQuickAddWord}
                   onSelectMode={setActiveExercise}
                   onStartHard={ids => { setPracticeWordIds(ids); setExerciseHidden(false); setActiveExercise('hard'); }}
                   onRecordResult={handleRecordResult}
