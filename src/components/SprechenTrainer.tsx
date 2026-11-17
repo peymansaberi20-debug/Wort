@@ -14,12 +14,13 @@
  *  - 5 conversation personas + 2 exam personas (gender-aware)
  *  - avatar (emoji) + name in chat header
  *  - stable voice selection (browser TTS: pick German voice matching persona gender)
- *  - cloud TTS hook via window.__WORT_TTS__ (optional, gender param)
+ *  - voice selection via audio.ts (cloud-first via wort.ttsWorker, browser-TTS
+ *    fallback) with persona-aware German voice name
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Send, Square, Volume2, Clock, PlusCircle, Repeat } from 'lucide-react';
-import { speak, stopSpeaking } from '../utils/audio';
+import { speak, stopSpeaking, getTtsWorkerBase, setTtsWorkerBase } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import { ExamRun, S, askJson, useNoHelp } from '../utils/trainerKit';
@@ -116,29 +117,27 @@ const EXAM_PERSONAS: Record<ExamType, Persona> = {
   },
 };
 
-/* ------------------------- Stable voice selection ------------------------- */
-// Picks a German browser TTS voice matching the persona gender. iOS Safari needs
-// voices loaded asynchronously via speechSynthesis.onvoiceschanged.
-const findDeVoice = (gender: Gender): SpeechSynthesisVoice | null => {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
-  const all = window.speechSynthesis.getVoices() || [];
-  const de = all.filter(v => (v.lang || '').toLowerCase().startsWith('de'));
-  if (!de.length) return null;
-  // Heuristic: female voices usually have keywords in name; otherwise pick first de voice.
-  const fem = de.find(v => /anna|female|weiblich|petra|sabina|marlene|katja|hanna/i.test(v.name));
-  const mal = de.find(v => /male|männlich|herr|markus|yannick|maxim|julius|markus/i.test(v.name));
-  const pick = gender === 'female' ? (fem || mal || de[0]) : (mal || fem || de[0]);
-  return pick || null;
+/* ------------------------- Voice selection ------------------------- *
+ * We rely on the real `audio.ts` (cloud-first via wort.ttsWorker, browser
+ * TTS fallback with German voice). `audio.ts` exposes `SpeakOptions.voiceName`
+ * and `vreg` (lang code), so we only need to map each persona's gender to a
+ * stable German browser voice name. The list below prefers well-known voices
+ * present on macOS/iOS ("Anna", "Markus") and Windows ("Katja", "Conrad");
+ * missing names simply fall back to the first German voice inside `speak()`.
+ */
+const VOICE_BY_GENDER: Record<Gender, string[]> = {
+  female: ['Anna', 'Katja', 'Petra', 'Sabina', 'Marlene', 'Hanna', 'Helena'],
+  male: ['Markus', 'Conrad', 'Yannick', 'Maxim', 'Julius', 'Jakob', 'Tom'],
 };
 
-// Optional cloud TTS hook. The existing wort-tts worker accepts ?lang=de; we add a
-// gender-aware endpoint later. For now we fall back to browser TTS with a chosen
-// German voice. To enable cloud voices later, set window.__WORT_TTS__ = async (text, gender) => url.
-type CloudTts = (text: string, gender: Gender) => Promise<string | null>;
-const getCloudTts = (): CloudTts | null => {
-  if (typeof window === 'undefined') return null;
-  const fn = (window as any).__WORT_TTS__;
-  return typeof fn === 'function' ? (fn as CloudTts) : null;
+const pickVoiceName = (gender: Gender): string | undefined => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
+  const all = window.speechSynthesis.getVoices() || [];
+  const de = all.filter(v => (v.lang || '').toLowerCase().startsWith('de'));
+  if (!de.length) return undefined;
+  const candidates = VOICE_BY_GENDER[gender];
+  const hit = de.find(v => candidates.some(c => v.name.toLowerCase().includes(c.toLowerCase())));
+  return (hit || de[0]).name;
 };
 
 const FREE_TOPICS = [
@@ -229,6 +228,8 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const [partSecondsLeft, setPartSecondsLeft] = useState<number>(180);
   const [showFa, setShowFa] = useState(false);
   const [noHelp, setNoHelp] = useNoHelp();
+  const [ttsWorkerInput, setTtsWorkerInput] = useState<string>(() => getTtsWorkerBase() || '');
+  const [ttsWorkerSaved, setTtsWorkerSaved] = useState<string | null>(null);
   const limited = !!exam || noHelp;
 
   const msgsRef = useRef<Msg[]>([]);
@@ -294,38 +295,32 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
 
   const stopTalking = () => { speakToken.current++; stopSpeaking(); setSpeaking(false); };
 
-  // Persona-aware speak: prefers cloud TTS (gender param) if available, else browser TTS
-  // with a German voice matching persona gender.
+  // Persona-aware speak: delegates to `audio.ts` `speak()`, which is itself
+  // cloud-first (wort.ttsWorker) with a browser-TTS fallback. We only choose a
+  // German voice matching the persona gender so each persona sounds consistent
+  // across sessions. On iOS Safari, `audio.ts` already warms up voices and uses
+  // the same unlock flow, so playback works there too.
   const personaSay = (text: string, onDone?: () => void) => {
     if (!text) return;
     const token = ++speakToken.current;
     stopSpeaking();
     setSpeaking(true); setBlocked(false);
     const rate = prefsRef.current.rate;
-    const gender = activePersona.gender;
+    const voiceName = pickVoiceName(activePersona.gender);
     const done = () => { if (token !== speakToken.current) return; setSpeaking(false); onDone?.(); };
     const fail = () => { if (token !== speakToken.current) return; setSpeaking(false); setBlocked(true); };
-
-    const cloud = getCloudTts();
-    if (cloud) {
-      cloud(text, gender).then(url => {
-        if (token !== speakToken.current) return;
-        if (!url) { fallbackBrowser(text, rate, done, fail); return; }
-        try {
-          const a = new Audio(url);
-          a.playbackRate = rate;
-          a.onended = done; a.onerror = () => fallbackBrowser(text, rate, done, fail);
-          void a.play().catch(() => fallbackBrowser(text, rate, done, fail));
-        } catch { fallbackBrowser(text, rate, done, fail); }
-      }).catch(() => { if (token === speakToken.current) fallbackBrowser(text, rate, done, fail); });
-      return;
-    }
-    fallbackBrowser(text, rate, done, fail);
-  };
-
-  const fallbackBrowser = (text: string, rate: number, onEnd: () => void, onErr: () => void) => {
-    const voice = findDeVoice(activePersona.gender);
-    speak(text, { rate, voice, onEnd, onErr: () => speak(text, { rate, voice, forceBrowser: true, onEnd, onErr }) });
+    void speak(text, {
+      rate,
+      vreg: 'de-DE',
+      voiceName,
+      onEnd: done,
+      onErr: () => {
+        // Cloud may fail (no worker, network) — audio.ts already falls back to
+        // browser TTS internally, so this branch only fires if even the
+        // browser voice failed. Try once more with forceBrowser to be safe.
+        void speak(text, { rate, vreg: 'de-DE', voiceName, forceBrowser: true, onEnd: done, onErr: fail });
+      },
+    });
   };
 
   const sayDe = (text: string, onDone?: () => void) => personaSay(text, onDone);
@@ -510,6 +505,37 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
         <button onClick={() => setPrefs({ handsFree: !prefs.handsFree })} className={chip(prefs.handsFree)}>🤝 دست‌آزاد</button>
         <button onClick={() => setPrefs({ autoSend: !prefs.autoSend })} className={chip(prefs.autoSend)}>⚡ ارسال خودکار</button>
         <button onClick={() => setNoHelp(!noHelp)} className={chip(noHelp)}>🚫 بدون کمک</button>
+      </div>
+      <div className="border-t border-slate-100 dark:border-slate-800 pt-2.5 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-[#5d6676]">☁️ صدای ابری (Worker TTS)</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ttsWorkerInput.trim() ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
+            {ttsWorkerInput.trim() ? 'فعال' : 'غیرفعال (مرورگری)'}
+          </span>
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            dir="ltr"
+            value={ttsWorkerInput}
+            onChange={e => { setTtsWorkerInput(e.target.value); setTtsWorkerSaved(null); }}
+            placeholder="https://wort-tts.peymansaberi20.workers.dev"
+            className="flex-1 min-w-0 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono outline-none"
+          />
+          <button
+            onClick={() => {
+              const v = ttsWorkerInput.trim().replace(/\/+$/, '');
+              setTtsWorkerBase(v);
+              setTtsWorkerInput(v);
+              setTtsWorkerSaved(v ? 'ذخیره شد ✓' : 'پاک شد (حالت مرورگری)');
+              setTimeout(() => setTtsWorkerSaved(null), 2500);
+            }}
+            className="px-3 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold whitespace-nowrap"
+          >ذخیره</button>
+        </div>
+        <div className="text-[10px] text-[#5d6676] leading-5">
+          وقتی آدرس Worker ثبت شود، صدا از سرور ابری پخش می‌شود (باکیفیت، یکدست در همه دستگاه‌ها و iOS). خالی گذاشتن = صدای مرورگر.
+          {ttsWorkerSaved && <span className="block text-emerald-600 font-bold mt-0.5">{ttsWorkerSaved}</span>}
+        </div>
       </div>
     </div>
   );
