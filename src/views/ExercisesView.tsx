@@ -21,6 +21,7 @@ import { SchreibenCorrector } from '../components/SchreibenCorrector';
 import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
+import { KonnektorTrainer } from '../components/KonnektorTrainer';
 import { PageOverlay } from '../components/PageOverlay';
 import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
@@ -63,6 +64,7 @@ export type ExerciseMode =
   | 'dikt'
   | 'errnb'
   | 'vprep'
+  | 'konnektoren'
   | 'hoeren'
   | 'hoeren_new'
   | 'hoeren_archive';
@@ -93,13 +95,14 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' },
+  konnektoren: { title: 'حروف ربط و اضافه', icon: '🔗', desc: 'تکمیل متن با حروف ربط مناسب به همراه گزینه‌های گمراه‌کننده' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
 };
 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'free', 'daily', 'review', 'cloze', 'plural', 'prod', 'synant', 'n2v', 'v2n', 'sent']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'puzzle', 'vprep'];
+const GRAMMATIK_MODES: ExerciseMode[] = ['art', 'conj', 'tense', 'case', 'adjdecl', 'puzzle', 'vprep', 'konnektoren'];
 const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
 const HOEREN_MODES: ExerciseMode[] = ['hoeren_new', 'hoeren_archive', 'dict', 'dikt'];
 type MainTab = 'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen';
@@ -2648,6 +2651,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
               {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
+               {qMode === 'konnektoren' && <KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} />}
 
               {qMode === 'prod' && (
                 <div className="space-y-2">
