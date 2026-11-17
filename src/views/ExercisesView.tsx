@@ -118,7 +118,7 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
 ];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren';
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
