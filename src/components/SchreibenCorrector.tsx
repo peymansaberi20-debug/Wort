@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
-import { generateWithGemini, parseAI } from '../utils/ai';
+import React, { useEffect, useRef, useState } from 'react';
 import { ShadowingModal } from './ShadowingModal';
 import { Camera, ImagePlus, Trash2 } from 'lucide-react';
-import { generateWithImages } from '../utils/aiProvider';
+import { generateWithImages, describeAiError } from '../utils/aiProvider';
+import { addErrors } from '../utils/errorBook';
+import { ExamRun, S, askJson, pick, sentenceFix, useNoHelp } from '../utils/trainerKit';
 
 /** Shrinks a photo to max 1800px JPEG so the upload stays small and reliable. */
 const shrinkImage = (file: File): Promise<{ dataUrl: string; mimeType: string; base64: string }> =>
@@ -32,16 +33,19 @@ const shrinkImage = (file: File): Promise<{ dataUrl: string; mimeType: string; b
     img.src = url;
   });
 
+interface Criteria { content: number; structure: number; vocab: number; grammar: number }
 interface SchreibenReport {
   transcribed_de?: string;
   understood_fa: string;
   score: number;
+  criteria: Criteria;
   corrected_de: string;
   issues: { type: string; wrong: string; correct: string; why_fa: string }[];
   tip_fa: string;
 }
 
 const SCHREIBEN_TOPICS = [
+  { id: 'zus', title: 'خلاصه‌نویسی از متن علمی (Zusammenfassung)', level: 'B2/C1', desc: 'خواندن یک متن علمی کوتاه و نوشتن خلاصهٔ آن با کلمات خودت (مناسب آزمون‌های دانشگاهی / EPD)' },
   { id: 'work', title: 'ایمیل کاری (حسابداری / اداری)', level: 'B1/B2', desc: 'نگارش مکاتبات مالی، گزارش کار، هماهنگی با همکاران یا مدیریت' },
   { id: 'bewerbung', title: 'درخواست کار (Bewerbung)', level: 'B1/B2', desc: 'ارسال رزومه، درخواست مصاحبه شغلی یا کارآموزی' },
   { id: 'haus', title: 'ایمیل به صاحب‌خانه یا Hausverwaltung', level: 'A2/B1', desc: 'گزارش خرابی، اعتراض به شارژ ساختمان یا هماهنگی تخلیه' },
@@ -51,6 +55,10 @@ const SCHREIBEN_TOPICS = [
   { id: 'friend', title: 'پیام غیررسمی به دوست', level: 'A2', desc: 'دعوت به مهمانی، برنامه‌ریزی آخر هفته یا احوالپرسی' },
   { id: 'report', title: 'گزارش از یک تجربه', level: 'B1', desc: 'تعریف یک اتفاق، سفر، دوره آموزشی یا خرید' }
 ];
+const EXAM_TOPICS: Record<string, string[]> = {
+  A1: ['friend', 'doctor'], A2: ['friend', 'haus', 'doctor'], B1: ['work', 'bewerbung', 'insurance', 'opinion'],
+  B2: ['opinion', 'work', 'zus'], C1: ['opinion', 'zus']
+};
 
 const ISSUE_BADGE: Record<string, string> = {
   'گرامر': 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
@@ -62,21 +70,57 @@ const ISSUE_BADGE: Record<string, string> = {
   'معنا و منطق جمله': 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
 };
 
+/** Rubrics like the real exams: four criteria, 0-25 each; the total is summed in code. */
+const RUBRIC: Record<'task' | 'zus' | 'free', { labels: [string, string, string, string]; text: string }> = {
+  task: {
+    labels: ['محتوا و انجام تکلیف', 'ساختار و انسجام', 'واژگان', 'گرامر و درستی'],
+    text: `- content: Erfüllung der Aufgabe (all required points covered, suitable register, length)
+- structure: Kohärenz und Struktur (greeting/closing, logical order, connectors)
+- vocab: Wortschatz (range, precision, spelling of words)
+- grammar: Grammatik (correctness and complexity of structures)`
+  },
+  zus: {
+    labels: ['محتوا و نکات کلیدی', 'ساختار و انسجام', 'واژگان و بازنویسی', 'گرامر و درستی'],
+    text: `- content: Inhalt (topic named, all key statements and the result of the source text reproduced, nothing invented, NO personal opinion)
+- structure: Struktur und Kohärenz (introduction naming topic/source, logical order, connectors, appropriate length ~100 words)
+- vocab: Wortschatz und Paraphrase (own words instead of copying sentences, academic register, variety)
+- grammar: Grammatik (correctness and complexity: Nebensätze, Passiv, Konjunktiv; spelling)`
+  },
+  free: {
+    labels: ['محتوا و منطق', 'ساختار و انسجام', 'واژگان', 'گرامر و درستی'],
+    text: `- content: Inhalt und Logik (the text makes sense, connectors are used logically)
+- structure: Struktur und Kohärenz
+- vocab: Wortschatz (range, precision, register)
+- grammar: Grammatik, Satzbau, Rechtschreibung`
+  }
+};
+
+const taskCheck = S.obj({ taskDe: S.req, taskFa: S.str(), sourceText: S.str(), point1: S.str(), point2: S.str(), point3: S.str() });
+const reportCheck = S.obj({
+  transcribed_de: S.str(), understood_fa: S.str(),
+  criteria: S.obj({ content: S.num(0, 25), structure: S.num(0, 25), vocab: S.num(0, 25), grammar: S.num(0, 25) }),
+  corrected_de: S.str(), issues: S.arr(S.obj({ type: S.str(), wrong: S.str(), correct: S.str(), why_fa: S.str() })), tip_fa: S.str()
+});
+const chatCheck = S.obj({ answer: S.req });
+const wc = (t: string) => t.split(/\s+/).filter(w => /\p{L}/u.test(w)).length;
+
 interface SchreibenCorrectorProps {
   onShowToast: (m: string, e?: boolean) => void;
   variant?: 'pruefung' | 'pruefen';
+  exam?: ExamRun;
 }
 
-export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowToast, variant = 'pruefen' }) => {
-  const isExamMode = variant === 'pruefung';
+export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowToast, variant = 'pruefen', exam }) => {
+  const isExamMode = variant === 'pruefung' || !!exam;
+  const [noHelp, setNoHelp] = useNoHelp();
+  const limited = !!exam || noHelp;           // hides the Persian task text and key points
 
-  // حالت شبیه‌ساز آزمون (Schreiben Prüfung)
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-  const [targetLevel, setTargetLevel] = useState<string>('B1');
-  const [promptData, setPromptData] = useState<{ taskDe: string; taskFa: string; points: string[] } | null>(null);
+  const [targetLevel, setTargetLevel] = useState<string>(exam ? exam.level : 'B1');
+  const [promptData, setPromptData] = useState<{ taskDe: string; taskFa: string; sourceText: string; points: string[] } | null>(null);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [showFa, setShowFa] = useState(false);
 
-  // حالت آپلود عکس و فایل (Schreiben prüfen)
   const [images, setImages] = useState<{ dataUrl: string; mimeType: string; base64: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -89,104 +133,98 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   const [chat, setChat] = useState<{ q: string; a: string; err?: boolean }[]>([]);
   const [chatQ, setChatQ] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(-1);
+  const runCheckRef = useRef<() => void>(() => {});
+
+  const rubricKey: 'task' | 'zus' | 'free' = selectedTopic === 'zus' ? 'zus' : isExamMode ? 'task' : 'free';
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
     e.target.value = '';
     if (files.length === 0) { onShowToast('لطفاً فقط فایل تصویری انتخاب کنید.', true); return; }
-    try {
-      const shrunk = await Promise.all(files.map(shrinkImage));
-      setImages(prev => [...prev, ...shrunk].slice(0, 8));
-    } catch {
-      onShowToast('خواندن تصویر ممکن نشد.', true);
-    }
+    try { const shrunk = await Promise.all(files.map(shrinkImage)); setImages(prev => [...prev, ...shrunk].slice(0, 8)); }
+    catch { onShowToast('خواندن تصویر ممکن نشد.', true); }
   };
 
-
-  const removeImage = (idx: number) => {
-    setImages(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const fetchTaskPrompt = async (topicId: string) => {
+  const fetchTaskPrompt = async (topicId: string, lvl = targetLevel) => {
     const topObj = SCHREIBEN_TOPICS.find(t => t.id === topicId);
     if (!topObj) return;
-    setGeneratingPrompt(true);
-    setPromptData(null);
+    setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg('');
+    const zus = topicId === 'zus';
     try {
-      const p = `You are a strict German exam designer (like ÖSD/Goethe for levels B1/B2). Create an exact exam Aufgabe card for: "${topObj.title} (${topObj.desc})" at level ${targetLevel}.
-The output must strictly mirror official exam formats (like Blog-Eintrag Stellungnahme or Formelles E-Mail with specific word counts, points to cover, and grammar requirements).
-
-Return ONLY valid JSON with no markdown formatting:
-[{"taskDe": "The exact exam instruction in German, including a realistic quote/blog excerpt or scenario, required word count, and clear instructions", "taskFa": "ترجمه و راهنمای فارسی سناریو و خواسته آزمون", "point1": "نکته اول", "point2": "نکته دوم", "point3": "نکته سوم"}]`;
-      const out = await generateWithGemini(p, { json: true, timeoutMs: 25000, retries: 1 });
-      const r: any = parseAI(out)[0] || {};
-      setPromptData({
-        taskDe: r.taskDe || `Schreiben Sie einen Text zum Thema ${topObj.title}.`,
-        taskFa: r.taskFa || topObj.desc,
-        points: [r.point1, r.point2, r.point3].filter(Boolean)
-      });
-    } catch {
-      onShowToast('دریافت سناریو ناموفق بود.', true);
-    } finally {
-      setGeneratingPrompt(false);
-    }
+      const p = `You are a strict German exam designer (like ÖSD/Goethe/EPD for level ${lvl}). Create an exam Aufgabe card for: "${topObj.title} (${topObj.desc})".
+${zus
+  ? `The task is a ZUSAMMENFASSUNG: put an authentic short scientific/academic source text (about ${lvl === 'C1' ? 280 : 220} words, a real-sounding topic from social science, technology, environment or economics) into "sourceText". "taskDe" is the German instruction: summarise the text in about 100 words, name topic and source, reproduce the key statements and the result in your own words, no personal opinion.`
+  : `The output must mirror official exam formats (Blog-Eintrag Stellungnahme or formelle E-Mail with a realistic scenario, required word count, points to cover). "sourceText" must be an empty string.`}
+Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای فارسی خواسته آزمون","sourceText":"...","point1":"نکته اول","point2":"نکته دوم","point3":"نکته سوم"}`;
+      const r = await askJson<any>(p, taskCheck, { timeoutMs: 40000 });
+      setPromptData({ taskDe: r.taskDe, taskFa: r.taskFa || topObj.desc, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) });
+    } catch (e: any) {
+      onShowToast(describeAiError(e), true);
+    } finally { setGeneratingPrompt(false); }
   };
+
+  // full-exam mode: pick a task for the level and start the real timer
+  useEffect(() => {
+    if (!exam) return;
+    const id = pick(EXAM_TOPICS[exam.level] || EXAM_TOPICS.B1);
+    setSelectedTopic(id);
+    void fetchTaskPrompt(id, exam.level).then(() => setSecondsLeft(exam.minutes * 60));
+  }, []);
+  useEffect(() => {
+    if (!exam || secondsLeft <= 0 || report) return;
+    const t = setInterval(() => setSecondsLeft(s => s - 1), 1000);
+    return () => clearInterval(t);
+  }, [exam, report, secondsLeft > 0]);
+  useEffect(() => { if (exam && secondsLeft === 0 && !report) runCheckRef.current(); }, [secondsLeft]);
 
   const runCheck = async () => {
     const s = text.trim();
-    if ((!s && images.length === 0) || busy) return;
-    setBusy(true);
-    setErrMsg('');
-    setReport(null);
+    if (busy) return;
+    if (!s && images.length === 0) { if (exam) exam.onFinish({ score: 0, max: 100, note: 'متنی نوشته نشد' }); return; }
+    setBusy(true); setErrMsg(''); setReport(null);
 
     const topicTitle = SCHREIBEN_TOPICS.find(t => t.id === selectedTopic)?.title || 'آزاد';
     const hasImages = images.length > 0;
+    const rubric = RUBRIC[rubricKey];
 
     const prompt = `You are an expert German exam corrector and teacher for Persian-speaking learners.
-${hasImages ? 'First, carefully transcribe ALL handwritten or printed German text from the attached image(s) accurately into "transcribed_de". If the user also typed text, combine or prioritize the image text as requested.' : ''}
+${hasImages ? 'First, carefully transcribe ALL handwritten or printed German text from the attached image(s) accurately into "transcribed_de". If the user also typed text, combine them.' : ''}
 Evaluate this German writing ${isExamMode ? `for level ${targetLevel} (Context: ${topicTitle})` : 'thoroughly in terms of German thinking (deutsches Denken), style, logic, and grammar'}.
 
 ${s ? `TYPED INPUT TEXT:\n"${s}"\n` : ''}
-${isExamMode && promptData ? `EXAM TASK CONTEXT:\n${promptData.taskDe}\n` : ''}
+${isExamMode && promptData ? `EXAM TASK:\n${promptData.taskDe}\n${promptData.sourceText ? `SOURCE TEXT TO SUMMARISE:\n${promptData.sourceText}\n` : ''}` : ''}
 
-CHECK:
-1) Meaning & logic: does the text make sense? Are connectors (weil, obwohl, trotzdem, dass, etc.) used logically?
-2) Grammar, verb conjugation, syntax, Hauptsatz/Nebensatz verb position.
-3) Prepositions and required cases (Akkusativ/Dativ/Genitiv).
-4) Articles, gender, adjective endings.
-5) Spelling, capitalization and formal/informal register consistency.
+RUBRIC — give each criterion an INTEGER 0-25 (do NOT output a total score):
+${rubric.text}
+Be strict and honest; a text that ignores the task or is far too short scores low.
 
-RULES:
-- Correct genuine errors; preserve the learner's voice and intended meaning as much as possible.
-- If correct: corrected_de = exact input/transcribed text, score = 100, issues = [].
+Also list the genuine errors:
 - Every "wrong" must be an exact substring of the original/transcribed text.
 - Issue types must be exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".
-- Score 0-100 integer.
-- Concise, clear Persian explanations.
-- Return ONLY a valid JSON array with one object, no Markdown:
-[{"transcribed_de":"${hasImages ? 'exact transcribed German text from images' : ''}","understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
+- corrected_de = the corrected full text (preserve the learner's voice). Persian explanations, concise.
+Return ONLY a valid JSON array with one object:
+[{"transcribed_de":"${hasImages ? 'exact transcribed German text from images' : ''}","understood_fa":"...","criteria":{"content":0,"structure":0,"vocab":0,"grammar":0},"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
 
     try {
-      const out = hasImages
-        ? await (generateWithImages as any)(prompt, images.map(img => ({ mimeType: img.mimeType, data: img.base64 })), { json: true, timeoutMs: 120000, retries: 1 })
-        : await generateWithGemini(prompt, { json: true, timeoutMs: 55000, retries: 1 });
-      const r: any = parseAI(out)[0] || {};
-      if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
-      setReport({
-        transcribed_de: r.transcribed_de ? String(r.transcribed_de) : undefined,
-        understood_fa: String(r.understood_fa || ''),
-        score: Math.max(0, Math.min(100, Math.round(Number(r.score)))),
-        corrected_de: String(r.corrected_de || ''),
-        issues: Array.isArray(r.issues) ? r.issues : [],
-        tip_fa: String(r.tip_fa || '')
-      });
+      const r = await askJson<any>(prompt, reportCheck, hasImages
+        ? { call: p => generateWithImages(p, images.map(i => ({ mimeType: i.mimeType, data: i.base64 })), { json: true, timeoutMs: 120000, retries: 1 }) }
+        : { timeoutMs: 55000 });
+      const source = r.transcribed_de || s;
+      const k = wc(source) < 15 ? 0.3 : 1;   // a couple of words cannot score high
+      const c = r.criteria;
+      const crit: Criteria = { content: Math.round(c.content * k), structure: Math.round(c.structure * k), vocab: Math.round(c.vocab * k), grammar: Math.round(c.grammar * k) };
+      const score = crit.content + crit.structure + crit.vocab + crit.grammar;   // total is summed by code
+      const issues = r.issues.filter((i: any) => i.wrong || i.correct);
+      if (issues.length) addErrors(issues.map((i: any) => ({ ...sentenceFix(source, i.wrong, i.correct), type: i.type, why: i.why_fa, src: 'Schreiben' })));
+      setReport({ transcribed_de: r.transcribed_de || undefined, understood_fa: r.understood_fa, score, criteria: crit, corrected_de: r.corrected_de, issues, tip_fa: r.tip_fa });
+      exam?.onFinish({ score, max: 100, note: r.tip_fa });
     } catch (e: any) {
-      setErrMsg(e?.message || 'تصحیح نوشتار ناموفق بود.');
-      onShowToast(e?.message || 'تصحیح ناموفق بود.', true);
-    } finally {
-      setBusy(false);
-    }
+      setErrMsg(describeAiError(e));
+      onShowToast(describeAiError(e), true);
+    } finally { setBusy(false); }
   };
+  runCheckRef.current = () => { void runCheck(); };
 
   const askChat = async () => {
     const q = chatQ.trim();
@@ -196,162 +234,93 @@ RULES:
     setChatQ('');
     const sourceText = report.transcribed_de || text.trim();
     try {
-      const out = await generateWithGemini(
-        `You are an expert German teacher. A learner's text was corrected.\nOriginal text: "${sourceText}"\nCorrected: "${report.corrected_de}"\nQuestion (in Persian): "${q}"\nAnswer ONLY a JSON array with one object:\n[{"answer":"پاسخ کوتاه و کاربردی فارسی (۳ تا ۵ خط)."}]`,
-        { json: true, timeoutMs: 30000, retries: 1 }
-      );
-      let answer = out.trim();
-      try {
-        const parsed = parseAI(out)[0];
-        if (parsed && typeof parsed.answer === 'string') answer = parsed.answer.trim();
-      } catch { /* ignore */ }
-      setChat(prev => {
-        const next = [...prev];
-        next[next.length - 1] = { q, a: answer || 'پاسخی دریافت نشد.' };
-        return next;
-      });
+      const r = await askJson<any>(`You are an expert German teacher. A learner's text was corrected.\nOriginal text: "${sourceText}"\nCorrected: "${report.corrected_de}"\nQuestion (in Persian): "${q}"\nAnswer ONLY a JSON array with one object:\n[{"answer":"پاسخ کوتاه و کاربردی فارسی (۳ تا ۵ خط)."}]`, chatCheck, { timeoutMs: 30000 });
+      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: r.answer }; return next; });
     } catch (e: any) {
-      setChat(prev => {
-        const next = [...prev];
-        next[next.length - 1] = { q, a: e?.message || 'خطا در ارتباط', err: true };
-        return next;
-      });
-    } finally {
-      setChatBusy(false);
-    }
+      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: describeAiError(e), err: true }; return next; });
+    } finally { setChatBusy(false); }
   };
+
+  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  const levelSelect = (
+    <select value={targetLevel} onChange={e => setTargetLevel(e.target.value)} className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none">
+      <option value="A2">سطح A2</option><option value="B1">سطح B1</option><option value="B2">سطح B2</option><option value="C1">سطح C1</option>
+    </select>
+  );
 
   return (
     <div className="space-y-4 text-right">
-      {/* بخش شبیه‌ساز آزمون فقط در حالت Schreiben Prüfung */}
-      {isExamMode ? (
+      {exam && (
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200">
+          <b className="text-sm">✍️ Schreiben — {exam.org} {exam.level}</b>
+          {secondsLeft >= 0 && !report && <span className="px-3 py-1 rounded-xl bg-white border border-amber-200 text-amber-800 text-xs font-mono font-bold">⏱ {fmt(secondsLeft)}</span>}
+        </div>
+      )}
+
+      {isExamMode && (
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 انتخاب موضوع و سناریوی آزمون Schreiben</span>
-            <select
-              value={targetLevel}
-              onChange={e => setTargetLevel(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none"
-            >
-              <option value="A2">سطح A2</option>
-              <option value="B1">سطح B1</option>
-              <option value="B2">سطح B2</option>
-            </select>
-          </div>
-
-          <select
-            value={selectedTopic}
-            onChange={e => {
-              const val = e.target.value;
-              setSelectedTopic(val);
-              if (val) void fetchTaskPrompt(val);
-              else setPromptData(null);
-            }}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
-          >
-            <option value="">-- موضوع آزمون را انتخاب کنید --</option>
-            {SCHREIBEN_TOPICS.map(t => (
-              <option key={t.id} value={t.id}>{t.title} ({t.level})</option>
-            ))}
-          </select>
-
-          {generatingPrompt && (
-            <div className="text-sm text-indigo-600 dark:text-indigo-400 font-bold animate-pulse text-center py-2">
-              ⏳ در حال بارگذاری سناریو و نکات آزمون...
-            </div>
+          {!exam && (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 انتخاب موضوع و سناریوی آزمون Schreiben</span>
+                {levelSelect}
+              </div>
+              <select value={selectedTopic} onChange={e => { const v = e.target.value; setSelectedTopic(v); if (v) void fetchTaskPrompt(v); else setPromptData(null); }}
+                className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none">
+                <option value="">-- موضوع آزمون را انتخاب کنید --</option>
+                {SCHREIBEN_TOPICS.map(t => <option key={t.id} value={t.id}>{t.title} ({t.level})</option>)}
+              </select>
+              <button onClick={() => setNoHelp(!noHelp)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>🚫 حالت بدون کمک {noHelp ? '(روشن)' : ''}</button>
+            </>
           )}
+
+          {generatingPrompt && <div className="text-sm text-indigo-600 dark:text-indigo-400 font-bold animate-pulse text-center py-2">⏳ در حال بارگذاری سناریو و نکات آزمون...</div>}
 
           {promptData && (
             <div className="p-3.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 space-y-2 text-sm leading-7">
               <div className="font-bold text-indigo-900 dark:text-indigo-200">📋 صورت سوال (Aufgabenstellung):</div>
-              <div dir="ltr" className="font-sans font-semibold text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
-                {promptData.taskDe}
-              </div>
-              <div className="text-slate-700 dark:text-slate-300">{promptData.taskFa}</div>
-              {promptData.points.length > 0 && (
-                <div className="pt-1">
-                  <span className="font-bold">نکات کلیدی برای نوشتن:</span>
-                  <ul className="list-disc list-inside space-y-1 mt-1 text-slate-600 dark:text-slate-400">
-                    {promptData.points.map((pt, i) => <li key={i}>{pt}</li>)}
-                  </ul>
+              <div dir="ltr" className="font-sans font-bold text-base text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50">{promptData.taskDe}</div>
+              {promptData.sourceText && (
+                <div className="space-y-1">
+                  <div className="font-bold text-indigo-900 dark:text-indigo-200">📄 متن مبدأ (Ausgangstext):</div>
+                  <div dir="ltr" className="font-sans text-sm text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap">{promptData.sourceText}</div>
                 </div>
               )}
+              {!limited && (showFa ? (
+                <>
+                  <div className="text-slate-700 dark:text-slate-300">{promptData.taskFa}</div>
+                  {promptData.points.length > 0 && (
+                    <div className="pt-1"><span className="font-bold">نکات کلیدی برای نوشتن:</span>
+                      <ul className="list-disc list-inside space-y-1 mt-1 text-slate-600 dark:text-slate-400">{promptData.points.map((pt, i) => <li key={i}>{pt}</li>)}</ul>
+                    </div>
+                  )}
+                </>
+              ) : <button onClick={() => setShowFa(true)} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش توضیح فارسی</button>)}
             </div>
           )}
         </div>
-      ) : null}
+      )}
 
-      {/* عکس / دوربین: در هر دو حالت (در حالت آزمون، بعد از دریافت سناریو) */}
-      {(!isExamMode || promptData) && (
+      {!exam && (!isExamMode || promptData) && (
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📸 ارسال عکس دست‌نویس یا فایل (چند صفحه)</span>
-            <select
-              value={targetLevel}
-              onChange={e => setTargetLevel(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none"
-            >
-              <option value="A2">سطح A2</option>
-              <option value="B1">سطح B1</option>
-              <option value="B2">سطح B2</option>
-            </select>
+            {levelSelect}
           </div>
-          <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
-            می‌توانی از متن دست‌نویس خودت عکس بگیری، تصویر از گالری/سیستم انتخاب کنی یا متن را پایین تایپ کنی.
-          </p>
-
+          <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">می‌توانی از متن دست‌نویس خودت عکس بگیری، تصویر از گالری/سیستم انتخاب کنی یا متن را پایین تایپ کنی.</p>
           <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 font-bold text-sm transition"
-            >
-              <Camera size={18} />
-              <span>عکس با دوربین</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 font-bold text-sm transition"
-            >
-              <ImagePlus size={18} />
-              <span>انتخاب عکس / فایل</span>
-            </button>
+            <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 font-bold text-sm transition"><Camera size={18} /><span>عکس با دوربین</span></button>
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 font-bold text-sm transition"><ImagePlus size={18} /><span>انتخاب عکس / فایل</span></button>
           </div>
-
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFilesSelected}
-            className="hidden"
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFilesSelected}
-            className="hidden"
-          />
-
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFilesSelected} className="hidden" />
+          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFilesSelected} className="hidden" />
           {images.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2">
               {images.map((img, idx) => (
                 <div key={idx} className="relative rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                   <img src={img.dataUrl} alt={`صفحه ${idx + 1}`} className="w-full h-32 object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(idx)}
-                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md"
-                    title="حذف تصویر"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <span className="absolute bottom-1 left-1.5 bg-black/65 text-white text-xs px-2 py-0.5 rounded-md font-bold">
-                    صفحه {idx + 1}
-                  </span>
+                  <button type="button" onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))} className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md" title="حذف تصویر"><Trash2 size={14} /></button>
+                  <span className="absolute bottom-1 left-1.5 bg-black/65 text-white text-xs px-2 py-0.5 rounded-md font-bold">صفحه {idx + 1}</span>
                 </div>
               ))}
             </div>
@@ -359,48 +328,40 @@ RULES:
         </div>
       )}
 
-      <textarea
-        dir="ltr"
-        rows={6}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        placeholder={isExamMode ? 'Hier steht dein deutscher Text … (پاسخ آزمون را اینجا بنویسید)' : 'Hier steht dein deutscher Text … (در صورت تمایل متن را اینجا بنویسید یا فقط عکس بالا را بفرستید)'}
-        className="w-full bg-slate-50 dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-2xl px-4 py-3 font-sans text-base outline-none leading-relaxed shadow-xs"
-      />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => void runCheck()}
-          disabled={busy || (!text.trim() && images.length === 0)}
-          className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 shadow-md transition"
-        >
-          {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال بررسی و تصحیح…</span></> : <span>🤖 تصحیح با هوش مصنوعی</span>}
-        </button>
-        {(report || images.length > 0 || text.trim()) && (
-          <button
-            onClick={() => { setReport(null); setText(''); setImages([]); setChat([]); setChatQ(''); }}
-            className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl text-sm font-bold transition"
-          >
-            🔄 شروع مجدد
-          </button>
-        )}
-      </div>
-
-      {errMsg && (
-        <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{errMsg}</div>
+      {(!exam || promptData) && (
+        <textarea dir="ltr" rows={exam ? 12 : 6} value={text} onChange={e => setText(e.target.value)}
+          placeholder={isExamMode ? 'Hier steht dein deutscher Text … (پاسخ آزمون را اینجا بنویسید)' : 'Hier steht dein deutscher Text … (در صورت تمایل متن را اینجا بنویسید یا فقط عکس بالا را بفرستید)'}
+          className="w-full bg-slate-50 dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-2xl px-4 py-3 font-sans text-base outline-none leading-relaxed shadow-xs" />
       )}
 
-      {report && (
+      <div className="flex flex-wrap items-center gap-2">
+        {(!exam || promptData) && (
+          <button onClick={() => void runCheck()} disabled={busy || (!text.trim() && images.length === 0)}
+            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 shadow-md transition">
+            {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال بررسی و تصحیح…</span></> : <span>{exam ? 'ثبت متن و ادامه ✓' : '🤖 تصحیح با هوش مصنوعی'}</span>}
+          </button>
+        )}
+        {!exam && (report || images.length > 0 || text.trim()) && (
+          <button onClick={() => { setReport(null); setText(''); setImages([]); setChat([]); setChatQ(''); }} className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl text-sm font-bold transition">🔄 شروع مجدد</button>
+        )}
+        {exam && wc(text) > 0 && <span className="text-xs text-[#5d6676]">{wc(text)} کلمه</span>}
+      </div>
+
+      {errMsg && <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{errMsg}</div>}
+
+      {report && !exam && (
         <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between">
-            <span className={`px-4 py-1.5 rounded-xl text-sm font-extrabold shadow-xs ${
-              report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' :
-              report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' :
-              'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'
-            }`}>
+            <span className={`px-4 py-1.5 rounded-xl text-sm font-extrabold shadow-xs ${report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'}`}>
               نمره ارزیابی: {report.score}/100
             </span>
-            {report.issues.length === 0 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ متن کاملاً درست و استاندارد!</span>}
+            {report.issues.length === 0 && report.score >= 80 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ متن کاملاً درست و استاندارد!</span>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+            {(['content', 'structure', 'vocab', 'grammar'] as const).map((k, i) => (
+              <div key={k} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex justify-between"><span>{RUBRIC[rubricKey].labels[i]}</span><span dir="ltr">{report.criteria[k]}/25</span></div>
+            ))}
           </div>
 
           {report.transcribed_de && (
@@ -418,7 +379,7 @@ RULES:
 
           {report.issues.length > 0 && (
             <div className="space-y-2.5">
-              <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 اشکالات یافت‌شده و اصلاحات:</div>
+              <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 اشکالات یافت‌شده و اصلاحات (به دفتر خطاها اضافه شد):</div>
               {report.issues.map((it, i) => (
                 <div key={i} className="p-3.5 rounded-2xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-2 shadow-xs">
                   <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold ${ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
@@ -445,18 +406,11 @@ RULES:
             <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 space-y-2">
               <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">✅ نسخه اصلاح‌شده و طبیعی:</div>
               <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{report.corrected_de}</div>
-              <button
-                onClick={() => setShadowOpen(true)}
-                className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-1.5 shadow-xs"
-              >
-                🎙 تمرین تلفظ این متن
-              </button>
+              <button onClick={() => setShadowOpen(true)} className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-1.5 shadow-xs">🎙 تمرین تلفظ این متن</button>
             </div>
           )}
 
-          {shadowOpen && (
-            <ShadowingModal freeText={report.corrected_de} onClose={() => setShadowOpen(false)} />
-          )}
+          {shadowOpen && <ShadowingModal freeText={report.corrected_de} onClose={() => setShadowOpen(false)} />}
 
           <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
             <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی درباره ساختار این متن یا اصطلاحاتش داری؟ بپرس:</div>
@@ -467,20 +421,11 @@ RULES:
               </div>
             ))}
             <div className="flex items-end gap-2">
-              <textarea
-                dir="rtl" rows={2} value={chatQ}
-                onChange={e => setChatQ(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void askChat(); } }}
+              <textarea dir="rtl" rows={2} value={chatQ} onChange={e => setChatQ(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); void askChat(); } }}
                 placeholder="سوالت را درباره گرامر یا واژگان بنویس…"
-                className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm outline-none resize-none"
-              />
-              <button
-                onClick={() => void askChat()}
-                disabled={chatBusy || !chatQ.trim()}
-                className="bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition"
-              >
-                {chatBusy ? '⏳' : '➤ ارسال'}
-              </button>
+                className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm outline-none resize-none" />
+              <button onClick={() => void askChat()} disabled={chatBusy || !chatQ.trim()} className="bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition">{chatBusy ? '⏳' : '➤ ارسال'}</button>
             </div>
           </div>
         </div>
