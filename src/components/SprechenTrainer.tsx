@@ -1,10 +1,24 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ *
+ * SprechenTrainer (enhanced with persona avatars + stable voice selection)
+ * -------------------------------------------------------------------------
+ * All original features preserved:
+ *  - instant per-message correction + feedback (Fb, addErrors)
+ *  - fluency measurement (words/wpm/pauses/fillers)
+ *  - exam simulator (3 parts, timer, model answer, criteria)
+ *  - prefs (autoplay, hands-free, auto-send, no-help)
+ *  - error book integration
+ * Added:
+ *  - 5 conversation personas + 2 exam personas (gender-aware)
+ *  - avatar (emoji) + name in chat header
+ *  - stable voice selection (browser TTS: pick German voice matching persona gender)
+ *  - cloud TTS hook via window.__WORT_TTS__ (optional, gender param)
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Send, Square, Volume2, Clock, PlusCircle } from 'lucide-react';
+import { Mic, MicOff, Send, Square, Volume2, Clock, PlusCircle, Repeat } from 'lucide-react';
 import { speak, stopSpeaking } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
@@ -19,7 +33,6 @@ interface SprechenTrainerProps {
 type Level = 'A1' | 'A2' | 'B1' | 'B2' | 'C1';
 type ExamType = 'Goethe' | 'Telc' | 'Zertifikat' | 'ÖSD' | 'EPD';
 interface Fb { ok: boolean; corrected: string; issues: { wrong: string; correct: string; why_fa: string }[]; better?: string; tip_fa?: string }
-/** Timing facts measured from the speech recognition of one spoken answer. */
 interface Stat { words: number; secs: number; pauses: number; longest: number; fillers: number; fillerList: string[] }
 interface Msg { who: 'ai' | 'user'; text: string; fb?: Fb; part?: number; stat?: Stat }
 interface Part { type: 'dialog' | 'monolog'; title_de: string; title_fa: string; task_de: string; task_fa: string; points: string[]; minutes: number; opening: string }
@@ -32,6 +45,102 @@ interface Report {
 }
 interface Prefs { autoplay: boolean; rate: number; level: Level; autoSend: boolean; handsFree: boolean }
 
+/* ----------------------------- Personas ----------------------------- */
+type Gender = 'female' | 'male';
+interface Persona {
+  id: string;
+  name: string;        // German display name
+  emoji: string;       // avatar (SVG/3D not needed for v1)
+  role: string;        // short role label (fa)
+  levels: Level[];     // recommended levels
+  gender: Gender;      // for voice selection
+  /** Injected verbatim into the system prompt. */
+  prompt: string;
+  /** First-line opening the persona says (optional; otherwise AI generates). */
+  opening?: string;
+}
+
+const PERSONAS: Persona[] = [
+  {
+    id: 'anna', name: 'Anna', emoji: '☕', role: 'باریستای کافهٔ برلین', levels: ['A1', 'A2'],
+    gender: 'female',
+    prompt: 'Du bist Anna, 24, Barista in einem Café in Berlin-Mitte. Charakter: freundlich, geduldig, ein bisschen witzig. Sprachstil: kurze Sätze, "nee" statt "nein", "super!" als Bestätigung, du wiederholst die Bestellung kurz zur Sicherheit. Bleib IMMER in Rolle. Antworte NUR auf Deutsch. Maximal 2 Sätze pro Antwort. Wenn der Lernende blockiert, hilf mit einer kurzen Frage.',
+    opening: 'Hallo! Schön, dass du da bist. Was darf ich dir bringen — Kaffee oder Tee?',
+  },
+  {
+    id: 'mueller', name: 'Herr Müller', emoji: '🏛️', role: 'کارمند ادارهٔ ثبت‌نام', levels: ['A2', 'B1'],
+    gender: 'male',
+    prompt: 'Du bist Herr Müller, 55, Sachbearbeiter im Bürgeramt. Charakter: höflich, formell, geduldig, fragt präzise nach. Sprachstil: formelles Deutsch ("Sie", "könnten Sie bitte...", "ich bräuchte noch..."). Bleib IMMER in Rolle. Antworte NUR auf Deutsch. Maximal 2 Sätze. Stell immer genau die Frage, die für die Anmeldung nötig ist.',
+    opening: 'Guten Tag. Hier ist das Bürgeramt. Was kann ich für Sie tun?',
+  },
+  {
+    id: 'lukas', name: 'Lukas', emoji: '🎒', role: 'دانشجو، Mensa', levels: ['B1'],
+    gender: 'male',
+    prompt: 'Du bist Lukas, 20, Student in München, triffst den Lernenden in der Mensa. Charakter: locker, neugierig, bisschen sarkastisch aber nett. Sprachstil: umgangssprachlich ("Alter", "nee", "krass", "völlig"). Bleib IMMER in Rolle. Antworte NUR auf Deutsch. 1-3 Sätze. Stell eine natürliche Folgefrage zum Uni-Alltag.',
+    opening: 'Hey! Setz dich doch. Bist du auch neu hier an der Uni?',
+  },
+  {
+    id: 'schmidt', name: 'Frau Schmidt', emoji: '🏠', role: 'مالک آپارتمان', levels: ['B1', 'B2'],
+    gender: 'female',
+    prompt: 'Du bist Frau Schmidt, 45, Vermieterin. Charakter: direkt, geschäftsmäßig, freundlich aber bestimmt. Sprachstil: klares Standarddeutsch, fragt nach Details (Miete, Kaution, Dauer). Bleib IMMER in Rolle. Antworte NUR auf Deutsch. Maximal 2-3 Sätze. Verhandle leicht, wenn der Lernende einen Vorschlag macht.',
+    opening: 'Guten Tag. Sie wollten sich die Wohnung ansehen, richtig?',
+  },
+  {
+    id: 'weber', name: 'Prof. Weber', emoji: '📚', role: 'استاد دانشگاه', levels: ['B2', 'C1'],
+    gender: 'male',
+    prompt: 'Du bist Prof. Weber, 60, Universität Mainz. Charakter: intellektuell, ruhig, ermutigend, stellt tiefe Fragen. Sprachstil: gehobenes, präzises Deutsch, akademische Wendungen. Bleib IMMER in Rolle. Antworte NUR auf Deutsch. 2-3 Sätze mit einer echten Diskussionsfrage. Keine Überkorrektur im Chat — reagiere nur inhaltlich.',
+    opening: 'Herzlich willkommen. Lassen Sie uns über das Thema sprechen — was ist Ihr erster Gedanke dazu?',
+  },
+];
+
+const EXAM_PERSONAS: Record<ExamType, Persona> = {
+  Goethe: {
+    id: 'ex-goethe', name: 'Frau Becker', emoji: '📋', role: 'ممتحن Goethe', levels: ['B1', 'B2'], gender: 'female',
+    prompt: 'Du bist Frau Becker, offizielle Prüferin für das Goethe-Zertifikat. Du bleibst neutral, freundlich, professionell. Du stellst die Aufgaben wie in einer echten Prüfung und stellst Nachfragen. Antworte NUR auf Deutsch, kurz.',
+  },
+  Telc: {
+    id: 'ex-telc', name: 'Herr Klein', emoji: '📋', role: 'ممتحن telc', levels: ['B1', 'B2'], gender: 'male',
+    prompt: 'Du bist Herr Klein, offizieller telc-Prüfer. Neutral, sachlich, professionell. Du stellst die Aufgaben wie in einer echten telc-Prüfung und stellst Nachfragen. Antworte NUR auf Deutsch, kurz.',
+  },
+  Zertifikat: {
+    id: 'ex-zert', name: 'Frau Weber', emoji: '📋', role: 'ممتحن Zertifikat Deutsch', levels: ['B1'], gender: 'female',
+    prompt: 'Du bist Frau Weber, offizielle Prüferin für das Zertifikat Deutsch. Neutral, sachlich. Du stellst die Aufgaben wie in einer echten Prüfung. Antworte NUR auf Deutsch, kurz.',
+  },
+  ÖSD: {
+    id: 'ex-oesd', name: 'Frau Gruber', emoji: '📋', role: 'ممتحن ÖSD', levels: ['B1', 'B2'], gender: 'female',
+    prompt: 'Du bist Frau Gruber, offizielle ÖSD-Prüferin (Österreich). Neutral, sachlich, österreichische Färbung in Begrüßung. Antworte NUR auf Deutsch, kurz.',
+  },
+  EPD: {
+    id: 'ex-epd', name: 'Prof. Hartmann', emoji: '📋', role: 'ممتحن EPD', levels: ['B2', 'C1'], gender: 'male',
+    prompt: 'Du bist Prof. Hartmann, EPD-Prüfer (Ergänzungsprüfung Deutsch, Universität). Akademisch, sachlich. Antworte NUR auf Deutsch, kurz.',
+  },
+};
+
+/* ------------------------- Stable voice selection ------------------------- */
+// Picks a German browser TTS voice matching the persona gender. iOS Safari needs
+// voices loaded asynchronously via speechSynthesis.onvoiceschanged.
+const findDeVoice = (gender: Gender): SpeechSynthesisVoice | null => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const all = window.speechSynthesis.getVoices() || [];
+  const de = all.filter(v => (v.lang || '').toLowerCase().startsWith('de'));
+  if (!de.length) return null;
+  // Heuristic: female voices usually have keywords in name; otherwise pick first de voice.
+  const fem = de.find(v => /anna|female|weiblich|petra|sabina|marlene|katja|hanna/i.test(v.name));
+  const mal = de.find(v => /male|männlich|herr|markus|yannick|maxim|julius|markus/i.test(v.name));
+  const pick = gender === 'female' ? (fem || mal || de[0]) : (mal || fem || de[0]);
+  return pick || null;
+};
+
+// Optional cloud TTS hook. The existing wort-tts worker accepts ?lang=de; we add a
+// gender-aware endpoint later. For now we fall back to browser TTS with a chosen
+// German voice. To enable cloud voices later, set window.__WORT_TTS__ = async (text, gender) => url.
+type CloudTts = (text: string, gender: Gender) => Promise<string | null>;
+const getCloudTts = (): CloudTts | null => {
+  if (typeof window === 'undefined') return null;
+  const fn = (window as any).__WORT_TTS__;
+  return typeof fn === 'function' ? (fn as CloudTts) : null;
+};
+
 const FREE_TOPICS = [
   'Reisen und Urlaub (سفر و تعطیلات)', 'Arbeit und Beruf (کار و شغل)', 'Bewerbungsgespräch (مصاحبهٔ شغلی)',
   'Wohnen und Haushalt (مسکن و خانه‌داری)', 'Wohnungssuche (جست‌وجوی خانه)', 'Beim Arzt (نزد پزشک)',
@@ -41,8 +150,10 @@ const FREE_TOPICS = [
   'Freunde und Familie (دوستان و خانواده)', 'Zukunftspläne (برنامه‌های آینده)', 'Freies Gespräch (مکالمهٔ آزاد)'
 ];
 const PREF_KEY = 'wb_sprechen_prefs';
+const PERSONA_KEY = 'wb_sprechen_persona';
 const DEFAULT_PREFS: Prefs = { autoplay: true, rate: 0.95, level: 'B1', autoSend: true, handsFree: false };
 const loadPrefs = (): Prefs => { try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { return DEFAULT_PREFS; } };
+const loadPersona = (): string => { try { return localStorage.getItem(PERSONA_KEY) || 'anna'; } catch { return 'anna'; } };
 const topicDe = (t: string) => t.replace(/\s*\(.*\)\s*$/, '');
 const ETYPE: Record<string, ExamType> = { Goethe: 'Goethe', 'ÖSD': 'ÖSD', telc: 'Telc', EPD: 'EPD' };
 
@@ -101,6 +212,7 @@ const reportCheck = S.obj({
 export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onShowToast, exam }) => {
   const [screen, setScreen] = useState<'hub' | 'free_setup' | 'free' | 'exam_setup' | 'exam' | 'report'>(exam ? 'exam' : 'hub');
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
+  const [personaId, setPersonaId] = useState<string>(loadPersona);
   const [topic, setTopic] = useState(FREE_TOPICS[0]);
   const [msgs, setMsgsState] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -117,13 +229,15 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const [partSecondsLeft, setPartSecondsLeft] = useState<number>(180);
   const [showFa, setShowFa] = useState(false);
   const [noHelp, setNoHelp] = useNoHelp();
-  const limited = !!exam || noHelp;          // no Persian task text, no corrections during talk, no replay of the examiner
+  const limited = !!exam || noHelp;
 
   const msgsRef = useRef<Msg[]>([]);
   const busyRef = useRef(false);
   const prefsRef = useRef(prefs);
   const screenRef = useRef(screen);
   const limitedRef = useRef(limited);
+  const personaRef = useRef(personaId);
+  const examTypeRef = useRef(examType);
   const speakToken = useRef(0);
   const recRef = useRef<any>(null);
   const finalRef = useRef('');
@@ -138,17 +252,33 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   prefsRef.current = prefs;
   screenRef.current = screen;
   limitedRef.current = limited;
+  personaRef.current = personaId;
+  examTypeRef.current = examType;
 
   const SR: any = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
   const setMsgs = (m: Msg[]) => { msgsRef.current = m; setMsgsState(m); };
   const setPrefs = (p: Partial<Prefs>) => { const n = { ...prefsRef.current, ...p }; setPrefsState(n); try { localStorage.setItem(PREF_KEY, JSON.stringify(n)); } catch { /* ignore */ } };
+  const setPersona = (id: string) => { setPersonaId(id); personaRef.current = id; try { localStorage.setItem(PERSONA_KEY, id); } catch { /* ignore */ } };
   const isExam = screen === 'exam';
+
+  // active persona object: exam persona overrides during exam screen
+  const activePersona: Persona = (() => {
+    if (screenRef.current === 'exam') return EXAM_PERSONAS[examTypeRef.current] || EXAM_PERSONAS.Goethe;
+    return PERSONAS.find(p => p.id === personaRef.current) || PERSONAS[0];
+  })();
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
   useEffect(() => () => { speakToken.current++; stopSpeaking(); try { recRef.current?.abort?.(); } catch { /* ignore */ } clearTimeout(silenceRef.current); }, []);
   useEffect(() => { if (exam) void startExam(ETYPE[exam.org], exam.level as Level); }, []);
+  // iOS Safari: voices load async; warm up once on mount so first speak() has a German voice ready.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const warm = () => { try { window.speechSynthesis.getVoices(); } catch { /* ignore */ } };
+    warm();
+    window.speechSynthesis.onvoiceschanged = warm;
+    return () => { try { window.speechSynthesis.onvoiceschanged = null; } catch { /* ignore */ } };
+  }, []);
 
-  // per-part countdown of the oral exam; in the full exam the part ends automatically
   useEffect(() => {
     if (screen !== 'exam' || busy || partSecondsLeft <= 0) return;
     const t = setInterval(() => setPartSecondsLeft(prev => Math.max(0, prev - 1)), 1000);
@@ -163,17 +293,43 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const formatTime = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
   const stopTalking = () => { speakToken.current++; stopSpeaking(); setSpeaking(false); };
-  const sayDe = (text: string, onDone?: () => void) => {
+
+  // Persona-aware speak: prefers cloud TTS (gender param) if available, else browser TTS
+  // with a German voice matching persona gender.
+  const personaSay = (text: string, onDone?: () => void) => {
     if (!text) return;
     const token = ++speakToken.current;
     stopSpeaking();
     setSpeaking(true); setBlocked(false);
     const rate = prefsRef.current.rate;
+    const gender = activePersona.gender;
     const done = () => { if (token !== speakToken.current) return; setSpeaking(false); onDone?.(); };
     const fail = () => { if (token !== speakToken.current) return; setSpeaking(false); setBlocked(true); };
-    speak(text, { rate, onEnd: done, onErr: () => { if (token === speakToken.current) speak(text, { rate, forceBrowser: true, onEnd: done, onErr: fail }); } });
+
+    const cloud = getCloudTts();
+    if (cloud) {
+      cloud(text, gender).then(url => {
+        if (token !== speakToken.current) return;
+        if (!url) { fallbackBrowser(text, rate, done, fail); return; }
+        try {
+          const a = new Audio(url);
+          a.playbackRate = rate;
+          a.onended = done; a.onerror = () => fallbackBrowser(text, rate, done, fail);
+          void a.play().catch(() => fallbackBrowser(text, rate, done, fail));
+        } catch { fallbackBrowser(text, rate, done, fail); }
+      }).catch(() => { if (token === speakToken.current) fallbackBrowser(text, rate, done, fail); });
+      return;
+    }
+    fallbackBrowser(text, rate, done, fail);
   };
-  const aiSays = (text: string) => { if (prefsRef.current.autoplay || limitedRef.current) sayDe(text, prefsRef.current.handsFree ? () => startListening() : undefined); };
+
+  const fallbackBrowser = (text: string, rate: number, onEnd: () => void, onErr: () => void) => {
+    const voice = findDeVoice(activePersona.gender);
+    speak(text, { rate, voice, onEnd, onErr: () => speak(text, { rate, voice, forceBrowser: true, onEnd, onErr }) });
+  };
+
+  const sayDe = (text: string, onDone?: () => void) => personaSay(text, onDone);
+  const aiSays = (text: string) => { if (prefsRef.current.autoplay || limitedRef.current) personaSay(text, prefsRef.current.handsFree ? () => startListening() : undefined); };
 
   const stopListening = () => { clearTimeout(silenceRef.current); try { recRef.current?.stop?.(); } catch { /* ignore */ } };
   function startListening() {
@@ -222,11 +378,17 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const ctxOf = (list: Msg[]) => list.slice(-14).map(m => `${m.who === 'ai' ? 'Partner' : 'Learner'}: ${m.text}`).join('\n');
   const sttNote = 'The learner\'s text may come from speech recognition: no punctuation — treat leniently.';
 
+  const personaBlock = (level: Level): string => {
+    const p = activePersona;
+    return `PERSONA (bleib IMMER in dieser Rolle, sprich als ${p.name}):\n${p.prompt}\nLernenden-Niveau: ${level}.`;
+  };
+
   const startFree = async () => {
     unlockAudio();
     setScreen('free'); setReport(null); setErr(''); setMsgs([]); setBusy(true); busyRef.current = true;
     try {
-      const r = await askJson<any>(`You are a friendly German conversation partner for a learner in Germany at level ${prefs.level}. Topic: "${topicDe(topic)}". Start conversation in German at level ${prefs.level}. Return ONLY JSON: {"reply":"..."}`, replyCheck, { timeoutMs: 30000 });
+      const p = activePersona;
+      const r = await askJson<any>(`${personaBlock(prefs.level)}\nThema: "${topicDe(topic)}". Beginne das Gespräch auf Deutsch. Return ONLY JSON: {"reply":"..."}`, replyCheck, { timeoutMs: 30000 });
       setMsgs([{ who: 'ai', text: r.reply }]);
       aiSays(r.reply);
     } catch (e: any) { setErr(describeAiError(e)); }
@@ -246,16 +408,17 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
     setMsgs(base); setInput(''); setBusy(true); busyRef.current = true; setErr('');
     try {
       if (!exam_) {
-        const r = await askJson<any>(`German conversation partner (Level ${prefs.level}). Topic: "${topicDe(topic)}". ${sttNote}
+        const r = await askJson<any>(`${personaBlock(prefs.level)}\nThema: "${topicDe(topic)}". ${sttNote}
 History:\n${ctxOf(base)}
-Task: (1) reply naturally in 1-2 sentences at level ${prefs.level} with a question; (2) check learner's last message for grammar/naturalness.
+Task: (1) antworte natürlich in 1-2 Sätzen auf Niveau ${prefs.level} mit einer Frage; (2) prüfe die letzte Nachricht des Lernenden auf Grammatik/Natürlichkeit.
 Return ONLY JSON: {"reply":"...","corrected":"...","issues":[{"wrong":"","correct":"","why_fa":"..."}],"better":"...","tip_fa":"..."}`, chatCheck, { timeoutMs: 35000 });
         const issues = r.issues.filter((i: any) => i.wrong || i.correct);
         const fb: Fb = { ok: issues.length === 0, corrected: r.corrected || text, issues, better: r.better, tip_fa: r.tip_fa };
         if (issues.length) addErrors([{ original: text, corrected: fb.corrected, type: 'گرامر', why: issues.map((i: any) => i.why_fa).join(' | '), src: 'Sprechen' }]);
         setMsgs([...base.slice(0, -1), { ...base[base.length - 1], fb }, { who: 'ai', text: r.reply }]); aiSays(r.reply);
       } else {
-        const r = await askJson<any>(`German oral examiner (${examType} Level ${examLevel}). Current part: "${part?.title_de}". Task: "${part?.task_de}". History:\n${ctxOf(base)}\nReact briefly to the candidate and ask ONE follow-up question or give the next prompt. Return ONLY JSON: {"reply":"..."}`, replyCheck, { timeoutMs: 30000 });
+        const p = activePersona;
+        const r = await askJson<any>(`${personaBlock(examLevel)}\nPrüfungstyp: ${examType}. Aktueller Teil: "${part?.title_de}". Aufgabe: "${part?.task_de}". History:\n${ctxOf(base)}\nReagiere kurz als Prüfer/in und stell EINE Rückfrage oder gib den nächsten Impuls. Return ONLY JSON: {"reply":"..."}`, replyCheck, { timeoutMs: 30000 });
         setMsgs([...base, { who: 'ai', text: r.reply, part: partIdx }]); aiSays(r.reply);
       }
     } catch (e: any) { setErr(describeAiError(e)); }
@@ -325,9 +488,9 @@ Give four criteria, each an INTEGER 0-25 (do NOT output a total):
 - grammar: Grammatik und Strukturen (correctness and complexity)
 Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"vocab":0,"grammar":0},"summary_fa":"...","strengths_fa":["..."],"improvements_fa":["..."],"corrections":[{"original":"...","corrected":"...","why_fa":"..."}],"model_answer_de":"model answer 4-6 sentences"}`,
         reportCheck, { timeoutMs: 60000 });
-      const k = candWords < 25 ? 0.4 : 1;   // far too little speech cannot score high
+      const k = candWords < 25 ? 0.4 : 1;
       const crit = { task: Math.round(r.criteria.task * k), interaction: Math.round(r.criteria.interaction * k), vocab: Math.round(r.criteria.vocab * k), grammar: Math.round(r.criteria.grammar * k) };
-      const score = crit.task + crit.interaction + crit.vocab + crit.grammar;   // total is summed by code
+      const score = crit.task + crit.interaction + crit.vocab + crit.grammar;
       if (r.corrections.length) addErrors(r.corrections.map((x: any) => ({ original: x.original, corrected: x.corrected, type: 'گرامر', why: x.why_fa, src: 'Sprechen' })));
       const rep: Report = { score, passed: score >= 60, level_estimate: r.level_estimate, criteria: crit, summary_fa: r.summary_fa, strengths_fa: r.strengths_fa, improvements_fa: r.improvements_fa, corrections: r.corrections, model_answer_de: r.model_answer_de, flu };
       setReport(rep); setScreen('report');
@@ -351,20 +514,70 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
     </div>
   );
 
+  // Persona picker (free chat only). Exam personas are fixed per exam type.
+  const PersonaPicker = (
+    <div className="space-y-2">
+      <div className="text-xs font-bold text-[#5d6676]">🎭 شخصیت هم‌صحبت را انتخاب کن:</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {PERSONAS.map(p => {
+          const on = personaId === p.id;
+          const ok = p.levels.includes(prefs.level);
+          const btnCls = on
+            ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]'
+            : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf]';
+          const nameCls = on ? 'text-white/80' : 'text-[#5d6676]';
+          const lvlCls = on ? 'text-white/70' : 'text-[#9aa3b2]';
+          return (
+            <button key={p.id} onClick={() => setPersona(p.id)} className={'text-right p-2.5 rounded-xl border transition ' + btnCls}>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl shrink-0">{p.emoji}</span>
+                <div className="min-w-0">
+                  <div className="font-bold text-sm truncate">{p.name}</div>
+                  <div className={'text-[10px] ' + nameCls}>{p.role}</div>
+                  <div className={'text-[10px] ' + lvlCls}>{p.levels.join(' / ')}</div>
+                </div>
+              </div>
+              {!ok && <div className={'text-[9px] mt-1 ' + (on ? 'text-white/70' : 'text-amber-600')}>سطح پیشنهادی: {p.levels.join('/')}</div>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Persona header inside chat
+  const PersonaHeader = (
+    <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-2xl shrink-0">{activePersona.emoji}</span>
+        <div className="min-w-0">
+          <div className="font-bold text-sm truncate">{activePersona.name}</div>
+          <div className="text-[10px] text-[#5d6676]">{activePersona.role}</div>
+        </div>
+      </div>
+      {screen === 'free' && (
+        <button onClick={() => { stopTalking(); goHub(); setScreen('free_setup'); }} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold shrink-0" title="تعویض شخصیت">
+          <Repeat size={12} /> تعویض
+        </button>
+      )}
+    </div>
+  );
+
   const Chat = (
     <>
+      {PersonaHeader}
       {(speaking || blocked) && (
         <div className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-bold ${blocked ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-800'}`}>
           <span>{blocked ? 'پخش صوتی مسدود شد؛ روی 🔊 بزن.' : '🔊 در حال صحبت…'}</span>
           {speaking && !limited && <button onClick={stopTalking} className="flex items-center gap-1 bg-white border rounded-lg px-2 py-1"><Square size={12} /> توقف</button>}
         </div>
       )}
-      <div ref={listRef} className="space-y-3 max-h-[52vh] overflow-y-auto p-1" dir="ltr">
+      <div ref={listRef} className="space-y-3 max-h-[48vh] overflow-y-auto p-1" dir="ltr">
         {msgs.map((m, i) => (
           <div key={i} className={`flex flex-col ${m.who === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`max-w-[88%] rounded-2xl px-4 py-2.5 ${m.who === 'user' ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'}`}>
               <div className="flex items-center justify-between gap-3 mb-0.5">
-                <span className="text-[10px] font-bold opacity-75">{m.who === 'ai' ? (isExam ? 'Prüfer/in' : 'AI Partner') : 'Du'}</span>
+                <span className="text-[10px] font-bold opacity-75">{m.who === 'ai' ? (isExam ? 'Prüfer/in' : activePersona.name) : 'Du'}</span>
                 {m.who === 'ai' && (!limited || blocked) && <button onClick={() => sayDe(m.text)} className="text-xs"><Volume2 size={14} /></button>}
               </div>
               <div className="font-sans text-base leading-relaxed">{m.text}</div>
@@ -411,7 +624,7 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
         <div className="space-y-3">
           {PrefsUI}
           <div className={card + ' flex items-center justify-between gap-3'}>
-            <div className="flex items-center gap-3"><span className="text-3xl">💬</span><div><h3 className="font-extrabold text-base">Freies Sprechen (مکالمه آزاد)</h3><p className="text-xs text-[#5d6676]">گفتگو با میکروفون و تصحیح لحظه‌ای</p></div></div>
+            <div className="flex items-center gap-3"><span className="text-3xl">💬</span><div><h3 className="font-extrabold text-base">Freies Sprechen (مکالمه آزاد)</h3><p className="text-xs text-[#5d6676]">گفتگو با میکروفون، تصحیح لحظه‌ای و شخصیت ثابت</p></div></div>
             <button onClick={() => setScreen('free_setup')} className="bg-[#1f5fbf] text-white px-4 py-2.5 rounded-xl font-bold text-sm">شروع ▶</button>
           </div>
           <div className={card + ' flex items-center justify-between gap-3'}>
@@ -427,6 +640,7 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
           <div className="flex items-center justify-between"><h3 className="font-extrabold">موضوع و سطح گفتگو</h3><button onClick={goHub} className="px-3 py-1 rounded-xl bg-slate-100 text-xs font-bold">بازگشت</button></div>
           <select value={topic} onChange={e => setTopic(e.target.value)} className="w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">{FREE_TOPICS.map(t => <option key={t} value={t}>{t}</option>)}</select>
           <div className="flex gap-1.5">{(['A2', 'B1', 'B2'] as Level[]).map(l => <button key={l} onClick={() => setPrefs({ level: l })} className={chip(prefs.level === l) + ' flex-1'}>{l}</button>)}</div>
+          {PersonaPicker}
           <button onClick={() => void startFree()} className="w-full bg-[#1f5fbf] text-white py-3 rounded-xl font-bold text-sm">شروع گفتگو 🎙️</button>
         </div>
       )}
@@ -456,6 +670,9 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
               <select value={examLevel} onChange={e => setExamLevel(e.target.value as Level)} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
                 {(['A1', 'A2', 'B1', 'B2', 'C1'] as Level[]).map(l => <option key={l} value={l}>{l}</option>)}
               </select></label>
+          </div>
+          <div className="text-[11px] text-[#5d6676] bg-slate-50 dark:bg-[#141923] rounded-xl p-2">
+            📋 شخصیت ممتحن به‌صورت خودکار بر اساس نوع آزمون انتخاب می‌شود: {EXAM_PERSONAS[examType].emoji} {EXAM_PERSONAS[examType].name} — {EXAM_PERSONAS[examType].role}
           </div>
           <button onClick={() => void startExam()} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm">شروع شبیه‌ساز آزمون 🚀</button>
         </div>
