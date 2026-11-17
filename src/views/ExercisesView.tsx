@@ -1032,10 +1032,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       qIds = pool.slice().sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'sent') {
       qIds = shuffleArr<Word>(pool).slice(0, 10).map(w => w.id);
+    } else if (activeMode === 'konnektoren') {
+      qIds = ['konnektoren-main'];
     } else if (isSelfContainedMode(activeMode)) {
       qIds = ['freesent-self'];
     }
-
     setQueue(qIds);
     setCurrentIndex(0);
     setRevealedCardId(null);
@@ -1055,12 +1056,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     if (activeMode === 'case') {
       return ALL_CASEQ.find(q => q.id === id) || null;
     }
+    if (activeMode === 'konnektoren') {
+      return FREE_SENT_WORD;
+    }
     if (isSelfContainedMode(activeMode)) {
       return FREE_SENT_WORD;
     }
     return words.find(w => w.id === id) || null;
   }, [queue, currentIndex, activeMode, words]);
-
+        
   const cardKeyNow = queue[currentIndex] || '';
   useEffect(() => { setMoreOpen(false); }, [cardKeyNow]);
   useEffect(() => {
@@ -2650,8 +2654,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'puzzle' && <SatzPuzzle key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
-              {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
-               {qMode === 'konnektoren' && <KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} />}
+{qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
+              {activeMode === 'konnektoren' && <KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} />}
 
               {qMode === 'prod' && (
                 <div className="space-y-2">
