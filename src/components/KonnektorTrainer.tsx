@@ -40,6 +40,121 @@ const DEFAULT_EXERCISES: KonnektorItem[] = [
   }
 ];
 
+/**
+ * استایل چاپ: در حالت screen، ناحیهٔ چاپ پنهان است؛ در حالت print،
+ * کل UI تعاملی پنهان می‌شود و دو صفحه نمایش داده می‌شود:
+ *   صفحه ۱: متن تمرین با جای‌خالی‌های شماره‌دار + استخر کلمات
+ *   صفحه ۲: پاسخ‌نامه
+ *
+ * نکات iOS Safari:
+ *   - page-break-after: always و معادل مدرن break-after: page هر دو نوشته شده‌اند.
+ *   - display: none برای پنهان‌کردن در Safari مدرن پشتیبانی می‌شود.
+ *   - @page size A4 با margin مشخص برای اطمینان از جا شدن در یک صفحه.
+ *   - position static (نه fixed/absolute) تا Safari ارتفاع را درست محاسبه کند.
+ */
+const PRINT_CSS = `
+@media screen {
+  .konn-print-area { display: none !important; }
+}
+@media print {
+  @page { size: A4; margin: 1.4cm 1.6cm; }
+  html, body { background: #fff !important; }
+  .konn-interactive { display: none !important; }
+  .konn-print-area {
+    display: block !important;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #000 !important;
+    font-family: Georgia, 'Times New Roman', 'Noto Serif', serif !important;
+  }
+  .konn-print-exercise {
+    page-break-after: always;
+    break-after: page;
+  }
+  .konn-print-title {
+    direction: ltr;
+    text-align: left;
+    font-size: 14pt;
+    font-weight: 700;
+    margin: 0 0 8pt 0;
+    color: #000;
+  }
+  .konn-print-sub {
+    direction: rtl;
+    text-align: right;
+    font-size: 10pt;
+    color: #444;
+    margin: 0 0 10pt 0;
+    font-family: 'Tahoma', 'Vazirmatn', sans-serif;
+  }
+  .konn-print-text {
+    direction: ltr;
+    text-align: left;
+    font-size: 12pt;
+    line-height: 1.7;
+    color: #000;
+    white-space: normal;
+    word-wrap: break-word;
+  }
+  .konn-print-blank {
+    display: inline-block;
+    min-width: 64px;
+    border-bottom: 1.5px solid #000;
+    text-align: center;
+    font-weight: 700;
+    font-size: 11pt;
+    color: #000;
+    margin: 0 2px;
+    padding: 0 4px;
+    line-height: 1.4;
+  }
+  .konn-print-pool {
+    direction: ltr;
+    text-align: left;
+    margin-top: 14pt;
+    padding: 8pt 10pt;
+    border: 1.2px solid #555;
+    border-radius: 5px;
+    font-size: 11pt;
+    color: #000;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .konn-print-pool b { font-size: 11pt; }
+  .konn-print-answers-title {
+    direction: ltr;
+    text-align: left;
+    font-size: 14pt;
+    font-weight: 700;
+    margin: 0 0 8pt 0;
+    color: #000;
+  }
+  .konn-print-answers-list {
+    direction: ltr;
+    text-align: left;
+    font-size: 12pt;
+    line-height: 1.9;
+    color: #000;
+    list-style: decimal;
+    padding-left: 20pt;
+    margin: 0;
+  }
+  .konn-print-answers-list li { margin-bottom: 3pt; }
+  .konn-print-answers-list b { color: #000; }
+  .konn-print-footer {
+    direction: rtl;
+    text-align: right;
+    font-size: 9pt;
+    color: #666;
+    margin-top: 14pt;
+    border-top: 1px solid #ccc;
+    padding-top: 4pt;
+    font-family: 'Tahoma', 'Vazirmatn', sans-serif;
+  }
+}
+`;
+
 export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onClose, onShowToast }) => {
   const [exercises, setExercises] = useState<KonnektorItem[]>(() => {
     try {
@@ -81,7 +196,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onClose, onS
 Provide a short text with exactly 6 to 7 blanks represented by placeholders like (1), (2), etc.
 Provide the correct answers for each blank, and a pool of words that includes the correct answers PLUS 2 misleading distractor words (traps).
 Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":[{"id":1,"answer":"..."}],"pool":["...","..."]}`;
-      
+
       const schema = S.obj({
         title: S.str('Übung'),
         text: S.req,
@@ -146,6 +261,14 @@ Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":
     }
   };
 
+  const handlePrint = () => {
+    // iOS Safari نیاز به تأخیر کوتاه دارد تا استایل چاپ در DOM قرار گیرد و layout محاسبه شود.
+    // ۵۰ms کافی است و تأخیر قابل‌ملاحظه‌ای برای کاربر ایجاد نمی‌کند.
+    setTimeout(() => {
+      window.print();
+    }, 50);
+  };
+
   // تفکیک متن و جای‌گذاری باکس‌ها
   // پشتیبانی از انواع مارکر جای‌خالی:
   //   _____  (هر تعداد خط‌زیر ≥ ۳)
@@ -158,7 +281,11 @@ Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":
     const usableBlanks = currentEx.blanks.slice(0, blankCount);
 
     return (
-      <div className="text-lg md:text-xl font-sans leading-loose text-slate-900 dark:text-slate-100 space-x-2 space-x-reverse" dir="ltr">
+      <div
+        className="text-lg md:text-xl font-sans leading-loose text-slate-900 dark:text-slate-100"
+        dir="ltr"
+        style={{ textAlign: 'left' }}
+      >
         {parts.map((part, index) => {
           const blankId = index + 1;
           const hasBlank = index < usableBlanks.length;
@@ -220,17 +347,55 @@ Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":
     );
   };
 
+  /**
+   * نسخهٔ چاپ متن: جای‌خالی‌ها به‌صورت (۱)، (۲)، ... با خط زیر نشان داده می‌شوند.
+   * این نسخه در screen پنهان است و فقط هنگام print نمایش داده می‌شود.
+   */
+  const renderPrintText = () => {
+    const parts = currentEx.text.split(/_{3,}|\(\s*\d+\s*\)|\[\s*\d+\s*\]|\{\s*\d+\s*\}/g);
+    const blankCount = parts.length - 1;
+    const usableBlanks = currentEx.blanks.slice(0, blankCount);
+
+    return (
+      <div className="konn-print-text">
+        {parts.map((part, index) => {
+          const blankId = index + 1;
+          const hasBlank = index < usableBlanks.length;
+          if (!hasBlank) {
+            return <span key={index}>{part}</span>;
+          }
+          return (
+            <React.Fragment key={index}>
+              <span>{part}</span>
+              <span className="konn-print-blank">({blankId})</span>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4 text-right max-w-2xl mx-auto pb-10" dir="rtl">
+      {/* استایل چاپ — در DOM باقی می‌ماند تا Safari در print هم آن را اعمال کند */}
+      <style>{PRINT_CSS}</style>
+
       {/* هدر مشابه سایر بخش‌ها */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
+      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2">
           <span className="text-xl">🔗</span>
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
             حروف ربط و اضافه (Konnektoren & Präpositionen)
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handlePrint}
+            className="bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs"
+            title="چاپ تمرین + پاسخنامه (دو صفحه)"
+          >
+            🖨️ چاپ
+          </button>
           <button
             onClick={handleGenerateNew}
             disabled={generating}
@@ -245,7 +410,7 @@ Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":
       </div>
 
       {/* انتخابگر تمرین‌های آرشیو شده */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs space-y-3">
+      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold text-slate-700 dark:text-slate-300">انتخاب تمرین:</span>
           <select
@@ -288,8 +453,8 @@ Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":
           </div>
         </div>
 
-        {/* متن تمرین */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#1b2029] border border-slate-200 dark:border-slate-800">
+        {/* متن تمرین — LTR واقعی برای آلمانی */}
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#1b2029] border border-slate-200 dark:border-slate-800" dir="ltr" style={{ textAlign: 'left' }}>
           {renderInteractiveText()}
         </div>
 
@@ -313,6 +478,40 @@ Return ONLY JSON: {"title":"...","text":"Text with (1), (2)... blanks","blanks":
               🔄 تلاش مجدد
             </button>
           )}
+        </div>
+      </div>
+
+      {/*
+        ناحیهٔ چاپ — در screen پنهان، در print نمایش داده می‌شود.
+        صفحهٔ اول: متن تمرین با جای‌خالی شماره‌دار + استخر کلمات.
+        صفحهٔ دوم: پاسخ‌نامه.
+      */}
+      <div className="konn-print-area" aria-hidden="true">
+        {/* صفحه ۱: تمرین */}
+        <div className="konn-print-exercise">
+          <div className="konn-print-title">{currentEx.title}</div>
+          <div className="konn-print-sub">تمرین حروف ربط و اضافه — جای‌خالی‌ها را با کلمات مناسب پر کنید.</div>
+          {renderPrintText()}
+          {currentEx.pool.length > 0 && (
+            <div className="konn-print-pool">
+              <b>Wörter:</b> {currentEx.pool.join('   |   ')}
+            </div>
+          )}
+        </div>
+
+        {/* صفحه ۲: پاسخ‌نامه */}
+        <div className="konn-print-answers">
+          <div className="konn-print-answers-title">Lösungen — پاسخ‌نامه</div>
+          <ol className="konn-print-answers-list">
+            {currentEx.blanks.map(b => (
+              <li key={b.id}>
+                <b>({b.id})</b> &nbsp; {b.answer}
+              </li>
+            ))}
+          </ol>
+          <div className="konn-print-footer">
+            WörterBuchMitPeyman — Konnektoren & Präpositionen
+          </div>
         </div>
       </div>
     </div>
