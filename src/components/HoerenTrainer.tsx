@@ -272,6 +272,79 @@ export const HoerenTrainer: React.FC<{
     saveList(ARCHIVE_HOEREN, list);
   };
 
+  const handlePrint = (type: 'questions' | 'transcript' | 'report') => {
+    if (!exercise) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    let content = '';
+    if (type === 'questions') {
+      content = `<h2>${exercise.title} — Fragen</h2>`;
+      if (exercise.part1TF.length > 0) {
+        content += `<h3>1. Richtig / Falsch</h3><ul>`;
+        exercise.part1TF.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.statement}</li>`; });
+        content += `</ul>`;
+      }
+      if (exercise.part2MC.length > 0) {
+        content += `<h3>2. Multiple Choice</h3>`;
+        exercise.part2MC.forEach((q, i) => {
+          content += `<div style="margin-bottom: 8px;"><b>${i + 1}.</b> ${q.question}<ul>`;
+          q.options.forEach((o, oi) => { content += `<li>${String.fromCharCode(65 + oi)}) ${o}</li>`; });
+          content += `</ul></div>`;
+        });
+      }
+      if (exercise.part3Gap.length > 0) {
+        content += `<h3>3. Lückentext</h3><ul>`;
+        exercise.part3Gap.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.sentence}</li>`; });
+        content += `</ul>`;
+      }
+      if (exercise.part4Short.length > 0) {
+        content += `<h3>4. Offene Fragen</h3><ul>`;
+        exercise.part4Short.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.question}</li>`; });
+        content += `</ul>`;
+      }
+      if (exercise.vocabulary.length > 0) {
+        content += `<h3>5. Wortschatz</h3><ul>`;
+        exercise.vocabulary.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.word}</li>`; });
+        content += `</ul>`;
+      }
+    } else if (type === 'transcript') {
+      content = `<h2>${exercise.title} — Transkript</h2><div style="white-space: pre-wrap;" dir="ltr">${transcript}</div>`;
+    } else {
+      content = `<h2>${exercise.title} — کارنامه و گزارش</h2>`;
+      if (result) {
+        content += `<p><b>امتیاز:</b> ${result.score} / ${result.maxScore} (${result.percentage}%) — ${result.gradeLabel}</p>`;
+        content += `<p><b>نظر استاد:</b> ${result.teacherCommentFa}</p>`;
+      } else {
+        content += `<p>آزمون هنوز ثبت یا تصحیح نشده است.</p>`;
+      }
+    }
+
+    printWindow.document.write(`
+      <html dir="rtl">
+        <head>
+          <title>Print</title>
+          <style>
+            @page { size: A4; margin: 12mm; }
+            body { font-family: sans-serif; padding: 10px; color: #111; font-size: 12px; line-height: 1; margin: 0; }
+            h2 { border-bottom: 1.5px solid #1f5fbf; padding-bottom: 4px; margin: 0 0 8px 0; color: #1f5fbf; font-size: 14px; }
+            h3 { font-size: 13px; margin: 8px 0 4px 0; color: #333; }
+            p, div { margin: 0 0 6px 0; }
+            ul { margin: 2px 0 8px 18px; padding: 0; }
+            li { margin-bottom: 3px; }
+          </style>
+        </head>
+        <body>
+          ${content}
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); window.close(); }, 250); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleBackToMenu = () => {
     stopAllPlayback();
     if (viewMode === 'exercise' && initialView === 'archive') setViewMode('archive');
@@ -596,12 +669,15 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
 
       {viewMode === 'exercise' && exercise && (
         <div className="space-y-6">
-          <div className={box + ' flex items-center justify-between gap-2'}>
+          <div className={box + ' flex items-center justify-between gap-2 flex-wrap'}>
             <div className="min-w-0">
               <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">{exercise.title}</h3>
               <span className="text-xs text-[#5d6676]">سطح: {exercise.level} • فرمت: {EXAM_LABELS[exercise.examType]}</span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button onClick={() => handlePrint('questions')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold">🖨 چاپ سوالات</button>
+              <button onClick={() => handlePrint('transcript')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold">🖨 چاپ Transkript</button>
+              <button onClick={() => handlePrint('report')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold">🖨 چاپ کارنامه</button>
               {exam && secondsLeft >= 0 && !submitted && (
                 <span className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono font-bold">⏱ {fmt(secondsLeft)}</span>
               )}
