@@ -2654,9 +2654,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'puzzle' && <SatzPuzzle key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
-{qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
-              {activeMode === 'konnektoren' && <KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} />}
-
+              {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
+              {activeMode === 'konnektoren' && <div className="col-span-full"><KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} /></div>}
               {qMode === 'prod' && (
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[#5d6676]">معادل آلمانی را تایپ کنید (با آرتیکل در صورت اسم بودن):</p>
