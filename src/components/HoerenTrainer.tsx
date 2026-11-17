@@ -238,6 +238,26 @@ export const HoerenTrainer: React.FC<{
   const limited = !!exam || noHelp;
   const submitRef = useRef<() => void>(() => {});
 
+  // Print: state-based, no window.open (blocked on iOS Safari).
+  const [printMode, setPrintMode] = useState<'questions' | 'transcript' | 'report' | null>(null);
+  useEffect(() => {
+    if (!printMode) return;
+    // iOS Safari: needs a tick for the print DOM to settle before calling print().
+    const t = setTimeout(() => {
+      window.print();
+      // Reset after print dialog closes. onafterprint is unreliable on iOS Safari,
+      // so reset on a short delay; the user returns to the same page (no popup).
+      setTimeout(() => setPrintMode(null), 300);
+    }, 80);
+    const cleanup = () => clearTimeout(t);
+    return cleanup;
+  }, [printMode]);
+
+  const handlePrint = (type: 'questions' | 'transcript' | 'report') => {
+    if (!exercise) return;
+    setPrintMode(type);
+  };
+
   useEffect(() => () => { stopSpeaking(); }, []);
 
   useEffect(() => { playsRef.current = 0; setPlays(0); setIsPlayingAudio(false); }, [audioUrl]);
@@ -270,79 +290,6 @@ export const HoerenTrainer: React.FC<{
     if (idx !== -1) list[idx] = rec; else list.unshift(rec);
     setSavedExercises(list);
     saveList(ARCHIVE_HOEREN, list);
-  };
-
-  const handlePrint = (type: 'questions' | 'transcript' | 'report') => {
-    if (!exercise) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    let content = '';
-    if (type === 'questions') {
-      content = `<h2>${exercise.title} — Fragen</h2>`;
-      if (exercise.part1TF.length > 0) {
-        content += `<h3>1. Richtig / Falsch</h3><ul>`;
-        exercise.part1TF.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.statement}</li>`; });
-        content += `</ul>`;
-      }
-      if (exercise.part2MC.length > 0) {
-        content += `<h3>2. Multiple Choice</h3>`;
-        exercise.part2MC.forEach((q, i) => {
-          content += `<div style="margin-bottom: 8px;"><b>${i + 1}.</b> ${q.question}<ul>`;
-          q.options.forEach((o, oi) => { content += `<li>${String.fromCharCode(65 + oi)}) ${o}</li>`; });
-          content += `</ul></div>`;
-        });
-      }
-      if (exercise.part3Gap.length > 0) {
-        content += `<h3>3. Lückentext</h3><ul>`;
-        exercise.part3Gap.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.sentence}</li>`; });
-        content += `</ul>`;
-      }
-      if (exercise.part4Short.length > 0) {
-        content += `<h3>4. Offene Fragen</h3><ul>`;
-        exercise.part4Short.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.question}</li>`; });
-        content += `</ul>`;
-      }
-      if (exercise.vocabulary.length > 0) {
-        content += `<h3>5. Wortschatz</h3><ul>`;
-        exercise.vocabulary.forEach((q, i) => { content += `<li><b>${i + 1}.</b> ${q.word}</li>`; });
-        content += `</ul>`;
-      }
-    } else if (type === 'transcript') {
-      content = `<h2>${exercise.title} — Transkript</h2><div style="white-space: pre-wrap;" dir="ltr">${transcript}</div>`;
-    } else {
-      content = `<h2>${exercise.title} — کارنامه و گزارش</h2>`;
-      if (result) {
-        content += `<p><b>امتیاز:</b> ${result.score} / ${result.maxScore} (${result.percentage}%) — ${result.gradeLabel}</p>`;
-        content += `<p><b>نظر استاد:</b> ${result.teacherCommentFa}</p>`;
-      } else {
-        content += `<p>آزمون هنوز ثبت یا تصحیح نشده است.</p>`;
-      }
-    }
-
-    printWindow.document.write(`
-      <html dir="rtl">
-        <head>
-          <title>Print</title>
-          <style>
-            @page { size: A4; margin: 12mm; }
-            body { font-family: sans-serif; padding: 10px; color: #111; font-size: 12px; line-height: 1; margin: 0; }
-            h2 { border-bottom: 1.5px solid #1f5fbf; padding-bottom: 4px; margin: 0 0 8px 0; color: #1f5fbf; font-size: 14px; }
-            h3 { font-size: 13px; margin: 8px 0 4px 0; color: #333; }
-            p, div { margin: 0 0 6px 0; }
-            ul { margin: 2px 0 8px 18px; padding: 0; }
-            li { margin-bottom: 3px; }
-          </style>
-        </head>
-        <body>
-          ${content}
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); window.close(); }, 250); };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
   };
 
   const handleBackToMenu = () => {
@@ -669,19 +616,22 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
 
       {viewMode === 'exercise' && exercise && (
         <div className="space-y-6">
-          <div className={box + ' flex items-center justify-between gap-2 flex-wrap'}>
-            <div className="min-w-0">
-              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">{exercise.title}</h3>
-              <span className="text-xs text-[#5d6676]">سطح: {exercise.level} • فرمت: {EXAM_LABELS[exercise.examType]}</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              <button onClick={() => handlePrint('questions')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold">🖨 چاپ سوالات</button>
-              <button onClick={() => handlePrint('transcript')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold">🖨 چاپ Transkript</button>
-              <button onClick={() => handlePrint('report')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold">🖨 چاپ کارنامه</button>
-              {exam && secondsLeft >= 0 && !submitted && (
-                <span className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono font-bold">⏱ {fmt(secondsLeft)}</span>
-              )}
-              {!exam && <>{!submitted && noHelpChip}<button onClick={handleBackToMenu} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت</button></>}
+          <div className={box + ' space-y-2'}>
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 break-words">{exercise.title}</h3>
+                <span className="text-xs text-[#5d6676]">سطح: {exercise.level} • فرمت: {EXAM_LABELS[exercise.examType]}</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                <button onClick={() => handlePrint('questions')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 سوالات</button>
+                <button onClick={() => handlePrint('transcript')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 Transkript</button>
+                <button onClick={() => handlePrint('report')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 کارنامه</button>
+                {exam && secondsLeft >= 0 && !submitted && (
+                  <span className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono font-bold whitespace-nowrap">⏱ {fmt(secondsLeft)}</span>
+                )}
+                {!exam && !submitted && noHelpChip}
+                {!exam && <button onClick={handleBackToMenu} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold whitespace-nowrap">بازگشت</button>}
+              </div>
             </div>
           </div>
 
@@ -806,6 +756,144 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* In-page print overlay: hidden on screen, shown only in print.
+          No window.open — works on iOS Safari. */}
+      <style>{`
+        @media screen {
+          .h-print-area { display: none !important; }
+        }
+        @media print {
+          @page { size: A4; margin: 12mm; }
+          body * { visibility: hidden !important; }
+          .h-print-area, .h-print-area * { visibility: visible !important; }
+          .h-print-area {
+            display: block !important;
+            position: absolute !important;
+            inset: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            color: #000 !important;
+            font-family: Georgia, 'Times New Roman', serif !important;
+          }
+          .h-print-area h2 {
+            border-bottom: 1.5px solid #1f5fbf;
+            padding-bottom: 4px;
+            margin: 0 0 8px 0;
+            color: #1f5fbf;
+            font-size: 16px;
+            font-family: Georgia, 'Times New Roman', serif;
+          }
+          .h-print-area h3 {
+            font-size: 14px;
+            margin: 12px 0 4px 0;
+            color: #333;
+            font-family: Georgia, 'Times New Roman', serif;
+          }
+          .h-print-area p, .h-print-area div { margin: 0 0 6px 0; font-size: 12px; line-height: 1.5; }
+          .h-print-area ul { margin: 2px 0 8px 18px; padding: 0; }
+          .h-print-area li { margin-bottom: 3px; font-size: 12px; line-height: 1.5; }
+          .h-print-area .ltr { direction: ltr; text-align: left; }
+          .h-print-area .rtl { direction: rtl; text-align: right; }
+          .h-print-area .pre { white-space: pre-wrap; }
+          .h-print-area .answers { color: #1a7a3a; font-weight: 700; }
+          .h-print-area .footer {
+            margin-top: 14pt; border-top: 1px solid #ccc; padding-top: 4pt;
+            font-size: 10px; color: #666;
+            font-family: Tahoma, 'Vazirmatn', sans-serif;
+          }
+        }
+      `}</style>
+      {printMode && exercise && (
+        <div className="h-print-area" aria-hidden="true">
+          {printMode === 'questions' && (
+            <>
+              <h2 className="ltr">{exercise.title} — Fragen</h2>
+              {exercise.part1TF.length > 0 && (
+                <>
+                  <h3 className="ltr">1. Richtig / Falsch</h3>
+                  <ul className="ltr">
+                    {exercise.part1TF.map((q, i) => (
+                      <li key={i}><b>{i + 1}.</b> {q.statement}{submitted && <span className="answers"> → {q.answer ? 'Richtig' : 'Falsch'}</span>}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {exercise.part2MC.length > 0 && (
+                <>
+                  <h3 className="ltr">2. Multiple Choice</h3>
+                  <div className="ltr">
+                    {exercise.part2MC.map((q, i) => (
+                      <div key={i} style={{ marginBottom: '8px' }}>
+                        <b>{i + 1}.</b> {q.question}
+                        <ul>
+                          {q.options.map((o, oi) => (
+                            <li key={oi}>{String.fromCharCode(65 + oi)}) {o}{submitted && oi === q.answerIndex && <span className="answers"> ✓</span>}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {exercise.part3Gap.length > 0 && (
+                <>
+                  <h3 className="ltr">3. Lückentext</h3>
+                  <ul className="ltr">
+                    {exercise.part3Gap.map((q, i) => (
+                      <li key={i}><b>{i + 1}.</b> {q.sentence}{submitted && <span className="answers"> → {q.answer}</span>}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {exercise.part4Short.length > 0 && (
+                <>
+                  <h3 className="ltr">4. Offene Fragen</h3>
+                  <ul className="ltr">
+                    {exercise.part4Short.map((q, i) => (
+                      <li key={i}><b>{i + 1}.</b> {q.question}{submitted && <span className="answers"> → {q.answer}</span>}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {exercise.vocabulary.length > 0 && (
+                <>
+                  <h3 className="ltr">5. Wortschatz</h3>
+                  <ul className="ltr">
+                    {exercise.vocabulary.map((q, i) => (
+                      <li key={i}><b>{i + 1}.</b> {q.word}{submitted && <span className="answers"> → {q.meaning}</span>}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {!submitted && <p className="footer rtl">پاسخ‌ها پس از تصحیح در همین فایل چاپ اضافه می‌شوند.</p>}
+            </>
+          )}
+          {printMode === 'transcript' && (
+            <>
+              <h2 className="ltr">{exercise.title} — Transkript</h2>
+              <div className="ltr pre">{transcript}</div>
+            </>
+          )}
+          {printMode === 'report' && (
+            <>
+              <h2 className="rtl">{exercise.title} — کارنامه و گزارش</h2>
+              {result ? (
+                <div className="rtl">
+                  <p><b>امتیاز:</b> {result.score} / {result.maxScore} ({result.percentage}%) — {result.gradeLabel}</p>
+                  <p><b>نظر استاد:</b> {result.teacherCommentFa}</p>
+                  {result.sections.length > 0 && (
+                    <ul style={{ marginTop: '8px' }}>
+                      {result.sections.map(s => <li key={s.label}>{s.label}: {s.earned}/{s.total} ({s.percentage}%)</li>)}
+                    </ul>
+                  )}
+                </div>
+              ) : <p className="rtl">آزمون هنوز ثبت یا تصحیح نشده است.</p>}
+            </>
+          )}
         </div>
       )}
     </div>
