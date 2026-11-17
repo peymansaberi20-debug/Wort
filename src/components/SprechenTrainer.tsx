@@ -6,25 +6,29 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Send, Square, Volume2, Clock, PlusCircle } from 'lucide-react';
 import { speak, stopSpeaking } from '../utils/audio';
-import { generateWithGemini, parseAI } from '../utils/ai';
 import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
+import { ExamRun, S, askJson, useNoHelp } from '../utils/trainerKit';
 
 interface SprechenTrainerProps {
   onClose: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  exam?: ExamRun;
 }
 
-type Level = 'A1' | 'A2' | 'B1' | 'B2';
-type ExamType = 'Goethe' | 'Telc' | 'Zertifikat';
+type Level = 'A1' | 'A2' | 'B1' | 'B2' | 'C1';
+type ExamType = 'Goethe' | 'Telc' | 'Zertifikat' | 'ÖSD' | 'EPD';
 interface Fb { ok: boolean; corrected: string; issues: { wrong: string; correct: string; why_fa: string }[]; better?: string; tip_fa?: string }
-interface Msg { who: 'ai' | 'user'; text: string; fb?: Fb; part?: number }
+/** Timing facts measured from the speech recognition of one spoken answer. */
+interface Stat { words: number; secs: number; pauses: number; longest: number; fillers: number; fillerList: string[] }
+interface Msg { who: 'ai' | 'user'; text: string; fb?: Fb; part?: number; stat?: Stat }
 interface Part { type: 'dialog' | 'monolog'; title_de: string; title_fa: string; task_de: string; task_fa: string; points: string[]; minutes: number; opening: string }
+interface Flu { words: number; wpm: number; pauses: number; longest: number; fillers: number; fillerList: string[] }
 interface Report {
   score: number; passed: boolean; level_estimate: string;
   criteria: { task: number; interaction: number; vocab: number; grammar: number };
   summary_fa: string; strengths_fa: string[]; improvements_fa: string[];
-  corrections: { original: string; corrected: string; why_fa: string }[]; model_answer_de: string;
+  corrections: { original: string; corrected: string; why_fa: string }[]; model_answer_de: string; flu?: Flu;
 }
 interface Prefs { autoplay: boolean; rate: number; level: Level; autoSend: boolean; handsFree: boolean }
 
@@ -40,10 +44,7 @@ const PREF_KEY = 'wb_sprechen_prefs';
 const DEFAULT_PREFS: Prefs = { autoplay: true, rate: 0.95, level: 'B1', autoSend: true, handsFree: false };
 const loadPrefs = (): Prefs => { try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') }; } catch { return DEFAULT_PREFS; } };
 const topicDe = (t: string) => t.replace(/\s*\(.*\)\s*$/, '');
-const obj = (res: string): any => { try { const a = parseAI(res); return (Array.isArray(a) ? a[0] : a) || {}; } catch { return {}; } };
-const arr = (v: any): any[] => (Array.isArray(v) ? v : []);
-const str = (v: any) => (v == null ? '' : String(v));
-const num = (v: any, max: number) => Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
+const ETYPE: Record<string, ExamType> = { Goethe: 'Goethe', 'ÖSD': 'ÖSD', telc: 'Telc', EPD: 'EPD' };
 
 const unlockAudio = () => {
   try { const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='); void a.play().catch(() => {}); } catch { /* ignore */ }
@@ -60,8 +61,45 @@ const defaultParts = (type: ExamType, level: Level): Part[] => [
   { type: 'dialog', title_de: 'Teil 3: Gemeinsam etwas planen', title_fa: 'بخش ۳: برنامه‌ریزی مشترک', task_de: 'Planen Sie gemeinsam eine Aktivität. Machen Sie Vorschläge und reagieren Sie auf Ihren Partner.', task_fa: 'با پارتنر برنامه‌ریزی کن، پیشنهاد بده و واکنش نشان بده.', points: ['Planung', 'Vorschlag'], minutes: 4, opening: 'Lassen Sie uns gemeinsam etwas planen. Was schlagen Sie vor?' }
 ];
 
-export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onShowToast }) => {
-  const [screen, setScreen] = useState<'hub' | 'free_setup' | 'free' | 'exam_setup' | 'exam' | 'report'>('hub');
+/* ---------- fluency measurement ---------- */
+const FILLER_RE = /\b(äh+m?|ähm|öhm?|hm+|also|halt|sozusagen|quasi)\b/gi;
+const countWords = (t: string) => t.split(/\s+/).filter(w => /\p{L}/u.test(w)).length;
+const fillersOf = (t: string): string[] => (t.toLowerCase().match(FILLER_RE) || []);
+const fluencyOf = (list: Msg[]): Flu | undefined => {
+  const sp = list.filter(m => m.who === 'user' && m.stat);
+  if (!sp.length) return undefined;
+  const words = sp.reduce((a, m) => a + m.stat!.words, 0);
+  const secs = sp.reduce((a, m) => a + m.stat!.secs, 0);
+  const all = sp.flatMap(m => m.stat!.fillerList);
+  const top: Record<string, number> = {};
+  all.forEach(f => { top[f] = (top[f] || 0) + 1; });
+  return {
+    words, wpm: secs >= 5 ? Math.round((words / secs) * 60) : 0,
+    pauses: sp.reduce((a, m) => a + m.stat!.pauses, 0), longest: Math.max(0, ...sp.map(m => m.stat!.longest)),
+    fillers: all.length, fillerList: Object.entries(top).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}×${n}`)
+  };
+};
+
+const replyCheck = S.obj({ reply: S.req });
+const chatCheck = S.obj({
+  reply: S.req, corrected: S.str(), better: S.str(), tip_fa: S.str(),
+  issues: S.arr(S.obj({ wrong: S.str(), correct: S.str(), why_fa: S.str() }))
+});
+const partsCheck = S.obj({
+  parts: S.arr(S.obj({
+    type: S.str('dialog'), title_de: S.str(), title_fa: S.str(), task_de: S.req, task_fa: S.str(),
+    points: S.arr(S.str()), minutes: S.num(1, 15, 3), opening: S.str()
+  }), 3)
+});
+const reportCheck = S.obj({
+  level_estimate: S.str(),
+  criteria: S.obj({ task: S.num(0, 25), interaction: S.num(0, 25), vocab: S.num(0, 25), grammar: S.num(0, 25) }),
+  summary_fa: S.str(), strengths_fa: S.arr(S.req), improvements_fa: S.arr(S.req),
+  corrections: S.arr(S.obj({ original: S.req, corrected: S.req, why_fa: S.str() })), model_answer_de: S.str()
+});
+
+export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onShowToast, exam }) => {
+  const [screen, setScreen] = useState<'hub' | 'free_setup' | 'free' | 'exam_setup' | 'exam' | 'report'>(exam ? 'exam' : 'hub');
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
   const [topic, setTopic] = useState(FREE_TOPICS[0]);
   const [msgs, setMsgsState] = useState<Msg[]>([]);
@@ -71,27 +109,35 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const [speaking, setSpeaking] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [listening, setListening] = useState(false);
-  const [examType, setExamType] = useState<ExamType>('Goethe');
-  const [examLevel, setExamLevel] = useState<Level>('B1');
+  const [examType, setExamType] = useState<ExamType>(exam ? ETYPE[exam.org] : 'Goethe');
+  const [examLevel, setExamLevel] = useState<Level>(exam ? (exam.level as Level) : 'B1');
   const [parts, setParts] = useState<Part[]>([]);
   const [partIdx, setPartIdx] = useState(0);
   const [report, setReport] = useState<Report | null>(null);
   const [partSecondsLeft, setPartSecondsLeft] = useState<number>(180);
   const [showFa, setShowFa] = useState(false);
+  const [noHelp, setNoHelp] = useNoHelp();
+  const limited = !!exam || noHelp;          // no Persian task text, no corrections during talk, no replay of the examiner
 
   const msgsRef = useRef<Msg[]>([]);
   const busyRef = useRef(false);
   const prefsRef = useRef(prefs);
   const screenRef = useRef(screen);
+  const limitedRef = useRef(limited);
   const speakToken = useRef(0);
   const recRef = useRef<any>(null);
   const finalRef = useRef('');
   const interimRef = useRef('');
   const silenceRef = useRef<any>(null);
+  const statRef = useRef({ t0: 0, tl: 0, pauses: 0, longest: 0 });
+  const pendStat = useRef<{ text: string; stat: Stat } | null>(null);
   const sendRef = useRef<(t?: string) => void>(() => {});
+  const nextPartRef = useRef<() => void>(() => {});
+  const autoEndRef = useRef(-1);
   const listRef = useRef<HTMLDivElement>(null);
   prefsRef.current = prefs;
   screenRef.current = screen;
+  limitedRef.current = limited;
 
   const SR: any = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
   const setMsgs = (m: Msg[]) => { msgsRef.current = m; setMsgsState(m); };
@@ -100,21 +146,21 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
   useEffect(() => () => { speakToken.current++; stopSpeaking(); try { recRef.current?.abort?.(); } catch { /* ignore */ } clearTimeout(silenceRef.current); }, []);
+  useEffect(() => { if (exam) void startExam(ETYPE[exam.org], exam.level as Level); }, []);
 
-  // تایمر معکوس برای هر بخش آزمون شفاهی
+  // per-part countdown of the oral exam; in the full exam the part ends automatically
   useEffect(() => {
     if (screen !== 'exam' || busy || partSecondsLeft <= 0) return;
-    const t = setInterval(() => {
-      setPartSecondsLeft(prev => Math.max(0, prev - 1));
-    }, 1000);
+    const t = setInterval(() => setPartSecondsLeft(prev => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(t);
   }, [screen, busy, partSecondsLeft]);
+  useEffect(() => {
+    if (!exam || screen !== 'exam' || busy || !parts.length || partSecondsLeft > 0 || autoEndRef.current === partIdx) return;
+    autoEndRef.current = partIdx;
+    nextPartRef.current();
+  }, [partSecondsLeft, parts.length]);
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
+  const formatTime = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
   const stopTalking = () => { speakToken.current++; stopSpeaking(); setSpeaking(false); };
   const sayDe = (text: string, onDone?: () => void) => {
@@ -127,7 +173,7 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
     const fail = () => { if (token !== speakToken.current) return; setSpeaking(false); setBlocked(true); };
     speak(text, { rate, onEnd: done, onErr: () => { if (token === speakToken.current) speak(text, { rate, forceBrowser: true, onEnd: done, onErr: fail }); } });
   };
-  const aiSays = (text: string) => { if (prefsRef.current.autoplay) sayDe(text, prefsRef.current.handsFree ? () => startListening() : undefined); };
+  const aiSays = (text: string) => { if (prefsRef.current.autoplay || limitedRef.current) sayDe(text, prefsRef.current.handsFree ? () => startListening() : undefined); };
 
   const stopListening = () => { clearTimeout(silenceRef.current); try { recRef.current?.stop?.(); } catch { /* ignore */ } };
   function startListening() {
@@ -139,9 +185,14 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
     const rec = new SR();
     rec.lang = 'de-DE'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
     finalRef.current = ''; interimRef.current = '';
+    statRef.current = { t0: 0, tl: 0, pauses: 0, longest: 0 };
     const gap = screenRef.current === 'exam' ? 4500 : 2600;
     rec.onstart = () => setListening(true);
     rec.onresult = (e: any) => {
+      const now = Date.now(); const s = statRef.current;
+      if (!s.t0) s.t0 = now;
+      else { const g = now - s.tl; if (g > 1400) { s.pauses++; s.longest = Math.max(s.longest, g); } }
+      s.tl = now;
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
@@ -158,6 +209,9 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
       setListening(false); recRef.current = null;
       const text = (finalRef.current || interimRef.current).trim();
       if (!text) return;
+      const s = statRef.current;
+      const fl = fillersOf(text);
+      pendStat.current = { text, stat: { words: countWords(text), secs: s.t0 ? Math.max(1, (s.tl - s.t0) / 1000) : 0, pauses: s.pauses, longest: Math.round(s.longest / 100) / 10, fillers: fl.length, fillerList: fl } };
       setInput(text);
       if (prefsRef.current.autoSend && screenRef.current !== 'exam') sendRef.current(text);
     };
@@ -165,18 +219,16 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
     try { rec.start(); } catch { setListening(false); recRef.current = null; }
   }
 
-  const ctxOf = (list: Msg[], who1 = 'Partner', who2 = 'Learner') => list.slice(-14).map(m => `${m.who === 'ai' ? who1 : who2}: ${m.text}`).join('\n');
+  const ctxOf = (list: Msg[]) => list.slice(-14).map(m => `${m.who === 'ai' ? 'Partner' : 'Learner'}: ${m.text}`).join('\n');
   const sttNote = 'The learner\'s text may come from speech recognition: no punctuation — treat leniently.';
 
   const startFree = async () => {
     unlockAudio();
     setScreen('free'); setReport(null); setErr(''); setMsgs([]); setBusy(true); busyRef.current = true;
     try {
-      const res = await generateWithGemini(`You are a friendly German conversation partner for a learner in Germany at level ${prefs.level}. Topic: "${topicDe(topic)}". Start conversation in German at level ${prefs.level}. Return ONLY JSON: {"reply":"..."}`, { json: true, timeoutMs: 30000, retries: 1 });
-      const reply = str(obj(res).reply).trim();
-      if (!reply) throw new Error('خطا در پاسخ هوش مصنوعی.');
-      setMsgs([{ who: 'ai', text: reply }]);
-      aiSays(reply);
+      const r = await askJson<any>(`You are a friendly German conversation partner for a learner in Germany at level ${prefs.level}. Topic: "${topicDe(topic)}". Start conversation in German at level ${prefs.level}. Return ONLY JSON: {"reply":"..."}`, replyCheck, { timeoutMs: 30000 });
+      setMsgs([{ who: 'ai', text: r.reply }]);
+      aiSays(r.reply);
     } catch (e: any) { setErr(describeAiError(e)); }
     finally { setBusy(false); busyRef.current = false; }
   };
@@ -185,49 +237,47 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
     const text = (override ?? input).trim();
     if (!text || busyRef.current) return;
     unlockAudio(); stopListening(); stopTalking();
-    const exam = screenRef.current === 'exam';
-    const part = exam ? parts[partIdx] : undefined;
-    const base = [...msgsRef.current, { who: 'user' as const, text, part: exam ? partIdx : undefined }];
+    const exam_ = screenRef.current === 'exam';
+    const part = exam_ ? parts[partIdx] : undefined;
+    const ps = pendStat.current;
+    const stat = ps && ps.text.toLowerCase() === text.toLowerCase() ? ps.stat : undefined;
+    pendStat.current = null;
+    const base: Msg[] = [...msgsRef.current, { who: 'user', text, part: exam_ ? partIdx : undefined, stat }];
     setMsgs(base); setInput(''); setBusy(true); busyRef.current = true; setErr('');
     try {
-      if (!exam) {
-        const res = await generateWithGemini(`German conversation partner (Level ${prefs.level}). Topic: "${topicDe(topic)}". ${sttNote}
+      if (!exam_) {
+        const r = await askJson<any>(`German conversation partner (Level ${prefs.level}). Topic: "${topicDe(topic)}". ${sttNote}
 History:\n${ctxOf(base)}
-Task: (1) reply naturally in 1-2 sentences at level ${prefs.level} with a question; (2) check learner's message for grammar/naturalness.
-Return ONLY JSON: {"reply":"...","ok":true,"corrected":"...","issues":[{"wrong":"","correct":"","why_fa":"..."}],"better":"...","tip_fa":"..."}`, { json: true, timeoutMs: 35000, retries: 1 });
-        const r = obj(res);
-        const reply = str(r.reply).trim();
-        const issues = arr(r.issues).map((i: any) => ({ wrong: str(i.wrong), correct: str(i.correct), why_fa: str(i.why_fa) })).filter(i => i.wrong || i.correct);
-        const fb: Fb = { ok: issues.length === 0, corrected: str(r.corrected) || text, issues, better: str(r.better), tip_fa: str(r.tip_fa) };
-        if (issues.length) addErrors([{ original: text, corrected: fb.corrected, type: 'گرامر', why: issues.map(i => i.why_fa).join(' | ') }]);
-        const next = [...base.slice(0, -1), { ...base[base.length - 1], fb }, { who: 'ai' as const, text: reply }];
-        setMsgs(next); aiSays(reply);
+Task: (1) reply naturally in 1-2 sentences at level ${prefs.level} with a question; (2) check learner's last message for grammar/naturalness.
+Return ONLY JSON: {"reply":"...","corrected":"...","issues":[{"wrong":"","correct":"","why_fa":"..."}],"better":"...","tip_fa":"..."}`, chatCheck, { timeoutMs: 35000 });
+        const issues = r.issues.filter((i: any) => i.wrong || i.correct);
+        const fb: Fb = { ok: issues.length === 0, corrected: r.corrected || text, issues, better: r.better, tip_fa: r.tip_fa };
+        if (issues.length) addErrors([{ original: text, corrected: fb.corrected, type: 'گرامر', why: issues.map((i: any) => i.why_fa).join(' | '), src: 'Sprechen' }]);
+        setMsgs([...base.slice(0, -1), { ...base[base.length - 1], fb }, { who: 'ai', text: r.reply }]); aiSays(r.reply);
       } else {
-        const res = await generateWithGemini(`German oral examiner (${examType} Level ${examLevel}). Current part: "${part?.title_de}". React to candidate and ask follow-up. Return ONLY JSON: {"reply":"..."}`, { json: true, timeoutMs: 30000, retries: 1 });
-        const reply = str(obj(res).reply).trim();
-        setMsgs([...base, { who: 'ai', text: reply, part: partIdx }]); aiSays(reply);
+        const r = await askJson<any>(`German oral examiner (${examType} Level ${examLevel}). Current part: "${part?.title_de}". Task: "${part?.task_de}". History:\n${ctxOf(base)}\nReact briefly to the candidate and ask ONE follow-up question or give the next prompt. Return ONLY JSON: {"reply":"..."}`, replyCheck, { timeoutMs: 30000 });
+        setMsgs([...base, { who: 'ai', text: r.reply, part: partIdx }]); aiSays(r.reply);
       }
     } catch (e: any) { setErr(describeAiError(e)); }
     finally { setBusy(false); busyRef.current = false; }
   };
   sendRef.current = t => { void sendMessage(t); };
 
-  const startExam = async () => {
+  const startExam = async (et: ExamType = examType, lv: Level = examLevel) => {
     unlockAudio();
-    setScreen('exam'); setReport(null); setErr(''); setMsgs([]); setPartIdx(0); setBusy(true); busyRef.current = true;
-    setShowFa(false);
+    setScreen('exam'); setReport(null); setErr(''); setMsgs([]); setPartIdx(0); setBusy(true); busyRef.current = true; setShowFa(false); autoEndRef.current = -1;
     let list: Part[] = [];
     try {
-      const res = await generateWithGemini(`Design an official German speaking exam simulation for ${examType} at level ${examLevel} (standard Goethe/telc format for Germany). Exactly 3 parts.
-Return ONLY JSON: {"parts":[{"type":"dialog|monolog","title_de":"Teil 1: ...","title_fa":"بخش ۱: ...","task_de":"...","task_fa":"...","points":["..."],"minutes":3,"opening":"..."}]}`, { json: true, timeoutMs: 40000, retries: 1 });
-      list = arr(obj(res).parts).slice(0, 3).map((p: any) => ({
-        type: p.type === 'monolog' ? 'monolog' : 'dialog', title_de: str(p.title_de), title_fa: str(p.title_fa),
-        task_de: str(p.task_de), task_fa: str(p.task_fa), points: arr(p.points).map(str), minutes: Number(p.minutes) || 3, opening: str(p.opening)
-      } as Part)).filter(p => p.task_de);
-      if (list.length < 3) throw new Error('short');
+      const r = await askJson<any>(`Design an official German speaking exam simulation for ${et} at level ${lv} (standard format for Germany/Austria). Exactly 3 parts.
+Return ONLY JSON: {"parts":[{"type":"dialog|monolog","title_de":"Teil 1: ...","title_fa":"بخش ۱: ...","task_de":"...","task_fa":"...","points":["..."],"minutes":3,"opening":"..."}]}`, partsCheck, { timeoutMs: 40000 });
+      list = r.parts.slice(0, 3).map((p: any) => ({ ...p, type: p.type === 'monolog' ? 'monolog' : 'dialog' }));
     } catch {
-      list = defaultParts(examType, examLevel);
+      list = defaultParts(et, lv);
       onShowToast('سناریوی استاندارد بارگذاری شد.', true);
+    }
+    if (exam) {
+      const sum = list.reduce((a, p) => a + p.minutes, 0) || 1;
+      list = list.map(p => ({ ...p, minutes: Math.max(1, Math.round((p.minutes * exam.minutes) / sum)) }));
     }
     setParts(list); setPartIdx(0);
     setPartSecondsLeft((list[0].minutes || 3) * 60);
@@ -241,32 +291,47 @@ Return ONLY JSON: {"parts":[{"type":"dialog|monolog","title_de":"Teil 1: ...","t
     stopListening(); stopTalking();
     if (partIdx >= parts.length - 1) { void evaluate(); return; }
     const i = partIdx + 1;
-    setShowFa(false);
-    setPartIdx(i);
+    setShowFa(false); setPartIdx(i);
     setPartSecondsLeft((parts[i].minutes || 3) * 60);
     const op = parts[i].opening || parts[i].task_de;
     setMsgs([...msgsRef.current, { who: 'ai', text: op, part: i }]);
     aiSays(op);
   };
+  nextPartRef.current = nextPart;
 
   const evaluate = async () => {
     const list = msgsRef.current;
-    if (!list.some(m => m.who === 'user')) { onShowToast('هنوز پاسخی ثبت نشده است.', true); return; }
+    if (!list.some(m => m.who === 'user')) {
+      if (exam) { exam.onFinish({ score: 0, max: 100, note: 'پاسخی ثبت نشد' }); return; }
+      onShowToast('هنوز پاسخی ثبت نشده است.', true); return;
+    }
     unlockAudio(); stopListening(); stopTalking();
     setBusy(true); busyRef.current = true; setErr('');
-    const exam = screenRef.current === 'exam';
+    const exam_ = screenRef.current === 'exam';
     try {
       const transcript = list.map(m => `${m.who === 'ai' ? 'Examiner' : 'Candidate'}: ${m.text}`).join('\n');
-      const res = await generateWithGemini(`TRANSCRIPT:\n${transcript}\n\nBe strict and honest: judge ONLY the Candidate's lines; very short or off-task answers get low scores. Evaluate candidate's German speaking transcript (${exam ? `${examType} ${examLevel}` : `level ${prefs.level}`}).
-Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"task":0,"interaction":0,"vocab":0,"grammar":0},"summary_fa":"...","strengths_fa":["..."],"improvements_fa":["..."],"corrections":[{"original":"...","corrected":"...","why_fa":"..."}],"model_answer_de":"model answer 4-6 sentences"}`, { json: true, timeoutMs: 60000, retries: 1 });
-      const r = obj(res);
-      const c = r.criteria || {};
-      const crit = { task: num(c.task, 25), interaction: num(c.interaction, 25), vocab: num(c.vocab, 25), grammar: num(c.grammar, 25) };
-      const score = crit.task + crit.interaction + crit.vocab + crit.grammar;
-      const corrections = arr(r.corrections).map((x: any) => ({ original: str(x.original), corrected: str(x.corrected), why_fa: str(x.why_fa) })).filter(x => x.original && x.corrected);
-      if (corrections.length) addErrors(corrections.map(x => ({ original: x.original, corrected: x.corrected, type: 'گرامر', why: x.why_fa })));
-      setReport({ score, passed: score >= 60, level_estimate: str(r.level_estimate), criteria: crit, summary_fa: str(r.summary_fa), strengths_fa: arr(r.strengths_fa).map(str), improvements_fa: arr(r.improvements_fa).map(str), corrections, model_answer_de: str(r.model_answer_de) });
-      setScreen('report');
+      const flu = fluencyOf(list);
+      const candWords = list.filter(m => m.who === 'user').reduce((a, m) => a + countWords(m.text), 0);
+      const facts = flu
+        ? `MEASURED FACTS (from audio timing, do not contradict): ${flu.wpm ? `${flu.wpm} words/minute (natural B1+ speech is roughly 90-130); ` : ''}${flu.pauses} pauses longer than 1.4 s (longest ${flu.longest} s); ${flu.fillers} filler words${flu.fillerList.length ? ` (${flu.fillerList.join(', ')})` : ''}. Speech recognition often drops "äh", so treat fillers as a lower bound.`
+        : 'No audio timing is available (answers were typed): judge only language.';
+      const r = await askJson<any>(`TRANSCRIPT:\n${transcript}\n\n${facts}\nCandidate spoke ${candWords} words in total.
+
+You are a strict, honest German oral examiner (${exam_ ? `${examType} ${examLevel}` : `level ${prefs.level}`}). Judge ONLY the Candidate's lines. Very short or off-task answers get low scores.
+Give four criteria, each an INTEGER 0-25 (do NOT output a total):
+- task: Aufgabenerfüllung (all points of the task covered, appropriate length)
+- interaction: Interaktion und Flüssigkeit (reacts to the examiner, keeps the talk going, fluency/pauses/fillers per the facts)
+- vocab: Wortschatz (range, precision, idiomatic use)
+- grammar: Grammatik und Strukturen (correctness and complexity)
+Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"vocab":0,"grammar":0},"summary_fa":"...","strengths_fa":["..."],"improvements_fa":["..."],"corrections":[{"original":"...","corrected":"...","why_fa":"..."}],"model_answer_de":"model answer 4-6 sentences"}`,
+        reportCheck, { timeoutMs: 60000 });
+      const k = candWords < 25 ? 0.4 : 1;   // far too little speech cannot score high
+      const crit = { task: Math.round(r.criteria.task * k), interaction: Math.round(r.criteria.interaction * k), vocab: Math.round(r.criteria.vocab * k), grammar: Math.round(r.criteria.grammar * k) };
+      const score = crit.task + crit.interaction + crit.vocab + crit.grammar;   // total is summed by code
+      if (r.corrections.length) addErrors(r.corrections.map((x: any) => ({ original: x.original, corrected: x.corrected, type: 'گرامر', why: x.why_fa, src: 'Sprechen' })));
+      const rep: Report = { score, passed: score >= 60, level_estimate: r.level_estimate, criteria: crit, summary_fa: r.summary_fa, strengths_fa: r.strengths_fa, improvements_fa: r.improvements_fa, corrections: r.corrections, model_answer_de: r.model_answer_de, flu };
+      setReport(rep); setScreen('report');
+      exam?.onFinish({ score, max: 100, note: r.summary_fa });
     } catch (e: any) { setErr(describeAiError(e)); }
     finally { setBusy(false); busyRef.current = false; }
   };
@@ -281,6 +346,7 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
         <button onClick={() => setPrefs({ autoplay: !prefs.autoplay })} className={chip(prefs.autoplay)}>🔊 پخش خودکار صدا</button>
         <button onClick={() => setPrefs({ handsFree: !prefs.handsFree })} className={chip(prefs.handsFree)}>🤝 دست‌آزاد</button>
         <button onClick={() => setPrefs({ autoSend: !prefs.autoSend })} className={chip(prefs.autoSend)}>⚡ ارسال خودکار</button>
+        <button onClick={() => setNoHelp(!noHelp)} className={chip(noHelp)}>🚫 بدون کمک</button>
       </div>
     </div>
   );
@@ -290,7 +356,7 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
       {(speaking || blocked) && (
         <div className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs font-bold ${blocked ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-800'}`}>
           <span>{blocked ? 'پخش صوتی مسدود شد؛ روی 🔊 بزن.' : '🔊 در حال صحبت…'}</span>
-          {speaking && <button onClick={stopTalking} className="flex items-center gap-1 bg-white border rounded-lg px-2 py-1"><Square size={12} /> توقف</button>}
+          {speaking && !limited && <button onClick={stopTalking} className="flex items-center gap-1 bg-white border rounded-lg px-2 py-1"><Square size={12} /> توقف</button>}
         </div>
       )}
       <div ref={listRef} className="space-y-3 max-h-[52vh] overflow-y-auto p-1" dir="ltr">
@@ -299,11 +365,11 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
             <div className={`max-w-[88%] rounded-2xl px-4 py-2.5 ${m.who === 'user' ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'}`}>
               <div className="flex items-center justify-between gap-3 mb-0.5">
                 <span className="text-[10px] font-bold opacity-75">{m.who === 'ai' ? (isExam ? 'Prüfer/in' : 'AI Partner') : 'Du'}</span>
-                {m.who === 'ai' && <button onClick={() => sayDe(m.text)} className="text-xs"><Volume2 size={14} /></button>}
+                {m.who === 'ai' && (!limited || blocked) && <button onClick={() => sayDe(m.text)} className="text-xs"><Volume2 size={14} /></button>}
               </div>
               <div className="font-sans text-base leading-relaxed">{m.text}</div>
             </div>
-            {m.fb && (
+            {m.fb && !limited && (
               <div className="max-w-[92%] mt-1 rounded-xl border bg-white dark:bg-[#141923] px-3 py-2 text-sm space-y-1.5" dir="rtl">
                 {m.fb.ok ? <div className="text-emerald-700 font-bold text-xs">✓ کاملاً درست و طبیعی</div> : (
                   <>
@@ -312,13 +378,8 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
                       <div key={k} className="text-xs leading-6">
                         <span dir="ltr" className="font-sans"><s className="text-rose-600">{x.wrong}</s> → <b className="text-emerald-700">{x.correct}</b></span>
                         <div className="text-[#5d6676]">{x.why_fa}</div>
-                        <button
-                          onClick={() => {
-                            addErrors([{ original: x.wrong, corrected: x.correct, type: 'گرامر مکالمه', why: x.why_fa }]);
-                            onShowToast('خطا به دفترچه خطاها افزوده شد ✓');
-                          }}
-                          className="mt-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center gap-1"
-                        >
+                        <button onClick={() => { addErrors([{ original: x.wrong, corrected: x.correct, type: 'گرامر مکالمه', why: x.why_fa, src: 'Sprechen' }]); onShowToast('خطا به دفترچه خطاها افزوده شد ✓'); }}
+                          className="mt-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center gap-1">
                           <PlusCircle size={12} /> افزودن این خطا به دفتر خطاها
                         </button>
                       </div>
@@ -389,11 +450,11 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-xs font-bold">فرمت آزمون
               <select value={examType} onChange={e => setExamType(e.target.value as ExamType)} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
-                <option value="Goethe">Goethe-Zertifikat</option><option value="Telc">telc Deutsch</option><option value="Zertifikat">Zertifikat Deutsch</option>
+                <option value="Goethe">Goethe-Zertifikat</option><option value="Telc">telc Deutsch</option><option value="ÖSD">ÖSD</option><option value="Zertifikat">Zertifikat Deutsch</option>
               </select></label>
             <label className="text-xs font-bold">سطح
               <select value={examLevel} onChange={e => setExamLevel(e.target.value as Level)} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
-                {(['A1', 'A2', 'B1', 'B2'] as Level[]).map(l => <option key={l} value={l}>{l}</option>)}
+                {(['A1', 'A2', 'B1', 'B2', 'C1'] as Level[]).map(l => <option key={l} value={l}>{l}</option>)}
               </select></label>
           </div>
           <button onClick={() => void startExam()} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm">شروع شبیه‌ساز آزمون 🚀</button>
@@ -404,13 +465,12 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
         <div className={card + ' space-y-3'}>
           <div className="flex items-start justify-between gap-2">
             <div className="space-y-1 min-w-0">
-              <b className="text-sm">🎓 {examType} {examLevel} — Teil {partIdx + 1} von {parts.length}</b>
+              <b className="text-sm">🎓 {examType} {examLevel} — Teil {partIdx + 1} von {parts.length || 3}</b>
               <p className="text-base font-extrabold font-sans" dir="ltr">{parts[partIdx]?.task_de}</p>
-              {showFa
+              {!limited && (showFa
                 ? <p className="text-xs text-[#9aa3b2]">{parts[partIdx]?.task_fa}</p>
-                : <button onClick={() => setShowFa(true)} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش فارسی</button>}
+                : <button onClick={() => setShowFa(true)} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش فارسی</button>)}
             </div>
-            {/* تایمر معکوس برای مدیریت زمان آزمون */}
             <div className="flex items-center gap-2 shrink-0">
               <span className="px-3 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 text-amber-800 text-xs font-mono font-bold flex items-center gap-1">
                 <Clock size={13} /> {formatTime(partSecondsLeft)}
@@ -431,9 +491,22 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
             {report.level_estimate && <div className="text-xs text-[#5d6676]">سطح تخمینی: {report.level_estimate}</div>}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-            {([['task', 'انجام تکلیف'], ['interaction', 'تعامل'], ['vocab', 'واژگان'], ['grammar', 'گرامر']] as const).map(([k, l]) => (
+            {([['task', 'انجام تکلیف'], ['interaction', 'تعامل و روانی'], ['vocab', 'واژگان'], ['grammar', 'گرامر']] as const).map(([k, l]) => (
               <div key={k} className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 flex justify-between"><span>{l}</span><span>{report.criteria[k]}/25</span></div>
             ))}
+          </div>
+          <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-xs space-y-1">
+            <div className="font-extrabold text-indigo-800 dark:text-indigo-300">⏱ سنجش روانی گفتار (از زمان‌بندی ضبط)</div>
+            {report.flu ? (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                <span>تعداد کلمه: <b dir="ltr">{report.flu.words}</b></span>
+                <span>سرعت: <b dir="ltr">{report.flu.wpm ? `${report.flu.wpm} wpm` : '—'}</b></span>
+                <span>مکث‌های بلند (&gt;۱٫۴ ثانیه): <b dir="ltr">{report.flu.pauses}</b></span>
+                <span>طولانی‌ترین مکث: <b dir="ltr">{report.flu.longest}s</b></span>
+                <span className="col-span-2">پرکننده‌ها (äh, also, halt…): <b dir="ltr">{report.flu.fillers}{report.flu.fillerList.length ? ` — ${report.flu.fillerList.join(', ')}` : ''}</b></span>
+              </div>
+            ) : <div>پاسخ‌ها تایپ شده بودند؛ روانی گفتار قابل اندازه‌گیری نیست.</div>}
+            <div className="text-[10px] text-[#5d6676]">تشخیص گفتار گاهی «äh» را حذف می‌کند؛ تعداد پرکننده‌ها حداقل مقدار است. تلفظ (Aussprache) از روی صدا سنجیده نمی‌شود.</div>
           </div>
           <p className="text-sm leading-7">{report.summary_fa}</p>
           {report.strengths_fa.length > 0 && <div className="text-sm"><b className="text-emerald-700">✅ نقاط قوت</b><ul className="list-disc pr-5 leading-7">{report.strengths_fa.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
@@ -443,24 +516,16 @@ Return ONLY JSON: {"score":0,"passed":true,"level_estimate":"B1","criteria":{"ta
               <div dir="ltr" className="font-sans"><s className="text-rose-600">{c.original}</s> → <b className="text-emerald-700">{c.corrected}</b></div>
               <div className="text-[#5d6676]">{c.why_fa}</div>
             </div>))}</div>}
-
-          {/* پخش صوتی پاسخ نمونه */}
           {report.model_answer_de && (
             <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-[#1f5fbf]">🎧 پاسخ نمونه استاندارد (Model Answer):</span>
-                <button
-                  onClick={() => sayDe(report.model_answer_de)}
-                  className="px-3 py-1 rounded-lg bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1"
-                >
-                  <Volume2 size={14} /> پخش صوتی پاسخ نمونه
-                </button>
+                <button onClick={() => sayDe(report.model_answer_de)} className="px-3 py-1 rounded-lg bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1"><Volume2 size={14} /> پخش صوتی پاسخ نمونه</button>
               </div>
               <p className="font-sans text-sm text-slate-800 dark:text-slate-100 text-left" dir="ltr">{report.model_answer_de}</p>
             </div>
           )}
-
-          <button onClick={goHub} className="w-full bg-[#1f5fbf] text-white py-3 rounded-xl font-bold text-sm">بازگشت به منو 🔄</button>
+          {!exam && <button onClick={goHub} className="w-full bg-[#1f5fbf] text-white py-3 rounded-xl font-bold text-sm">بازگشت به منو 🔄</button>}
         </div>
       )}
     </div>
