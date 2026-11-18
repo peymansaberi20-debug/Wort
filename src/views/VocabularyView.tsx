@@ -799,6 +799,20 @@ Answer ONLY a JSON array, no code fence, no commentary:
     resetForm();
   };
 
+  // قاب استاندارد و یکدست برای محتوای تب‌ها — همهٔ تب‌ها همین ظاهر را دارند (درخواست #۲)
+  const renderEmbedTab = (icon: string, title: string, content: React.ReactNode) => (
+    <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl shadow-xs overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] bg-slate-50/80 dark:bg-[#141923]/60">
+        <div className="flex items-center gap-2">
+          <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
+          <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100">{title}</h3>
+        </div>
+        <IconBtn onClick={() => setTab('list')} title="بازگشت به لیست واژگان"><X size={18} className="text-red-500" /></IconBtn>
+      </div>
+      <div className="embed-host">{content}</div>
+    </div>
+  );
+
   return (
     <div className="space-y-4 text-right">
       {/* Tab bar (same look as the exercises tabs) */}
@@ -862,11 +876,11 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
 )}
 {/* Add / Edit Word Form Accordion */}
       {isFormOpen && (
-        <div className="bg-white dark:bg-[#1b2029] border-2 border-blue-200 dark:border-blue-900 rounded-3xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b pb-3">
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 -m-5 mb-4 rounded-t-3xl border-b border-[#dde1ea] dark:border-[#333b4a] bg-slate-50/80 dark:bg-[#141923]/60">
             <div className="flex items-center gap-2">
-              <span className="text-xl">{isEditing ? '✏️' : '➕'}</span>
-              <h3 className="font-bold text-base md:text-lg">
+              <span className="text-xl leading-none" aria-hidden="true">{isEditing ? '✏️' : '➕'}</span>
+              <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100">
                 {isEditing ? `ویرایش واژه: ${editingWord?.de}` : 'افزودن واژهٔ جدید'}
               </h3>
             </div>
@@ -1799,22 +1813,20 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       </div>
       </>)}
 
-      {/* The former popups are shown inline inside their own tab */}
-      {tab === 'group' && renderGroupImport && <div className="embed-host">{renderGroupImport(() => setTab('list'))}</div>}
-      {tab === 'compare' && (
-        <div className="embed-host">
-          <WordCompareModal
-            open
-            onClose={() => setTab('list')}
-            words={words}
-            onSaveWord={onSaveWord}
-            onSelectWord={onSelectWord}
-            onShowToast={onShowToast}
-          />
-        </div>
-      )}
-      {tab === 'manage' && renderManager && <div className="embed-host">{renderManager(() => setTab('list'))}</div>}
-      {tab === 'quality' && renderQuality && <div className="embed-host">{renderQuality(() => setTab('list'))}</div>}
+      {/* The former popups are shown inline inside their own tab — همه با یک قاب و یک آیکون خروج یکسان */}
+      {tab === 'group' && renderGroupImport && renderEmbedTab('📦', 'افزودن گروهی', renderGroupImport(() => setTab('list')))}
+      {tab === 'compare' && renderEmbedTab('⚖️', 'مقایسه لغت‌ها', (
+        <WordCompareModal
+          open
+          onClose={() => setTab('list')}
+          words={words}
+          onSaveWord={onSaveWord}
+          onSelectWord={onSelectWord}
+          onShowToast={onShowToast}
+        />
+      ))}
+      {tab === 'manage' && renderManager && renderEmbedTab('🗂', 'مدیریت گروهی', renderManager(() => setTab('list')))}
+      {tab === 'quality' && renderQuality && renderEmbedTab('✅', 'کنترل کیفیت', renderQuality(() => setTab('list')))}
       {aiChoicePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-4">
