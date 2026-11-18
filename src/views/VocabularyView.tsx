@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
-import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, matchCat, resolveCat, isLeech, fullWord } from '../utils/storage';
+import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
@@ -10,6 +10,19 @@ import { X, Save, HelpCircle } from 'lucide-react';
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
   (value || '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('de');
+
+// ترتیب سطوح CEFR برای مرتب‌سازی بر اساس سطح (واژهٔ بدون سطح → آخر لیست)
+const LVL_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+// طیف رنگی چیپ سطح: نارنجی کمرنگ (A1) تا نارنجی خیلی پررنگ (C2)؛ در حالت تیره با شفافیت صعودی
+const LVL_COLORS: Record<string, string> = {
+  A1: 'bg-orange-100 text-orange-800 dark:bg-orange-500/10 dark:text-orange-200',
+  A2: 'bg-orange-200 text-orange-900 dark:bg-orange-500/20 dark:text-orange-200',
+  B1: 'bg-orange-300 text-orange-900 dark:bg-orange-500/30 dark:text-orange-100',
+  B2: 'bg-orange-400 text-orange-950 dark:bg-orange-500/50 dark:text-orange-50',
+  C1: 'bg-orange-600 text-white dark:bg-orange-500/70 dark:text-white',
+  C2: 'bg-orange-800 text-white dark:bg-orange-500/90 dark:text-white'
+};
 
 const parseGermanEntry = (input: string, selectedArt = ''): { de: string; art: string } => {
   const value = duplicateKey(input);
@@ -77,13 +90,19 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterArt, setFilterArt] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState<'de' | 'added' | 'hard' | 'due'>('de');
+  const [filterLvl, setFilterLvl] = useState('');
+  const [sortBy, setSortBy] = useState<'de' | 'lvl' | 'added' | 'hard' | 'due'>('de');
 
   // Category open accordion
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [catsVer, setCatsVer] = useState(0);
   const [catMgrNew, setCatMgrNew] = useState('');
+  // تغییر نام درون‌خطی + مودال تأیید حذف سفارشی (جایگزین prompt/confirm مرورگر که در حالت webapp کار نمی‌کنند)
+  const [renamingCat, setRenamingCat] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+  const [catDeleteTarget, setCatDeleteTarget] = useState<string | null>(null);
+  const [catMergePending, setCatMergePending] = useState<{ from: string; to: string } | null>(null);
   const [flatView, setFlatView] = useState(false);
   React.useEffect(() => { if (openCatMgrSignal) setCategoryManagerOpen(true); }, [openCatMgrSignal]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -196,25 +215,38 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     const n = Date.now();
     return words
       .filter(w => {
+        // جستجو در کلمهٔ آلمانی، معنی فارسی/انگلیسی، مترادف‌ها، متضادها و برچسب‌ها
         const matchesQuery =
           !searchQuery.trim() ||
-          (w.de + ' ' + w.fa).toLowerCase().includes(searchQuery.trim().toLowerCase());
+          [w.de, w.fa, w.en, w.syn, w.synFa, w.ant, w.antFa, w.tags]
+            .join(' ')
+            .toLowerCase()
+            .includes(searchQuery.trim().toLowerCase());
         const matchesArt = !filterArt || w.art === filterArt;
+        const matchesLvl = !filterLvl || String(w.lvl || '').trim().toUpperCase() === filterLvl;
         const matchesStatus =
           filterStatus === 'all' ||
           (filterStatus === 'new' ? !w.last :
           filterStatus === 'due' ? w.last && w.due <= n :
           filterStatus === 'hard' ? isLeech(w) :
           w.last);
-        return matchesQuery && matchesArt && matchesStatus;
+        return matchesQuery && matchesArt && matchesLvl && matchesStatus;
       })
       .sort((a, b) => {
         if (sortBy === 'de') return a.de.localeCompare(b.de, 'de');
+        // مرتب‌سازی بر حسب سطح CEFR: A1→C2، هم‌سطح‌ها الفبایی، بدون سطح در انتها
+        if (sortBy === 'lvl') {
+          const rank = (l?: string) => {
+            const i = LVL_ORDER.indexOf(String(l || '').trim().toUpperCase());
+            return i === -1 ? LVL_ORDER.length : i;
+          };
+          return rank(a.lvl) - rank(b.lvl) || a.de.localeCompare(b.de, 'de');
+        }
         if (sortBy === 'added') return b.added - a.added;
         if (sortBy === 'hard') return b.bad - a.bad;
         return a.due - b.due;
       });
-  }, [words, searchQuery, filterArt, filterStatus, sortBy]);
+  }, [words, searchQuery, filterArt, filterStatus, filterLvl, sortBy]);
   // Typo-tolerant suggestions from the user's own library
 const lev = (a: string, b: string): number => {
 const m = a.length, n = b.length;
@@ -275,6 +307,28 @@ return words
   const toggleFaVisibility = (wordId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setVisFa(prev => ({ ...prev, [wordId]: !prev[wordId] }));
+  };
+
+  // تغییر نام دسته درون‌خطی: Enter = ذخیره، Escape = انصراف
+  const commitRename = (oldName: string) => {
+    const newName = renameVal.trim();
+    if (!newName) {
+      onShowToast('نام جدید نمی‌تواند خالی باشد.', true);
+      return;
+    }
+    if (newName !== oldName) {
+      if (categories.some(([c]) => c.toLowerCase() === newName.toLowerCase())) {
+        // نام تکراری یعنی ادغام دو دسته — قبل از انجام، با مودال تأیید می‌گیریم
+        setRenamingCat(null);
+        setCatMergePending({ from: oldName, to: newName });
+        return;
+      }
+      renameExtraCat(oldName, newName);
+      setCatsVer(x => x + 1);
+      onRenameCategory(oldName, newName);
+      onShowToast(`نام دسته به «${newName}» تغییر کرد.`, false);
+    }
+    setRenamingCat(null);
   };
 
   const resetForm = () => {
@@ -899,8 +953,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 value={formFa}
                 onChange={e => setFormFa(e.target.value)}
                 className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-bold text-base md:text-lg outline-none"              />
-            <button
-                            />
               <input
                 type="text"
                 dir="ltr"
@@ -1311,7 +1363,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         <div>
           <input
             type="text"
-            placeholder="🔍 جستجو در واژگان (کلمه آلمانی یا معنی فارسی)..."
+            placeholder="🔍 جستجو: کلمه، معنی فارسی/انگلیسی، مترادف، متضاد، برچسب..."
             value={searchQuery}
             onChange={e => {
               setSearchQuery(e.target.value);
@@ -1321,8 +1373,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           />
         </div>
 
-        {/* Line 2: 3 search filters side-by-side in one line */}
-        <div className="grid grid-cols-3 gap-2">
+        {/* Line 2: 4 search filters — 2×2 on mobile, one row on md+ */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {/* 1. Article Filter */}
           <select
             value={filterArt}
@@ -1355,9 +1407,22 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
           >
             <option value="de">مرتب‌سازی: الفبا</option>
+            <option value="lvl">سطح (A1 تا C2)</option>
             <option value="added">تاریخ افزودن</option>
             <option value="hard">سختی</option>
             <option value="due">مرور بعدی</option>
+          </select>
+
+          {/* 4. Level Filter */}
+          <select
+            value={filterLvl}
+            onChange={e => setFilterLvl(e.target.value)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+          >
+            <option value="">سطح: همه</option>
+            {LVL_ORDER.map(l => (
+              <option key={l} value={l}>{l}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -1369,7 +1434,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
         <div
           className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 md:p-6"
           onClick={e => {
-            if (e.target === e.currentTarget) setCategoryManagerOpen(false);
+            if (e.target === e.currentTarget) { setCategoryManagerOpen(false); setRenamingCat(null); setCatDeleteTarget(null); setCatMergePending(null); }
           }}
         >
           <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-2xl">
@@ -1386,7 +1451,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCategoryManagerOpen(false)}
+                  onClick={() => { setCategoryManagerOpen(false); setRenamingCat(null); setCatDeleteTarget(null); setCatMergePending(null); }}
                   aria-label="بستن مدیریت دسته‌ها"
                   className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold"
                 >
@@ -1420,42 +1485,144 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 key={catName}
                 className="py-2 flex items-center justify-between gap-2 text-xs md:text-sm"
               >
-                <span className="font-medium text-slate-800 dark:text-slate-200">
-                  📁 {catName} <span className="text-[#5d6676] text-xs">({count} واژه)</span>
-                </span>
+                {renamingCat === catName ? (
+                  /* ویرایش درون‌خطی نام دسته (Enter = ذخیره، Escape = انصراف) */
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <input
+                      value={renameVal}
+                      onChange={e => setRenameVal(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') commitRename(catName);
+                        if (e.key === 'Escape') setRenamingCat(null);
+                      }}
+                      autoFocus
+                      dir="rtl"
+                      placeholder="نام جدید…"
+                      className="flex-1 min-w-0 bg-slate-50 dark:bg-[#141923] border border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-2.5 py-2 text-xs md:text-sm outline-none"
+                    />
+                    <button
+                      onClick={() => commitRename(catName)}
+                      title="ذخیره نام"
+                      aria-label="ذخیره نام دسته"
+                      className="w-9 h-9 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-600 flex items-center justify-center text-sm flex-shrink-0 transition"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={() => setRenamingCat(null)}
+                      title="انصراف"
+                      aria-label="انصراف از تغییر نام"
+                      className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-sm flex-shrink-0 transition"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="font-medium text-slate-800 dark:text-slate-200 min-w-0 truncate">
+                      📁 {catName} <span className="text-[#5d6676] text-xs">({count} واژه)</span>
+                    </span>
 
-                {/* Icons pinned to the left (end in RTL) */}
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      const newName = prompt('نام جدید دسته را وارد کنید:', catName);
-                      if (newName && newName.trim() && newName.trim() !== catName) {
-                        renameExtraCat(catName, newName.trim()); setCatsVer(x => x + 1); onRenameCategory(catName, newName.trim());
-                      }
-                    }}
-                    title="تغییر نام / ادغام"
-                    aria-label="تغییر نام دسته"
-                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-sm transition"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`آیا از حذف دستهٔ «${catName}» اطمینان دارید؟ واژه‌ها حذف نمی‌شوند و فقط بدون دسته خواهند شد.`)) {
-                        removeExtraCat(catName); setCatsVer(x => x + 1); onDeleteCategory(catName);
-                      }
-                    }}
-                    title="حذف دسته"
-                    aria-label="حذف دسته"
-                    className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 flex items-center justify-center text-sm transition"
-                  >
-                    🗑
-                  </button>
-                </div>
+                    {/* Icons pinned to the left (end in RTL) */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => { setRenamingCat(catName); setRenameVal(catName); }}
+                        title="تغییر نام / ادغام"
+                        aria-label="تغییر نام دسته"
+                        className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-sm transition"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => setCatDeleteTarget(catName)}
+                        title="حذف دسته"
+                        aria-label="حذف دسته"
+                        className="w-9 h-9 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 flex items-center justify-center text-sm transition"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           )}
         </div>
+
+        {/* مودال تأیید حذف دسته — جایگزین confirm() مرورگر که در حالت webapp کار نمی‌کند */}
+        {catDeleteTarget && (
+          <div
+            className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={e => { if (e.target === e.currentTarget) setCatDeleteTarget(null); }}
+          >
+            <div role="alertdialog" aria-modal="true" className="w-full max-w-xs bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-2xl space-y-3 text-center">
+              <div className="text-3xl" aria-hidden="true">🗑</div>
+              <div className="font-extrabold text-sm text-slate-900 dark:text-slate-100">حذف دستهٔ «{catDeleteTarget}»</div>
+              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                واژه‌های این دسته حذف نمی‌شوند و فقط بدون دسته خواهند شد.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = catDeleteTarget || '';
+                    setCatDeleteTarget(null);
+                    setRenamingCat(null);
+                    removeExtraCat(target); setCatsVer(x => x + 1); onDeleteCategory(target);
+                    onShowToast(`دستهٔ «${target}» حذف شد؛ واژه‌ها بدون دسته شدند.`, false);
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition"
+                >
+                  حذف کن
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatDeleteTarget(null)}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2.5 rounded-xl text-xs font-bold transition"
+                >
+                  انصراف
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* مودال تأیید ادغام دسته‌ها — وقتی نام جدید با دستهٔ موجود یکی است */}
+        {catMergePending && (
+          <div
+            className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={e => { if (e.target === e.currentTarget) setCatMergePending(null); }}
+          >
+            <div role="alertdialog" aria-modal="true" className="w-full max-w-xs bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-2xl space-y-3 text-center">
+              <div className="text-3xl" aria-hidden="true">🔀</div>
+              <div className="font-extrabold text-sm text-slate-900 dark:text-slate-100">ادغام دستهٔ «{catMergePending.from}» با «{catMergePending.to}»</div>
+              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                دسته‌ای با این نام از قبل وجود دارد. همهٔ واژه‌ها به «{catMergePending.to}» منتقل می‌شوند و دستهٔ «{catMergePending.from}» حذف می‌شود.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = catMergePending;
+                    setCatMergePending(null);
+                    renameExtraCat(m.from, m.to); setCatsVer(x => x + 1); onRenameCategory(m.from, m.to);
+                    onShowToast(`دستهٔ «${m.from}» با «${m.to}» ادغام شد.`, false);
+                  }}
+                  className="bg-[#1f5fbf] hover:bg-[#194ea0] text-white px-3 py-2.5 rounded-xl text-xs font-bold transition"
+                >
+                  ادغام کن
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatMergePending(null)}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2.5 rounded-xl text-xs font-bold transition"
+                >
+                  انصراف
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
           </div>
         </div>
       )}
@@ -1576,7 +1743,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
 
                             <div className="flex items-center gap-1.5" dir="ltr">
                               {w.art && (
-                                <span className={`px-1.5 py-0.2 rounded font-bold text-xs ${
+                                <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${
                                   w.art === 'der' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
                                   w.art === 'die' ? 'bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300' :
                                   'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
@@ -1610,12 +1777,12 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                           {/* Quick indicators */}
                           <div className="flex items-center gap-1.5 text-[11px] text-[#5d6676] flex-shrink-0">
                             {w.lvl && (
-                              <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded text-[10px]">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${LVL_COLORS[String(w.lvl).trim().toUpperCase()] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
                                 {w.lvl}
                               </span>
                             )}
                             {w.needsFull && (
-                              <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded text-[10px] font-bold" title="پروفایل سبک است — در پروفایل، 💎 تکمیل کامل بزن">⚡</span>
+                              <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-bold" title="پروفایل سبک است — در پروفایل، 💎 تکمیل کامل بزن">⚡</span>
                             )}
                             {isLeech(w) && <span>🩸</span>}
                             {w.img && <span>🖼</span>}
