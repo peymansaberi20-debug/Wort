@@ -3,7 +3,8 @@ import { Word } from '../types';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { IconBtn } from './IconBtn';
 import { ShadowingModal } from './ShadowingModal';
-import { X } from 'lucide-react';
+import { ErrorBoundary } from './ErrorBoundary';
+import { X, Mic } from 'lucide-react';
 
 interface SentenceBuilderModalProps {
   word: Word | null;
@@ -284,7 +285,9 @@ JSON REQUIREMENTS
       </div>
 
       {shadowOpen && report && (
-        <ShadowingModal freeText={report.corrected_de} word={word} onClose={() => setShadowOpen(false)} />
+        <ErrorBoundary label="تمرین تلفظ">
+          <ShadowingModal freeText={report.corrected_de} word={word} onClose={() => setShadowOpen(false)} />
+        </ErrorBoundary>
       )}
     </div>
   );
