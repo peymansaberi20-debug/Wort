@@ -5,6 +5,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ShadowingModal } from './ShadowingModal';
+import { ErrorBoundary } from './ErrorBoundary';
+import { ImageCropper } from './ImageCropper';
 import { Camera, ImagePlus, Trash2 } from 'lucide-react';
 import { generateWithImages, describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
@@ -122,6 +124,8 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   const [showFa, setShowFa] = useState(false);
 
   const [images, setImages] = useState<{ dataUrl: string; mimeType: string; base64: string }[]>([]);
+  // صف کراپ: هر عکس تازه قبل از ورود به فهرست از کراپ می‌گذرد (درخواست #۶)
+  const [pendingCrop, setPendingCrop] = useState<{ dataUrl: string; rest: { dataUrl: string; mimeType: string; base64: string }[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,8 +146,19 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
     const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
     e.target.value = '';
     if (files.length === 0) { onShowToast('لطفاً فقط فایل تصویری انتخاب کنید.', true); return; }
-    try { const shrunk = await Promise.all(files.map(shrinkImage)); setImages(prev => [...prev, ...shrunk].slice(0, 8)); }
+    try {
+      const shrunk = await Promise.all(files.map(shrinkImage));
+      // اولین عکس به کراپ می‌رود؛ بقیه در صف می‌مانند و یکی‌یکی کراپ می‌شوند
+      setPendingCrop({ dataUrl: shrunk[0].dataUrl, rest: shrunk.slice(1) });
+    }
     catch { onShowToast('خواندن تصویر ممکن نشد.', true); }
+  };
+
+  const pushImage = (dataUrl: string) => setImages(prev => [...prev, { dataUrl, mimeType: 'image/jpeg', base64: (dataUrl.split(',')[1] || '') }].slice(0, 8));
+  const advanceCrop = (c: { dataUrl: string; rest: { dataUrl: string; mimeType: string; base64: string }[] } | null) => {
+    if (!c) return null;
+    if (c.rest.length) return { dataUrl: c.rest[0].dataUrl, rest: c.rest.slice(1) };
+    return null;
   };
 
   const fetchTaskPrompt = async (topicId: string, lvl = targetLevel) => {
@@ -314,6 +329,14 @@ Return ONLY a valid JSON array with one object:
           </div>
           <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFilesSelected} className="hidden" />
           <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFilesSelected} className="hidden" />
+          {pendingCrop && (
+            <ImageCropper
+              src={pendingCrop.dataUrl}
+              title={`برش تصویر (${images.length + 1}/${images.length + 1 + pendingCrop.rest.length})`}
+              onCancel={() => { pushImage(pendingCrop.dataUrl); setPendingCrop(c => advanceCrop(c)); }}
+              onConfirm={cropped => { pushImage(cropped); setPendingCrop(c => advanceCrop(c)); }}
+            />
+          )}
           {images.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2">
               {images.map((img, idx) => (
@@ -410,7 +433,11 @@ Return ONLY a valid JSON array with one object:
             </div>
           )}
 
-          {shadowOpen && <ShadowingModal freeText={report.corrected_de} onClose={() => setShadowOpen(false)} />}
+          {shadowOpen && (
+            <ErrorBoundary label="تمرین تلفظ">
+              <ShadowingModal freeText={report.corrected_de} onClose={() => setShadowOpen(false)} />
+            </ErrorBoundary>
+          )}
 
           <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
             <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی درباره ساختار این متن یا اصطلاحاتش داری؟ بپرس:</div>
