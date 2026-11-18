@@ -2,7 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Word } from '../types';
 import { fullWord } from '../utils/storage';
-import { speak, stopSpeaking, getTtsWorkerBase } from '../utils/audio';
+// ⚠️ دسترسی امن به ماژول صدا: اگر exportای در audio.ts موجود نباشد یا خطا بدهد،
+// به‌جای سفید شدن کل صفحه فقط امکان مربوطه بی‌اثر می‌شود.
+import * as audioMod from '../utils/audio';
+
+const audioAny = audioMod as any;
+const speakSafe = (text: string) => { try { audioAny.speak?.(text); } catch { /* ignore */ } };
+const stopSpeakingSafe = () => { try { audioAny.stopSpeaking?.(); } catch { /* ignore */ } };
+const getTtsBaseSafe = (): string => { try { return String(audioAny.getTtsWorkerBase?.() || ''); } catch { return ''; } };
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { IconBtn } from './IconBtn';
 import { X, Mic, Square, Play, Trash2, Volume2, Wand2 } from 'lucide-react';
@@ -76,7 +83,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
 
   const runAnalysis = async () => {
     if (!recUrl) return;
-    const base = getTtsWorkerBase();
+    const base = getTtsBaseSafe();
     const sampleSrc = base ? `${base}/?lang=de&text=${encodeURIComponent(text)}` : '';
     try {
       const eMine = await analyzeAudio(recUrl);
@@ -161,7 +168,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
   // sample duration from cloud mp3 metadata (if worker configured)
   useEffect(() => {
     setSampleDur(null);
-    const base = getTtsWorkerBase();
+    const base = getTtsBaseSafe();
     if (!base || !text) return;
     const a = new Audio(`${base}/?lang=de&text=${encodeURIComponent(text)}`);
     const onMeta = () => { if (isFinite(a.duration)) setSampleDur(a.duration); };
@@ -180,19 +187,19 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
 
   // stop recording/audio when the modal closes
   useEffect(() => () => {
-    stopSpeaking();
+    stopSpeakingSafe();
     try { if (recRef.current?.state === 'recording') recRef.current.stop(); } catch { /* ignore */ }
   }, []);
 
   const playSample = () => {
     if (!text) return;
-    const base = getTtsWorkerBase();
-    stopSpeaking();
+    const base = getTtsBaseSafe();
+    stopSpeakingSafe();
     if (base) {
       const a = new Audio(`${base}/?lang=de&text=${encodeURIComponent(text)}`);
       void a.play().catch(() => speak(text));
     } else {
-      speak(text);
+      speakSafe(text);
     }
   };
 
@@ -202,7 +209,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
       setErr('مرورگر شما از ضبط صدا پشتیبانی نمی‌کند.');
       return;
     }
-    stopSpeaking();
+    stopSpeakingSafe();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
@@ -229,7 +236,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
 
   const playRec = () => {
     if (!recUrl) return;
-    stopSpeaking();
+    stopSpeakingSafe();
     void new Audio(recUrl).play().catch(() => setErr('پخش ضبط ناموفق بود.'));
   };
 
