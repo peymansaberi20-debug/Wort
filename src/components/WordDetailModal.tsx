@@ -303,17 +303,48 @@ const seg = pluralSegments2();
           "همون بالا دکمه های : بازگشت ، ویرایش ، حذف و افزودن عکس هست. کمی به هم ریخته هستند .
           مرتب و تمیز هر چهارتا رو در یک خط نمایش بده و ترتیب و منطق اونها بر اساس عرف و روال استاندارد و کاربر پسند نرم افزارها و APP های فارسی باشه"
         */}
-        <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-start gap-2">          
-          {/* Phase 2 Sec.1: icon strip — close leftmost, then image, edit, delete */}
-          <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
-          <div className="flex items-center gap-1.5">
-            <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
-              {word.img ? '🖼️' : '📷'}
-            </IconBtn>
-            <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
-             <IconBtn onClick={() => onEdit(word)} title="تکمیل کامل پروفایل (در فرم ویرایش، دکمهٔ 💎)"><Sparkles size={18} className="text-amber-500" /></IconBtn>
-            <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
-            <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
+        {/* Sticky block: icon strip + frozen word bar — while scrolling, word and Persian meaning remain visible (request #7) */}
+        <div className="sticky top-0 z-20">
+          <div dir="ltr" className="bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-start gap-2">
+            {/* Phase 2 Sec.1: icon strip — close leftmost, then image, edit, delete */}
+            <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
+            <div className="flex items-center gap-1.5">
+              <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
+                {word.img ? '🖼️' : '📷'}
+              </IconBtn>
+              <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
+              <IconBtn onClick={() => onEdit(word)} title="تکمیل کامل پروفایل (در فرم ویرایش، دکمهٔ 💎)"><Sparkles size={18} className="text-amber-500" /></IconBtn>
+              <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
+              <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
+            </div>
+          </div>
+          {/* Frozen word bar: word + Persian translation (when enabled) always stays at the top of the page */}
+          <div dir="ltr" className="bg-gradient-to-l from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white px-3 py-2 flex items-center justify-between gap-2 shadow-md">
+            <div className="flex items-center gap-2 min-w-0">
+              {articleBadge()}
+              <span className="font-extrabold font-sans text-lg md:text-xl truncate">{word.de}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {showFa && word.fa && (
+                <span dir="rtl" className="text-sm md:text-base font-bold text-amber-300 truncate max-w-[46vw] sm:max-w-[240px]">{word.fa}</span>
+              )}
+              <button
+                onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
+                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-base transition"
+                title="پخش تلفظ صوتی" aria-label="پخش تلفظ صوتی"
+              >
+                🔊
+              </button>
+              <button
+                onClick={() => setShowFa(value => !value)}
+                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-base transition"
+                title={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
+                aria-label={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
+                aria-expanded={showFa}
+              >
+                {showFa ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
         </div>
 
