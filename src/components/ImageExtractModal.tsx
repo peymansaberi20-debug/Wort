@@ -8,6 +8,7 @@ import { Conflict, ImportDecision, classifyImport } from '../utils/vocabMerge';
 import { ImportConflictDialog } from './ImportConflictDialog';
 import { copyText } from '../utils/clipboard';
 import { recognizeImage, releaseOcr } from '../utils/ocr';
+import { ImageCropper } from './ImageCropper';
 import { BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, loadSession, makeCandidates, markCompleted, newSession, buildSinglePromptDepth, type PromptDepth,
   nextOpenBatch, saveSession, sessionProgress, setBatchSize, splitCandidates, validateBatchResponse, validationToWords
 } from '../utils/extractSession';
@@ -45,6 +46,40 @@ export const ImageExtractModal: React.FC<ImageExtractModalProps> = ({
   const [progressPercent, setProgressPercent] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  // کراپ تصویر بعد از انتخاب/گرفتن عکس (درخواست #۶): هر عکس قبل از ورود به فهرست از کراپ می‌گذرد
+  const [pendingCrop, setPendingCrop] = useState<{ dataUrl: string; name: string; file: File } | null>(null);
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+
+  const fileToDataUrl = (f: File): Promise<string> => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result));
+    r.onerror = () => rej(new Error('read'));
+    r.readAsDataURL(f);
+  });
+  const dataUrlToFile = (dataUrl: string, name: string): File => {
+    const [meta, b64] = dataUrl.split(',');
+    const mime = /:(.*?);/.exec(meta)?.[1] || 'image/jpeg';
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new File([arr], name, { type: mime });
+  };
+  const openCropFor = async (imgs: File[]) => {
+    if (!imgs.length) return;
+    try {
+      const url = await fileToDataUrl(imgs[0]);
+      setCropQueue(imgs.slice(1));
+      setPendingCrop({ dataUrl: url, name: imgs[0].name || 'photo.jpg', file: imgs[0] });
+    } catch { setFiles(prev => [...prev, ...imgs]); }
+  };
+  const nextCrop = async (rest: File[]) => {
+    if (!rest.length) { setCropQueue([]); return; }
+    try {
+      const url = await fileToDataUrl(rest[0]);
+      setCropQueue(rest.slice(1));
+      setPendingCrop({ dataUrl: url, name: rest[0].name || 'photo.jpg', file: rest[0] });
+    } catch { setFiles(prev => [...prev, ...rest]); setCropQueue([]); setPendingCrop(null); }
+  };
   const [sourceCollapsed, setSourceCollapsed] = useState<boolean>(false);
 
   const LEVEL_ORDER = ['', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -568,9 +603,17 @@ Rules:
                   accept="image/*"
                   multiple
                   disabled={loading || enriching}
-                  onChange={e => setFiles(Array.from(e.target.files || []))}
+                  onChange={e => { const fl = Array.from(e.target.files || []); e.target.value = ''; void openCropFor(fl); }}
                   className="w-full text-xs file:bg-slate-100 file:border-0 file:rounded-xl file:px-3 file:py-1.5 file:text-xs file:font-bold file:mr-2 cursor-pointer"
                 />
+                {pendingCrop && (
+                  <ImageCropper
+                    src={pendingCrop.dataUrl}
+                    title="برش تصویر (اختیاری)"
+                    onCancel={() => { setFiles(prev => [...prev, pendingCrop.file]); setPendingCrop(null); void nextCrop(cropQueue); }}
+                    onConfirm={cropped => { setFiles(prev => [...prev, dataUrlToFile(cropped, pendingCrop.name)]); setPendingCrop(null); void nextCrop(cropQueue); }}
+                  />
+                )}
               </div>
             ) : (
               <textarea
