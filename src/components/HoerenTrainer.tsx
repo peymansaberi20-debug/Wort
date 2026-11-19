@@ -308,10 +308,21 @@ export const HoerenTrainer: React.FC<{
 
   // Print: state-based, no window.open (blocked on iOS Safari). Questions and answer key are separate.
   const [printMode, setPrintMode] = useState<'questions' | 'answers' | 'transcript' | 'report' | null>(null);
+  const printWin = useRef<Window | null>(null);
   useEffect(() => {
     if (!printMode) return;
     const t = setTimeout(() => {
-      window.print();
+      const w = printWin.current; printWin.current = null;
+      const el = document.querySelector('.h-print-area');
+      if (w && el) {
+        try {
+          const css = 'body{font-family:Georgia,serif;margin:16px;color:#000;background:#fff}h2{border-bottom:1.5px solid #1f5fbf;color:#1f5fbf;font-size:18px;padding-bottom:4px}h3{font-size:15px;margin:14px 0 4px}p,div,li{font-size:13px;line-height:1.6}ul{margin:2px 0 8px 18px;padding:0}.ltr{direction:ltr;text-align:left}.rtl{direction:rtl;text-align:right}.pre{white-space:pre-wrap}.answers{color:#1a7a3a;font-weight:700}@page{size:A4;margin:12mm}';
+          w.document.open();
+          w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hören</title><style>' + css + '</style></head><body>' + el.innerHTML + '</body></html>');
+          w.document.close();
+          setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 500);
+        } catch { try { w.close(); } catch { /* ignore */ } window.print(); }
+      } else { if (w) { try { w.close(); } catch { /* ignore */ } } window.print(); }
       setTimeout(() => setPrintMode(null), 300);
     }, 80);
     return () => clearTimeout(t);
@@ -319,6 +330,12 @@ export const HoerenTrainer: React.FC<{
 
   const handlePrint = (type: 'questions' | 'answers' | 'transcript' | 'report') => {
     if (!exercise) return;
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform))) {
+      try {
+        const w = window.open('', '_blank');
+        if (w) { w.document.write('<p style="font-family:sans-serif;padding:16px">⏳ …</p>'); printWin.current = w; }
+      } catch { printWin.current = null; }
+    }
     setPrintMode(type);
   };
 
@@ -820,8 +837,7 @@ ${numbered}`,
                 {exam && secondsLeft >= 0 && !submitted && (
                   <span className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono font-bold whitespace-nowrap">⏱ {fmt(secondsLeft)}</span>
                 )}
-                {!exam && !submitted && noHelpChip}
-                {!exam && <button onClick={handleBackToMenu} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold whitespace-nowrap">بازگشت</button>}
+                {!exam && <button onClick={handleBackToMenu} aria-label="بازگشت" className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-bold">✕</button>}
               </div>
             </div>
           </div>
@@ -881,6 +897,12 @@ ${numbered}`,
                 onError={() => setError('فایل صوتی پخش نشد — لینک را بررسی کن یا از «پخش با صدای مرورگر» استفاده کن.')} />
             )}
           </div>
+
+          {!exam && !submitted && (
+            <button onClick={() => setNoHelp(!noHelp)} className={`w-full py-2.5 rounded-xl text-sm font-bold border ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>
+              🚫 حالت بدون کمک {noHelp ? '(روشن)' : '(خاموش)'}
+            </button>
+          )}
 
           {(!limited || submitted) && (
             <div className={box + ' space-y-2'}>
