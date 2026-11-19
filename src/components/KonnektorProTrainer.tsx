@@ -74,7 +74,8 @@ interface KExercise {
   id: string; ts: number; level: Lvl; topic: string;
   items: KItem[];
   answers: Record<number, string>;
-  corrections: Correction[] | null;
+  /** تصحیحِ هر جمله پس از بررسی همان جمله اینجا ذخیره می‌شود (کلید = no) — جریان تک‌موردی */
+  corrections: Record<number, Correction>;
   chats: Record<number, ChatMsg[]>;
 }
 interface WInfo { lemma: string; fa: string; pos: string; art?: string; ex?: string; exFa?: string; }
@@ -84,7 +85,17 @@ const faDate = (ts: number): string => {
   catch { return new Date(ts).toLocaleDateString(); }
 };
 const loadHist = (): KExercise[] => {
-  try { const h = JSON.parse(localStorage.getItem(HKEY) || '[]'); return Array.isArray(h) ? h : []; } catch { return []; }
+  try {
+    const h = JSON.parse(localStorage.getItem(HKEY) || '[]');
+    if (!Array.isArray(h)) return [];
+    // سازگاری با نسخهٔ قدیمی: corrections آرایه بود → تبدیل به Record بر اساس no
+    return h.map((x: any) => ({
+      ...x,
+      corrections: Array.isArray(x?.corrections)
+        ? Object.fromEntries((x.corrections as Correction[]).filter(Boolean).map((c: Correction) => [String(c.no), c]))
+        : (x?.corrections && typeof x.corrections === 'object' ? x.corrections : {})
+    })) as KExercise[];
+  } catch { return []; }
 };
 const saveHist = (h: KExercise[]) => { try { localStorage.setItem(HKEY, JSON.stringify(h.slice(0, 30))); } catch { /* ignore */ } };
 
@@ -101,6 +112,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
   const [count, setCount] = useState(8);
   const [topic, setTopic] = useState('');
   const [ex, setEx] = useState<KExercise | null>(null);
+  const [curNo, setCurNo] = useState(1); // جملهٔ جاری — جریان تک‌موردی (مثل تمرین فعل+حرف اضافه)
   const [generating, setGenerating] = useState(false);
   const [correcting, setCorrecting] = useState(false);
   const [chatOpen, setChatOpen] = useState<number | null>(null);
@@ -152,9 +164,10 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       const e: KExercise = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         ts: Date.now(), level, topic: topic.trim(),
-        items: clean, answers: {}, corrections: null, chats: {}
+        items: clean, answers: {}, corrections: {}, chats: {}
       };
       setEx(e);
+      setCurNo(1);
       setScreen('play');
       setChatOpen(null);
       setAdded(new Set());
@@ -166,28 +179,47 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     }
   };
 
-  // ────────── ارسال برای تصحیح ──────────
-  const sendCorrection = async () => {
-    if (!ex) return;
-    const answered = ex.items.filter(i => (ex.answers[i.no] || '').trim()).length;
-    if (!answered) { onShowToast('اول حداقل یک جمله را کامل کن.', true); return; }
-    if (answered < ex.items.length && !window.confirm(`فقط ${answered} جمله از ${ex.items.length} کامل شده؛ بقیه «بی‌پاسخ» تصحیح می‌شود. ادامه؟`)) return;
+  // ────────── تصحیح فوری همان جمله (تک‌موردی) ──────────
+  const checkOne = async () => {
+    if (!ex || correcting) return;
+    const it = ex.items[curNo - 1];
+    if (!it) return;
+    const ans = (ex.answers[it.no] || '').trim();
+    if (!ans) { onShowToast('اول جمله را کامل کن، بعد بررسی کن.', true); return; }
     setCorrecting(true);
     try {
-      const raw = await askGemini(buildCorrectionPrompt(ex.level, ex.items, ex.answers), SYS_AI);
+      const raw = await askGemini(buildCorrectionPrompt(ex.level, [it], { [it.no]: ans }), SYS_AI);
       const corr = parseJSONLoose<Correction[]>(raw);
-      const map = new Map<number, Correction>((Array.isArray(corr) ? corr : []).filter(c => c && typeof c.no === 'number').map(c => [c.no, c]));
-      const merged: Correction[] = ex.items.map(it => map.get(it.no) || { no: it.no, ok: false, corrected: '', grammar: 'پاسخ داده نشد', meaning: '', thinking: '' });
+      const c0 = (Array.isArray(corr) ? corr : []).find(c => c && typeof c.no === 'number')
+        || { no: it.no, ok: false, corrected: '', grammar: 'پاسخ بررسی نشد', meaning: '', thinking: '' };
+      const merged: Record<number, Correction> = { ...ex.corrections, [it.no]: { ...c0, no: it.no } };
       setEx({ ...ex, corrections: merged });
-      setScreen('review');
-      setChatOpen(null);
-      const okN = merged.filter(c => c.ok).length;
-      onShowToast(`تصحیح شد: ${okN} از ${merged.length} درست ✓`);
+      onShowToast(c0.ok ? '✓ قابل قبول بود' : 'بررسی شد — بازخورد زیر جمله است.');
     } catch (e) {
       onShowToast(aiErrorText(e), true);
     } finally {
       setCorrecting(false);
     }
+  };
+
+  // جملهٔ بعدی — یا در آخرین جمله، نتیجهٔ جلسه
+  const nextItem = () => {
+    if (!ex) return;
+    if (curNo >= ex.items.length) { setScreen('review'); setChatOpen(null); return; }
+    setCurNo(curNo + 1);
+    setChatOpen(null);
+  };
+
+  // رد کردن بدون بررسی
+  const skipItem = () => { nextItem(); };
+
+  // ادامهٔ موارد بررسی‌نشده از صفحهٔ نتیجه
+  const continueRemaining = () => {
+    if (!ex) return;
+    const open = ex.items.find(i => !ex.corrections[i.no]);
+    if (open) setCurNo(open.no);
+    setScreen('play');
+    setChatOpen(null);
   };
 
   // ────────── چت درون‌خطیِ هر جمله ──────────
@@ -198,7 +230,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     const item = ex.items.find(i => i.no === no);
     if (!item) return;
     const hist0 = ex.chats[no] || [];
-    const corr = (ex.corrections || []).find(c => c.no === no) || null;
+    const corr = (ex.corrections && ex.corrections[no]) || null;
     setChatBusy(no);
     setChatInput('');
     setEx({ ...ex, chats: { ...ex.chats, [no]: [...hist0, { role: 'user', text: q }] } });
@@ -270,12 +302,15 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     setEx(h);
     setLevel(h.level);
     setTopic(h.topic);
-    setScreen(h.corrections ? 'review' : 'play');
+    const open = h.items.find(i => !h.corrections || !h.corrections[i.no]);
+    if (open) { setScreen('play'); setCurNo(open.no); } else { setScreen('review'); }
     setChatOpen(null);
   };
 
-  const answeredCount = ex ? ex.items.filter(i => (ex.answers[i.no] || '').trim()).length : 0;
-  const okCount = ex?.corrections ? ex.corrections.filter(c => c.ok).length : 0;
+  const corrList = ex?.corrections ? Object.values(ex.corrections) : [];
+  const checkedCount = corrList.length;
+  const okCount = corrList.filter(c => c?.ok).length;
+  const uncheckedCount = ex ? Math.max(0, ex.items.length - checkedCount) : 0;
 
   // راهنمای حروف ربطِ سطح، دسته‌بندی‌شده
   const byCat = useMemo(() => {
@@ -405,14 +440,14 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       </div>
 
       {/* صفحهٔ ۲: پاسخنامهٔ تصحیح‌شده */}
-      {ex.corrections && (
+      {Object.keys(ex.corrections).length > 0 && (
         <div className="kpp-pagebreak" dir="rtl">
           <div style={{ borderBottom: '2px solid #1f5fbf', paddingBottom: 6, marginBottom: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 800 }}>پاسخنامهٔ تصحیح‌شده + بازخورد</div>
             <div style={{ fontSize: 10, color: '#555' }}>سطح {ex.level} • موضوع: {ex.topic || 'آزاد'}</div>
           </div>
-          {ex.items.map((it, i) => {
-            const c = ex.corrections![i];
+          {ex.items.map(it => {
+            const c = ex.corrections[it.no];
             return (
               <div key={it.no} style={{ fontSize: 11, marginBottom: 10, breakInside: 'avoid' }}>
                 <div style={{ fontSize: 11.5 }}>
@@ -441,9 +476,10 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
         <div className="space-y-3">
           <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 shadow-xs">
             <p className="text-sm text-[#5d6676] dark:text-[#a3adbd] leading-6">
-              مثل تمرین کتاب: بخش اول جمله با حرف ربطِ هدف داده می‌شود و شما ادامه را می‌نویسید.
-              جملات را <b>هوش مصنوعی</b> طبق سطح می‌سازد و بعد از تکمیل، هر جمله را سه‌لایه تصحیح می‌کند
-              (گرامری / مفهومی / تفکر آلمانی) و می‌توانی دربارهٔ همین جمله با معلم گفتگو کنی.
+              مثل تمرین کتاب: بخش اول جمله با حرف ربطِ هدف داده می‌شود و شما ادامه را می‌نویسید — اما <b>یکی‌یکی</b>:
+              هر جمله را که نوشتی همان‌جا سه‌لایه تصحیح و بازخورد می‌گیری (گرامری / مفهومی / تفکر آلمانی)،
+              می‌توانی همان‌جا با معلم گفتگو کنی و بعد با «بعدی» بروی سراغ جملهٔ بعد تا تعدادی که انتخاب کردی.
+              جملات را <b>هوش مصنوعی</b> طبق سطح می‌سازد.
             </p>
 
             {/* وضعیت هوش مصنوعی — فقط نمایش؛ تنظیم در صفحهٔ تنظیمات برنامه */}
@@ -575,7 +611,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     <div className="min-w-0">
                       <div className="text-xs font-bold">
                         سطح {h.level} • {h.items.length} جمله{h.topic ? ` • ${h.topic}` : ''}
-                        {h.corrections ? <span className="text-emerald-600"> • تصحیح‌شده {h.corrections.filter(c => c.ok).length}/{h.items.length}</span> : ''}
+                        {h.corrections && Object.keys(h.corrections).length > 0 ? <span className="text-emerald-600"> • تصحیح‌شده {Object.values(h.corrections).filter(c => c.ok).length}/{h.items.length}</span> : ''}
                       </div>
                       <div className="text-[10px] text-[#5d6676] flex flex-wrap gap-1.5 mt-1">
                         <span className="bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5">{faDate(h.ts)}</span>
@@ -616,98 +652,160 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
         </div>
       )}
 
-      {/* ═════════ در حال تمرین ═════════ */}
-      {screen === 'play' && ex && (
-        <div className="space-y-3">
-          <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-            <div className="flex items-center justify-between gap-2 text-xs mb-2">
-              <div className="flex flex-wrap gap-1.5">
-                <span className="bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-[#7fb0ff] rounded-full px-2 py-0.5 font-bold">سطح {ex.level}</span>
-                {ex.topic && <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full px-2 py-0.5 font-bold">{ex.topic}</span>}
-              </div>
-              <div className="text-[#5d6676]">✍️ {answeredCount}/{ex.items.length}</div>
-            </div>
-            <p className="text-[11px] text-[#5d6676] leading-5 mb-3">
-              ادامهٔ هر جمله را آلمانی بنویس (کادر زیر جمله). روی حرف ربط سبز بزنی، نکتهٔ گرامری‌اش را می‌بینی؛
-              روی هر کلمهٔ جمله بزنی، ترجمهٔ فارسی + مثال می‌آید و می‌توانی به واژگان اضافه‌اش کنی.
-              جمله‌ای که سؤال داری، با 💬 مستقیم از معلم بپرس.
-            </p>
-            <div className="space-y-3">
-              {ex.items.map(it => (
-                <div key={it.no} className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] font-bold bg-slate-100 dark:bg-slate-800 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">{it.no}</span>
-                      <button
-                        onClick={e => tapKonnektor(e, it.connector)}
-                        dir="ltr"
-                        className="text-[11px] font-bold font-sans bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 transition"
-                        title="نکتهٔ این حرف ربط"
-                      >
-                        {it.connector}
-                      </button>
-                      {it.hint && <span className="text-[11px] text-orange-600 dark:text-orange-400 font-bold">({it.hint})</span>}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => doSpeak(it.first + ' ' + (ex.answers[it.no] || ''))}
-                        className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm"
-                        title="تلفظ"
-                        aria-label="تلفظ"
-                      >
-                        🔊
-                      </button>
-                      <button
-                        onClick={() => setChatOpen(chatOpen === it.no ? null : it.no)}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition ${(ex.chats[it.no] || []).length || chatOpen === it.no
-                          ? 'bg-[#1f5fbf] text-white'
-                          : 'bg-slate-100 dark:bg-slate-800'}`}
-                        title="گفتگو دربارهٔ این جمله"
-                        aria-label="گفتگو دربارهٔ این جمله"
-                      >
-                        💬
-                      </button>
-                    </div>
-                  </div>
-                  <p dir="ltr" className="font-sans text-[15px] md:text-base leading-[2] text-slate-800 dark:text-slate-100" style={{ textAlign: 'left' }}>
-                    {renderGermanWords(it.first, `it${it.no}`, it.first)}
-                    <span className="inline-block border-b-2 border-dashed border-[#1f5fbf] dark:border-[#7fb0ff] w-10 mx-1 align-baseline" />
-                  </p>
-                  <textarea
-                    rows={2}
-                    dir="ltr"
-                    value={ex.answers[it.no] || ''}
-                    onChange={e => setEx({ ...ex, answers: { ...ex.answers, [it.no]: e.target.value } })}
-                    placeholder="ادامهٔ جمله را آلمانی بنویس…"
-                    className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-base font-sans bg-white dark:bg-[#141923] outline-none focus:border-[#1f5fbf] dark:focus:border-[#7fb0ff] transition text-left"
-                  />
-                  {chatOpen === it.no && <ChatBox no={it.no} />}
+      {/* ═════════ در حال تمرین — جمله به جمله با تصحیح فوری ═════════ */}
+      {screen === 'play' && ex && (() => {
+        const it = ex.items[curNo - 1];
+        if (!it) return null;
+        const c = ex.corrections[it.no];
+        const ans = ex.answers[it.no] || '';
+        const isLast = curNo >= ex.items.length;
+        const pct = Math.round((curNo / ex.items.length) * 100);
+        return (
+          <div className="space-y-3">
+            <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
+              <div className="flex items-center justify-between gap-2 text-xs mb-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-[#7fb0ff] rounded-full px-2 py-0.5 font-bold">سطح {ex.level}</span>
+                  {ex.topic && <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full px-2 py-0.5 font-bold">{ex.topic}</span>}
                 </div>
-              ))}
+                <div className="text-[#5d6676] font-bold">جملهٔ {curNo} از {ex.items.length}</div>
+              </div>
+              <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-3">
+                <div className="h-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] transition-all duration-300" style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-[11px] text-[#5d6676] leading-5 mb-3">
+                جمله را کامل کن و «بررسی همین جمله» را بزن — همان‌جا تصحیح و بازخورد سه‌لایه می‌گیری؛
+                با 💬 همان‌جا از معلم بپرس، بعد با «بعدی» برو سراغ جملهٔ بعد.
+                روی حرف ربط سبز بزنی نکتهٔ گرامری‌اش را می‌بینی و روی هر کلمه بزنی ترجمهٔ فارسی می‌آید.
+              </p>
+
+              <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-bold bg-slate-100 dark:bg-slate-800 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">{it.no}</span>
+                    <button
+                      onClick={e => tapKonnektor(e, it.connector)}
+                      dir="ltr"
+                      className="text-[11px] font-bold font-sans bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 transition"
+                      title="نکتهٔ این حرف ربط"
+                    >
+                      {it.connector}
+                    </button>
+                    {it.hint && <span className="text-[11px] text-orange-600 dark:text-orange-400 font-bold">({it.hint})</span>}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => doSpeak(it.first + ' ' + ans)}
+                      className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm"
+                      title="تلفظ"
+                      aria-label="تلفظ"
+                    >
+                      🔊
+                    </button>
+                    <button
+                      onClick={() => setChatOpen(chatOpen === it.no ? null : it.no)}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition ${(ex.chats[it.no] || []).length || chatOpen === it.no
+                        ? 'bg-[#1f5fbf] text-white'
+                        : 'bg-slate-100 dark:bg-slate-800'}`}
+                      title="گفتگو دربارهٔ این جمله"
+                      aria-label="گفتگو دربارهٔ این جمله"
+                    >
+                      💬
+                    </button>
+                  </div>
+                </div>
+                <p dir="ltr" className="font-sans text-[15px] md:text-base leading-[2] text-slate-800 dark:text-slate-100" style={{ textAlign: 'left' }}>
+                  {renderGermanWords(it.first, `it${it.no}`, it.first)}
+                  <span className="inline-block border-b-2 border-dashed border-[#1f5fbf] dark:border-[#7fb0ff] w-10 mx-1 align-baseline" />
+                </p>
+                <textarea
+                  rows={2}
+                  dir="ltr"
+                  readOnly={!!c}
+                  value={ans}
+                  onChange={e => setEx({ ...ex, answers: { ...ex.answers, [it.no]: e.target.value } })}
+                  placeholder="ادامهٔ جمله را آلمانی بنویس…"
+                  className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-base font-sans bg-white dark:bg-[#141923] outline-none focus:border-[#1f5fbf] dark:focus:border-[#7fb0ff] transition text-left"
+                />
+
+                {/* بازخورد فوری همان‌جا — بعد از بررسی */}
+                {c && (
+                  <div className={`rounded-xl p-3 space-y-2 border ${c.ok ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-bold ${c.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{c.ok ? '✓ قابل قبول' : '✗ نیاز به اصلاح'}</span>
+                      <button onClick={() => doSpeak(c.corrected || it.first + ' ' + ans)} className="text-base" title="تلفظ جملهٔ درست">🔊</button>
+                    </div>
+                    {!c.ok && ans.trim() && (
+                      <div dir="ltr" className="text-sm leading-7" style={{ textAlign: 'left' }}>
+                        <span className="text-[#5d6676] font-sans">{it.first} </span>
+                        <b className="text-red-500 line-through decoration-1 font-sans">{ans}</b>
+                      </div>
+                    )}
+                    {c.corrected && (
+                      <div dir="ltr" className="text-sm leading-7 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}>{c.corrected}</div>
+                    )}
+                    {c.grammar && (
+                      <div className="text-xs leading-6 rounded-lg bg-white/70 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
+                        <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">📐 گرامری:</b> {c.grammar}
+                      </div>
+                    )}
+                    {c.meaning && (
+                      <div className="text-xs leading-6 rounded-lg bg-white/70 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
+                        <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧭 مفهومی:</b> {c.meaning}
+                      </div>
+                    )}
+                    {c.thinking && (
+                      <div className="text-xs leading-6 rounded-lg bg-white/70 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
+                        <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🇩🇪 تفکر آلمانی:</b> {c.thinking}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-[#5d6676]">سؤال داری؟ با 💬 همین‌جا از معلم بپرس، بعد «بعدی» را بزن.</p>
+                  </div>
+                )}
+                {chatOpen === it.no && <ChatBox no={it.no} />}
+              </div>
+
+              {c ? (
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <button onClick={nextItem} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3 rounded-xl text-sm font-bold transition">
+                    {isLast ? '🏁 پایان و دیدن نتیجه' : 'بعدی ←'}
+                  </button>
+                  <button onClick={() => setChatOpen(chatOpen === it.no ? null : it.no)} className="border-2 border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] py-3 rounded-xl text-sm font-bold transition">
+                    💬 چت با معلم{(ex.chats[it.no] || []).length ? ` (${(ex.chats[it.no] || []).length})` : ''}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5 mt-3">
+                  <button
+                    onClick={checkOne}
+                    disabled={correcting || !ans.trim()}
+                    className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3 rounded-xl text-sm font-bold transition disabled:opacity-60"
+                  >
+                    {correcting ? '⏳ معلم دارد همین جمله را بررسی می‌کند…' : '✅ بررسی همین جمله'}
+                  </button>
+                  <button onClick={skipItem} disabled={correcting} className="w-full text-[11px] text-[#5d6676] dark:text-[#a3adbd] py-1">
+                    {isLast ? 'رد کردن و رفتن به نتیجه' : 'رد کردن بدون بررسی ←'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => window.print()} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold transition">🖨 چاپ / PDF</button>
+              <button onClick={() => { setScreen('config'); setEx(null); setChatOpen(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold transition">بازگشت به فهرست</button>
             </div>
           </div>
+        );
+      })()}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={sendCorrection}
-              disabled={correcting}
-              className="col-span-2 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3 rounded-xl text-sm font-bold transition disabled:opacity-60"
-            >
-              {correcting ? '⏳ معلم دارد جمله‌ها را تصحیح می‌کند…' : '✅ تکمیل کردم — تصحیح و بازخورد بده'}
-            </button>
-            <button onClick={() => window.print()} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold transition">🖨 چاپ / PDF</button>
-            <button onClick={() => { setScreen('config'); setEx(null); setChatOpen(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold transition">بازگشت به فهرست</button>
-          </div>
-        </div>
-      )}
-
-      {/* ═════════ بازخورد و گفتگو ═════════ */}
-      {screen === 'review' && ex && ex.corrections && (
+      {/* ═════════ نتیجهٔ جلسه و مرور ═════════ */}
+      {screen === 'review' && ex && Object.keys(ex.corrections).length > 0 && (
         <div className="space-y-3">
           <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 text-center shadow-xs">
-            <div className="text-4xl">{okCount === ex.items.length ? '🏆' : okCount >= ex.items.length * 0.7 ? '🎉' : '💪'}</div>
-            <div className="text-2xl font-extrabold mt-2">{okCount} / {ex.items.length}</div>
+            <div className="text-4xl">{okCount === checkedCount && checkedCount === ex.items.length ? '🏆' : okCount >= ex.items.length * 0.7 ? '🎉' : '💪'}</div>
+            <div className="text-2xl font-extrabold mt-2">{okCount} / {checkedCount} قابل قبول</div>
             <p className="text-xs text-[#5d6676] mt-1">
+              {uncheckedCount > 0 && <>{uncheckedCount} جمله بررسی‌نشده ماند. </>}
               زیر هر جمله: تصحیح معلم + سه لایهٔ بازخورد (گرامری / مفهومی / تفکر آلمانی).
               با 💬 دربارهٔ هر جمله سؤال بپرس — معلم با همان تصحیح در گفتگو جواب می‌دهد.
             </p>
@@ -715,21 +813,41 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               <button onClick={generate} disabled={generating} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-2.5 rounded-xl text-xs font-bold disabled:opacity-60">
                 {generating ? '⏳ …' : '✨ تمرین جدید (همین سطح)'}
               </button>
-              <button onClick={() => setScreen('play')} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ برگشت به پاسخ‌ها</button>
+              {uncheckedCount > 0
+                ? <button onClick={continueRemaining} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ ادامهٔ {uncheckedCount} جملهٔ باقی‌مانده</button>
+                : <button onClick={() => { setScreen('play'); setChatOpen(null); }} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ مرور جمله‌ها</button>}
               <button onClick={() => window.print()} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">🖨 چاپ / PDF (با پاسخنامه)</button>
               <button onClick={() => { setScreen('config'); setEx(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">بازگشت به فهرست</button>
             </div>
           </div>
 
           <div className="space-y-3">
-            {ex.items.map((it, i) => {
-              const c = ex.corrections![i];
+            {ex.items.map(it => {
+              const c = ex.corrections[it.no];
               const userAns = (ex.answers[it.no] || '').trim();
+              if (!c) {
+                return (
+                  <div key={it.no} className="bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 shadow-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold bg-slate-100 dark:bg-slate-800 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">{it.no}</span>
+                        <span className="text-xs font-bold text-[#5d6676]">بدون بررسی</span>
+                      </div>
+                      <button onClick={() => { setCurNo(it.no); setScreen('play'); setChatOpen(null); }} className="text-[11px] px-3 py-1.5 rounded-lg bg-[#1f5fbf] text-white font-bold">
+                        بررسی کن
+                      </button>
+                    </div>
+                    <div dir="ltr" className="text-sm leading-7 mt-2 font-sans" style={{ textAlign: 'left' }}>
+                      <span className="text-[#5d6676]">{it.first} </span><b>{userAns || '—'}</b>
+                    </div>
+                  </div>
+                );
+              }
               return (
-                <div key={it.no} className={`bg-white dark:bg-[#1b2029] border rounded-2xl p-4 space-y-2.5 shadow-xs ${c?.ok ? 'border-emerald-300 dark:border-emerald-800' : 'border-red-300 dark:border-red-800'}`}>
+                <div key={it.no} className={`bg-white dark:bg-[#1b2029] border rounded-2xl p-4 space-y-2.5 shadow-xs ${c.ok ? 'border-emerald-300 dark:border-emerald-800' : 'border-red-300 dark:border-red-800'}`}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] font-bold bg-slate-100 dark:bg-slate-800 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">{it.no}</span>
-                    <span className={`text-xs font-bold ${c?.ok ? 'text-emerald-600' : 'text-red-500'}`}>{c?.ok ? '✓ قابل قبول' : '✗ نیاز به اصلاح'}</span>
+                    <span className={`text-xs font-bold ${c.ok ? 'text-emerald-600' : 'text-red-500'}`}>{c.ok ? '✓ قابل قبول' : '✗ نیاز به اصلاح'}</span>
                     <button
                       onClick={() => setChatOpen(chatOpen === it.no ? null : it.no)}
                       className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition ${(ex.chats[it.no] || []).length || chatOpen === it.no
@@ -746,24 +864,24 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     <b className="text-red-500 line-through decoration-1">{userAns || '(بدون پاسخ)'}</b>
                   </div>
 
-                  {c?.corrected && (
+                  {c.corrected && (
                     <div dir="ltr" className="flex items-start gap-2 text-sm leading-7 rounded-xl p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800" style={{ textAlign: 'left' }}>
                       <span className="flex-1 font-sans font-bold text-emerald-900 dark:text-emerald-200">{c.corrected}</span>
                       <button onClick={() => doSpeak(c.corrected)} className="text-base flex-shrink-0 mt-1" title="تلفظ جملهٔ درست">🔊</button>
                     </div>
                   )}
 
-                  {c?.grammar && (
+                  {c.grammar && (
                     <div className="text-xs leading-6 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
                       <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">📐 گرامری:</b> {c.grammar}
                     </div>
                   )}
-                  {c?.meaning && (
+                  {c.meaning && (
                     <div className="text-xs leading-6 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
                       <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧭 مفهومی:</b> {c.meaning}
                     </div>
                   )}
-                  {c?.thinking && (
+                  {c.thinking && (
                     <div className="text-xs leading-6 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
                       <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🇩🇪 تفکر آلمانی:</b> {c.thinking}
                     </div>
