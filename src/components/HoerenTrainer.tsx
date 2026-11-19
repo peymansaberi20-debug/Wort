@@ -322,7 +322,34 @@ export const HoerenTrainer: React.FC<{
           w.document.close();
           setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 500);
         } catch { try { w.close(); } catch { /* ignore */ } window.print(); }
-      } else { if (w) { try { w.close(); } catch { /* ignore */ } } window.print(); }
+      } else {
+        const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+        if (el && mobile) {
+          const host = document.createElement('div');
+          host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#fff;display:flex;flex-direction:column';
+          const bar = document.createElement('div');
+          bar.style.cssText = 'display:flex;gap:8px;padding:10px;padding-top:max(10px,env(safe-area-inset-top));border-bottom:1px solid #ddd;font-family:sans-serif';
+          const fr = document.createElement('iframe');
+          fr.style.cssText = 'flex:1;border:0;width:100%;background:#fff';
+          const mk = (t: string, fill: boolean, fn: () => void) => {
+            const b = document.createElement('button');
+            b.textContent = t;
+            b.style.cssText = 'flex:1;padding:12px;border-radius:10px;border:1px solid #1f5fbf;font-size:15px;font-weight:700;background:' + (fill ? '#1f5fbf' : '#fff') + ';color:' + (fill ? '#fff' : '#1f5fbf');
+            b.onclick = fn;
+            return b;
+          };
+          bar.appendChild(mk('✕ بستن و بازگشت', false, () => host.remove()));
+          bar.appendChild(mk('🖨 چاپ', true, () => { try { fr.contentWindow?.focus(); fr.contentWindow?.print(); } catch { window.print(); } }));
+          host.appendChild(bar); host.appendChild(fr); document.body.appendChild(host);
+          const d = fr.contentDocument;
+          if (d) {
+            const css = 'body{font-family:Georgia,serif;margin:16px;color:#000;background:#fff}h2{border-bottom:1.5px solid #1f5fbf;color:#1f5fbf;font-size:18px;padding-bottom:4px}h3{font-size:15px;margin:14px 0 4px}p,div,li{font-size:13px;line-height:1.6}ul{margin:2px 0 8px 18px;padding:0}.ltr{direction:ltr;text-align:left}.rtl{direction:rtl;text-align:right}.pre{white-space:pre-wrap}.answers{color:#1a7a3a;font-weight:700}@page{size:A4;margin:12mm}';
+            d.open();
+            d.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' + css + '</style></head><body>' + el.innerHTML + '</body></html>');
+            d.close();
+          }
+        } else window.print();
+      }
       setTimeout(() => setPrintMode(null), 300);
     }, 80);
     return () => clearTimeout(t);
@@ -332,7 +359,7 @@ export const HoerenTrainer: React.FC<{
     if (!exercise) return;
     if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform))) {
       try {
-        const w = window.open('', '_blank');
+        const w = null as Window | null;
         if (w) { w.document.write('<p style="font-family:sans-serif;padding:16px">⏳ …</p>'); printWin.current = w; }
       } catch { printWin.current = null; }
     }
