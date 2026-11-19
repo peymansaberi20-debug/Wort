@@ -641,6 +641,7 @@ export default function App() {
               words={state.words}
               settings={state.set}
               activeMode={activeExercise}
+              onQuickAddWord={handleQuickAddWord}
               practiceWordIds={practiceWordIds}
               dailyProgress={state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 }}
               onSelectMode={mode => {
