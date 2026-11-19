@@ -7,7 +7,7 @@
  *   با یک خط به تابع واقعی وصل کن، مثلاً:
  *       import { callAI } from './ai';
  *       export const askGemini: AskAI = (prompt, system) => callAI(prompt, system);
- *   بقیهٔ فایل‌ها هیچ تغییری نمی‌خواهند.
+ *   بقیهٔ فایلها هیچ تغییری نمی‌خواهند.
  */
 
 export type AskAI = (prompt: string, system?: string) => Promise<string>;
