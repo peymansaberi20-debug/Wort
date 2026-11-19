@@ -19,99 +19,40 @@ import { speak } from '../utils/audio';
 import { Lvl, Kat, KAT_LABEL, LVL_INFO, LVL_ORDER, KonnektorItem, connectorsFor, findKonnektor } from '../data/konnektorenData';
 import { SYS_AI, buildExercisePrompt, buildCorrectionPrompt, buildWordPrompt, buildChatPrompt, ChatCtx } from '../utils/konnektorPrompts';
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * پل AI — درون‌خطی‌شده (قبلاً src/utils/konnektorAI.ts بود) تا تمرین کانکتور
- * کاملاً خودکفا باشد و فایل جداگانه‌ای لازم نباشد.
- * ═══════════════════════════════════════════════════════════════════════ */
+/* ───────────────────────── پل هوش مصنوعی برنامه ─────────────────────────
+ * کلید و مدل از تنظیمات برنامه (src/utils/aiProvider — Gemini/Groq/OpenRouter) می‌آید.
+ * هیچ کارت کلیدی داخل تمرین نیست؛ اگر کلید در تنظیمات نباشد فقط پیام راهنما می‌بینی. */
+import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
 
-export type AskAI = (prompt: string, system?: string) => Promise<string>;
+/** ساخت/تصحیح/واژه — پاسخ JSON (قرارداد پروایدر برنامه) */
+export const askGemini = async (prompt: string, system?: string): Promise<string> =>
+  generateText((system ? system + '\n\n' : '') + prompt, { json: true, timeoutMs: 90000, retries: 1 });
 
-const AI_STORE = 'konnektor_pro_ai';
+/** گفتگوی آزاد با معلم — متن ساده */
+export const askGeminiChat = async (prompt: string, system?: string): Promise<string> =>
+  generateText((system ? system + '\n\n' : '') + prompt, { timeoutMs: 60000, retries: 1 });
 
-/** کلیدهای رایجی که شاید برنامهٔ تو از قبل در localStorage داشته باشد */
-const PROBE_KEYS = ['gemini_api_key', 'GEMINI_API_KEY', 'geminiKey', 'gemini_key', 'ai_api_key', 'konnektor_pro_key'];
-
-function probeStoredKey(): string {
-  for (const k of PROBE_KEYS) {
-    try {
-      const v = localStorage.getItem(k);
-      if (v && v.trim().length > 20) return v.trim();
-    } catch { /* ignore */ }
-  }
-  return '';
-}
-
-export interface AIConfig { key: string; model: string }
-
-export function getAIConfig(): AIConfig {
-  try {
-    const c = JSON.parse(localStorage.getItem(AI_STORE) || '{}');
-    return {
-      key: (c.key && String(c.key).trim()) || probeStoredKey(),
-      model: (c.model && String(c.model).trim()) || 'gemini-2.5-flash'
-    };
-  } catch {
-    return { key: probeStoredKey(), model: 'gemini-2.5-flash' };
-  }
-}
-
-export function setAIConfig(key: string, model: string): void {
-  try {
-    localStorage.setItem(AI_STORE, JSON.stringify({ key: key.trim(), model: model.trim() || 'gemini-2.5-flash' }));
-  } catch { /* ignore */ }
-}
-
-export const hasAIKey = (): boolean => getAIConfig().key.length > 20;
-
-/** پیام خطای خوانا برای کاربر */
+/** پیام خطای خوانا از پروایدر برنامه */
 export const aiErrorText = (e: unknown): string => {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (msg === 'NO_KEY') return 'کلید Gemini تنظیم نشده — در کارت «اتصال هوش مصنوعی» کلید را وارد کن.';
-  if (msg.startsWith('AI_HTTP_403') || msg.startsWith('AI_HTTP_400')) return 'کلید Gemini نامعتبر است یا مدل در دسترس نیست.';
-  if (msg.startsWith('AI_HTTP_429')) return 'محدودیت تعداد درخواست Gemini — کمی بعد دوباره تلاش کن.';
-  if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرور Gemini: ' + msg.slice(0, 120);
-  if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
-  if (msg === 'AI_PARSE') return 'پاسخ هوش مصنوعی قابل تبدیل به JSON نبود — دوباره تلاش کن.';
-  return 'خطای نامشخص در اتصال به هوش مصنوعی: ' + msg.slice(0, 120);
+  try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به هوش مصنوعی.'; }
 };
 
-/** فراخوانی Gemini (v1beta generateContent) */
-export const askGemini: AskAI = async (prompt, system) => {
-  const { key, model } = getAIConfig();
-  if (!key || key.length < 20) throw new Error('NO_KEY');
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: (system ? system + '\n\n' : '') + prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
-      })
-    }
-  );
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`AI_HTTP_${res.status}: ${t.slice(0, 200)}`);
-  }
-  const j = await res.json();
-  const text: string = (j?.candidates?.[0]?.content?.parts || [])
-    .map((p: { text?: string }) => p.text || '')
-    .filter(Boolean)
-    .join('');
-  if (!text.trim()) throw new Error('AI_EMPTY');
-  return text;
+/** وضعیت کلید از تنظیمات برنامه */
+export const hasAIKey = (): boolean => { try { return !!hasApiKey(); } catch { return false; } };
+
+/** برچسب وضعیت برای نمایش */
+export const aiStatusLabel = (): string => {
+  try {
+    const p = String(getActiveProvider() || 'AI');
+    const m = String(getModel() || '').trim();
+    return m ? `${p} · ${m}` : p;
+  } catch { return 'AI'; }
 };
 
 /** تبدیل پاسخ AI به JSON حتی وقتی ```json یا متن اضافه دارد */
 export function parseJSONLoose<T>(raw: string): T {
-  let s = raw.trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/```\s*$/, '')
-    .trim();
-  const tryParse = (x: string): T | null => {
-    try { return JSON.parse(x) as T; } catch { return null; }
-  };
+  let s = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  const tryParse = (x: string): T | null => { try { return JSON.parse(x) as T; } catch { return null; } };
   let out = tryParse(s);
   if (out) return out;
   const a = s.indexOf('['), b = s.lastIndexOf(']');
@@ -120,7 +61,6 @@ export function parseJSONLoose<T>(raw: string): T {
   if (ao >= 0 && bo > ao) { out = tryParse(s.slice(ao, bo + 1)); if (out) return out; }
   throw new Error('AI_PARSE');
 }
-/* ═════════════════ پایان پل AI درون‌خطی ═════════════════ */
 
 const HKEY = 'konnektor_pro_history_v1';
 const WORD_RE = /[A-Za-zÄÖÜäöüß]+(?:-[A-Za-zÄÖÜäöüß]+)*/g;
@@ -171,9 +111,6 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
   const [hist, setHist] = useState<KExercise[]>(loadHist);
   const [histOpen, setHistOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [aiBoxOpen, setAiBoxOpen] = useState(false);
-  const [aiKey, setAiKey] = useState(getAIConfig().key);
-  const [aiModel, setAiModel] = useState(getAIConfig().model);
   const wCache = useRef<Map<string, WInfo>>(new Map());
 
   // ذخیرهٔ خودکار (با تأخیر ۷۰۰ms تا هر حروف تایپ محاسبه نشود)
@@ -200,15 +137,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     }
   };
 
-  const saveAIConfig = () => {
-    setAIConfig(aiKey, aiModel);
-    setAiBoxOpen(false);
-    onShowToast('تنظیمات هوش مصنوعی ذخیره شد ✓');
-  };
-
   // ────────── ساخت تمرین با هوش مصنوعی ──────────
   const generate = async () => {
-    if (!hasAIKey()) { setAiBoxOpen(true); onShowToast('اول کلید Gemini را در کارت «اتصال هوش مصنوعی» وارد کن.', true); return; }
+    if (!hasAIKey()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
     setGenerating(true);
     try {
       const konns = connectorsFor(level);
@@ -277,7 +208,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
         userText: ex.answers[no] || '', question: q,
         correction: corr, history: hist0
       };
-      const ans = await askGemini(buildChatPrompt(ctx, ex.level), SYS_AI);
+      const ans = await askGeminiChat(buildChatPrompt(ctx, ex.level), SYS_AI);
       setEx(prev => prev
         ? { ...prev, chats: { ...prev.chats, [no]: [...(prev.chats[no] || []), { role: 'ai', text: ans.trim() }] } }
         : prev);
@@ -297,7 +228,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     if (cached) { setWCard({ word: token, sentence, info: cached, loading: false }); return; }
     setWCard({ word: token, sentence, info: null, loading: true });
     if (!hasAIKey()) {
-      setWCard({ word: token, sentence, info: { lemma: token, fa: 'برای ترجمه، کلید Gemini را در کارت «اتصال هوش مصنوعی» تنظیم کن.', pos: 'other' }, loading: false });
+      setWCard({ word: token, sentence, info: { lemma: token, fa: 'برای ترجمهٔ خودکار، هوش مصنوعی را در تنظیمات برنامه فعال کن.', pos: 'other' }, loading: false });
       return;
     }
     const lvl = ex?.level || level;
@@ -515,36 +446,15 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               (گرامری / مفهومی / تفکر آلمانی) و می‌توانی دربارهٔ همین جمله با معلم گفتگو کنی.
             </p>
 
-            {/* اتصال هوش مصنوعی */}
-            <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] overflow-hidden">
-              <button onClick={() => setAiBoxOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold">
-                <span>🤖 اتصال هوش مصنوعی {hasAIKey() ? <span className="text-emerald-600">• متصل ✓</span> : <span className="text-red-500">• بدون کلید</span>}</span>
-                <span className="text-[#5d6676]">{aiBoxOpen ? '▲' : '▼'}</span>
-              </button>
-              {aiBoxOpen && (
-                <div className="px-3 pb-3 space-y-2">
-                  <p className="text-[11px] text-[#5d6676] leading-5">
-                    کلید Gemini API را وارد کن (aistudio.google.com/apikey). اگر برنامه‌ات کلید را از قبل ذخیره کرده باشد، خودکار پیدا می‌شود.
-                    بعداً وقتی فایل <code dir="ltr">src/utils/ai.ts</code> را وصل کردیم، این بخش لازم نیست.
-                  </p>
-                  <input
-                    type="password"
-                    value={aiKey}
-                    onChange={e => setAiKey(e.target.value)}
-                    placeholder="Gemini API Key (AIza…)"
-                    dir="ltr"
-                    className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-3 py-2 text-sm bg-white dark:bg-[#141923] outline-none text-left"
-                  />
-                  <input
-                    value={aiModel}
-                    onChange={e => setAiModel(e.target.value)}
-                    placeholder="مدل (gemini-2.5-flash)"
-                    dir="ltr"
-                    className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-3 py-2 text-sm bg-white dark:bg-[#141923] outline-none text-left"
-                  />
-                  <button onClick={saveAIConfig} className="w-full bg-[#1f5fbf] text-white py-2 rounded-lg text-xs font-bold">ذخیرهٔ تنظیمات</button>
-                </div>
-              )}
+            {/* وضعیت هوش مصنوعی — فقط نمایش؛ تنظیم در صفحهٔ تنظیمات برنامه */}
+            <div className={`rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
+              hasAIKey()
+                ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
+                : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
+            }`}>
+              {hasAIKey()
+                ? <>🤖 متصل: <b dir="ltr">{aiStatusLabel()}</b> — کلید و مدل از تنظیمات برنامه استفاده می‌شود.</>
+                : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — در صفحهٔ تنظیمات کلید را وارد کن؛ بدون کلید هم می‌توانی حروف ربط را از بانک مرور کنی.</>}
             </div>
 
             {/* سطح */}
