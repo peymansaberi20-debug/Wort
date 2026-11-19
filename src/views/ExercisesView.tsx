@@ -2654,7 +2654,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'puzzle' && <SatzPuzzle key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
-              {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} />}
+              {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />}
               {activeMode === 'konnektoren' && <div className="col-span-full"><KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} /></div>}
               {activeMode === 'tstory' && (
                 <div className="col-span-full">
