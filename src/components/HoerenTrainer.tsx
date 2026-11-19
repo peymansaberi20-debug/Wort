@@ -318,7 +318,7 @@ export const HoerenTrainer: React.FC<{
         try {
           const css = 'body{font-family:Georgia,serif;margin:16px;color:#000;background:#fff}h2{border-bottom:1.5px solid #1f5fbf;color:#1f5fbf;font-size:18px;padding-bottom:4px}h3{font-size:15px;margin:14px 0 4px}p,div,li{font-size:13px;line-height:1.6}ul{margin:2px 0 8px 18px;padding:0}.ltr{direction:ltr;text-align:left}.rtl{direction:rtl;text-align:right}.pre{white-space:pre-wrap}.answers{color:#1a7a3a;font-weight:700}@page{size:A4;margin:12mm}';
           w.document.open();
-          w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hören</title><style>' + css + '</style></head><body>' + el.innerHTML + '</body></html>');
+          w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hören</title><style>' + css + '.noprint{position:sticky;top:0;display:flex;gap:8px;padding:8px 0;background:#fff;font-family:sans-serif}.noprint button{flex:1;padding:12px;border-radius:10px;border:1px solid #1f5fbf;background:#1f5fbf;color:#fff;font-size:15px;font-weight:700}.noprint button.b{background:#fff;color:#1f5fbf}@media print{.noprint{display:none}}</style></head><body><div class="noprint"><button class="b" onclick="window.close()">✕ بستن و بازگشت به برنامه</button><button onclick="window.print()">🖨 چاپ</button></div>' + el.innerHTML + '</body></html>');
           w.document.close();
           setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 500);
         } catch { try { w.close(); } catch { /* ignore */ } window.print(); }
