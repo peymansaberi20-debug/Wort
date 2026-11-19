@@ -22,7 +22,7 @@ import { SYS_AI, buildExercisePrompt, buildCorrectionPrompt, buildWordPrompt, bu
 /* ───────────────────────── پل هوش مصنوعی برنامه ─────────────────────────
  * کلید و مدل از تنظیمات برنامه (src/utils/aiProvider — Gemini/Groq/OpenRouter) می‌آید.
  * هیچ کارت کلیدی داخل تمرین نیست؛ اگر کلید در تنظیمات نباشد فقط پیام راهنما می‌بینی. */
-import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
+import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel, getAiDebugInfo } from '../utils/aiProvider';
 
 /** ساخت/تصحیح/واژه — پاسخ JSON (قرارداد پروایدر برنامه) */
 export const askGemini = async (prompt: string, system?: string): Promise<string> =>
@@ -489,8 +489,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                 : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
             }`}>
               {hasAIKey()
-                ? <>🤖 متصل: <b dir="ltr">{aiStatusLabel()}</b> — کلید و مدل از تنظیمات برنامه استفاده می‌شود.</>
-                : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — در صفحهٔ تنظیمات کلید را وارد کن؛ بدون کلید هم می‌توانی حروف ربط را از بانک مرور کنی.</>}
+                ? <>🤖 متصل: <b dir="ltr">{aiStatusLabel()}</b> — کلید از «{getAiDebugInfo().source}» خوانده شد.</>
+                : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — در صفحهٔ تنظیمات کلید را وارد و <b>ذخیره</b> کن؛ بدون کلید هم می‌توانی حروف ربط را از بانک مرور کنی.
+                    <span className="block text-[10px] font-normal mt-0.5 opacity-80">چک فنی: {getAiDebugInfo().source}</span></>}
             </div>
 
             {/* سطح */}
