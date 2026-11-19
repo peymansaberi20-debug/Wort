@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { stopSpeaking, getTtsWorkerBase, speak } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
@@ -816,10 +817,6 @@ ${numbered}`,
                 <span className="text-xs text-[#5d6676]">سطح: {exercise.level} • فرمت: {EXAM_LABELS[exercise.examType]}</span>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                <button onClick={() => handlePrint('questions')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 سوالات</button>
-                <button onClick={() => handlePrint('answers')} className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 پاسخنامه</button>
-                <button onClick={() => handlePrint('transcript')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 Transkript</button>
-                <button onClick={() => handlePrint('report')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 کارنامه</button>
                 {exam && secondsLeft >= 0 && !submitted && (
                   <span className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-mono font-bold whitespace-nowrap">⏱ {fmt(secondsLeft)}</span>
                 )}
@@ -856,9 +853,11 @@ ${numbered}`,
                   onChange={e => { const v = Number(e.target.value); if (audioRef.current) audioRef.current.currentTime = v; setCurT(v); }} />
                 <span className="font-mono text-[11px] w-10 text-center">{dur ? fmt(Math.floor(dur)) : '--:--'}</span>
                 <button onClick={() => skip(10)} className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold">10 ⏩</button>
-                <select value={rate} onChange={e => changeRate(Number(e.target.value))} className="bg-slate-100 dark:bg-slate-800 rounded-lg px-1.5 py-1 text-[11px] font-bold outline-none">
-                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => <option key={r} value={r}>{r}×</option>)}
-                </select>
+                <input key={rate} type="number" inputMode="decimal" step="0.01" min="0.25" max="3" defaultValue={rate}
+                  onBlur={e => { const v = Number(String(e.target.value).replace(',', '.')); changeRate(v >= 0.25 && v <= 3 ? Math.round(v * 100) / 100 : 1); }}
+                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                  title="سرعت (مثلاً 0.9 یا 1.03)"
+                  className="w-14 bg-slate-100 dark:bg-slate-800 rounded-lg px-1.5 py-1 text-[11px] font-bold text-center outline-none" />
               </div>
             )}
             {limited && (playUrl || transcript) && <div className="text-[11px] text-[#5d6676]">طبق قانون آزمون فقط {MAX_PLAYS} بار پخش مجاز است — باقی‌مانده: {playsLeft}</div>}
@@ -1034,6 +1033,15 @@ ${numbered}`,
         </div>
       )}
 
+       {viewMode === 'exercise' && exercise && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <button onClick={() => handlePrint('questions')} className="w-full py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold">🖨 سوالات</button>
+          <button onClick={() => handlePrint('answers')} className="w-full py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold">🖨 پاسخنامه</button>
+          <button onClick={() => handlePrint('transcript')} className="w-full py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold">🖨 Transkript</button>
+          <button onClick={() => handlePrint('report')} className="w-full py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold">🖨 کارنامه</button>
+        </div>
+      )}
+
       {/* In-page print overlay: hidden on screen, shown only in print.
           No window.open — works on iOS Safari. Questions and answer key are always separate. */}
       <style>{`
@@ -1075,9 +1083,12 @@ ${numbered}`,
           .h-print-area .rtl { direction: rtl; text-align: right; }
           .h-print-area .pre { white-space: pre-wrap; }
           .h-print-area .answers { color: #1a7a3a; font-weight: 700; }
+          body > *:not(.h-print-area) { display: none !important; }
+          html, body { height: auto !important; overflow: visible !important; }
+          .h-print-area { position: static !important; }
         }
       `}</style>
-      {printMode && exercise && (
+       {printMode && exercise && ((c: React.ReactNode) => createPortal(c, document.body))(
         <div className="h-print-area" aria-hidden="true">
           {printMode === 'questions' && (
             <>
