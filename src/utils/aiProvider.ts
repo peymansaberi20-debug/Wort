@@ -11,22 +11,28 @@
 
 export type ProviderId = 'gemini' | 'groq' | 'openrouter';
 
-export interface ProviderMeta { label: string; name: string; vision: boolean; models: string[]; baseUrl: string; }
+export interface ProviderMeta { label: string; name: string; vision: boolean; models: string[]; modelExamples: string[]; keyUrl: string; baseUrl: string; }
 
 const BASE_PROVIDERS: Record<string, ProviderMeta> = {
   gemini: {
     label: 'Gemini', name: 'Gemini', vision: true,
     models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-flash-latest'],
+    modelExamples: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-flash-latest'],
+    keyUrl: 'https://aistudio.google.com/apikey',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
   },
   groq: {
     label: 'Groq', name: 'Groq', vision: false,
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'qwen/qwen3-32b'],
+    models: ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'],
+    modelExamples: ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'],
+    keyUrl: 'https://console.groq.com/keys',
     baseUrl: 'https://api.groq.com/openai/v1',
   },
   openrouter: {
     label: 'OpenRouter', name: 'OpenRouter', vision: true,
     models: ['openrouter/auto', 'google/gemini-2.5-flash', 'anthropic/claude-sonnet-4.5', 'openai/gpt-4o-mini'],
+    modelExamples: ['openrouter/auto', 'google/gemini-2.5-flash', 'anthropic/claude-sonnet-4.5', 'openai/gpt-4o-mini'],
+    keyUrl: 'https://openrouter.ai/keys',
     baseUrl: 'https://openrouter.ai/api/v1',
   },
 };
@@ -36,7 +42,7 @@ export const PROVIDERS: Record<string, ProviderMeta> = new Proxy(BASE_PROVIDERS,
   get(t, p) {
     if (typeof p !== 'string' || p === 'then') return undefined;
     if (p in t) return t[p];
-    return { label: p, name: p, vision: false, models: [], baseUrl: '' };
+    return { label: p, name: p, vision: false, models: [], modelExamples: [], keyUrl: '', baseUrl: '' };
   },
 });
 /** نام جایگزین که بعضی صفحه‌های تنظیمات import می‌کنند */
@@ -76,6 +82,8 @@ const JSON_SETTINGS_KEYS = [
   'app_ai_settings', 'settings_ai', 'konnektor_pro_ai', 'ai', 'worter_ai',
 ];
 const PLAIN_KEY_CANDIDATES = [
+  // قرارداد صفحهٔ تنظیمات همین برنامه (wort_ai_key_…)
+  'wort_ai_key_gemini', 'wort_ai_key_groq', 'wort_ai_key_openrouter',
   'gemini_api_key', 'GEMINI_API_KEY', 'geminiKey', 'gemini_key',
   'ai_api_key', 'ai_apiKey', 'ai_key', 'apiKey', 'API_KEY',
   'groq_api_key', 'GROQ_API_KEY', 'openrouter_api_key', 'OPENROUTER_API_KEY',
@@ -84,7 +92,8 @@ const PLAIN_KEY_CANDIDATES = [
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
   gemini: 'gemini-2.5-flash',
-  groq: 'llama-3.3-70b-versatile',
+  // llama-3.3-70b-versatile از ۱۶ اوت ۲۰۲۶ برای حساب‌های معمولی جمع شده — جایگزین رسمی گروق:
+  groq: 'openai/gpt-oss-120b',
   openrouter: 'openrouter/auto',
 };
 
@@ -153,6 +162,12 @@ function detect(): Detected | null {
   let res: Detected | null = null;
   try {
     if (typeof localStorage === 'undefined') { cache = null; return null; }
+    // ۰) کلید نشستِ ارائه‌دهندهٔ فعال (persist=false کارت تنظیمات)
+    const ap0 = readStored().provider;
+    if (ap0 && PROVIDER_IDS.includes(ap0) && SESSION_KEYS[ap0]) {
+      const m = sanitizeModel(readStored().model || '');
+      res = { key: SESSION_KEYS[ap0] as string, provider: ap0, model: m || DEFAULT_MODELS[ap0], source: 'کلید نشست (بدون ذخیره)', explicitModel: !!m };
+    }
     // ۱) آبجکت‌های تنظیمات JSON با نام‌های معروف
     for (const k of JSON_SETTINGS_KEYS) {
       const v = localStorage.getItem(k);
@@ -194,6 +209,20 @@ function detect(): Detected | null {
         res = { key: s.key, provider: p, model: m || DEFAULT_MODELS[p], source: CANON[0], explicitModel: !!m };
       }
     }
+    // ۵) مدل ذخیره‌شدهٔ متعارف حتی وقتی کلید از جای دیگری آمده
+    if (res && !res.explicitModel) {
+      const m = sanitizeModel(readStored().model || '');
+      if (m && m !== res.model) res = { ...res, model: m, explicitModel: true };
+    }
+    // ۶) کلید نشست هر ارائه‌دهندهٔ دیگر
+    if (!res) {
+      for (const p of PROVIDER_IDS) {
+        if (SESSION_KEYS[p]) {
+          res = { key: SESSION_KEYS[p] as string, provider: p, model: perProviderModel(p) || DEFAULT_MODELS[p], source: 'کلید نشست (بدون ذخیره)', explicitModel: false };
+          break;
+        }
+      }
+    }
   } catch { /* localStorage در دسترس نیست */ }
   cache = res;
   return res;
@@ -225,6 +254,33 @@ export const loadAiSettings = getAIConfig;
 /* ───────────── ذخیرهٔ متعارف — API صفحهٔ تنظیمات (GeminiKeyCard) ───────────── */
 const CANON = ['worter_ai_settings', 'ai_settings'];
 
+/** کلیدهای نشست (persist=false کارت تنظیمات) — فقط در حافظه، هرگز در localStorage */
+const SESSION_KEYS: Partial<Record<ProviderId, string>> = {};
+
+/** کلید یک ارائه‌دهندهٔ مشخص — قرارداد کارت تنظیمات: wort_ai_key_<id> */
+function perProviderKey(p: ProviderId): string {
+  const s = SESSION_KEYS[p];
+  if (s) return s;
+  try {
+    const v = (localStorage.getItem('wort_ai_key_' + p) || '').trim();
+    if (v) return v;
+  } catch { /* ignore */ }
+  const st = readStored();
+  if (st.key && st.provider === p) return st.key;
+  return '';
+}
+
+/** مدل یک ارائه‌دهندهٔ مشخص — قرارداد کارت تنظیمات: wort_ai_model_<id> */
+function perProviderModel(p: ProviderId): string {
+  try {
+    const m = sanitizeModel(localStorage.getItem('wort_ai_model_' + p) || '');
+    if (m) return m;
+  } catch { /* ignore */ }
+  const st = readStored();
+  if (st.provider === p) return sanitizeModel(st.model || '');
+  return '';
+}
+
 function readStored(): { provider?: ProviderId; key?: string; model?: string } {
   for (const k of CANON) {
     try {
@@ -250,15 +306,46 @@ function writeStored(patch: { provider?: ProviderId; key?: string; model?: strin
   } catch { /* ignore */ }
 }
 
-/** ذخیرهٔ کلید — رشتهٔ خالی یعنی پاک کردن */
-export function setApiKey(key: string): void {
+/**
+ * ذخیرهٔ کلید — دو فرم:
+ *   setApiKey(key)                     فرم قدیمی: کلید سراسری در ذخیرهٔ متعارف
+ *   setApiKey(provider, key, persist)  فرم کارت تنظیمات: کلید مخصوص همان ارائه‌دهنده
+ * رشتهٔ خالی یعنی پاک کردن.
+ */
+export function setApiKey(providerOrKey: ProviderId | string, key?: string, persist: boolean = true): void {
+  if (key === undefined) {
+    const k = (providerOrKey || '').trim();
+    if (!k) { clearApiKey(); return; }
+    writeStored({ key: k });
+    return;
+  }
+  const p = providerOrKey as ProviderId;
   const k = (key || '').trim();
-  if (!k) { clearApiKey(); return; }
-  writeStored({ key: k });
+  if (!k) { clearApiKey(p); return; }
+  if (persist) {
+    try { localStorage.setItem('wort_ai_key_' + p, k); } catch { /* ignore */ }
+    delete SESSION_KEYS[p];
+    writeStored({ provider: p, key: k });
+  } else {
+    SESSION_KEYS[p] = k;
+    try { localStorage.removeItem('wort_ai_key_' + p); } catch { /* ignore */ }
+    // ارائه‌دهنده فعال می‌شود ولی کلید در localStorage نمی‌آید
+    writeStored({ provider: p, key: '' });
+  }
 }
 
-/** ذخیرهٔ مدل */
-export function setModel(model: string): void { writeStored({ model: (model || '').trim() }); }
+/** ذخیرهٔ مدل — setModel(model) فرم قدیمی، setModel(provider, model) فرم کارت تنظیمات */
+export function setModel(providerOrModel: ProviderId | string, model?: string): void {
+  if (model === undefined) {
+    writeStored({ model: (providerOrModel || '').trim() });
+    return;
+  }
+  const p = providerOrModel as ProviderId;
+  const m = (model || '').trim();
+  try { localStorage.setItem('wort_ai_model_' + p, m); } catch { /* ignore */ }
+  const st = readStored();
+  if (!st.provider || st.provider === p) writeStored({ model: m });
+}
 
 /** تغییر ارائه‌دهندهٔ فعال — مدل ناسازگار خودکار به پیش‌فرض همان ارائه‌دهنده می‌رود */
 export function setActiveProvider(p: ProviderId): void {
@@ -267,20 +354,48 @@ export function setActiveProvider(p: ProviderId): void {
   writeStored({ provider: p, model: fits ? m : DEFAULT_MODELS[p] });
 }
 
-/** پاک کردن کلید و تنظیمات */
-export function clearApiKey(): void {
+/** پاک کردن کلید و تنظیمات — با id فقط همان ارائه‌دهنده، بدون id همه */
+export function clearApiKey(provider?: ProviderId): void {
+  if (!provider) {
+    try {
+      for (const k of CANON) localStorage.removeItem(k);
+      for (const k of PLAIN_KEY_CANDIDATES) {
+        if (k === 'apiKey' || k === 'API_KEY') continue; // نام عمومی — ممکن است بخش دیگری استفاده کند
+        localStorage.removeItem(k);
+      }
+      for (const p of PROVIDER_IDS) {
+        localStorage.removeItem('wort_ai_key_' + p);
+        localStorage.removeItem('wort_ai_model_' + p);
+        localStorage.removeItem(p + '_api_key');
+      }
+    } catch { /* ignore */ }
+    for (const p of PROVIDER_IDS) delete SESSION_KEYS[p];
+    invalidateAiCache();
+    return;
+  }
   try {
-    for (const k of CANON) localStorage.removeItem(k);
-    for (const k of PLAIN_KEY_CANDIDATES) {
-      if (k === 'apiKey' || k === 'API_KEY') continue; // نام عمومی — ممکن است بخش دیگری استفاده کند
-      localStorage.removeItem(k);
+    localStorage.removeItem('wort_ai_key_' + provider);
+    localStorage.removeItem('wort_ai_model_' + provider);
+    localStorage.removeItem(provider + '_api_key');
+    const st = readStored();
+    if (!st.provider || st.provider === provider) {
+      for (const k of CANON) localStorage.removeItem(k);
     }
   } catch { /* ignore */ }
+  delete SESSION_KEYS[provider];
   invalidateAiCache();
 }
 
-/** کلید ذخیره‌شده در دسترس است؟ (برای نشان «وصل» صفحهٔ تنظیمات) */
-export function isKeyPersisted(): boolean { return !!detect(); }
+/** کلید ذخیره‌شده در دسترس است؟ — با id فقط همان ارائه‌دهنده، بدون id کلاً */
+export function isKeyPersisted(provider?: ProviderId): boolean {
+  if (provider) {
+    if (SESSION_KEYS[provider]) return false; // فقط نشست — ذخیره نشده
+    try { if ((localStorage.getItem('wort_ai_key_' + provider) || '').trim()) return true; } catch { /* ignore */ }
+    const st = readStored();
+    return !!(st.key && st.provider === provider);
+  }
+  return !!detect();
+}
 
 export function hasApiKey(): boolean { return !!detect(); }
 
@@ -290,7 +405,8 @@ export function getActiveProvider(): ProviderId {
   return detect()?.provider || 'gemini';
 }
 
-export function getModel(): string {
+export function getModel(provider?: ProviderId): string {
+  if (provider) return perProviderModel(provider) || DEFAULT_MODELS[provider];
   const s = readStored();
   const m = sanitizeModel(s.model || '');
   if (m) return m;
@@ -304,13 +420,24 @@ export function getAiDebugInfo(): AiDebugInfo {
   return { found: true, source: d.source, provider: d.provider, model: d.model, keyLen: d.key.length };
 }
 
-/** کلید فعال (برای کدهای قدیمی که خودشان مستقیم REST می‌زنند) */
-export function getApiKey(): string { return readStored().key || getAIConfig().key || ''; }
+/** کلید فعال (برای کدهای قدیمی که خودشان مستقیم REST می‌زنند) — با id فقط همان ارائه‌دهنده */
+export function getApiKey(provider?: ProviderId): string {
+  if (provider) return perProviderKey(provider);
+  return readStored().key || getAIConfig().key || '';
+}
 
-/** تست اتصال سریع — true یعنی کلید و مدل پاسخ می‌دهند */
-export async function testConnection(): Promise<boolean> {
-  try { const r = await generateText('Antworte nur mit: OK', { timeoutMs: 15000, retries: 0 }); return !!r; }
-  catch { return false; }
+/** آزمون اتصال کارت تنظیمات — فقط کلید داده‌شده را امتحان می‌کند و هیچ چیز را ذخیره/تغییر نمی‌دهد */
+export async function testConnection(provider?: ProviderId, key?: string): Promise<{ ok: boolean; message: string }> {
+  const p = provider || getActiveProvider();
+  const k = (key || '').trim() || getApiKey(p);
+  if (!k) return { ok: false, message: 'ابتدا کلید API را وارد کنید.' };
+  const model = getModel(p) || DEFAULT_MODELS[p];
+  try {
+    await callProvider('Antworte nur mit: OK', [], { timeoutMs: 15000, retries: 0 }, { provider: p, key: k, model });
+    return { ok: true, message: 'اتصال با «' + (PROVIDERS[p]?.label || p) + '» برقرار است و مدل «' + model + '» پاسخ داد.' };
+  } catch (e) {
+    return { ok: false, message: describeAiError(e) };
+  }
 }
 
 /* ───────────── فراخوانی REST ───────────── */
@@ -351,8 +478,52 @@ function toOpenAiMessages(prompt: string, images: Array<{ mimeType: string; data
   }];
 }
 
-async function callProvider(prompt: string, images: Array<{ mimeType: string; data: string }>, opts: GenerateOpts): Promise<string> {
-  const cfg = getAIConfig();
+/** لیست مدل‌های واقعی حساب از خود ارائه‌دهنده — برای خودترمیمی وقتی مدل ذخیره‌شده منقضی شده */
+async function fetchProviderModels(provider: ProviderId, key: string): Promise<string[] | null> {
+  const urls: Record<ProviderId, string> = {
+    gemini: 'https://generativelanguage.googleapis.com/v1beta/models',
+    groq: 'https://api.groq.com/openai/v1/models',
+    openrouter: 'https://openrouter.ai/api/v1/models',
+  };
+  const headers: Record<string, string> = provider === 'gemini'
+    ? { 'x-goog-api-key': key }
+    : { 'Authorization': `Bearer ${key}` };
+  try {
+    const res = await fetchWithTimeout(urls[provider], { method: 'GET', headers }, 15000);
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const raw: any[] = provider === 'gemini' ? (data?.models || []) : (data?.data || []);
+    const ids = raw
+      .map((m: any) => sanitizeModel(String(provider === 'gemini' ? (m?.name ?? '') : (m?.id ?? ''))))
+      .filter(Boolean);
+    return ids.length ? ids : null;
+  } catch { return null; }
+}
+
+/** بهترین مدل چتِ در دسترس از میان لیست واقعی حساب */
+function pickChatModel(ids: string[], provider: ProviderId): string | null {
+  const BAD = /(whisper|tts|guard|embed|rank|aqa|imagen|veo|live|learnlm|playai|distil)/i;
+  const good = ids.filter(i => !BAD.test(i) && (provider !== 'gemini' || /gemini/i.test(i)));
+  if (!good.length) return null;
+  const PREF = provider === 'gemini'
+    ? ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite']
+    : provider === 'groq'
+      ? ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant']
+      : ['openrouter/auto', 'google/gemini-2.5-flash'];
+  for (const p of PREF) { const hit = good.find(i => i === p); if (hit) return hit; }
+  const RES: RegExp[] = provider === 'gemini'
+    ? [/gemini-2\.5.*flash/i, /flash/i, /gemini-2\.5/i]
+    : provider === 'groq'
+      ? [/120b/i, /qwen3/i, /20b/i, /instant/i]
+      : [/gemini-2\.5-flash/i, /flash/i];
+  for (const re of RES) { const hit = good.find(i => re.test(i)); if (hit) return hit; }
+  return good[0];
+}
+
+type CallOverride = { provider: ProviderId; key: string; model: string };
+
+async function callProvider(prompt: string, images: Array<{ mimeType: string; data: string }>, opts: GenerateOpts, override?: CallOverride): Promise<string> {
+  const cfg = override || getAIConfig();
   if (!cfg.key) throw aiErr('NO_KEY');
   const json = !!opts.json;
   const timeoutMs = opts.timeoutMs ?? 60000;
@@ -404,13 +575,25 @@ async function callProvider(prompt: string, images: Array<{ mimeType: string; da
   try {
     return await attempt(primary);
   } catch (e) {
-    // ۴۰۴ یعنی مدل ذخیره‌شده منقضی/ناشناس است — یک بار با مدل پیش‌فرض همان ارائه‌دهنده امتحان کن
-    // و اگر جواب داد ذخیرهٔ مدل را هم اصلاح کن تا درخواست‌های بعدی یک‌مرحله‌ای شوند
-    if ((e as Error).message === 'AI_HTTP_404' && primary !== def) {
-      const r = await attempt(def);
-      try { setModel(def); } catch { /* ignore */ }
-      return r;
+    if ((e as Error).message !== 'AI_HTTP_404') throw e;
+    const heal = (m: string): void => {
+      if (override) return; // آزمون اتصال هیچ چیز را ذخیره یا تغییر نمی‌دهد
+      try { setModel(m); } catch { /* ignore */ }
+      try { localStorage.setItem('wort_ai_model_' + provider, m); } catch { /* ignore */ }
+    };
+    // لایهٔ ۱: مدل پیش‌فرض ارائه‌دهنده — مدل ذخیره‌شده ممکن است منقضی شده باشد
+    if (primary !== def) {
+      try { const r = await attempt(def); heal(def); return r; }
+      catch (e2) { if ((e2 as Error).message !== 'AI_HTTP_404') throw e2; }
     }
+    // لایهٔ ۲: کشف مدل از لیست واقعی حساب (گروق مدل‌های قدیمی را جمع کرده)
+    try {
+      const ids = await fetchProviderModels(provider, cfg.key);
+      const pick = ids ? pickChatModel(ids, provider) : null;
+      if (pick && pick !== primary && pick !== def) {
+        const r = await attempt(pick); heal(pick); return r;
+      }
+    } catch { /* لیست مدل‌ها در دسترس نبود — خطای اصلی ۴۰۴ را بده */ }
     throw e;
   }
 }
