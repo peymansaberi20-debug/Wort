@@ -21,6 +21,7 @@ import { SchreibenCorrector } from '../components/SchreibenCorrector';
 import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
+import { WorksheetTrainer } from '../components/WorksheetTrainer';
 import { KonnektorTrainer } from '../components/KonnektorTrainer';
 import { KonnektorProTrainer } from '../components/KonnektorProTrainer';
 import { TenseStoryTrainer } from './TenseStoryTrainer';
@@ -69,6 +70,7 @@ export type ExerciseMode =
   | 'konnektoren'
   | 'tstory'
   | 'kpro'
+  | 'wsh'
   | 'hoeren'
   | 'hoeren_new'
   | 'hoeren_archive';
@@ -102,13 +104,14 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   konnektoren: { title: 'حروف ربط و اضافه', icon: '🔗', desc: 'تکمیل متن با حروف ربط مناسب به همراه گزینه‌های گمراه‌کننده' },
   tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و چاپ' },
   kpro: { title: 'ساخت جمله با همهٔ حروف ربط', icon: '🧩', desc: 'Sätze komplettieren با هوش مصنوعی؛ همهٔ حروف ربط طبق سطح A1–C2، تصحیح سه‌لایه، گفتگو، چاپ' },
+  wsh: { title: 'برگه‌های تمرین (Arbeitsblatt)', icon: '📄', desc: 'همان برگه‌های کاغذی گرامر؛ جمله‌به‌جمله با جای‌خالی، بررسی فوری، توضیح هوش مصنوعی و تکرار غلط‌ها' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
 };
 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['conj', 'tense', 'tstory', 'art', 'adjdecl', 'case', 'vprep', 'konnektoren', 'kpro', 'puzzle'];
+const GRAMMATIK_MODES: ExerciseMode[] = ['conj', 'tense', 'tstory', 'art', 'adjdecl', 'case', 'vprep', 'konnektoren', 'kpro', 'wsh', 'puzzle'];
 const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
 const HOEREN_MODES: ExerciseMode[] = ['hoeren_new', 'hoeren_archive', 'dict', 'dikt'];
 type MainTab = 'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen';
@@ -124,7 +127,7 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
 ];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh';
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -2672,6 +2675,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     settings={settings}
                     onShowToast={onShowToast}
                     onQuickAddWord={onQuickAddWord}
+                    onClose={() => onSelectMode(null)}
+                  />
+                </div>
+              )}
+              {activeMode === 'wsh' && (
+                <div className="col-span-full">
+                  <WorksheetTrainer
+                    key={currentKey}
+                    onShowToast={onShowToast}
                     onClose={() => onSelectMode(null)}
                   />
                 </div>
