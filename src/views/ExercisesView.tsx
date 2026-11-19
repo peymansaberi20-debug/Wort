@@ -2100,6 +2100,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <HoerenTrainer
         initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
+        onQuickAddWord={onQuickAddWord}
         onClose={() => onSelectMode(null)}
       />
     );
