@@ -22,8 +22,7 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { WorksheetTrainer } from '../components/WorksheetTrainer';
-import { KonnektorTrainer } from '../components/KonnektorTrainer';
-import { KonnektorProTrainer } from '../components/KonnektorProTrainer';
+import { KonnektorenHub } from '../components/KonnektorenHub';
 import { TenseStoryTrainer } from './TenseStoryTrainer';
 import { PageOverlay } from '../components/PageOverlay';
 import { today } from '../utils/dates';
@@ -101,17 +100,24 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' },
-  konnektoren: { title: 'حروف ربط و اضافه', icon: '🔗', desc: 'تکمیل متن با حروف ربط مناسب به همراه گزینه‌های گمراه‌کننده' },
+  konnektoren: { title: 'حروف ربط و اضافه', icon: '🔗', desc: '(ادغام‌شده در «حروف ربط») تکمیل متن با حروف ربط مناسب به همراه گزینه‌های گمراه‌کننده' },
   tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و چاپ' },
-  kpro: { title: 'ساخت جمله با همهٔ حروف ربط', icon: '🧩', desc: 'Sätze komplettieren با هوش مصنوعی؛ همهٔ حروف ربط طبق سطح A1–C2، تصحیح سه‌لایه، گفتگو، چاپ' },
-  wsh: { title: 'برگه‌های تمرین (Arbeitsblatt)', icon: '📄', desc: 'همان برگه‌های کاغذی گرامر؛ جمله‌به‌جمله با جای‌خالی، بررسی فوری، توضیح هوش مصنوعی و تکرار غلط‌ها' },
+  kpro: { title: 'حروف ربط (Konnektoren)', icon: '🧩', desc: 'دو تمرین در یک‌جا: جمله‌سازی با AI طبق سطح A1–C2 + تکمیل متن با گزینه‌های گمراه‌کننده؛ تصحیح سه‌لایه، گفتگو، چاپ' },
+  wsh: { title: 'برگه‌های تمرین (Arbeitsblatt)', icon: '📄', desc: 'همان برگه‌های کاغذی گرامر؛ جمله‌به‌جمله: جای‌خالی با بررسی فوری + تمرین‌های آزاد (واژه‌سازی و کامل‌کردن جمله) با تصحیح هوش مصنوعی' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
 };
 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural']; 
-const GRAMMATIK_MODES: ExerciseMode[] = ['conj', 'tense', 'tstory', 'art', 'adjdecl', 'case', 'vprep', 'konnektoren', 'kpro', 'wsh', 'puzzle'];
+/** ترتیب آموزشی گروه‌بندی‌شدهٔ تمرین‌های گرامر (از پایه به بالا) */
+const GRAMMATIK_SECTIONS: { icon: string; label: string; modes: ExerciseMode[] }[] = [
+  { icon: '🔤', label: 'فعل و زمان‌ها', modes: ['conj', 'tense', 'tstory'] },
+  { icon: '🧱', label: 'اسم، آرتیکل، صفت و حالت', modes: ['art', 'adjdecl', 'case'] },
+  { icon: '🔗', label: 'حروف اضافه', modes: ['vprep', 'wsh'] },
+  { icon: '🧩', label: 'حروف ربط و جمله‌سازی', modes: ['kpro', 'puzzle'] },
+];
+const GRAMMATIK_MODES: ExerciseMode[] = GRAMMATIK_SECTIONS.flatMap(s => s.modes);
 const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
 const HOEREN_MODES: ExerciseMode[] = ['hoeren_new', 'hoeren_archive', 'dict', 'dikt'];
 type MainTab = 'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen';
@@ -1870,26 +1876,37 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         )}
 
         {mainTab === 'grammatik' && (
-          <div className="space-y-3">
-            {GRAMMATIK_MODES.map(mode => {
-              const info = EXERCISE_NAMES[mode];
-              return (
-                <div
-                  key={mode}
-                  onClick={() => onSelectMode(mode)}
-                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center justify-between gap-2.5 cursor-pointer shadow-xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
-                    <div className="min-w-0">
-                      <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
-                      <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
-                    </div>
-                  </div>
-                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex-shrink-0">شروع ▶</span>
+          <div className="space-y-4">
+            {GRAMMATIK_SECTIONS.map(sec => (
+              <div key={sec.label} className="space-y-2">
+                <div className="flex items-center gap-1.5 px-1 text-[12px] font-bold text-[#5d6676] dark:text-[#a3adbd]">
+                  <span>{sec.icon}</span>
+                  <span>{sec.label}</span>
+                  <span className="h-px flex-1 bg-[#dde1ea] dark:bg-[#333b4a]" />
                 </div>
-              );
-            })}
+                <div className="space-y-3">
+                  {sec.modes.map(mode => {
+                    const info = EXERCISE_NAMES[mode];
+                    return (
+                      <div
+                        key={mode}
+                        onClick={() => onSelectMode(mode)}
+                        className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center justify-between gap-2.5 cursor-pointer shadow-xs"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
+                          <div className="min-w-0">
+                            <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
+                            <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
+                          </div>
+                        </div>
+                        <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex-shrink-0">شروع ▶</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -2658,20 +2675,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
               {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />}
-              {activeMode === 'konnektoren' && <div className="col-span-full"><KonnektorTrainer onClose={() => onSelectMode(null)} onShowToast={onShowToast} /></div>}
-              {activeMode === 'tstory' && (
+              {(activeMode === 'kpro' || activeMode === 'konnektoren') && (
                 <div className="col-span-full">
-                  <TenseStoryTrainer
+                  <KonnektorenHub
+                    key={currentKey}
                     settings={settings}
                     onShowToast={onShowToast}
                     onQuickAddWord={onQuickAddWord}
                     onClose={() => onSelectMode(null)}
+                    initialTab={activeMode === 'konnektoren' ? 'cloze' : 'ai'}
                   />
                 </div>
               )}
-              {activeMode === 'kpro' && (
+              {activeMode === 'tstory' && (
                 <div className="col-span-full">
-                  <KonnektorProTrainer
+                  <TenseStoryTrainer
                     settings={settings}
                     onShowToast={onShowToast}
                     onQuickAddWord={onQuickAddWord}
