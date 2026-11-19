@@ -11,11 +11,34 @@
 
 export type ProviderId = 'gemini' | 'groq' | 'openrouter';
 
-export const PROVIDERS: Record<string, { label: string; vision: boolean }> = {
-  gemini: { label: 'Gemini', vision: true },
-  groq: { label: 'Groq', vision: false },
-  openrouter: { label: 'OpenRouter', vision: true },
+export interface ProviderMeta { label: string; name: string; vision: boolean; models: string[]; baseUrl: string; }
+
+const BASE_PROVIDERS: Record<string, ProviderMeta> = {
+  gemini: {
+    label: 'Gemini', name: 'Gemini', vision: true,
+    models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-flash-latest'],
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+  },
+  groq: {
+    label: 'Groq', name: 'Groq', vision: false,
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-120b', 'qwen/qwen3-32b'],
+    baseUrl: 'https://api.groq.com/openai/v1',
+  },
+  openrouter: {
+    label: 'OpenRouter', name: 'OpenRouter', vision: true,
+    models: ['openrouter/auto', 'google/gemini-2.5-flash', 'anthropic/claude-sonnet-4.5', 'openai/gpt-4o-mini'],
+    baseUrl: 'https://openrouter.ai/api/v1',
+  },
 };
+
+/** PROVIDERS مقاوم: هر id ناشناسی هم فیلد کامل پیش‌فرض می‌گیرد تا UI هرگز به فیلد گم‌شده سفید نشود */
+export const PROVIDERS: Record<string, ProviderMeta> = new Proxy(BASE_PROVIDERS, {
+  get(t, p) {
+    if (typeof p !== 'string' || p === 'then') return undefined;
+    if (p in t) return t[p];
+    return { label: p, name: p, vision: false, models: [], baseUrl: '' };
+  },
+});
 /** نام جایگزین که بعضی صفحه‌های تنظیمات import می‌کنند */
 export const AI_PROVIDERS = PROVIDERS;
 
@@ -81,6 +104,21 @@ function normProvider(v: unknown): ProviderId | null {
   return null;
 }
 
+/** نام مدل تمیز: حذف فاصله و پیشوند models/ که بعضی ذخیره‌ها دارند (۴۰۴ می‌دهد) */
+export function sanitizeModel(m: string): string {
+  let s = (m || '').trim();
+  while (s.toLowerCase().startsWith('models/')) s = s.slice(7);
+  return s.trim();
+}
+
+/** ارائه‌دهندهٔ معتبر از hint و کلید — idهای ناشناس (مثلاً openai قدیمی) را نرمال می‌کند */
+function knownProvider(hint: unknown, key?: string): ProviderId {
+  const h = normProvider(hint);
+  if (h) return h;
+  const mk = key ? matchKey(key) : null;
+  return mk?.provider || 'gemini';
+}
+
 function fromJsonBlob(raw: string, source: string): Detected | null {
   let o: any;
   try { o = JSON.parse(raw); } catch { return null; }
@@ -93,7 +131,7 @@ function fromJsonBlob(raw: string, source: string): Detected | null {
       const v = b[k];
       if (typeof v !== 'string' || !v.trim()) continue;
       if (!found && KEY_FIELDS.test(k)) { const mk = matchKey(v); if (mk) found = mk; }
-      else if (MODEL_FIELDS.test(k)) model = v.trim();
+      else if (MODEL_FIELDS.test(k)) model = sanitizeModel(v);
       else if (PROVIDER_FIELDS.test(k)) providerHint = normProvider(v);
       if (!found && typeof v === 'string' && v.length < 500) { const mk = matchKey(v); if (mk) found = mk; }
     }
@@ -151,8 +189,9 @@ function detect(): Detected | null {
     if (!res) {
       const s = readStored();
       if (s.key && s.key.length > 20) {
-        const p = s.provider || matchKey(s.key)?.provider || 'gemini';
-        res = { key: s.key, provider: p, model: s.model || DEFAULT_MODELS[p], source: CANON[0], explicitModel: !!s.model };
+        const p = knownProvider(s.provider, s.key);
+        const m = sanitizeModel(s.model || '');
+        res = { key: s.key, provider: p, model: m || DEFAULT_MODELS[p], source: CANON[0], explicitModel: !!m };
       }
     }
   } catch { /* localStorage در دسترس نیست */ }
@@ -247,13 +286,14 @@ export function hasApiKey(): boolean { return !!detect(); }
 
 export function getActiveProvider(): ProviderId {
   const s = readStored();
-  if (s.provider) return s.provider;
+  if (s.provider && PROVIDER_IDS.includes(s.provider)) return s.provider;
   return detect()?.provider || 'gemini';
 }
 
 export function getModel(): string {
   const s = readStored();
-  if (s.model) return s.model;
+  const m = sanitizeModel(s.model || '');
+  if (m) return m;
   return detect()?.model || DEFAULT_MODELS[getActiveProvider()];
 }
 
@@ -316,44 +356,63 @@ async function callProvider(prompt: string, images: Array<{ mimeType: string; da
   if (!cfg.key) throw aiErr('NO_KEY');
   const json = !!opts.json;
   const timeoutMs = opts.timeoutMs ?? 60000;
-  const url = {
-    gemini: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`,
-    groq: 'https://api.groq.com/openai/v1/chat/completions',
-    openrouter: 'https://openrouter.ai/api/v1/chat/completions',
-  }[cfg.provider];
+  const provider = cfg.provider;
+  const def = DEFAULT_MODELS[provider];
+  const primary = sanitizeModel(cfg.model) || def;
 
-  let init: RequestInit;
-  if (cfg.provider === 'gemini') {
-    init = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key },
-      body: JSON.stringify({
-        contents: [{
-          role: 'user',
-          parts: [{ text: prompt }, ...images.map(i => ({ inlineData: { mimeType: i.mimeType, data: i.data } }))],
-        }],
-        generationConfig: { temperature: 0.8, ...(json ? { responseMimeType: 'application/json' } : {}) },
-      }),
-    };
-  } else {
-    init = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.key}` },
-      body: JSON.stringify({ model: cfg.model, messages: toOpenAiMessages(prompt, images, json), temperature: 0.8 }),
-    };
-  }
+  const attempt = async (model: string): Promise<string> => {
+    const url = {
+      gemini: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      groq: 'https://api.groq.com/openai/v1/chat/completions',
+      openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+    }[provider];
 
-  let res: Response;
+    let init: RequestInit;
+    if (provider === 'gemini') {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }, ...images.map(i => ({ inlineData: { mimeType: i.mimeType, data: i.data } }))],
+          }],
+          generationConfig: { temperature: 0.8, ...(json ? { responseMimeType: 'application/json' } : {}) },
+        }),
+      };
+    } else {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.key}` },
+        body: JSON.stringify({ model, messages: toOpenAiMessages(prompt, images, json), temperature: 0.8 }),
+      };
+    }
+
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, init, timeoutMs);
+    } catch (e: any) {
+      if (e?.name === 'AbortError') throw aiErr('AI_TIMEOUT');
+      throw aiErr('AI_NETWORK');
+    }
+    if (!res.ok) throw aiErr('AI_HTTP_' + res.status);
+    let data: any;
+    try { data = await res.json(); } catch { throw aiErr('AI_EMPTY'); }
+    return provider === 'gemini' ? extractTextGemini(data) : extractTextOpenAI(data);
+  };
+
   try {
-    res = await fetchWithTimeout(url, init, timeoutMs);
-  } catch (e: any) {
-    if (e?.name === 'AbortError') throw aiErr('AI_TIMEOUT');
-    throw aiErr('AI_NETWORK');
+    return await attempt(primary);
+  } catch (e) {
+    // ۴۰۴ یعنی مدل ذخیره‌شده منقضی/ناشناس است — یک بار با مدل پیش‌فرض همان ارائه‌دهنده امتحان کن
+    // و اگر جواب داد ذخیرهٔ مدل را هم اصلاح کن تا درخواست‌های بعدی یک‌مرحله‌ای شوند
+    if ((e as Error).message === 'AI_HTTP_404' && primary !== def) {
+      const r = await attempt(def);
+      try { setModel(def); } catch { /* ignore */ }
+      return r;
+    }
+    throw e;
   }
-  if (!res.ok) throw aiErr('AI_HTTP_' + res.status);
-  let data: any;
-  try { data = await res.json(); } catch { throw aiErr('AI_EMPTY'); }
-  return cfg.provider === 'gemini' ? extractTextGemini(data) : extractTextOpenAI(data);
 }
 
 const RETRYABLE = (code: string): boolean =>
