@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { stopSpeaking, getTtsWorkerBase } from '../utils/audio';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { stopSpeaking, getTtsWorkerBase, speak } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import {
   ARCHIVE_HOEREN, ExamRun, MAX_PLAYS, S, TOPICS_DE, askJson, audioGet, audioPut, hash, loadList, pick, saveList, useNoHelp
 } from '../utils/trainerKit';
-import { ClickableText, WordLookupModal } from './WordLookup';
+import { WordLookupModal } from './WordLookup';
 import type { Word } from '../types';
 
 type ExamType = 'Standard' | 'Goethe' | 'OESD' | 'Telc' | 'EPD';
@@ -19,7 +19,7 @@ type MC = { question: string; options: string[]; answerIndex: number; explanatio
 type Gap = { sentence: string; answer: string; translation?: string };
 type Short = { question: string; answer: string; translation?: string };
 type Vocab = { word: string; meaning: string };
-type Grade = { correct: boolean; points: number; feedback: string; feedbackFa: string };
+type Grade = { correct: boolean; points: number; feedback: string; feedbackFa: string; expected?: string; given?: string };
 type SectionScore = { label: string; earned: number; total: number; percentage: number };
 type GradingResult = {
   score: number; maxScore: number; percentage: number; gradeLabel: string; passed: boolean; sections: SectionScore[];
@@ -27,9 +27,10 @@ type GradingResult = {
 };
 type HistoryAttempt = { date: string; score: number; maxScore: number; percentage: number; gradeLabel: string; passed: boolean };
 type Exercise = { title: string; examType: ExamType; level: string; part1TF: TF[]; part2MC: MC[]; part3Gap: Gap[]; part4Short: Short[]; vocabulary: Vocab[] };
+type TrChunk = { t: string; g: number[] };
 type SavedExerciseRecord = {
   id: string; createdAt: string; title: string; examType: ExamType; level: string; transcript: string; exercise: Exercise;
-  sentencePairsCache?: { de: string; fa: string }[]; audioUrl?: string; answers: Record<string, string>; submitted: boolean;
+  sentencePairsCache?: { de: string; fa: string }[]; audioUrl?: string; srcAudio?: string; trans?: TrChunk[][]; answers: Record<string, string>; submitted: boolean;
   result: GradingResult | null; historyAttempts?: HistoryAttempt[];
 };
 
@@ -150,21 +151,77 @@ const gradeCheck = S.obj({
 });
 const transcriptCheck = (x: any): string => { const t = S.req(x?.transcript); if (t.length < 80) throw new Error('short'); return t; };
 
-function splitForTts(text: string, max = 350): string[] {
-  const sentences = text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]*\s*/g) || [text];
-  const chunks: string[] = [];
+/** Persian translation check: {"paragraphs":[{"chunks":[{"t":"...","g":[0,1]}]}]} */
+const trCheck = (n: number) => (data: any): TrChunk[][] => {
+  const arr = Array.isArray(data) ? data : data?.paragraphs;
+  if (!Array.isArray(arr) || arr.length < 1) throw new Error('bad translation');
+  return Array.from({ length: n }, (_, i) => {
+    const p = arr[i]; const cs = Array.isArray(p) ? p : p?.chunks;
+    if (!Array.isArray(cs)) return [];
+    return cs
+      .map((c: any) => ({ t: String(c?.t ?? '').trim(), g: Array.isArray(c?.g) ? c.g.map(Number).filter((x: number) => Number.isInteger(x)) : [] }))
+      .filter((c: TrChunk) => c.t);
+  });
+};
+
+/** Transcript -> paragraphs (by line break; long blocks are cut every 3 sentences) -> word tokens. */
+function buildParas(text: string): string[][] {
+  const out: string[][] = [];
+  for (const block of text.split(/\n+/)) {
+    const sents = block.replace(/[ \t]+/g, ' ').trim().match(/[^.!?]+[.!?]*\s*/g) || [];
+    for (let i = 0; i < sents.length; i += 3) {
+      const toks = sents.slice(i, i + 3).join(' ').trim().split(/\s+/).filter(Boolean);
+      if (toks.length) out.push(toks);
+    }
+  }
+  return out;
+}
+const cleanWord = (t: string) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+const nz = (s: string) => s.toLowerCase().replace(/ß/g, 'ss').replace(/[.,;:!?"'„“”()]/g, '').replace(/\s+/g, ' ').trim();
+
+/** Chunks of max ~180 characters (cloud TTS workers usually limit the text length). */
+function splitForTts(text: string, max = 180): string[] {
+  const sents = text.replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const out: string[] = [];
   let cur = '';
-  for (const s of sentences) {
-    if (cur && (cur + s).length > max) { chunks.push(cur.trim()); cur = ''; }
-    cur += s;
+  const push = () => { if (cur.trim()) out.push(cur.trim()); cur = ''; };
+  for (const s0 of sents) {
+    const parts: string[] = [];
+    if (s0.length <= max) parts.push(s0.trim());
+    else {
+      let w = '';
+      for (const word of s0.trim().split(' ')) {
+        if (w && (w + ' ' + word).length > max) { parts.push(w); w = word; } else w = w ? w + ' ' + word : word;
+      }
+      if (w) parts.push(w);
+    }
+    for (const p of parts) {
+      if (cur && (cur + ' ' + p).length > max) push();
+      cur = cur ? cur + ' ' + p : p;
+    }
   }
-  if (cur.trim()) chunks.push(cur.trim());
-  const result: string[] = [];
-  for (const c of chunks) {
-    if (c.length <= max * 1.6) result.push(c);
-    else for (let i = 0; i < c.length; i += max) result.push(c.slice(i, i + max));
+  push();
+  return out;
+}
+
+async function fetchChunk(base: string, text: string): Promise<Blob> {
+  let lastErr = '';
+  for (let a = 0; a < 3; a++) {
+    for (const mode of ['get', 'post'] as const) {
+      try {
+        const res = mode === 'get'
+          ? await fetch(`${base}/?lang=de&text=${encodeURIComponent(text)}`)
+          : await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, lang: 'de' }) });
+        if (!res.ok) { lastErr = 'HTTP ' + res.status; continue; }
+        const b = await res.blob();
+        if (b.size < 800) { lastErr = 'پاسخ خالی'; continue; }
+        if (/json|text|html/i.test(b.type)) { lastErr = 'پاسخ صوتی نبود'; continue; }
+        return b.type.startsWith('audio') ? b : new Blob([b], { type: 'audio/mpeg' });
+      } catch { lastErr = 'اتصال'; }
+    }
+    await new Promise(r => setTimeout(r, 700));
   }
-  return result;
+  throw new Error(`ساخت صدا ناموفق بود (${lastErr}). آدرس Worker را در تنظیمات بررسی کن، یا «پخش با صدای مرورگر» را بزن.`);
 }
 
 /** Cloud TTS for a whole transcript; result is cached (Cache API), so it is never generated twice. */
@@ -176,13 +233,7 @@ async function makeAudio(text: string, onProg?: (s: string) => void): Promise<st
   const blobs: Blob[] = [];
   for (let i = 0; i < chunks.length; i++) {
     onProg?.(`${i + 1} / ${chunks.length}`);
-    let res: Response | null = null;
-    try { res = await fetch(`${base}/?lang=de&text=${encodeURIComponent(chunks[i])}`); } catch { res = null; }
-    if (!res || !res.ok) {
-      res = await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: chunks[i], lang: 'de' }) });
-    }
-    if (!res.ok) throw new Error('خطا در ارتباط با سرور صوت.');
-    blobs.push(await res.blob());
+    blobs.push(await fetchChunk(base, chunks[i]));
   }
   const blob = new Blob(blobs, { type: 'audio/mpeg' });
   void audioPut(text, blob);
@@ -204,7 +255,7 @@ export const HoerenTrainer: React.FC<{
 }> = ({ onClose, initialView = 'menu', onQuickAddWord, exam }) => {
   const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive' | 'exercise'>(initialView === 'creator' ? 'creator' : initialView === 'archive' ? 'archive' : 'menu');
   const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>(() => loadList<SavedExerciseRecord>(ARCHIVE_HOEREN));
-  const [currentArchiveId, setCurrentArchiveId] = useState<string | null>(null);
+  const archiveId = useRef<string | null>(null);
 
   const [transcript, setTranscript] = useState('');
   const [examType, setExamType] = useState<ExamType>(exam ? ETYPE[exam.org] : 'Standard');
@@ -222,45 +273,57 @@ export const HoerenTrainer: React.FC<{
   const [buildErr, setBuildErr] = useState('');
 
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [srcAudio, setSrcAudio] = useState('');      // saved original mp3 link (permanent per exercise)
+  const [srcInput, setSrcInput] = useState('');
+  const srcRef = useRef('');
+  srcRef.current = srcAudio;
+  const playUrl = srcAudio || audioUrl;
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [audioGenProgress, setAudioGenProgress] = useState('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [browserPlaying, setBrowserPlaying] = useState(false);
   const [plays, setPlays] = useState(0);
   const playsRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const bTok = useRef(0);
+  const [rate, setRate] = useState(1);
+  const [curT, setCurT] = useState(0);
+  const [dur, setDur] = useState(0);
 
   const [historyAttempts, setHistoryAttempts] = useState<HistoryAttempt[]>([]);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showTr, setShowTr] = useState(false);
+  const [trans, setTrans] = useState<TrChunk[][] | null>(null);
+  const [trBusy, setTrBusy] = useState(false);
+  const [trErr, setTrErr] = useState('');
+  const [hov, setHov] = useState<{ p: number; kind: 'd' | 'f'; i: number } | null>(null);
   const [showFa, setShowFa] = useState<Record<string, boolean>>({});
   const [lookup, setLookup] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(-1);
   const [noHelp, setNoHelp] = useNoHelp();
   const limited = !!exam || noHelp;
   const submitRef = useRef<() => void>(() => {});
+  const paras = useMemo(() => buildParas(transcript), [transcript]);
 
-  // Print: state-based, no window.open (blocked on iOS Safari).
-  const [printMode, setPrintMode] = useState<'questions' | 'transcript' | 'report' | null>(null);
+  // Print: state-based, no window.open (blocked on iOS Safari). Questions and answer key are separate.
+  const [printMode, setPrintMode] = useState<'questions' | 'answers' | 'transcript' | 'report' | null>(null);
   useEffect(() => {
     if (!printMode) return;
-    // iOS Safari: needs a tick for the print DOM to settle before calling print().
     const t = setTimeout(() => {
       window.print();
-      // Reset after print dialog closes. onafterprint is unreliable on iOS Safari,
-      // so reset on a short delay; the user returns to the same page (no popup).
       setTimeout(() => setPrintMode(null), 300);
     }, 80);
-    const cleanup = () => clearTimeout(t);
-    return cleanup;
+    return () => clearTimeout(t);
   }, [printMode]);
 
-  const handlePrint = (type: 'questions' | 'transcript' | 'report') => {
+  const handlePrint = (type: 'questions' | 'answers' | 'transcript' | 'report') => {
     if (!exercise) return;
     setPrintMode(type);
   };
 
   useEffect(() => () => { stopSpeaking(); }, []);
 
-  useEffect(() => { playsRef.current = 0; setPlays(0); setIsPlayingAudio(false); }, [audioUrl]);
+  useEffect(() => { playsRef.current = 0; setPlays(0); setIsPlayingAudio(false); setCurT(0); setDur(0); }, [playUrl]);
 
   // audio of a transcript is cached: reopening an archived exercise brings the voice back
   useEffect(() => {
@@ -270,26 +333,40 @@ export const HoerenTrainer: React.FC<{
   }, [viewMode, transcript]);
 
   const stopAllPlayback = () => {
+    bTok.current++; setBrowserPlaying(false);
     stopSpeaking();
     audioRef.current?.pause();
     setIsPlayingAudio(false);
   };
 
+  /** Writes a partial change into one archive record (keeps everything else). */
+  const patchRecord = (id: string | null, patch: Partial<SavedExerciseRecord>) => {
+    if (!id) return;
+    setSavedExercises(prev => {
+      const list = prev.map(r => r.id === id ? { ...r, ...patch } : r);
+      saveList(ARCHIVE_HOEREN, list);
+      return list;
+    });
+  };
+
   const persistCurrentToArchive = (curEx: Exercise | null, curTr: string, curAns: Record<string, string>, curSub: boolean, curRes: GradingResult | null, curHist: HistoryAttempt[]) => {
     if (!curEx) return;
-    const list = [...savedExercises];
-    const targetId = currentArchiveId || 'ex_' + Date.now();
-    if (!currentArchiveId) setCurrentArchiveId(targetId);
-    const idx = list.findIndex(i => i.id === targetId);
-    const rec: SavedExerciseRecord = {
-      id: targetId,
-      createdAt: idx !== -1 ? list[idx].createdAt : new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
-      title: curEx.title, examType: curEx.examType, level: curEx.level, transcript: curTr, exercise: curEx,
-      answers: curAns, submitted: curSub, result: curRes, historyAttempts: curHist
-    };
-    if (idx !== -1) list[idx] = rec; else list.unshift(rec);
-    setSavedExercises(list);
-    saveList(ARCHIVE_HOEREN, list);
+    const id = archiveId.current || (archiveId.current = 'ex_' + Date.now());
+    setSavedExercises(prev => {
+      const idx = prev.findIndex(i => i.id === id);
+      const old = idx !== -1 ? prev[idx] : undefined;
+      const rec: SavedExerciseRecord = {
+        ...(old || {}),
+        id,
+        createdAt: old?.createdAt || new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        title: curEx.title, examType: curEx.examType, level: curEx.level, transcript: curTr, exercise: curEx,
+        srcAudio: old ? old.srcAudio : (srcRef.current || undefined),
+        answers: curAns, submitted: curSub, result: curRes, historyAttempts: curHist
+      };
+      const list = old ? prev.map(r => r.id === id ? rec : r) : [rec, ...prev];
+      saveList(ARCHIVE_HOEREN, list);
+      return list;
+    });
   };
 
   const handleBackToMenu = () => {
@@ -328,43 +405,60 @@ export const HoerenTrainer: React.FC<{
       const details: Record<string, Grade> = {};
       const pointsById: Record<string, number> = {};
       const errs: { original: string; corrected: string; type: string; why: string; src: string }[] = [];
-      const freeQuestions: { id: string; question: string; expected: string; userAnswer: string; category: string }[] = [];
+      const free: { id: string; question: string; expected: string; userAnswer: string; category: string }[] = [];
 
       exercise.part1TF.forEach((q, i) => {
         const id = `tf-${i}`; const given = answers[id]; const correct = given === String(q.answer);
         pointsById[id] = correct ? 1 : 0;
-        details[id] = { correct, points: correct ? 1 : 0, feedback: q.explanation || `Richtige Antwort: ${q.answer ? 'Richtig' : 'Falsch'}`, feedbackFa: `پاسخ صحیح: ${q.answer ? 'درست (Richtig)' : 'نادرست (Falsch)'} — ${q.explanation}` };
+        details[id] = {
+          correct, points: correct ? 1 : 0, feedback: q.explanation || '', feedbackFa: '',
+          expected: q.answer ? 'Richtig (درست)' : 'Falsch (نادرست)', given: given ? (given === 'true' ? 'Richtig' : 'Falsch') : ''
+        };
         if (given && !correct) errs.push({ original: `${q.statement} → ${given === 'true' ? 'Richtig' : 'Falsch'}`, corrected: `${q.statement} → ${q.answer ? 'Richtig' : 'Falsch'}`, type: 'Hören', why: q.explanation, src: 'Hören' });
       });
       exercise.part2MC.forEach((q, i) => {
         const id = `mc-${i}`; const given = answers[id]; const correct = given === String(q.answerIndex);
         const opt = q.options[q.answerIndex] || '';
         pointsById[id] = correct ? 1 : 0;
-        details[id] = { correct, points: correct ? 1 : 0, feedback: q.explanation || `Richtige Antwort: ${String.fromCharCode(65 + q.answerIndex)}) ${opt}`, feedbackFa: `پاسخ صحیح: ${String.fromCharCode(65 + q.answerIndex)}) ${opt} — ${q.explanation}` };
+        details[id] = {
+          correct, points: correct ? 1 : 0, feedback: q.explanation || '', feedbackFa: '',
+          expected: `${String.fromCharCode(65 + q.answerIndex)}) ${opt}`,
+          given: given !== undefined && given !== '' ? `${String.fromCharCode(65 + Number(given))}) ${q.options[Number(given)] || ''}` : ''
+        };
         if (given && !correct) errs.push({ original: `${q.question} → ${q.options[Number(given)] || ''}`, corrected: `${q.question} → ${opt}`, type: 'Hören', why: q.explanation, src: 'Hören' });
       });
-      const addFree = (id: string, question: string, expected: string, category: string) => freeQuestions.push({ id, question, expected, userAnswer: answers[id] || '', category });
+      const addFree = (id: string, question: string, expected: string, category: string) => free.push({ id, question, expected, userAnswer: answers[id] || '', category });
       exercise.part3Gap.forEach((q, i) => addFree(`gap-${i}`, q.sentence, q.answer, 'Lückentext'));
       exercise.part4Short.forEach((q, i) => addFree(`short-${i}`, q.question, q.answer, 'Offene Frage'));
       exercise.vocabulary.forEach((q, i) => addFree(`v-${i}`, q.word, q.meaning, 'Wortschatz'));
 
+      // 1) unanswered -> 0 points; 2) gap answers identical to the solution are graded locally (no AI call needed)
+      const toAi: typeof free = [];
+      free.forEach(q => {
+        const base = { expected: q.expected, given: q.userAnswer };
+        if (!q.userAnswer.trim()) {
+          pointsById[q.id] = 0; details[q.id] = { correct: false, points: 0, feedback: '', feedbackFa: '', ...base };
+        } else if (q.category === 'Lückentext' && nz(q.userAnswer) === nz(q.expected)) {
+          pointsById[q.id] = 1; details[q.id] = { correct: true, points: 1, feedback: 'Richtig ✔', feedbackFa: '', ...base };
+        } else toAi.push(q);
+      });
+
       let tc = '', tcFa = '', st = '', rec = '';
-      const answeredFree = freeQuestions.filter(q => q.userAnswer.trim());
-      if (answeredFree.length > 0) {
+      if (toAi.length > 0) {
         const parsed = await askJson<any>(
           `Du bist ein erfahrener Prüfer für Deutsch als Fremdsprache (${EXAM_LABELS[exercise.examType]}, Niveau ${exercise.level}).
-Bewerte die Antworten fair; Erklärungen und Feedback AUCH AUF PERSISCH (فارسی). Vergib pro Aufgabe genau 0, 0.5 oder 1 Punkt. Nicht beantwortete Aufgaben wurden bereits entfernt.
-Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründung","feedbackFa":"توضیح فارسی"}],"teacherComment":"...","teacherCommentFa":"...","strengths":"...","recommendations":"..."}
-\n\nTRANSKRIPT:\n${transcript}\n\nANTWORTEN:\n${JSON.stringify(answeredFree)}`,
+Bewerte die Antworten fair und nach dem Sinn (kleine Tippfehler oder gleichwertige Formulierungen nicht hart bestrafen); Erklärungen und Feedback AUCH AUF PERSISCH (فارسی). Vergib pro Aufgabe genau 0, 0.5 oder 1 Punkt. Nenne in "feedbackFa" kurz, was falsch/fehlend war und was die richtige Lösung ist. Nicht beantwortete Aufgaben wurden bereits entfernt.
+Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründung","feedbackFa":"توضیح فارسی"}],"teacherComment":"...","teacherCommentFa":"...","strengths":"... (فارسی)","recommendations":"... (فارسی)"}
+\n\nTRANSKRIPT:\n${transcript}\n\nANTWORTEN:\n${JSON.stringify(toAi)}`,
           gradeCheck, { timeoutMs: 60000 }
         );
         const byId = new Map<string, any>(parsed.results.map((r: any) => [r.id, r]));
-        freeQuestions.forEach(q => {
+        toAi.forEach(q => {
           const g = byId.get(q.id);
-          const pts = q.userAnswer.trim() && g ? Math.round(g.points * 2) / 2 : 0;
-          pointsById[q.id] = pts;
-          details[q.id] = { correct: pts === 1, points: pts, feedback: g?.feedback || '', feedbackFa: g?.feedbackFa || '' };
-          if (q.userAnswer.trim() && pts < 1) {
+          const p = g ? Math.round(g.points * 2) / 2 : 0;
+          pointsById[q.id] = p;
+          details[q.id] = { correct: p === 1, points: p, feedback: g?.feedback || '', feedbackFa: g?.feedbackFa || '', expected: q.expected, given: q.userAnswer };
+          if (p < 1) {
             const blank = /_{2,}/.test(q.question);
             errs.push({
               original: blank ? q.question.replace(/_{2,}/, q.userAnswer) : `${q.question} → ${q.userAnswer}`,
@@ -374,8 +468,6 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
           }
         });
         tc = parsed.teacherComment; tcFa = parsed.teacherCommentFa; st = parsed.strengths; rec = parsed.recommendations;
-      } else {
-        freeQuestions.forEach(q => { pointsById[q.id] = 0; details[q.id] = { correct: false, points: 0, feedback: '', feedbackFa: '' }; });
       }
 
       const sections: SectionScore[] = [];
@@ -397,7 +489,9 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
       const { gradeLabel, passed } = getOfficialGradeInfo(percentage);
       const finalRes: GradingResult = {
         score, maxScore, percentage, gradeLabel, passed, sections,
-        teacherComment: tc || 'Gut gemacht.', teacherCommentFa: tcFa || 'عملکرد شما ثبت شد.', strengths: st, recommendations: rec, details
+        teacherComment: tc || (passed ? 'Gut gemacht.' : 'Weiter üben.'),
+        teacherCommentFa: tcFa || (passed ? 'عملکرد خوبی داشتید.' : 'نیاز به تمرین بیشتر دارید؛ بخش‌های ضعیف‌تر را دوباره گوش کنید.'),
+        strengths: st, recommendations: rec, details
       };
       setResult(finalRes); setSubmitted(true);
       if (errs.length) addErrors(errs);
@@ -413,11 +507,22 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
   };
   submitRef.current = () => { void submitAnswers(); };
 
+  /** Fresh, empty attempt of the same exercise (answers/result cleared, attempt history kept). */
+  const resetAttempt = () => {
+    stopAllPlayback();
+    setAnswers({}); setSubmitted(false); setResult(null); setError(''); setWarningMsg(''); setShowFa({});
+    playsRef.current = 0; setPlays(0);
+    persistCurrentToArchive(exercise, transcript, {}, false, null, historyAttempts);
+  };
+
   const generate = async () => {
     if (transcript.trim().length < 80) { setError('متن کامل‌تری وارد کنید (حداقل ۸۰ نویسه).'); return; }
     stopAllPlayback();
+    const su = srcInput.trim();
+    if (su && !/^https?:\/\//i.test(su)) { setError('لینک mp3 باید با http:// یا https:// شروع شود.'); return; }
     setError(''); setWarningMsg(''); setExercise(null); setAnswers({}); setSubmitted(false); setResult(null);
-    setHistoryAttempts([]); setCurrentArchiveId(null); setAudioUrl(null); setShowTranscript(false); setShowFa({});
+    setHistoryAttempts([]); archiveId.current = null; setAudioUrl(null); setSrcAudio(su); srcRef.current = su;
+    setShowTranscript(false); setShowTr(false); setTrans(null); setTrErr(''); setShowFa({});
     setLoading(true);
     try {
       const tr = transcript.trim();
@@ -442,6 +547,42 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
     finally { setGeneratingAudio(false); setAudioGenProgress(''); }
   };
 
+  /** Saves (or removes) the original mp3 link permanently for this exercise. */
+  const saveSrcAudio = (remove = false) => {
+    const v = remove ? '' : srcInput.trim();
+    if (v && !/^https?:\/\//i.test(v)) { setError('لینک mp3 باید با http:// یا https:// شروع شود.'); return; }
+    setError(''); stopAllPlayback();
+    setSrcAudio(v); srcRef.current = v; if (remove) setSrcInput('');
+    patchRecord(archiveId.current, { srcAudio: v || undefined });
+  };
+
+  // ---- Persian translation under each paragraph (cached in the archive record) ----
+  const loadTranslation = async () => {
+    if (trans || trBusy || !paras.length) return;
+    setTrBusy(true); setTrErr('');
+    try {
+      const numbered = paras.map((t, i) => `[${i}] ` + t.map((w, j) => `${j}:${w}`).join(' ')).join('\n');
+      const res = await askJson<TrChunk[][]>(
+        `Translate this German listening text into natural Persian, paragraph by paragraph. Each paragraph is given as numbered German tokens ("index:word").
+For each paragraph return the Persian translation split into short chunks IN PERSIAN READING ORDER. Each chunk has "t" (the Persian words) and "g" (array of the German token indexes that this chunk translates). Every German token index must appear in at least one chunk; the chunks together must form a complete, fluent Persian translation.
+Return ONLY JSON: {"paragraphs":[{"chunks":[{"t":"...","g":[0,1]}]}]} with exactly ${paras.length} paragraphs in the same order.
+
+PARAGRAPHS:
+${numbered}`,
+        trCheck(paras.length), { timeoutMs: 60000, cacheKey: 'htr:' + hash(transcript) }
+      );
+      setTrans(res); patchRecord(archiveId.current, { trans: res });
+    } catch (e: any) { setTrErr(describeAiError(e)); } finally { setTrBusy(false); }
+  };
+  const toggleTr = () => {
+    const nv = !showTr; setShowTr(nv); setHov(null);
+    if (nv) void loadTranslation();
+  };
+
+  // hover sync: German word <-> Persian chunk
+  const actD = (pi: number, i: number) => !!hov && hov.p === pi && (hov.kind === 'd' ? hov.i === i : !!trans?.[pi]?.[hov.i]?.g.includes(i));
+  const actF = (pi: number, ci: number) => !!hov && hov.p === pi && (hov.kind === 'f' ? hov.i === ci : !!trans?.[pi]?.[ci]?.g.includes(hov.i));
+
   // ---- full-exam mode: build everything automatically, then run with the real timer ----
   const autoBuild = async () => {
     if (!exam) return;
@@ -453,7 +594,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
       const url = await makeAudio(tr, setAudioGenProgress);
       setTranscript(tr); setExercise(ex); setAudioUrl(url); setViewMode('exercise'); setSecondsLeft(exam.minutes * 60);
       persistCurrentToArchive(ex, tr, {}, false, null, []);
-    } catch (e: any) { setBuildErr(describeAiError(e)); } finally { setLoading(false); }
+    } catch (e: any) { setBuildErr(e?.message && !/^AI_/.test(e.message) ? e.message : describeAiError(e)); } finally { setLoading(false); }
   };
   useEffect(() => { if (exam) void autoBuild(); }, []);
 
@@ -474,7 +615,32 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
     const fresh = a.ended || a.currentTime < 0.3;
     if (fresh && limited && playsRef.current >= MAX_PLAYS) return;
     if (fresh) { playsRef.current++; setPlays(playsRef.current); }
-    void a.play(); setIsPlayingAudio(true);
+    stopSpeaking(); bTok.current++; setBrowserPlaying(false);
+    a.playbackRate = limited ? 1 : rate;
+    a.play().then(() => setIsPlayingAudio(true)).catch(() => setIsPlayingAudio(false));
+  };
+  const skip = (d: number) => { const a = audioRef.current; if (!a || !dur) return; a.currentTime = Math.max(0, Math.min(dur, a.currentTime + d)); setCurT(a.currentTime); };
+  const changeRate = (r: number) => { setRate(r); if (audioRef.current) audioRef.current.playbackRate = r; };
+
+  /** Browser voice: no generation needed; plays the transcript sentence by sentence. */
+  const browserLocked = limited && !browserPlaying && playsRef.current >= MAX_PLAYS;
+  const playBrowser = () => {
+    if (browserPlaying) { stopAllPlayback(); return; }
+    if (!transcript.trim() || browserLocked) return;
+    stopAllPlayback();
+    if (limited) { playsRef.current++; setPlays(playsRef.current); }
+    const tok = ++bTok.current; setBrowserPlaying(true);
+    const chunks = splitForTts(transcript, 220);
+    const next = (i: number) => {
+      if (bTok.current !== tok) return;
+      if (i >= chunks.length) { setBrowserPlaying(false); return; }
+      void speak(chunks[i], {
+        forceBrowser: true, rate: 0.9,
+        onEnd: () => next(i + 1),
+        onErr: () => { if (bTok.current === tok) { setBrowserPlaying(false); setError('پخش با صدای مرورگر ناموفق بود.'); } }
+      });
+    };
+    next(0);
   };
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -482,10 +648,23 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
   const faBtn = (id: string, t?: string) => (!t || (limited && !submitted)) ? null : (showFa[id]
     ? <p className="text-xs text-slate-400">{t}</p>
     : <button onClick={() => setShowFa(p => ({ ...p, [id]: true }))} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش فارسی</button>);
-  const fb = (id: string) => { const d = result?.details?.[id]; return submitted && d ? (
-    <div className={`p-2 rounded-xl text-xs space-y-0.5 ${d.correct ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
-      <div dir="ltr" className="font-sans">{d.correct ? '✔' : '✘'} {d.feedback}</div><div>{d.feedbackFa}</div>
-    </div>) : null; };
+  const fb = (id: string) => {
+    const d = result?.details?.[id];
+    if (!submitted || !d) return null;
+    const tone = d.points === 1 ? 'bg-emerald-50 text-emerald-800' : d.points > 0 ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-700';
+    return (
+      <div className={`p-2.5 rounded-xl text-xs space-y-1 ${tone}`}>
+        <div className="font-bold">{d.points === 1 ? '✔' : d.points > 0 ? '◐' : '✘'} امتیاز: {d.points} / 1</div>
+        {d.given !== undefined && <div>پاسخ شما: <span dir="ltr" className="font-sans font-bold">{d.given || '— (بدون پاسخ)'}</span></div>}
+        {d.points < 1 && d.expected && <div>پاسخ صحیح: <span dir="ltr" className="font-sans font-bold">{d.expected}</span></div>}
+        {d.feedback && <div dir="ltr" className="font-sans text-left">{d.feedback}</div>}
+        {d.feedbackFa && <div>{d.feedbackFa}</div>}
+      </div>
+    );
+  };
+  const optCls = (sel: boolean, right: boolean) => submitted
+    ? (right ? 'bg-emerald-600 text-white border-emerald-600' : sel ? 'bg-red-600 text-white border-red-600' : 'bg-white dark:bg-slate-800 border-slate-200 opacity-70')
+    : (sel ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-white dark:bg-slate-800 border-slate-200');
   const box = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4';
   const noHelpChip = (
     <button onClick={() => setNoHelp(!noHelp)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>
@@ -575,6 +754,11 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
               className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-sm font-sans outline-none text-left" dir="ltr" />
           </div>
 
+          <div>
+            <label className="block text-xs font-bold mb-1.5">🔗 لینک mp3 صدای اصلی (اختیاری — برای همیشه روی همین تمرین ذخیره می‌شود):</label>
+            <input dir="ltr" value={srcInput} onChange={e => setSrcInput(e.target.value)} placeholder="https://example.com/audio.mp3" className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-sans outline-none" />
+          </div>
+
           <div className="flex items-center justify-between gap-2">{noHelpChip}<span className="text-[11px] text-[#5d6676]">بدون ترجمه، حداکثر ۲ بار پخش، متن تا پایان مخفی</span></div>
 
           {error && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs">{error}</div>}
@@ -595,21 +779,30 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
           <div className="space-y-3">
             {savedExercises.length === 0 ? (
               <div className="py-12 text-center text-sm text-[#5d6676]">هیچ تمرینی در آرشیو ذخیره نشده است.</div>
-            ) : savedExercises.map(item => (
-              <div key={item.id}
-                onClick={() => {
-                  setCurrentArchiveId(item.id); setExercise(item.exercise); setTranscript(item.transcript); setAnswers(item.answers || {});
-                  setSubmitted(item.submitted || false); setResult(item.result || null); setHistoryAttempts(item.historyAttempts || []);
-                  setAudioUrl(null); setShowTranscript(false); setShowFa({}); setViewMode('exercise');
-                }}
-                className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141923] flex items-center justify-between cursor-pointer hover:border-[#1f5fbf] transition">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{item.title}</h4>
-                  <span className="text-xs text-[#5d6676]">تاریخ: {item.createdAt} • سطح: {item.level}</span>
+            ) : savedExercises.map(item => {
+              const last = item.historyAttempts?.[item.historyAttempts.length - 1];
+              return (
+                <div key={item.id}
+                  onClick={() => {
+                    stopAllPlayback();
+                    // every opening starts a fresh, empty attempt (previous results stay only as history)
+                    archiveId.current = item.id; setExercise(item.exercise); setTranscript(item.transcript);
+                    setAnswers({}); setSubmitted(false); setResult(null); setError(''); setWarningMsg('');
+                    setHistoryAttempts(item.historyAttempts || []);
+                    setSrcAudio(item.srcAudio || ''); setSrcInput(item.srcAudio || ''); srcRef.current = item.srcAudio || '';
+                    setTrans(item.trans || null); setShowTr(false); setTrErr('');
+                    playsRef.current = 0; setPlays(0);
+                    setAudioUrl(null); setShowTranscript(false); setShowFa({}); setViewMode('exercise');
+                  }}
+                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141923] flex items-center justify-between cursor-pointer hover:border-[#1f5fbf] transition">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{item.title}</h4>
+                    <span className="text-xs text-[#5d6676]">تاریخ: {item.createdAt} • سطح: {item.level}{item.srcAudio ? ' • 🔗 صدای اصلی' : ''}{last ? ` • آخرین نتیجه: ${last.percentage}%` : ''}</span>
+                  </div>
+                  <span className="bg-[#1f5fbf] text-white px-4 py-2 rounded-xl text-xs font-bold">ورود به تمرین ▶</span>
                 </div>
-                <span className="bg-[#1f5fbf] text-white px-4 py-2 rounded-xl text-xs font-bold">ورود به تمرین ▶</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -624,6 +817,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
               </div>
               <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                 <button onClick={() => handlePrint('questions')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 سوالات</button>
+                <button onClick={() => handlePrint('answers')} className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 پاسخنامه</button>
                 <button onClick={() => handlePrint('transcript')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 Transkript</button>
                 <button onClick={() => handlePrint('report')} className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold whitespace-nowrap">🖨 کارنامه</button>
                 {exam && secondsLeft >= 0 && !submitted && (
@@ -636,29 +830,99 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
           </div>
 
           <div className={box + ' space-y-3'}>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-sm font-bold">🎧 فایل صوتی تمرین:</span>
-              {!audioUrl ? (
-                <button onClick={() => void handleGenerateAudio()} disabled={generatingAudio} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold disabled:opacity-50">
-                  {generatingAudio ? `در حال ساخت (${audioGenProgress})...` : 'تولید فایل صوتی ابری 🔊'}
+              <div className="flex items-center gap-2 flex-wrap">
+                {!playUrl ? (
+                  <button onClick={() => void handleGenerateAudio()} disabled={generatingAudio} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold disabled:opacity-50">
+                    {generatingAudio ? `در حال ساخت (${audioGenProgress})...` : 'تولید فایل صوتی ابری 🔊'}
+                  </button>
+                ) : (
+                  <button onClick={togglePlayPauseAudio} disabled={playLocked} className="px-4 py-2 rounded-xl bg-emerald-600 disabled:bg-slate-400 text-white text-xs font-bold">
+                    {isPlayingAudio ? 'توقف پخش ⏸' : playLocked ? 'پخش‌ها تمام شد' : (srcAudio ? 'پخش صدای اصلی ▶' : 'پخش صوت ▶')}
+                  </button>
+                )}
+                <button onClick={playBrowser} disabled={browserLocked} className="px-4 py-2 rounded-xl bg-indigo-600 disabled:bg-slate-400 text-white text-xs font-bold">
+                  {browserPlaying ? 'توقف صدای مرورگر ⏹' : browserLocked ? 'پخش‌ها تمام شد' : '🔈 پخش با صدای مرورگر'}
                 </button>
-              ) : (
-                <button onClick={togglePlayPauseAudio} disabled={playLocked} className="px-4 py-2 rounded-xl bg-emerald-600 disabled:bg-slate-400 text-white text-xs font-bold">
-                  {isPlayingAudio ? 'توقف پخش ⏸' : playLocked ? 'پخش‌ها تمام شد' : 'پخش صوت ▶'}
-                </button>
-              )}
+              </div>
             </div>
-            {limited && audioUrl && <div className="text-[11px] text-[#5d6676]">طبق قانون آزمون فقط {MAX_PLAYS} بار پخش مجاز است — باقی‌مانده: {playsLeft}</div>}
-            {audioUrl && <audio ref={audioRef} src={audioUrl} onEnded={() => setIsPlayingAudio(false)} className="hidden" />}
+
+            {playUrl && !limited && (
+              <div className="flex items-center gap-2" dir="ltr">
+                <button onClick={() => skip(-10)} className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold">⏪ 10</button>
+                <span className="font-mono text-[11px] w-10 text-center">{fmt(Math.floor(curT))}</span>
+                <input type="range" className="flex-1 min-w-0" min={0} max={dur || 0} step={0.1} value={Math.min(curT, dur || 0)} disabled={!dur}
+                  onChange={e => { const v = Number(e.target.value); if (audioRef.current) audioRef.current.currentTime = v; setCurT(v); }} />
+                <span className="font-mono text-[11px] w-10 text-center">{dur ? fmt(Math.floor(dur)) : '--:--'}</span>
+                <button onClick={() => skip(10)} className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold">10 ⏩</button>
+                <select value={rate} onChange={e => changeRate(Number(e.target.value))} className="bg-slate-100 dark:bg-slate-800 rounded-lg px-1.5 py-1 text-[11px] font-bold outline-none">
+                  {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => <option key={r} value={r}>{r}×</option>)}
+                </select>
+              </div>
+            )}
+            {limited && (playUrl || transcript) && <div className="text-[11px] text-[#5d6676]">طبق قانون آزمون فقط {MAX_PLAYS} بار پخش مجاز است — باقی‌مانده: {playsLeft}</div>}
+
+            {!exam && (
+              <div className="space-y-1">
+                <div className="flex gap-2" dir="ltr">
+                  <input value={srcInput} onChange={e => setSrcInput(e.target.value)} placeholder="🔗 https://example.com/audio.mp3" className="flex-1 min-w-0 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-sans outline-none" />
+                  <button onClick={() => saveSrcAudio()} className="px-3 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold whitespace-nowrap">ذخیره لینک</button>
+                  {srcAudio && <button onClick={() => saveSrcAudio(true)} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">حذف</button>}
+                </div>
+                <p className="text-[11px] text-[#5d6676]">{srcAudio ? '✔ صدای اصلی روی این تمرین ذخیره است و همیشه پخش می‌شود.' : 'لینک مستقیم فایل mp3 را بگذار تا به‌جای صدای ساخته‌شده، صدای اصلی روی همین تمرین ذخیره شود.'}</p>
+              </div>
+            )}
+
+            {playUrl && (
+              <audio ref={audioRef} src={playUrl} preload="metadata" className="hidden"
+                onEnded={() => setIsPlayingAudio(false)} onPause={() => setIsPlayingAudio(false)} onPlay={() => setIsPlayingAudio(true)}
+                onTimeUpdate={e => setCurT(e.currentTarget.currentTime)}
+                onLoadedMetadata={e => { const d = e.currentTarget.duration; setDur(Number.isFinite(d) ? d : 0); e.currentTarget.playbackRate = limited ? 1 : rate; }}
+                onError={() => setError('فایل صوتی پخش نشد — لینک را بررسی کن یا از «پخش با صدای مرورگر» استفاده کن.')} />
+            )}
           </div>
 
           {(!limited || submitted) && (
             <div className={box + ' space-y-2'}>
-              <button onClick={() => setShowTranscript(v => !v)} className="text-sm font-bold text-[#1f5fbf]">{showTranscript ? '🙈 مخفی کردن متن' : '📄 نمایش متن شنیداری (Transcript)'}</button>
+              <div className="flex items-center gap-4 flex-wrap">
+                <button onClick={() => setShowTranscript(v => !v)} className="text-sm font-bold text-[#1f5fbf]">{showTranscript ? '🙈 مخفی کردن متن' : '📄 نمایش متن شنیداری (Transcript)'}</button>
+                {showTranscript && <button onClick={toggleTr} className="text-sm font-bold text-[#6b4fd8]">{showTr ? '🙈 مخفی کردن ترجمه فارسی' : '🌐 مشاهده ترجمه فارسی'}</button>}
+              </div>
               {showTranscript && (
                 <>
-                  <p className="text-[11px] text-[#1f5fbf]">💡 روی هر واژه بزن تا معنی‌اش را ببینی و به واژه‌نامه اضافه کنی.</p>
-                  <div className="font-sans text-sm leading-7 text-left" dir="ltr"><ClickableText text={transcript} onWord={setLookup} /></div>
+                  <p className="text-[11px] text-[#1f5fbf]">💡 روی هر واژه بزن تا معنی‌اش را ببینی و به واژه‌نامه اضافه کنی. با نگه‌داشتن موس روی واژه، معادل فارسی‌اش هم روشن می‌شود.</p>
+                  {trErr && <div className="p-2 bg-red-50 text-red-700 rounded-xl text-xs">{trErr}</div>}
+                  <div className="space-y-4">
+                    {paras.map((toks, pi) => (
+                      <div key={pi} className="space-y-1.5">
+                        <div className="font-sans text-sm leading-7 text-left" dir="ltr">
+                          {toks.map((tk, i) => (
+                            <span key={i}>
+                              <span
+                                onMouseEnter={() => setHov({ p: pi, kind: 'd', i })} onMouseLeave={() => setHov(null)}
+                                onClick={() => { setHov({ p: pi, kind: 'd', i }); const w = cleanWord(tk); if (w) setLookup(w); }}
+                                className={`cursor-pointer rounded px-0.5 transition-colors ${actD(pi, i) ? 'bg-amber-300 dark:bg-amber-600/70' : 'hover:bg-amber-100 dark:hover:bg-amber-900/40'}`}>{tk}</span>{' '}
+                            </span>
+                          ))}
+                        </div>
+                        {showTr && (trBusy && !trans
+                          ? <p className="text-xs text-slate-400" dir="rtl">⏳ در حال ترجمه…</p>
+                          : trans?.[pi]?.length ? (
+                            <div className="text-sm leading-7 text-right text-slate-600 dark:text-slate-300 border-r-2 border-[#6b4fd8]/40 pr-2" dir="rtl">
+                              {trans[pi].map((c, ci) => (
+                                <span key={ci}>
+                                  <span
+                                    onMouseEnter={() => setHov({ p: pi, kind: 'f', i: ci })} onMouseLeave={() => setHov(null)}
+                                    onClick={() => setHov({ p: pi, kind: 'f', i: ci })}
+                                    className={`cursor-pointer rounded px-0.5 transition-colors ${actF(pi, ci) ? 'bg-amber-300 dark:bg-amber-600/70' : 'hover:bg-amber-100 dark:hover:bg-amber-900/40'}`}>{c.t}</span>{' '}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null)}
+                      </div>
+                    ))}
+                  </div>
                 </>
               )}
             </div>
@@ -674,8 +938,8 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                     <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.statement}</p>
                     {faBtn(id, q.translation)}
                     <div className="flex gap-2" dir="ltr">
-                      <button onClick={() => answer(id, 'true')} className={`px-4 py-2 rounded-xl text-xs font-bold border ${answers[id] === 'true' ? 'bg-[#1f5fbf] text-white' : 'bg-white dark:bg-slate-800'}`}>Richtig{limited && !submitted ? '' : ' (درست)'}</button>
-                      <button onClick={() => answer(id, 'false')} className={`px-4 py-2 rounded-xl text-xs font-bold border ${answers[id] === 'false' ? 'bg-[#1f5fbf] text-white' : 'bg-white dark:bg-slate-800'}`}>Falsch{limited && !submitted ? '' : ' (نادرست)'}</button>
+                      <button onClick={() => answer(id, 'true')} className={`px-4 py-2 rounded-xl text-xs font-bold border ${optCls(answers[id] === 'true', q.answer === true)}`}>Richtig{limited && !submitted ? '' : ' (درست)'}</button>
+                      <button onClick={() => answer(id, 'false')} className={`px-4 py-2 rounded-xl text-xs font-bold border ${optCls(answers[id] === 'false', q.answer === false)}`}>Falsch{limited && !submitted ? '' : ' (نادرست)'}</button>
                     </div>
                     {fb(id)}
                   </div>); })}
@@ -691,7 +955,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                     {faBtn(id, q.translation)}
                     <div className="space-y-1.5" dir="ltr">
                       {q.options.map((o, oi) => (
-                        <button key={oi} onClick={() => answer(id, String(oi))} className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold border ${answers[id] === String(oi) ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-white dark:bg-slate-800 border-slate-200'}`}>{String.fromCharCode(65 + oi)}) {o}</button>
+                        <button key={oi} onClick={() => answer(id, String(oi))} className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold border ${optCls(answers[id] === String(oi), oi === q.answerIndex)}`}>{String.fromCharCode(65 + oi)}) {o}</button>
                       ))}
                     </div>
                     {fb(id)}
@@ -706,7 +970,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
                     <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.sentence}</p>
                     {faBtn(id, q.translation)}
-                    <input dir="ltr" value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
+                    <input dir="ltr" readOnly={submitted} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
                     {fb(id)}
                   </div>); })}
               </div>
@@ -719,7 +983,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
                     <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.question}</p>
                     {faBtn(id, q.translation)}
-                    <textarea dir="ltr" rows={2} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
+                    <textarea dir="ltr" rows={2} readOnly={submitted} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
                     {fb(id)}
                   </div>); })}
               </div>
@@ -731,7 +995,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                 {exercise.vocabulary.map((q, idx) => { const id = `v-${idx}`; return (
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
                     <p className="text-base font-extrabold text-left" dir="ltr">{q.word}</p>
-                    <input dir="ltr" value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
+                    <input dir="ltr" readOnly={submitted} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
                     {fb(id)}
                   </div>); })}
               </div>
@@ -748,11 +1012,22 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
             ) : result && (
               <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 space-y-3">
                 <h4 className="font-extrabold text-base text-emerald-800 dark:text-emerald-300">نتیجه آزمون شما: {result.score} / {result.maxScore} ({result.percentage}%) — {result.gradeLabel}</h4>
+                <div className="flex items-center gap-2 text-xs font-bold">
+                  <span className={`px-2.5 py-0.5 rounded-full text-white ${result.passed ? 'bg-emerald-600' : 'bg-red-600'}`}>{result.passed ? 'قبول ✓' : 'مردود ✗'}</span>
+                  <span className="text-[#5d6676]">حد نصاب قبولی: ۶۰٪</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/70 dark:bg-slate-800 overflow-hidden">
+                  <div className={`h-full ${result.passed ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${result.percentage}%` }} />
+                </div>
                 <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-                  {result.sections.map(s => <div key={s.label} className="p-2 rounded-xl bg-white/70 dark:bg-slate-800 flex justify-between"><span>{s.label}</span><span dir="ltr">{s.earned}/{s.total}</span></div>)}
+                  {result.sections.map(s => <div key={s.label} className="p-2 rounded-xl bg-white/70 dark:bg-slate-800 flex justify-between"><span>{s.label}</span><span dir="ltr">{s.earned}/{s.total} ({s.percentage}%)</span></div>)}
                 </div>
                 <p className="text-xs text-slate-700 dark:text-slate-300">{result.teacherCommentFa}</p>
+                {result.strengths && <p className="text-xs text-emerald-800 dark:text-emerald-300">💪 نقاط قوت: {result.strengths}</p>}
+                {result.recommendations && <p className="text-xs text-indigo-800 dark:text-indigo-300">🎯 پیشنهاد: {result.recommendations}</p>}
+                {historyAttempts.length > 1 && <p className="text-[11px] text-[#5d6676]">تلاش‌ها: {historyAttempts.map(h => `${h.percentage}%`).join(' ← ')}</p>}
                 <p className="text-[11px] text-[#5d6676]">پاسخ‌های اشتباه به «دفتر خطاها» اضافه شد.</p>
+                {!exam && <button onClick={resetAttempt} className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-emerald-300 text-emerald-800 dark:text-emerald-300 text-xs font-bold">🔄 آزمون دوباره (برگهٔ سفید)</button>}
               </div>
             )}
           </div>
@@ -760,7 +1035,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
       )}
 
       {/* In-page print overlay: hidden on screen, shown only in print.
-          No window.open — works on iOS Safari. */}
+          No window.open — works on iOS Safari. Questions and answer key are always separate. */}
       <style>{`
         @media screen {
           .h-print-area { display: none !important; }
@@ -800,11 +1075,6 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
           .h-print-area .rtl { direction: rtl; text-align: right; }
           .h-print-area .pre { white-space: pre-wrap; }
           .h-print-area .answers { color: #1a7a3a; font-weight: 700; }
-          .h-print-area .footer {
-            margin-top: 14pt; border-top: 1px solid #ccc; padding-top: 4pt;
-            font-size: 10px; color: #666;
-            font-family: Tahoma, 'Vazirmatn', sans-serif;
-          }
         }
       `}</style>
       {printMode && exercise && (
@@ -816,9 +1086,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                 <>
                   <h3 className="ltr">1. Richtig / Falsch</h3>
                   <ul className="ltr">
-                    {exercise.part1TF.map((q, i) => (
-                      <li key={i}><b>{i + 1}.</b> {q.statement}{submitted && <span className="answers"> → {q.answer ? 'Richtig' : 'Falsch'}</span>}</li>
-                    ))}
+                    {exercise.part1TF.map((q, i) => <li key={i}><b>{i + 1}.</b> {q.statement} &nbsp; ☐ Richtig &nbsp; ☐ Falsch</li>)}
                   </ul>
                 </>
               )}
@@ -829,11 +1097,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
                     {exercise.part2MC.map((q, i) => (
                       <div key={i} style={{ marginBottom: '8px' }}>
                         <b>{i + 1}.</b> {q.question}
-                        <ul>
-                          {q.options.map((o, oi) => (
-                            <li key={oi}>{String.fromCharCode(65 + oi)}) {o}{submitted && oi === q.answerIndex && <span className="answers"> ✓</span>}</li>
-                          ))}
-                        </ul>
+                        <ul>{q.options.map((o, oi) => <li key={oi}>{String.fromCharCode(65 + oi)}) {o}</li>)}</ul>
                       </div>
                     ))}
                   </div>
@@ -842,34 +1106,56 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
               {exercise.part3Gap.length > 0 && (
                 <>
                   <h3 className="ltr">3. Lückentext</h3>
-                  <ul className="ltr">
-                    {exercise.part3Gap.map((q, i) => (
-                      <li key={i}><b>{i + 1}.</b> {q.sentence}{submitted && <span className="answers"> → {q.answer}</span>}</li>
-                    ))}
-                  </ul>
+                  <ul className="ltr">{exercise.part3Gap.map((q, i) => <li key={i}><b>{i + 1}.</b> {q.sentence}</li>)}</ul>
                 </>
               )}
               {exercise.part4Short.length > 0 && (
                 <>
                   <h3 className="ltr">4. Offene Fragen</h3>
-                  <ul className="ltr">
-                    {exercise.part4Short.map((q, i) => (
-                      <li key={i}><b>{i + 1}.</b> {q.question}{submitted && <span className="answers"> → {q.answer}</span>}</li>
-                    ))}
-                  </ul>
+                  <ul className="ltr">{exercise.part4Short.map((q, i) => <li key={i}><b>{i + 1}.</b> {q.question}<div style={{ borderBottom: '1px solid #999', height: '22px' }} /></li>)}</ul>
                 </>
               )}
               {exercise.vocabulary.length > 0 && (
                 <>
                   <h3 className="ltr">5. Wortschatz</h3>
-                  <ul className="ltr">
-                    {exercise.vocabulary.map((q, i) => (
-                      <li key={i}><b>{i + 1}.</b> {q.word}{submitted && <span className="answers"> → {q.meaning}</span>}</li>
-                    ))}
-                  </ul>
+                  <ul className="ltr">{exercise.vocabulary.map((q, i) => <li key={i}><b>{i + 1}.</b> {q.word} = ______________________</li>)}</ul>
                 </>
               )}
-              {!submitted && <p className="footer rtl">پاسخ‌ها پس از تصحیح در همین فایل چاپ اضافه می‌شوند.</p>}
+            </>
+          )}
+          {printMode === 'answers' && (
+            <>
+              <h2 className="ltr">{exercise.title} — Lösungen</h2>
+              {exercise.part1TF.length > 0 && (
+                <>
+                  <h3 className="ltr">1. Richtig / Falsch</h3>
+                  <ul className="ltr">{exercise.part1TF.map((q, i) => <li key={i}><b>{i + 1}.</b> <span className="answers">{q.answer ? 'Richtig' : 'Falsch'}</span>{q.explanation ? ` — ${q.explanation}` : ''}</li>)}</ul>
+                </>
+              )}
+              {exercise.part2MC.length > 0 && (
+                <>
+                  <h3 className="ltr">2. Multiple Choice</h3>
+                  <ul className="ltr">{exercise.part2MC.map((q, i) => <li key={i}><b>{i + 1}.</b> <span className="answers">{String.fromCharCode(65 + q.answerIndex)}) {q.options[q.answerIndex]}</span>{q.explanation ? ` — ${q.explanation}` : ''}</li>)}</ul>
+                </>
+              )}
+              {exercise.part3Gap.length > 0 && (
+                <>
+                  <h3 className="ltr">3. Lückentext</h3>
+                  <ul className="ltr">{exercise.part3Gap.map((q, i) => <li key={i}><b>{i + 1}.</b> <span className="answers">{q.answer}</span></li>)}</ul>
+                </>
+              )}
+              {exercise.part4Short.length > 0 && (
+                <>
+                  <h3 className="ltr">4. Offene Fragen</h3>
+                  <ul className="ltr">{exercise.part4Short.map((q, i) => <li key={i}><b>{i + 1}.</b> <span className="answers">{q.answer}</span></li>)}</ul>
+                </>
+              )}
+              {exercise.vocabulary.length > 0 && (
+                <>
+                  <h3 className="ltr">5. Wortschatz</h3>
+                  <ul className="ltr">{exercise.vocabulary.map((q, i) => <li key={i}><b>{q.word}</b> = <span className="answers">{q.meaning}</span></li>)}</ul>
+                </>
+              )}
             </>
           )}
           {printMode === 'transcript' && (
