@@ -19,6 +19,19 @@ export const PROVIDERS: Record<string, { label: string; vision: boolean }> = {
 /** نام جایگزین که بعضی صفحه‌های تنظیمات import می‌کنند */
 export const AI_PROVIDERS = PROVIDERS;
 
+/** ترتیب ارائه‌دهنده‌ها برای منوها */
+export const PROVIDER_IDS: ProviderId[] = ['gemini', 'groq', 'openrouter'];
+
+/** خطای استاندارد هوش مصنوعی — کد در code و message */
+export class AiError extends Error {
+  code: string;
+  constructor(code: string, message?: string) {
+    super(message || code);
+    this.name = 'AiError';
+    this.code = code;
+  }
+}
+
 export interface GenerateOpts { json?: boolean; timeoutMs?: number; retries?: number; }
 export interface AIConfig { key: string; model: string; provider: ProviderId; source: string; }
 export interface AiDebugInfo { found: boolean; source: string; provider: ProviderId; model: string; keyLen: number; }
@@ -134,6 +147,14 @@ function detect(): Detected | null {
         }
       }
     }
+    // ۴) کلید ذخیره‌شدهٔ متعارف حتی اگر الگویش را نشناسیم (مثلاً کلید پروژه)
+    if (!res) {
+      const s = readStored();
+      if (s.key && s.key.length > 20) {
+        const p = s.provider || matchKey(s.key)?.provider || 'gemini';
+        res = { key: s.key, provider: p, model: s.model || DEFAULT_MODELS[p], source: CANON[0], explicitModel: !!s.model };
+      }
+    }
   } catch { /* localStorage در دسترس نیست */ }
   cache = res;
   return res;
@@ -162,11 +183,79 @@ export function setAIConfig(key: string, model: string, provider?: ProviderId): 
 export const saveAiSettings = setAIConfig;
 export const loadAiSettings = getAIConfig;
 
+/* ───────────── ذخیرهٔ متعارف — API صفحهٔ تنظیمات (GeminiKeyCard) ───────────── */
+const CANON = ['worter_ai_settings', 'ai_settings'];
+
+function readStored(): { provider?: ProviderId; key?: string; model?: string } {
+  for (const k of CANON) {
+    try {
+      const o = JSON.parse(localStorage.getItem(k) || 'null');
+      if (o && typeof o === 'object') return o;
+    } catch { /* ignore */ }
+  }
+  return {};
+}
+
+function writeStored(patch: { provider?: ProviderId; key?: string; model?: string }): void {
+  const cur = readStored();
+  const next = { provider: patch.provider ?? cur.provider, key: patch.key ?? cur.key, model: patch.model ?? cur.model };
+  try {
+    const json = JSON.stringify(next);
+    localStorage.setItem(CANON[0], json);
+    localStorage.setItem(CANON[1], json);
+    if (next.key) {
+      const p = next.provider || matchKey(next.key)?.provider;
+      if (p) localStorage.setItem(p + '_api_key', next.key);
+    }
+    invalidateAiCache();
+  } catch { /* ignore */ }
+}
+
+/** ذخیرهٔ کلید — رشتهٔ خالی یعنی پاک کردن */
+export function setApiKey(key: string): void {
+  const k = (key || '').trim();
+  if (!k) { clearApiKey(); return; }
+  writeStored({ key: k });
+}
+
+/** ذخیرهٔ مدل */
+export function setModel(model: string): void { writeStored({ model: (model || '').trim() }); }
+
+/** تغییر ارائه‌دهندهٔ فعال — مدل ناسازگار خودکار به پیش‌فرض همان ارائه‌دهنده می‌رود */
+export function setActiveProvider(p: ProviderId): void {
+  const m = (readStored().model || '').trim();
+  const fits = p === 'gemini' ? m.startsWith('gemini') : !!m && !m.startsWith('gemini');
+  writeStored({ provider: p, model: fits ? m : DEFAULT_MODELS[p] });
+}
+
+/** پاک کردن کلید و تنظیمات */
+export function clearApiKey(): void {
+  try {
+    for (const k of CANON) localStorage.removeItem(k);
+    for (const k of PLAIN_KEY_CANDIDATES) {
+      if (k === 'apiKey' || k === 'API_KEY') continue; // نام عمومی — ممکن است بخش دیگری استفاده کند
+      localStorage.removeItem(k);
+    }
+  } catch { /* ignore */ }
+  invalidateAiCache();
+}
+
+/** کلید ذخیره‌شده در دسترس است؟ (برای نشان «وصل» صفحهٔ تنظیمات) */
+export function isKeyPersisted(): boolean { return !!detect(); }
+
 export function hasApiKey(): boolean { return !!detect(); }
 
-export function getActiveProvider(): ProviderId { return detect()?.provider || 'gemini'; }
+export function getActiveProvider(): ProviderId {
+  const s = readStored();
+  if (s.provider) return s.provider;
+  return detect()?.provider || 'gemini';
+}
 
-export function getModel(): string { return detect()?.model || DEFAULT_MODELS[getActiveProvider()]; }
+export function getModel(): string {
+  const s = readStored();
+  if (s.model) return s.model;
+  return detect()?.model || DEFAULT_MODELS[getActiveProvider()];
+}
 
 /** اطلاعات وضعیت برای نمایش — بدون محتوای کلید */
 export function getAiDebugInfo(): AiDebugInfo {
@@ -176,7 +265,7 @@ export function getAiDebugInfo(): AiDebugInfo {
 }
 
 /** کلید فعال (برای کدهای قدیمی که خودشان مستقیم REST می‌زنند) */
-export function getApiKey(): string { return getAIConfig().key || ''; }
+export function getApiKey(): string { return readStored().key || getAIConfig().key || ''; }
 
 /** تست اتصال سریع — true یعنی کلید و مدل پاسخ می‌دهند */
 export async function testConnection(): Promise<boolean> {
@@ -185,7 +274,7 @@ export async function testConnection(): Promise<boolean> {
 }
 
 /* ───────────── فراخوانی REST ───────────── */
-const aiErr = (code: string): Error => { const e = new Error(code); (e as any).aiCode = true; return e; };
+const aiErr = (code: string): AiError => new AiError(code);
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const ac = new AbortController();
@@ -301,7 +390,7 @@ export const callAI = generateText;
 
 /** پیام خطای خوانا برای کاربر */
 export function describeAiError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e || '');
+  const msg = e instanceof AiError && e.code ? e.code : (e instanceof Error ? e.message : String(e || ''));
   if (msg === 'NO_KEY') return 'هوش مصنوعی در تنظیمات برنامه فعال نیست — کلید را در صفحهٔ تنظیمات وارد کن.';
   if (msg === 'AI_TIMEOUT') return 'هوش مصنوعی دیر جواب داد (timeout) — کمی بعد دوباره تلاش کن.';
   if (msg === 'AI_NETWORK') return 'اتصال به سرور هوش مصنوعی برقرار نشد — اینترنت را چک کن.';
