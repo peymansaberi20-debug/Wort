@@ -8,6 +8,7 @@ import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
 import { ShadowingModal } from './ShadowingModal';
+import { ImageCropper } from './ImageCropper';
 import { PratText } from './PratText';
 import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
 }) => {
   const [showFa, setShowFa] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
+  const [pendingImg, setPendingImg] = useState<string | null>(null); // picked photo waiting for crop
 
   // Hide every Persian translation whenever the active word changes or the modal closes.
   useEffect(() => {
@@ -44,24 +46,30 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
       const file = fileInput.files?.[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const scale = Math.min(1, 480 / Math.max(img.width, img.height));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            onImageChange(word, canvas.toDataURL('image/jpeg', 0.8));
-          }
-        };
-        img.src = reader.result as string;
-      };
+      reader.onload = () => setPendingImg(reader.result as string); // crop first, save on confirm
       reader.readAsDataURL(file);
     };
     fileInput.click();
+  };
+
+  // cropped dataURL -> max 640 px long edge, JPEG 0.8, then store on the word
+  const saveCropped = (dataUrl: string) => {
+    setPendingImg(null);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 640 / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { onImageChange(word, dataUrl); return; }
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      onImageChange(word, canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => onImageChange(word, dataUrl);
+    img.src = dataUrl;
   };
 
   const articleBadge = () => {
@@ -297,6 +305,9 @@ const seg = pluralSegments2();
       }}
     >
       {shadowOpen && <ShadowingModal word={word} onClose={() => setShadowOpen(false)} />}
+      {pendingImg && (
+        <ImageCropper src={pendingImg} title="برش تصویر واژه" onCancel={() => setPendingImg(null)} onConfirm={saveCropped} />
+      )}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
         {/*
           Fulfills User Request #9:
