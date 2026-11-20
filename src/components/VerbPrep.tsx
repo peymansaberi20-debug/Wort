@@ -243,17 +243,6 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     <div className="space-y-4 text-right max-w-3xl mx-auto">
       {showTabBar !== false && <div className="flex gap-2">{Tab('practice', '🎯 تمرین')}{Tab('learn', '📚 یادگیری')}{Tab('add', '➕ افزودن')}</div>}
 
-      {/* وضعیت هوش مصنوعی — فقط نمایش؛ تنظیم در صفحهٔ تنظیمات برنامه */}
-      <div className={`rounded-xl px-3 py-2 text-[11px] leading-5 border ${
-        aiOn
-          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
-          : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300'
-      }`}>
-        {aiOn
-          ? <>🤖 متصل به هوش مصنوعی برنامه: <b dir="ltr">{aiLabel()}</b> — توضیح معلم، لمس واژه و چت فعال‌اند؛ کلید و مدل از تنظیمات برنامه.</>
-          : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — تمرین، یادگیری و افزودن دستی مثل قبل کار می‌کنند؛ فقط توضیح معلم، لمس واژه و چت غیرفعال‌اند.</>}
-      </div>
-
       {/* ---------------- LEARN ---------------- */}
       {tab === 'learn' && (
         <div className="space-y-3">
@@ -299,13 +288,11 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
       {/* ---------------- PRACTICE ---------------- */}
       {tab === 'practice' && !sess && (
         <div className={card}>
-          <div className="font-extrabold text-sm">🔗 فعل + حرف اضافه (Verben mit Präpositionen)</div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2"><div className="font-extrabold text-lg" dir="ltr">{pool.length}</div><div className="text-[11px]">فعل در این فیلتر</div></div>
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 py-2"><div className="font-extrabold text-lg text-emerald-700 dark:text-emerald-300" dir="ltr">{learned}</div><div className="text-[11px]">یاد گرفته</div></div>
             <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 py-2"><div className="font-extrabold text-lg text-amber-700 dark:text-amber-300" dir="ltr">{all.filter(v => stats[v.id] && stats[v.id].due <= Date.now()).length}</div><div className="text-[11px]">نوبت مرور</div></div>
           </div>
-          <p className="text-[12px] leading-6 text-[#5d6676] dark:text-[#a3adbd]">هر سؤال دو قدم دارد: ۱) حرف اضافهٔ درست، ۲) حالت دستوری (Akk یا Dat). اول چهارگزینه‌ای است؛ وقتی فعل را بهتر بلد شدی باید خودت تایپ کنی. فعل‌های غلط دوباره در همین جلسه می‌آیند و به «دفتر خطاها» هم می‌روند. 💡 در جملهٔ نتیجه هر کلمه را لمس کن یا دکمهٔ «چرا؟» را بزن تا معلم توضیح بدهد.</p>
           <div className="grid grid-cols-3 gap-2">
             <select value={fLvl} onChange={e => setLvl(e.target.value)} className={inp}><option value="">همهٔ سطوح</option>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
             {PrepSel(fPrep, setFPrep, 'همهٔ حرف‌ها')}
