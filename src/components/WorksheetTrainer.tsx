@@ -100,18 +100,125 @@ function parseJSONLoose<T>(raw: string): T {
 const COUNTS = [5, 8, 10, 12];
 const TOPIC_CHIPS = ['Alltag', 'Reise', 'Arbeit', 'Umwelt', 'Technik', 'Gesundheit', 'Freizeit'];
 
+/* ── استخر ساختارهای فعل/صفت + حرف اضافه به تفکیک سطح ──
+   مشکل قبلی: انتخابِ آزاد توسط مدل هر بار به همان ۴–۵ ساختار محدود و تکراری ختم می‌شد.
+   حالا برنامه خودش تصادفی از این استخر انتخاب می‌کند (ساختارهای برگه‌های اخیر کنار گذاشته
+   می‌شوند) و مدل فقط برای همین ساختارها جمله می‌سازد — تنوع تضمینی است. */
+const PREP_POOL: Record<string, string[]> = {
+  A1: [
+    'denken an + Akk', 'fragen nach + Dat', 'warten auf + Akk', 'sprechen mit + Dat', 'sprechen über + Akk',
+    'kommen aus + Dat', 'wohnen bei + Dat', 'fahren mit + Dat (Bus, Zug …)', 'Angst haben vor + Dat',
+    'einladen zu + Dat', 'gehen zu + Dat (Arzt, Schule …)', 'spielen mit + Dat', 'kaufen für + Akk',
+    'sein für/gegen + Akk (Meinung)', 'helfen bei + Dat', 'anfangen mit + Dat', 'telefonieren mit + Dat',
+    'sich freuen über + Akk', 'Lust haben auf + Akk', 'Hunger haben auf + Akk', 'Interesse haben an + Dat',
+    'bestellen für + Akk'
+  ],
+  A2: [
+    'sich freuen auf + Akk', 'sich freuen über + Akk', 'sich erinnern an + Akk', 'glauben an + Akk',
+    'sich gewöhnen an + Akk', 'sich ärgern über + Akk', 'nachdenken über + Akk', 'sich interessieren für + Akk',
+    'sich bewerben um + Akk', 'bitten um + Akk', 'danken für + Akk', 'sich entschuldigen bei + Dat',
+    'teilnehmen an + Dat', 'aufhören mit + Dat', 'Zeit haben für + Akk', 'Probleme haben mit + Dat',
+    'sich verabreden mit + Dat', 'arbeiten bei + Dat (Firma)', 'stammen aus + Dat (Stadt/Land)',
+    'übersetzen aus + Dat (Sprache)', 'sich verlieben in + Akk', 'sich kümmern um + Akk',
+    'einverstanden sein mit + Dat', 'sich treffen mit + Dat', 'lachen über + Akk', 'träumen von + Dat',
+    'erzählen von + Dat', 'aufpassen auf + Akk', 'suchen nach + Dat', 'riechen nach + Dat',
+    'schmecken nach + Dat', 'Glück haben mit + Dat', 'Pech haben mit + Dat', 'schreiben an + Akk'
+  ],
+  B1: [
+    'sich verlassen auf + Akk', 'sich konzentrieren auf + Akk', 'sich beziehen auf + Akk',
+    'Rücksicht nehmen auf + Akk', 'sich aufregen über + Akk', 'sich informieren über + Akk',
+    'diskutieren über + Akk', 'sich beschweren über + Akk', 'sich beschweren bei + Dat',
+    'sich unterhalten mit + Dat', 'sich streiten mit + Dat', 'sich verständigen mit + Dat',
+    'zusammenhängen mit + Dat', 'sich befassen mit + Dat', 'rechnen mit + Dat', 'sich anmelden zu + Dat',
+    'einladen zu + Dat', 'beitragen zu + Dat', 'gehören zu + Dat', 'abhängen von + Dat',
+    'halten von + Dat (Meinung)', 'wissen von + Dat', 'profitieren von + Dat', 'sich unterscheiden von + Dat',
+    'sich richten nach + Dat', 'bestehen aus + Dat', 'bestehen auf + Dat (auf etwas bestehen)',
+    'schützen vor + Dat', 'warnen vor + Dat', 'sich fürchten vor + Dat', 'sich einsetzen für + Akk',
+    'Verantwortung tragen für + Akk', 'sich eignen für + Akk', 'halten für + Akk (für … halten)',
+    'tauschen gegen + Akk', 'kämpfen gegen + Akk', 'sich wehren gegen + Akk',
+    'ankommen auf + Akk (es kommt darauf an)', 'zweifeln an + Dat', 'leiden an + Dat (Krankheit)',
+    'sich beteiligen an + Dat', 'sich erinnern an + Akk', 'sich gewöhnen an + Akk', 'träumen von + Dat',
+    'sich kümmern um + Akk', 'sich sorgen um + Akk', 'sorgen für + Akk', 'berichten über + Akk'
+  ],
+  B2: [
+    'sich auseinandersetzen mit + Dat', 'in Verbindung stehen mit + Dat', 'in Zusammenhang bringen mit + Dat',
+    'sich identifizieren mit + Dat', 'sich abfinden mit + Dat', 'Stellung nehmen zu + Dat',
+    'sich äußern zu + Dat', 'sich bekennen zu + Dat', 'neigen zu + Dat', 'verhelfen zu + Dat',
+    'zwingen zu + Dat', 'ermutigen zu + Dat', 'berechtigen zu + Dat', 'sich entscheiden für + Akk',
+    'sich rechtfertigen vor + Dat', 'sich hüten vor + Dat', 'fliehen vor + Dat', 'zurückweichen vor + Dat',
+    'überzeugen von + Dat', 'sich überzeugen von + Dat', 'abhalten von + Dat', 'ablenken von + Dat',
+    'entbinden von + Dat (von einer Pflicht)', 'sich trennen von + Dat', 'sich verabschieden von + Dat',
+    'zeugen von + Dat', 'berichten von + Dat', 'hinweisen auf + Akk', 'verweisen auf + Akk',
+    'sich auswirken auf + Akk', 'Einfluss haben auf + Akk', 'Einfluss ausüben auf + Akk',
+    'verzichten auf + Akk', 'eingehen auf + Akk (auf ein Thema eingehen)', 'sich vorbereiten auf + Akk',
+  'Kritik üben an + Dat', 'mitwirken an + Dat', 'hindern an + Dat', 'verzweifeln an + Dat',
+  'sich erfreuen + Gen (gehoben)', 'sich bedienen + Gen (gehoben)', 'unterscheiden zwischen + Dat',
+  'vermitteln zwischen + Dat', 'resultieren aus + Dat', 'hervorgehen aus + Dat',
+  'sich zusammensetzen aus + Dat', 'in Kauf nehmen (Akk)', 'anpassen an + Akk (sich anpassen an)'
+  ]
+};
+const C1_COMBOS: string[] = [
+  'absehen von + Dat (auf etwas verzichten)', 'abweichen von + Dat', 'abraten von + Dat',
+  'abrücken von + Dat', 'abstammen von + Dat', 'abhängig sein von + Dat', 'unterscheiden zwischen + Dat',
+  'schwanken zwischen + Dat', 'eingreifen in + Akk', 'einwilligen in + Akk', 'sich einfühlen in + Akk',
+  'verwickeln in + Akk', 'einmünden in + Akk', 'sich ergeben aus + Dat', 'folgern aus + Dat',
+  'schließen auf + Akk (folgern)', 'schließen aus + Dat (Grundlage)', 'Rückschlüsse ziehen aus + Dat',
+  'zuführen zu + Dat', 'beitragen zu + Dat', 'anpassen an + Akk (sich anpassen an)',
+  'sich halten an + Akk (eine Regel)', 'sich klammern an + Akk', 'appellieren an + Akk',
+  'partizipieren an + Dat', 'sich dessen bewusst sein (Gen)', 'bezichtigen + Gen (Vorwurf)',
+  'gedenken + Gen (gehoben)', 'sich erfreuen + Gen (gehoben)', 'sich bedienen + Gen (gehoben)',
+  'angesichts + Gen (vor dem Hintergrund)', 'aufgrund + Gen (wegen)', 'infolge + Gen (als Folge von)',
+  'anlässlich + Gen (aus Anlass von)', 'im Zuge + Gen (im Rahmen von)', 'hinsichtlich + Gen (bezüglich)'
+];
+PREP_POOL['C1'] = C1_COMBOS;
+PREP_POOL['C2'] = [
+  ...C1_COMBOS,
+  'sich enthalten + Gen (gehoben)', 'verdächtigen + Gen', 'zeihen + Gen (gehoben)',
+  'sich schämen + Gen (gehoben)', 'harren + Gen (gehoben)', 'berauben + Gen (um etwas bringen)'
+];
+
+const WSH_PREP_RECENT_KEY = 'wb_wsh_prep_recent_v1';
+
+const loadPrepRecent = (lvl: string): string[] => {
+  try {
+    const o = JSON.parse(localStorage.getItem(WSH_PREP_RECENT_KEY) || '{}') as Record<string, unknown>;
+    return Array.isArray(o[lvl]) ? (o[lvl] as string[]) : [];
+  } catch { return []; }
+};
+
+const savePrepRecent = (lvl: string, used: string[]): void => {
+  try {
+    const o = JSON.parse(localStorage.getItem(WSH_PREP_RECENT_KEY) || '{}') as Record<string, unknown>;
+    const prev = Array.isArray(o[lvl]) ? (o[lvl] as string[]) : [];
+    o[lvl] = Array.from(new Set([...used, ...prev])).slice(0, 30);
+    localStorage.setItem(WSH_PREP_RECENT_KEY, JSON.stringify(o));
+  } catch { /* ignore */ }
+};
+
+/** انتخاب n ساختار از استخر سطح — ساختارهای برگه‌های اخیر حذف و در صورت نیاز بازیافت می‌شوند */
+const pickPrepCombos = (lvl: string, n: number): string[] => {
+  const src = PREP_POOL[lvl] || PREP_POOL['B1'];
+  const recent = new Set(loadPrepRecent(lvl).map(c => c.toLowerCase()));
+  const fresh = src.filter(c => !recent.has(c.toLowerCase()));
+  const rest = src.filter(c => recent.has(c.toLowerCase()));
+  return [...fresh.sort(() => Math.random() - 0.5), ...rest.sort(() => Math.random() - 0.5)]
+    .slice(0, Math.max(1, n));
+};
+
 const SAMPLE_PREP = '{"seg":["Erika freut sich schon "," ihren Geburtstag."],"answers":["auf"],"note":"sich freuen auf + Akk — شادی برای رویداد آینده"}';
 
-const buildPrepPrompt = (level: string, count: number, topic: string): string =>
+const buildPrepPrompt = (level: string, count: number, topic: string, combos: string[]): string =>
   `Du bist ein erfahrener Deutschlehrer und erstellst ein Arbeitsblatt «Verben mit Präpositionen».
 Niveau: ${level}. Thema: ${topic.trim() || 'Alltag und Studium'}.
 Erstelle GENAU ${count} Lückensätze nach genau diesem Muster:
   ${SAMPLE_PREP}
+Nutze GENAU die folgenden Wendungen — jede genau einmal, in dieser Reihenfolge. Erfinde keine anderen Verben oder Wendungen:
+${combos.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 Regeln:
-- Jeder Satz testet ein Verb oder Adjektiv mit fester Präposition (sich freuen auf, warten auf, Angst haben vor, sich bewerben um, sich interessieren für, einverstanden sein mit, teilnehmen an …). Niveau ${level}: Wortschatz und Strukturen passend, keine Wiederholung, unterschiedliche Verben.
+- Jede Wendung oben kommt in genau einem Satz vor. Der Kasus in Klammern hilft dir bei der richtigen Präposition/Kasus-Kombination.
 - 1 oder 2 Lücken pro Satz. "seg" ist ein Array mit 2 (bei einer Lücke) oder 3 (bei zwei Lücken) Textteilen; die Lücken stehen genau zwischen den Teilen.
 - Steht die Lücke am Satzanfang, großgeschrieben (z. B. "Mit wem hast du dich unterhalten?").
-- "answers": die richtigen Präpositionen in der Reihenfolge der Lücken.
+- "answers": NUR die Präposition(en) in der Reihenfolge der Lücken (z. B. "auf" — ohne Kasus-Angabe).
 - "note": ۱–۲ جملهٔ فارسی — فعل/ساختار + حرف اضافه + حالت (+ معنی فعل در صورت لزوم)، مثل نمونه.
 - "alt" (اختیاری): پاسخ‌های جایگزینِ درستِ هر Lücke.
 Gib NUR ein JSON-Array zurück.`;
@@ -337,10 +444,15 @@ export const WorksheetTrainer: React.FC<{
     const theCnt = Math.max(1, Math.min(20, cnt || count));
     setBusy(true);
     try {
-      const prompt = kind === 'prep' ? buildPrepPrompt(theLvl, theCnt, topic) : buildKlassePrompt(theLvl, theCnt, topic);
+      // انتخاب ساختارها از استخر سطح (با حافظهٔ برگه‌های اخیر) → تنوع تضمینی
+      const combos = kind === 'prep' ? pickPrepCombos(theLvl, theCnt) : [];
+      const prompt = kind === 'prep'
+        ? buildPrepPrompt(theLvl, theCnt, topic, combos)
+        : buildKlassePrompt(theLvl, theCnt, topic);
       const raw = await askJson(prompt);
       const items: WshEntry[] = kind === 'prep' ? cleanPrep(raw) : cleanKlasse(raw);
       if (!items.length) throw new Error('پاسخ هوش مصنوعی ساختار معتبر نداشت — دوباره تلاش کن.');
+      if (kind === 'prep' && combos.length) savePrepRecent(theLvl, combos);
       runSheet(items, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ts: Date.now(), level: theLvl, topic: topic.trim() });
       onShowToast?.(`برگهٔ جدید با ${items.length} مورد ساخته شد ✓`);
     } catch (e) {
