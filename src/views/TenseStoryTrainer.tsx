@@ -716,30 +716,9 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   if (screen === 'config') {
     return (
       <div dir="rtl" className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-extrabold text-[#1f2a3d] dark:text-[#e7ecf5]">📜 داستان همهٔ زمان‌ها</h2>
-            <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] mt-0.5">مثل کتاب: متن با جای خالیِ فعل — شکل درست را بنویس (Ergänzen Sie die Verben!)</p>
-          </div>
-          {onClose && (
-            <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]">بستن ✕</button>
-          )}
-        </div>
-
-        {/* وضعیت هوش مصنوعی — فقط نمایش؛ تنظیمات در صفحهٔ تنظیمات برنامه است */}
-        <div className={`rounded-xl px-3 py-2 text-[11px] leading-5 border ${
-          aiOn
-            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
-            : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300'
-        }`}>
-          {aiOn
-            ? <>🤖 متصل به هوش مصنوعی برنامه: <b dir="ltr">{aiLabel()}</b> — کلید و مدل از تنظیمات برنامه استفاده می‌شود.</>
-            : <>🔌 هوش مصنوعی هنوز در تنظیمات برنامه فعال نشده. با «داستان آمادهٔ آفلاین» هم می‌توانی تمرین کنی؛ برای ساخت داستان بی‌نهایت و تصحیح هوشمند، کلید را در تنظیمات وارد کن.</>}
-        </div>
-
         {/* سطح */}
         <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] mb-1.5">۱. سطح — فعل‌ها و حروف اضافه فقط از ردهٔ همین سطح</div>
+          <div className="text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] mb-1.5">۱. سطح</div>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
             {TLVL_ORDER.map(l => (
               <button
