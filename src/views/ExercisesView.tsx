@@ -22,7 +22,8 @@ import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { VerbPrep } from '../components/VerbPrep';
 import { WorksheetTrainer } from '../components/WorksheetTrainer';
-import { KonnektorenHub } from '../components/KonnektorenHub';
+import { KonnektorTrainer } from '../components/KonnektorTrainer';
+import { KonnektorProTrainer } from '../components/KonnektorProTrainer';
 import { TenseStoryTrainer } from './TenseStoryTrainer';
 import { PageOverlay } from '../components/PageOverlay';
 import { today } from '../utils/dates';
@@ -99,10 +100,10 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   puzzle: { title: 'چیدن جمله (Satzbau)', icon: '🧩', desc: 'کلمه‌های درهم‌ریختهٔ جمله‌های مثال خودت را به ترتیب درست آلمانی بچین' },
   dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
-  vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: 'حرف اضافه و حالت دستوری ۱۰۰+ فعل مهم؛ یادگیری، تمرین فاصله‌دار و افزودن فعل جدید' },
-  konnektoren: { title: 'حروف ربط و اضافه', icon: '🔗', desc: '(ادغام‌شده در «حروف ربط») تکمیل متن با حروف ربط مناسب به همراه گزینه‌های گمراه‌کننده' },
+  vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: '۱۰۰+ فعل مهم با حرف اضافه و حالت دستوری؛ سه تمرین جدا: یادگیری با فیلتر و مثال لمس‌پذیر، تمرین فاصله‌دار و افزودن فعل جدید' },
+  konnektoren: { title: 'متن جای‌خالی (Konnektoren)', icon: '📝', desc: 'متن با جاهای خالی؛ حرف ربط درست را از بین گزینه‌های گمراه‌کننده انتخاب کن' },
   tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و چاپ' },
-  kpro: { title: 'حروف ربط (Konnektoren)', icon: '🧩', desc: 'دو تمرین در یک‌جا: جمله‌سازی با AI طبق سطح A1–C2 + تکمیل متن با گزینه‌های گمراه‌کننده؛ تصحیح سه‌لایه، گفتگو، چاپ' },
+  kpro: { title: 'کامل‌کردن جمله با AI (Sätze komplettieren)', icon: '🤖', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ تصحیح سه‌لایه (گرامر، جایگاه فعل، منطق)، گفتگو با معلم، واژه‌کارت و چاپ — سطح A1 تا C2' },
   wsh: { title: 'برگه‌های تمرین (Arbeitsblatt)', icon: '📄', desc: 'همان برگه‌های کاغذی گرامر؛ جمله‌به‌جمله: جای‌خالی با بررسی فوری + تمرین‌های آزاد (واژه‌سازی و کامل‌کردن جمله) با تصحیح هوش مصنوعی' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
@@ -110,14 +111,44 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
 };
 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural']; 
-/** ترتیب آموزشی گروه‌بندی‌شدهٔ تمرین‌های گرامر (از پایه به بالا) */
-const GRAMMATIK_SECTIONS: { icon: string; label: string; modes: ExerciseMode[] }[] = [
-  { icon: '🔤', label: 'فعل و زمان‌ها', modes: ['conj', 'tense', 'tstory'] },
-  { icon: '🧱', label: 'اسم، آرتیکل، صفت و حالت', modes: ['art', 'adjdecl', 'case'] },
-  { icon: '🔗', label: 'حروف اضافه', modes: ['vprep', 'wsh'] },
-  { icon: '🧩', label: 'حروف ربط و جمله‌سازی', modes: ['kpro', 'puzzle'] },
+/** ساختار دو سطحی تب گرامر: ۴ دستهٔ اصلی؛ هر تمرین یک تب مستقل (بدون زیربخش داخلی) */
+interface GramTab { id: string; label: string; mode: ExerciseMode; vTab?: 'learn' | 'practice' | 'add' }
+interface GramCat { icon: string; label: string; desc: string; tabs: GramTab[] }
+const GRAMMATIK_CATS: GramCat[] = [
+  {
+    icon: '🔤', label: 'فعل و زمان‌ها', desc: 'صرف فعل، زمان‌های Präteritum و Perfekt، داستان با همهٔ زمان‌ها',
+    tabs: [
+      { id: 'conj', label: 'صرف فعل', mode: 'conj' },
+      { id: 'tense', label: 'زمان فعل', mode: 'tense' },
+      { id: 'tstory', label: 'داستان زمان‌ها', mode: 'tstory' },
+    ],
+  },
+  {
+    icon: '🧱', label: 'اسم، آرتیکل، صفت و حالت', desc: 'der/die/das، پایانهٔ صفت، حرف اضافه + حالت',
+    tabs: [
+      { id: 'art', label: 'آرتیکل', mode: 'art' },
+      { id: 'adjdecl', label: 'صرف صفت', mode: 'adjdecl' },
+      { id: 'case', label: 'حالت و حرف اضافه', mode: 'case' },
+    ],
+  },
+  {
+    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ برگه‌های تمرین کاغذی',
+    tabs: [
+      { id: 'vprepl', label: 'یادگیری فعل‌ها', mode: 'vprep', vTab: 'learn' },
+      { id: 'vprepp', label: 'تمرین فعل‌ها', mode: 'vprep', vTab: 'practice' },
+      { id: 'vprepa', label: 'افزودن فعل', mode: 'vprep', vTab: 'add' },
+      { id: 'wsh', label: 'برگه‌های تمرین', mode: 'wsh' },
+    ],
+  },
+  {
+    icon: '🧩', label: 'حروف ربط و جمله‌سازی', desc: 'متن جای‌خالی با حروف ربط، کامل‌کردن جمله با AI و چیدن جمله',
+    tabs: [
+      { id: 'konnektoren', label: 'متن جای‌خالی', mode: 'konnektoren' },
+      { id: 'kpro', label: 'کامل‌کردن جمله با AI', mode: 'kpro' },
+      { id: 'puzzle', label: 'چیدن جمله', mode: 'puzzle' },
+    ],
+  },
 ];
-const GRAMMATIK_MODES: ExerciseMode[] = GRAMMATIK_SECTIONS.flatMap(s => s.modes);
 const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
 const HOEREN_MODES: ExerciseMode[] = ['hoeren_new', 'hoeren_archive', 'dict', 'dikt'];
 type MainTab = 'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen';
@@ -847,6 +878,20 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   const [revealedCardId, setRevealedCardId] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  /** تب گرامر دو سطحی: دستهٔ بازشده در فهرست + تب فعال VerbPrep (سه تمرین جدا) */
+  const [gramCat, setGramCat] = useState<number | null>(null);
+  const [vprepTab, setVprepTab] = useState<'learn' | 'practice' | 'add'>('practice');
+  const openGramTab = (t: GramTab): void => {
+    if (t.vTab) setVprepTab(t.vTab);
+    onSelectMode(t.mode);
+  };
+  const gramSec = activeMode
+    ? GRAMMATIK_CATS.find(c => c.tabs.some(t => t.mode === activeMode)) || null
+    : (gramCat !== null ? GRAMMATIK_CATS[gramCat] || null : null);
+  const activeGramTabId = activeMode && gramSec
+    ? gramSec.tabs.find(t => t.mode === activeMode && (t.mode !== 'vprep' || t.vTab === vprepTab))?.id
+    : undefined;
   const [currentCardDir, setCurrentCardDir] = useState<'de' | 'fa'>('de');
 
   const [userInput, setUserInput] = useState<string>('');
@@ -1877,36 +1922,55 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
         {mainTab === 'grammatik' && (
           <div className="space-y-4">
-            {GRAMMATIK_SECTIONS.map(sec => (
-              <div key={sec.label} className="space-y-2">
-                <div className="flex items-center gap-1.5 px-1 text-[12px] font-bold text-[#5d6676] dark:text-[#a3adbd]">
-                  <span>{sec.icon}</span>
-                  <span>{sec.label}</span>
-                  <span className="h-px flex-1 bg-[#dde1ea] dark:bg-[#333b4a]" />
-                </div>
-                <div className="space-y-3">
-                  {sec.modes.map(mode => {
-                    const info = EXERCISE_NAMES[mode];
-                    return (
-                      <div
-                        key={mode}
-                        onClick={() => onSelectMode(mode)}
-                        className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center justify-between gap-2.5 cursor-pointer shadow-xs"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
-                          <div className="min-w-0">
-                            <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
-                            <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
-                          </div>
+            {gramSec === null ? (
+              <>
+                <p className="text-sm text-[#5d6676] dark:text-[#a3adbd] leading-7">
+                  گرامر در ۴ دستهٔ اصلی چیده شده — یک دسته را باز کن؛ تمرین‌هایش را به شکل تب بالا می‌بینی.
+                </p>
+                {GRAMMATIK_CATS.map((sec, si) => (
+                  <div
+                    key={sec.label}
+                    onClick={() => setGramCat(si)}
+                    className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-4 hover:border-[#1f5fbf] transition cursor-pointer shadow-xs space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">{sec.icon}</span>
+                        <div className="min-w-0">
+                          <b className="text-[14px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{sec.label}</b>
+                          <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{sec.desc}</span>
                         </div>
-                        <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex-shrink-0">شروع ▶</span>
                       </div>
-                    );
-                  })}
+                      <span className="text-[#5d6676] dark:text-[#a3adbd] font-bold text-lg">‹</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sec.tabs.map(t => (
+                        <span key={t.id} className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-[#5d6676] dark:text-[#a3adbd]">{t.label}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <button onClick={() => setGramCat(null)} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">→ همهٔ دسته‌ها</button>
+                  <b className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{gramSec.icon} {gramSec.label}</b>
                 </div>
-              </div>
-            ))}
+                <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 flex gap-1.5 overflow-x-auto">
+                  {gramSec.tabs.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => openGramTab(t)}
+                      className="px-3.5 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
+                    >{t.label}</button>
+                  ))}
+                </div>
+                <p className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] px-1">
+                  روی تب هر تمرین بزن تا همان تمرین باز شود؛ موقع تمرین هم نوار تب‌ها بالای صفحه می‌ماند تا بین تمرین‌های همین دسته جابه‌جا شوی.
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -2100,7 +2164,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <HoerenTrainer
         initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
-        onQuickAddWord={onQuickAddWord}
         onClose={() => onSelectMode(null)}
       />
     );
@@ -2132,6 +2195,17 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   return (
     <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      {mainTab === 'grammatik' && gramSec && (
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 flex gap-1.5 overflow-x-auto">
+          {gramSec.tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => openGramTab(t)}
+              className={`px-3.5 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition flex-shrink-0 ${t.id === activeGramTabId ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]'}`}
+            >{t.label}</button>
+          ))}
+        </div>
+      )}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
@@ -2675,16 +2749,24 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               {qMode === 'puzzle' && <SatzPuzzle key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
-              {qMode === 'vprep' && <VerbPrep key={currentKey} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />}
-              {(activeMode === 'kpro' || activeMode === 'konnektoren') && (
+              {qMode === 'vprep' && <VerbPrep key={currentKey} initialTab={vprepTab} showTabBar={false} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />}
+              {activeMode === 'konnektoren' && (
                 <div className="col-span-full">
-                  <KonnektorenHub
+                  <KonnektorTrainer
+                    key={currentKey}
+                    onClose={() => onSelectMode(null)}
+                    onShowToast={onShowToast}
+                  />
+                </div>
+              )}
+              {activeMode === 'kpro' && (
+                <div className="col-span-full">
+                  <KonnektorProTrainer
                     key={currentKey}
                     settings={settings}
                     onShowToast={onShowToast}
                     onQuickAddWord={onQuickAddWord}
                     onClose={() => onSelectMode(null)}
-                    initialTab={activeMode === 'konnektoren' ? 'cloze' : 'ai'}
                   />
                 </div>
               )}
