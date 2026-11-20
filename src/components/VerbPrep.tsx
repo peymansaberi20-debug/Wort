@@ -73,8 +73,10 @@ const Ex: React.FC<{ v: VP; onTap?: (w: string) => void }> = ({ v, onTap }) => {
   return <span dir="ltr" className="font-sans">{p ? <><TapText text={p[0]} onTap={onTap} />{p[0] && !p[0].endsWith(' ') ? ' ' : ''}<b className="text-[#1f5fbf] dark:text-[#7fb0ff] underline decoration-2"><TapText text={p[1]} onTap={onTap} /></b><TapText text={p[2]} onTap={onTap} /></> : <TapText text={v.ex} onTap={onTap} />}</span>;
 };
 
-export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean }> = ({ onShowToast, onQuickAddWord }) => {
-  const [tab, setTab] = useState<'learn' | 'practice' | 'add'>('practice');
+export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
+  const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab || 'practice');
+  // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان
+  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
   const [custom, setCustom] = useState<VP[]>(() => load<VP[]>(CUSTOM_KEY, []));
   const [stats, setStats] = useState<Record<string, St>>(() => load(STATS_KEY, {}));
   const all = useMemo(() => [...VERB_PREPS, ...custom], [custom]);
@@ -239,7 +241,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
 
   return (
     <div className="space-y-4 text-right max-w-3xl mx-auto">
-      <div className="flex gap-2">{Tab('practice', '🎯 تمرین')}{Tab('learn', '📚 یادگیری')}{Tab('add', '➕ افزودن')}</div>
+      {showTabBar !== false && <div className="flex gap-2">{Tab('practice', '🎯 تمرین')}{Tab('learn', '📚 یادگیری')}{Tab('add', '➕ افزودن')}</div>}
 
       {/* وضعیت هوش مصنوعی — فقط نمایش؛ تنظیم در صفحهٔ تنظیمات برنامه */}
       <div className={`rounded-xl px-3 py-2 text-[11px] leading-5 border ${
