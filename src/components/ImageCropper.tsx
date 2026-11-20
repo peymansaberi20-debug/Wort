@@ -21,6 +21,8 @@
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { X } from 'lucide-react';
+import { IconBtn } from './IconBtn';
 
 type Aspect = 'free' | '1:1' | '4:3';
 interface Rect { x: number; y: number; w: number; h: number; } // مختصات نسبی 0..1
@@ -154,7 +156,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ src, onCancel, onCon
       <div className="w-full sm:max-w-lg bg-white dark:bg-[#1b2029] rounded-t-3xl sm:rounded-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-sm font-bold">✂️ {title}</div>
-          <button onClick={onCancel} className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sm">✕</button>
+          <IconBtn onClick={onCancel} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
         </div>
 
         <div
