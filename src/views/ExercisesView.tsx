@@ -71,6 +71,7 @@ export type ExerciseMode =
   | 'tstory'
   | 'kpro'
   | 'wsh'
+  | 'wsh2'
   | 'hoeren'
   | 'hoeren_new'
   | 'hoeren_archive';
@@ -104,7 +105,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   konnektoren: { title: 'متن جای‌خالی (Konnektoren)', icon: '📝', desc: 'متن با جاهای خالی؛ حرف ربط درست را از بین گزینه‌های گمراه‌کننده انتخاب کن' },
   tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و چاپ' },
   kpro: { title: 'کامل‌کردن جمله با AI (Sätze komplettieren)', icon: '🤖', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ تصحیح سه‌لایه (گرامر، جایگاه فعل، منطق)، گفتگو با معلم، واژه‌کارت و چاپ — سطح A1 تا C2' },
-  wsh: { title: 'برگه‌های تمرین (Arbeitsblatt)', icon: '📄', desc: 'همان برگه‌های کاغذی گرامر؛ جمله‌به‌جمله: جای‌خالی با بررسی فوری + تمرین‌های آزاد (واژه‌سازی و کامل‌کردن جمله) با تصحیح هوش مصنوعی' },
+  wsh: { title: 'برگهٔ فعل + حرف اضافه (AI)', icon: '📄', desc: 'هوش مصنوعی هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، چت با معلم و آرشیو برگه‌ها' },
+  wsh2: { title: 'برگهٔ کلاس (AI) — واژه و حروف ربط', icon: '🧾', desc: 'مثل برگهٔ نمونهٔ کلاس: توضیح واژه‌های سطح‌دار + کامل‌کردن جمله با حرف ربط (جایگاه فعل)؛ ساخت با AI هر بار، تصحیح، چت با معلم و آرشیو' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
@@ -132,12 +134,13 @@ const GRAMMATIK_CATS: GramCat[] = [
     ],
   },
   {
-    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ برگه‌های تمرین کاغذی',
+    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ دو برگهٔ AI: جای‌خالی فعل+حرف اضافه و برگهٔ کلاس',
     tabs: [
       { id: 'vprepl', label: 'یادگیری فعل‌ها', mode: 'vprep', vTab: 'learn' },
       { id: 'vprepp', label: 'تمرین فعل‌ها', mode: 'vprep', vTab: 'practice' },
       { id: 'vprepa', label: 'افزودن فعل', mode: 'vprep', vTab: 'add' },
-      { id: 'wsh', label: 'برگه‌های تمرین', mode: 'wsh' },
+      { id: 'wsh', label: 'برگهٔ فعل+حرف اضافه', mode: 'wsh' },
+      { id: 'wsh2', label: 'برگهٔ کلاس', mode: 'wsh2' },
     ],
   },
   {
@@ -164,7 +167,7 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
 ];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'wsh2';
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -2780,10 +2783,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   />
                 </div>
               )}
-              {activeMode === 'wsh' && (
+              {(activeMode === 'wsh' || activeMode === 'wsh2') && (
                 <div className="col-span-full">
                   <WorksheetTrainer
                     key={currentKey}
+                    kind={activeMode === 'wsh' ? 'prep' : 'klasse'}
                     onShowToast={onShowToast}
                     onClose={() => onSelectMode(null)}
                   />
