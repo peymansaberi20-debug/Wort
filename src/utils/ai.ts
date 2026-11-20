@@ -586,23 +586,45 @@ export const AIPM = (lines: string[], words: Word[], catOverride?: string): stri
   buildGroupPromptV2(lines, words, catOverride);
 
 export function parseAI(t: string): any[] {
-  t = t.replace(/```(?:json)?/gi, '').trim();
-  const i = t.search(/[\[{]/);
-  if (i < 0) throw new Error('پاسخ هوش مصنوعی خالی بود یا JSON نداشت — دوباره تلاش کن.');
-  t = t.slice(i);
-  const tryParse = (s: string): any => { try { return JSON.parse(s); } catch { return undefined; } };
-  let o: any;
-  const j = Math.max(t.lastIndexOf(']'), t.lastIndexOf('}'));
-  if (j >= 0) o = tryParse(t.slice(0, j + 1));
-  if (o === undefined) {
-    // پاسخ نیمه‌کاره: تا آخرین شیء کامل نجات بده
-    let cut = t.lastIndexOf('},');
-    while (cut > 0 && o === undefined) {
-      o = tryParse(t.slice(0, cut + 1) + ']');
-      if (o === undefined) cut = t.lastIndexOf('},', cut - 1);
+  const raw = String(t || '');
+  const snippet = raw.trim().replace(/\s+/g, ' ').slice(0, 160);
+  let s = raw.replace(/```(?:json)?/gi, '').trim();
+  const i = s.search(/[\[{]/);
+  if (i < 0) throw new Error(`پاسخ هوش مصنوعی JSON نداشت. ابتدای پاسخ: «${snippet}»`);
+  s = s.slice(i);
+  // JSON.parse, then once more with trailing commas removed
+  const tryParse = (x: string): any => {
+    try { return JSON.parse(x); } catch { /* fall through */ }
+    try { return JSON.parse(x.replace(/,(\s*[}\]])/g, '$1')); } catch { return undefined; }
+  };
+  // Collect every COMPLETE top-level {...} object (string/escape aware) — rescues truncated answers
+  const salvage = (src: string): any[] => {
+    const out: any[] = [];
+    let inStr = false, esc = false, depth = 0, start = -1;
+    for (let k = 0; k < src.length; k++) {
+      const c = src[k];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') { inStr = true; continue; }
+      if (c === '{') { if (depth === 0) start = k; depth++; }
+      else if (c === '}') {
+        depth--;
+        if (depth === 0 && start >= 0) { const o = tryParse(src.slice(start, k + 1)); if (o !== undefined) out.push(o); start = -1; }
+        if (depth < 0) depth = 0;
+      }
     }
+    return out;
+  };
+  let o: any = tryParse(s);
+  if (o === undefined) {
+    const j = Math.max(s.lastIndexOf(']'), s.lastIndexOf('}'));
+    if (j >= 0) o = tryParse(s.slice(0, j + 1));
   }
-  if (o === undefined) throw new Error('پاسخ هوش مصنوعی ناقص برگشت (JSON کامل نبود). دوباره امتحان کن؛ اگر تکرار شد سقف سرویس نزدیک است — سرویس دیگر را در تنظیمات فعال کن یا تعداد واژه‌ها را کم کن.');
+  if (o === undefined) {
+    let part = salvage(s);
+    if (!part.length && s.startsWith('{')) { const k = s.indexOf('['); if (k > 0) part = salvage(s.slice(k)); } // truncated {"words":[...]}
+    if (part.length) o = part;
+  }
+  if (o === undefined) throw new Error(`پاسخ هوش مصنوعی قابل تبدیل به JSON نبود (ناقص یا نامعتبر). ابتدای پاسخ: «${snippet}»`);
   if (o && Array.isArray(o.words)) o = o.words;
   return Array.isArray(o) ? o : [o];
 }
@@ -713,7 +735,7 @@ export async function generateWithGemini(
 ): Promise<string> {
   return generateText(prompt, {
     json: true,
-    timeoutMs: options?.timeoutMs || 25000,
+    timeoutMs: options?.timeoutMs || 60000,
     retries: options?.retries ?? 1,
     model: options?.model
   });
@@ -771,46 +793,59 @@ export async function processBatchWordsWithGemini(
   catOverride?: string,
   onProgress?: (doneCount: number, totalCount: number, currentMsg: string) => void,
   depth: 'light' | 'mid' | 'full' = 'full'
-): Promise<{ ws: Word[]; errs: string[] }> {
-  const BATCH_SIZE = depth === 'full' ? 5 : 10;
+): Promise<{ ws: Word[]; errs: string[]; failed?: string[] }> {
+  // Full profiles are ~28 fields each: 4 per request keeps each answer clear of truncation/timeout limits.
+  const BATCH_SIZE = depth === 'full' ? 4 : 10;
   const chunks: string[][] = [];
-  for (let i = 0; i < lines.length; i += BATCH_SIZE) {
-    chunks.push(lines.slice(i, i + BATCH_SIZE));
-  }
+  for (let i = 0; i < lines.length; i += BATCH_SIZE) chunks.push(lines.slice(i, i + BATCH_SIZE));
 
   const allWords: Word[] = [];
   const allErrs: string[] = [];
+  const failed: string[] = []; // input lines that produced no word
+
+  const ask = async (part: string[]): Promise<any[]> => {
+    const prompt = depth === 'full' ? AIPM(part, words, catOverride) : buildGroupPromptDepth(part, words, depth, catOverride);
+    // 90 s: a multi-word full profile can legitimately take 30-60 s (the old 30 s limit aborted it -> AI_TIMEOUT)
+    const resText = await generateWithGemini(prompt, { timeoutMs: 90000, retries: 1 });
+    try { return parseAI(resText); }
+    catch {
+      // one fresh attempt when the answer was unparsable/truncated beyond salvage
+      return parseAI(await generateWithGemini(prompt, { timeoutMs: 90000, retries: 0 }));
+    }
+  };
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
-    const fromIdx = i * BATCH_SIZE + 1;
-    const toIdx = Math.min((i + 1) * BATCH_SIZE, lines.length);
-
     onProgress?.(
       allWords.length,
       lines.length,
-      `در حال تکمیل واژه‌های ${fromIdx} تا ${toIdx} از مجموع ${lines.length} واژه...`
+      `در حال تکمیل واژه‌های ${i * BATCH_SIZE + 1} تا ${Math.min((i + 1) * BATCH_SIZE, lines.length)} از مجموع ${lines.length} واژه...`
     );
-
     try {
-      const prompt = depth === 'full' ? AIPM(chunk, words, catOverride) : buildGroupPromptDepth(chunk, words, depth, catOverride);
-      const resText = await generateWithGemini(prompt, { timeoutMs: 30000 });
-      const parsed = parseAI(resText);
+      let parsed = await ask(chunk);
+      // truncated answer: results follow input order, so re-ask only for the missing tail
+      if (parsed.length < chunk.length) {
+        try { parsed = parsed.concat(await ask(chunk.slice(parsed.length))); } catch { /* reported below */ }
+      }
       const { ws, errs } = aiToIMP(parsed, words, catOverride);
-      if (parsed.length < chunk.length) allErrs.push(`دستهٔ ${i + 1}: فقط ${parsed.length} از ${chunk.length} واژه کامل شد (پاسخ ناقص بود) — بقیه را دوباره بده.`);
+      if (parsed.length < chunk.length) {
+        failed.push(...chunk.slice(parsed.length));
+        allErrs.push(`دستهٔ ${i + 1}: فقط ${parsed.length} از ${chunk.length} واژه کامل شد — بقیه را دوباره بده.`);
+      }
       allWords.push(...ws);
       allErrs.push(...errs);
     } catch (e: any) {
+      failed.push(...chunk);
       if (e instanceof AiError && ['AI_HTTP_429', 'AI_HTTP_401', 'AI_HTTP_403', 'AI_HTTP_404', 'NO_KEY'].includes(e.code)) {
-        // A definitive answer (quota exhausted, bad key, unknown model): do not hammer the provider with the remaining batches
+        // Definitive answer (quota, bad key, unknown model, no key): do not hammer the provider with the remaining batches
         allErrs.push(`${describeAiError(e)} (پردازش ${i + 1} تا ${chunks.length} متوقف شد؛ ${allWords.length} واژه تکمیل شده بود)`);
+        for (let k = i + 1; k < chunks.length; k++) failed.push(...chunks[k]);
         break;
       }
-      allErrs.push(`خطا در پردازش دسته ${i + 1}: ${describeAiError(e)}`);
+      allErrs.push(`خطا در پردازش دسته ${i + 1}: ${e instanceof AiError ? describeAiError(e) : (e?.message || String(e))}`);
     }
   }
-
-  return { ws: allWords, errs: allErrs };
+  return { ws: allWords, errs: allErrs, failed };
 }
 
 /** Streaming is not required by the app: the full answer is delivered as one chunk. */
