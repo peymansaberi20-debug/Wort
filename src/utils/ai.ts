@@ -741,6 +741,38 @@ export async function generateWithGemini(
   });
 }
 
+export interface QuickTranslation {
+  fa: string;
+  art: string; // 'der' | 'die' | 'das' | ''
+  pos: string; // Persian label stored by the app, e.g. 'اسم'
+  lvl: string; // A1..C2 or ''
+  en: string;
+}
+
+/**
+ * Fast one-word translation for the add-word form (German -> Persian + article/POS/level).
+ * Small prompt, short timeout: much quicker than a full profile.
+ */
+export async function quickTranslateWithGemini(de: string): Promise<QuickTranslation | null> {
+  const word = (de || '').trim();
+  if (!word) return null;
+  const prompt = `You are a German-Persian dictionary. Target: "${word}"
+Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:
+[{"fa":"...","art":"der|die|das|","pos":"اسم|فعل|صفت|قید|حرف اضافه|اصطلاح","lvl":"A1|A2|B1|B2|C1|C2","en":"..."}]
+Rules:
+- fa: precise, natural Persian meaning, the most common everyday meaning first (a few short meanings separated by «،» at most).
+- art: exactly der|die|das for nouns, otherwise "".
+- pos: exactly one of the listed Persian labels.
+- lvl: CEFR estimate of the word's typical use; "" if unsure.
+- en: closest English equivalent translated from the German, lowercase; "" if none.
+- If the target is misspelled, translate the clearly intended German word. Never invent a meaning; use "" when uncertain.`;
+  const text = await generateWithGemini(prompt, { timeoutMs: 30000, retries: 1 });
+  const r: any = parseAI(text)[0];
+  if (!r || typeof r !== 'object') return null;
+  const str = (v: any) => (typeof v === 'string' ? v.trim() : '');
+  return { fa: str(r.fa), art: str(r.art).toLowerCase(), pos: str(r.pos), lvl: str(r.lvl).toUpperCase(), en: str(r.en) };
+}
+
 export interface SpellResult {
   status: 'ok' | 'corrected' | 'invalid';
   suggestion?: string;
