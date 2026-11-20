@@ -800,14 +800,18 @@ Answer ONLY a JSON array, no code fence, no commentary:
   };
 
   // قاب استاندارد و یکدست برای محتوای تب‌ها — همهٔ تب‌ها همین ظاهر را دارند (درخواست #۲)
-  const renderEmbedTab = (icon: string, title: string, content: React.ReactNode) => (
-    <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl shadow-xs overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] bg-slate-50/80 dark:bg-[#141923]/60">
-        <div className="flex items-center gap-2">
-          <span className="text-xl leading-none" aria-hidden="true">{icon}</span>
-          <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-100">{title}</h3>
+  // Uniform one-line header (same card as the grammar tab): icon + title | ⓘ help + red X
+  const renderEmbedTab = (icon: string, title: string, helpTopic: string, content: React.ReactNode) => (
+    <div className="space-y-3">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-lg flex-shrink-0">{icon}</span>
+          <h3 className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100 break-words">{title}</h3>
         </div>
-        <IconBtn onClick={() => setTab('list')} title="بازگشت به لیست واژگان"><X size={18} className="text-red-500" /></IconBtn>
+        <div className="flex items-center gap-2" dir="ltr">
+          <IconBtn onClick={() => setTab('list')} title="بازگشت به لیست واژگان"><X size={18} className="text-red-500" /></IconBtn>
+          <IconBtn onClick={() => onOpenHelp(helpTopic)} title={`راهنمای ${title}`}><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
+        </div>
       </div>
       <div className="embed-host">{content}</div>
     </div>
@@ -1814,10 +1818,11 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       </>)}
 
       {/* The former popups are shown inline inside their own tab — همه با یک قاب و یک آیکون خروج یکسان */}
-      {tab === 'group' && renderGroupImport && renderEmbedTab('📦', 'افزودن گروهی', renderGroupImport(() => setTab('list')))}
-      {tab === 'compare' && renderEmbedTab('⚖️', 'مقایسه لغت‌ها', (
+      {tab === 'group' && renderGroupImport && renderEmbedTab('📦', 'افزودن گروهی', 'group_import', renderGroupImport(() => setTab('list')))}
+      {tab === 'compare' && renderEmbedTab('⚖️', 'مقایسه لغت‌ها', 'compare', (
         <WordCompareModal
           open
+          embedded
           onClose={() => setTab('list')}
           words={words}
           onSaveWord={onSaveWord}
@@ -1825,8 +1830,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           onShowToast={onShowToast}
         />
       ))}
-      {tab === 'manage' && renderManager && renderEmbedTab('🗂', 'مدیریت گروهی', renderManager(() => setTab('list')))}
-      {tab === 'quality' && renderQuality && renderEmbedTab('✅', 'کنترل کیفیت', renderQuality(() => setTab('list')))}
+      {tab === 'manage' && renderManager && renderEmbedTab('🗂', 'مدیریت گروهی', 'manager', renderManager(() => setTab('list')))}
+      {tab === 'quality' && renderQuality && renderEmbedTab('✅', 'کنترل کیفیت', 'quality', renderQuality(() => setTab('list')))}
       {aiChoicePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-4">
