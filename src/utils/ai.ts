@@ -1,902 +1,658 @@
-import { fixLexList, fixPlural, isNounEntry, lcFirst, normalizeConj, validateConjTable } from './german';
-import { Word } from '../types';
-import { norm, matchCat } from './storage';
-import { AiError, describeAiError, generateText, getActiveProvider, getModel, hasApiKey } from './aiProvider';
+/**
+ * aiProvider.ts — پل هوش مصنوعی برنامه (Gemini / Groq / OpenRouter)
+ * نسخهٔ «کاوشگر» — چرا؟ تمرین‌ها می‌گفتند «کلید فعال نشده» در حالی که صفحهٔ تنظیمات «وصل» را نشان می‌داد.
+ * این نسخه کلید را از هر قرارداد ذخیرهٔ معروفی پیدا می‌کند:
+ *   ۱) آبجکت‌های تنظیمات JSON با هر نامی (key / apiKey / api_key / geminiKey / token …)
+ *   ۲) کلیدهای تخت localStorage (gemini_api_key، ai_api_key، groq_api_key …)
+ *   ۳) جستجوی عمیق در «همهٔ» ورودی‌های localStorage با تشخیص الگوی خود کلیدها
+ *      (Gemini با AIza… ، Groq با gsk_… ، OpenRouter با sk-or-…)
+ * محتوای کلید هرگز لاگ یا نمایش داده نمی‌شود — فقط محل کشف و طولش.
+ */
 
-export const BASE_CATEGORIES = [
-  'ارتباطات (Kommunikation)',
-  'اصطلاحات (Redewendungen)',
-  'اکسل (Excel)',
-  'اداری (Büro)',
-  'پایه (Grundwortschatz)',
-  'پرکاربرد (Häufige Wörter)',
-  'دشوار (Schwierige Wörter)',
-  'روزمره (Alltag)',
-  'مالی (Finanzen und Buchhaltung)'
+export type ProviderId = 'gemini' | 'groq' | 'openrouter';
+
+export interface ProviderMeta { label: string; name: string; vision: boolean; models: string[]; modelExamples: string[]; keyUrl: string; baseUrl: string; }
+
+const BASE_PROVIDERS: Record<string, ProviderMeta> = {
+  gemini: {
+    label: 'Gemini', name: 'Gemini', vision: true,
+    models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-flash-latest'],
+    modelExamples: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-flash-latest'],
+    keyUrl: 'https://aistudio.google.com/apikey',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+  },
+  groq: {
+    label: 'Groq', name: 'Groq', vision: false,
+    models: ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'],
+    modelExamples: ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'],
+    keyUrl: 'https://console.groq.com/keys',
+    baseUrl: 'https://api.groq.com/openai/v1',
+  },
+  openrouter: {
+    label: 'OpenRouter', name: 'OpenRouter', vision: true,
+    models: ['openrouter/auto', 'google/gemini-2.5-flash', 'anthropic/claude-sonnet-4.5', 'openai/gpt-4o-mini'],
+    modelExamples: ['openrouter/auto', 'google/gemini-2.5-flash', 'anthropic/claude-sonnet-4.5', 'openai/gpt-4o-mini'],
+    keyUrl: 'https://openrouter.ai/keys',
+    baseUrl: 'https://openrouter.ai/api/v1',
+  },
+};
+
+/** PROVIDERS مقاوم: هر id ناشناسی هم فیلد کامل پیش‌فرض می‌گیرد تا UI هرگز به فیلد گم‌شده سفید نشود */
+export const PROVIDERS: Record<string, ProviderMeta> = new Proxy(BASE_PROVIDERS, {
+  get(t, p) {
+    if (typeof p !== 'string' || p === 'then') return undefined;
+    if (p in t) return t[p];
+    return { label: p, name: p, vision: false, models: [], modelExamples: [], keyUrl: '', baseUrl: '' };
+  },
+});
+/** نام جایگزین که بعضی صفحه‌های تنظیمات import می‌کنند */
+export const AI_PROVIDERS = PROVIDERS;
+
+/** ترتیب ارائه‌دهنده‌ها برای منوها */
+export const PROVIDER_IDS: ProviderId[] = ['gemini', 'groq', 'openrouter'];
+
+/** خطای استاندارد هوش مصنوعی — کد در code و message */
+export class AiError extends Error {
+  code: string;
+  constructor(code: string, message?: string) {
+    super(message || code);
+    this.name = 'AiError';
+    this.code = code;
+  }
+}
+
+export interface GenerateOpts { json?: boolean; timeoutMs?: number; retries?: number; model?: string; }
+export interface AIConfig { key: string; model: string; provider: ProviderId; source: string; }
+export interface AiDebugInfo { found: boolean; source: string; provider: ProviderId; model: string; keyLen: number; }
+
+interface Detected extends AIConfig { explicitModel: boolean; }
+
+/* ───────────── الگوهای خود کلیدها ───────────── */
+const KEY_RES: Array<{ re: RegExp; provider: ProviderId }> = [
+  { re: /AIza[0-9A-Za-z_\-]{20,}/, provider: 'gemini' },
+  { re: /gsk_[0-9A-Za-z]{20,}/, provider: 'groq' },
+  { re: /sk-or-[0-9A-Za-z\-]{20,}/, provider: 'openrouter' },
+];
+const KEY_FIELDS = /^(key|apiKey|api_key|geminiKey|gemini_api_key|groqKey|groq_api_key|openrouterKey|openrouter_api_key|token|api)$/i;
+const MODEL_FIELDS = /^(model|modelName|model_name|aiModel)$/i;
+const PROVIDER_FIELDS = /^(provider|vendor|aiProvider)$/i;
+
+const JSON_SETTINGS_KEYS = [
+  'worter_ai_settings', 'ai_settings', 'aiSettings', 'ai_config', 'aiConfig',
+  'app_ai_settings', 'settings_ai', 'konnektor_pro_ai', 'ai', 'worter_ai',
+];
+const PLAIN_KEY_CANDIDATES = [
+  // قرارداد صفحهٔ تنظیمات همین برنامه (wort_ai_key_…)
+  'wort_ai_key_gemini', 'wort_ai_key_groq', 'wort_ai_key_openrouter',
+  'gemini_api_key', 'GEMINI_API_KEY', 'geminiKey', 'gemini_key',
+  'ai_api_key', 'ai_apiKey', 'ai_key', 'apiKey', 'API_KEY',
+  'groq_api_key', 'GROQ_API_KEY', 'openrouter_api_key', 'OPENROUTER_API_KEY',
+  'konnektor_pro_key',
 ];
 
-export function getDynamicCategories(existingWords: Word[]): string[] {
-  const customCats = new Set<string>(BASE_CATEGORIES);
-  existingWords.forEach(w => {
-    if (w.cat && w.cat.trim()) customCats.add(w.cat.trim());
-  });
-  return Array.from(customCats).sort((a, b) => a.localeCompare(b, 'fa'));
+const DEFAULT_MODELS: Record<ProviderId, string> = {
+  gemini: 'gemini-2.5-flash',
+  // llama-3.3-70b-versatile از ۱۶ اوت ۲۰۲۶ برای حساب‌های معمولی جمع شده — جایگزین رسمی گروق:
+  groq: 'openai/gpt-oss-120b',
+  openrouter: 'openrouter/auto',
+};
+
+function matchKey(v: string): { key: string; provider: ProviderId } | null {
+  for (const { re, provider } of KEY_RES) {
+    const m = v.match(re);
+    if (m) return { key: m[0], provider };
+  }
+  return null;
 }
 
-export const MASTER_PROMPT_STATIC = `German Vocabulary Master Prompt — Final Comprehensive Version
-
-1. Role and Objective
-
-You are an expert German vocabulary extraction, classification, and JSON-generation assistant for a Persian-speaking German learner.
-
-Your responsibilities are to:
-
-* Process German words and expressions supplied directly by the user.
-* Extract useful German vocabulary from images, screenshots, handwritten notes, documents, books, magazines, articles, and longer texts.
-* Prioritize valuable vocabulary instead of obvious beginner words.
-* Identify the correct meaning, part of speech, and CEFR level.
-* Provide accurate Persian translations and natural German example sentences.
-* Identify genuine word-family relationships, including related nouns, verbs, adjectives, and adverbs.
-* Explain relevant prepositions, grammatical complements, and grammatical cases.
-* Write concise, practical Persian learning notes using a strict multiline format.
-* Generate valid JSON compatible with the user’s existing web application’s importer.
-The required JSON keys are: de, art, fa, syn, synFa, ant, antFa, pl, pos, lvl, cat, ex, exFa, ex2, ex2Fa, cloze, ans, conj, prat, perf, komparativ, superlativ, imperativDu, imperativIhr, imperativSie, sep, notes. Include every key in every object, using an empty string when not applicable. For adjectives, populate komparativ and superlativ. For verbs, populate imperativDu, imperativIhr, and imperativSie. For AI-generated lexical fields that are not sentence-initial prose, use lowercase initial letters where grammatically appropriate; preserve correct German capitalization for nouns/headwords and sentence beginnings.
-* Create a downloadable UTF-8 .json file whenever file creation is available.
-
-Priority Order
-
-1. Exact JSON schema and import compatibility.
-2. Linguistic accuracy.
-3. Educational usefulness.
-4. Consistent formatting.
-5. Conciseness.
-
-Never sacrifice JSON compatibility or factual accuracy to add more information.
-
-⸻
-
-2. Input Workflows
-
-A. When the User Sends German Words Directly
-
-When the user sends one German word, multiple words, or a vocabulary list:
-
-1. Process every submitted item immediately.
-2. Determine the correct dictionary form and meaning.
-3. Identify the part of speech and other applicable grammatical information.
-4. Provide accurate translations, synonyms, antonyms, examples, and verb forms where applicable.
-5. Identify useful related words from the same word family.
-6. Explain relevant prepositions, grammatical structures, and cases in notes.
-7. Generate one JSON object for each submitted vocabulary item.
-8. Return exactly one valid JSON array.
-9. If file creation is available, provide a downloadable UTF-8 .json file containing exactly the same array.
-
-Do not ask the user to select items before generating JSON.
-
-If the same item appears multiple times, avoid unnecessary duplicate objects unless the user explicitly requests duplicates or the items represent genuinely different meanings.
-
-For expressions and idioms, preserve the complete expression when it has independent learning value.
-
-B. When the User Sends an Image, Text, or Document
-
-When the user sends a photo, screenshot, handwritten note, scanned page, document, book, magazine, article, or longer German text:
-
-1. Read the source as accurately as possible.
-2. Extract useful German vocabulary directly.
-3. Apply the vocabulary selection and difficulty filter in Section 3.
-4. Identify the relevant dictionary forms and context-specific meanings.
-5. Generate JSON objects directly for the selected vocabulary.
-6. Return exactly one valid JSON array.
-7. If file creation is available, provide a downloadable UTF-8 .json file containing exactly the same array.
-
-Do not create a numbered selection list, do not wait for the user to select numbers, and do not ask for selection confirmation. Extract and process suitable vocabulary directly.
-
-Additional rules:
-
-* Recognize German spelling, capitalization, umlauts, and ß correctly.
-* Do not invent words that are absent from the source.
-* Do not silently guess unreadable or ambiguous words.
-* Omit uncertain words when their intended form cannot be established reliably.
-* Avoid unnecessary duplicates.
-* Preserve complete expressions when isolated words would not convey their meaning adequately.
-* Use the meaning that best matches the source context.
-
-⸻
-
-3. Vocabulary Selection and Difficulty Filter
-
-Do not automatically extract every word that appears in the source. Select vocabulary according to usefulness, difficulty, context, and learning value.
-
-A. Exclude Obvious Beginner Vocabulary
-
-Generally exclude very common A1 words that most learners are expected to know already, such as:
-
-* Schule
-* Haus
-* Mann
-* Frau
-* Kind
-* machen
-* gehen
-* kommen
-* sein
-* haben
-* gut
-* schön
-
-These examples are guidelines, not an absolute blacklist.
-
-Include a basic word when it has a noteworthy advanced meaning, an important less-obvious usage, a useful idiom, a valuable grammatical pattern, or another clear learning benefit.
-
-Do not include a basic word merely because it appears in the source.
-
-B. Prioritize Valuable Vocabulary
-
-Give priority to:
-
-* B1–C2 vocabulary.
-* Useful A2 vocabulary that is less obvious or easily misunderstood.
-* Words with multiple meanings or subtle distinctions.
-* Important verbs, including separable and inseparable verbs.
-* Meaningful noun–verb combinations and collocations.
-* Idioms, fixed expressions, and common constructions.
-* Formal, academic, professional, administrative, and specialized vocabulary when relevant.
-* Words that are difficult to infer from context.
-* Vocabulary that Persian-speaking learners commonly confuse.
-* Vocabulary that improves reading comprehension, speaking, writing, or listening.
-* Useful word-family relationships that connect nouns, verbs, adjectives, and adverbs.
-
-C. Evaluate Expressions in Context
-
-Do not discard a valuable expression simply because its individual components are basic.
-
-Examples:
-
-* eine Entscheidung treffen
-* zur Verfügung stehen
-* sich mit etwas auseinandersetzen
-* in Betracht ziehen
-
-Prioritize the complete expression when it has meaningful learning value. Include individual components separately only if they also have independent learning value.
-
-D. Exclude Low-Value Entries
-
-Avoid including:
-
-* Obvious beginner vocabulary with little additional learning value.
-* Repetitive items already represented by a more useful expression.
-* Ordinary articles, pronouns, and basic grammatical words unless their specific usage is noteworthy.
-* Proper names and incidental words that are not useful vocabulary-learning targets.
-* Words included merely to increase the number of entries.
-
-E. Apply a Relevance Test
-
-Before including an item, ask:
-
-“Would this item meaningfully expand the vocabulary or improve the German comprehension of a learner who already knows common A1 vocabulary?”
-
-If the answer is no, exclude it. If the answer is yes, include it and assign the most defensible CEFR level.
-
-F. Prefer Quality over Quantity
-
-When the source supports it, aim for approximately 70–80% B1–C2 vocabulary, with the remaining entries reserved for particularly useful A2 vocabulary and valuable expressions.
-
-This is a guideline only.
-
-* Do not force the ratio.
-* Do not invent advanced vocabulary.
-* Do not artificially increase CEFR levels.
-* If the source contains only a few valuable items, return a shorter, higher-quality list.
-
-⸻
-
-4. Mandatory JSON Schema and Import Compatibility
-
-Every vocabulary object must contain exactly these 22 keys in the exact order shown:
-
-1. de
-2. art
-3. fa
-4. syn
-5. synFa
-6. ant
-7. antFa
-8. pl
-9. pos
-10. lvl
-11. ex
-12. exFa
-13. ex2
-14. ex2Fa
-15. cloze
-16. ans
-17. conj
-18. prat
-19. perf
-20. sep
-21. notes
-22. cat
-
-Never add, remove, rename, or reorder these keys.
-
-Mandatory rules:
-
-* Every object must contain all 22 keys, even when some fields are not applicable.
-* Every value must be a string.
-* Use "" for empty or non-applicable fields.
-* Never use null, numbers, arrays, or nested objects as field values.
-* Do not add IDs, extraction numbers, metadata, comments, or extra keys.
-* Use valid JSON syntax with double quotes.
-* Escape quotation marks and special characters correctly.
-* Do not include trailing commas.
-* Do not wrap the array in another object.
-
-Final JSON Output
-
-The final data must be exactly one JSON array containing the vocabulary objects.
-
-* Do not include explanatory text inside the JSON.
-* Do not use Markdown code fences around the final JSON output.
-* Do not include comments or annotations.
-* Do not add headings or introductions inside the JSON data.
-* Ensure the array can be parsed by a standard JSON parser.
-
-If a brief sentence is needed to introduce a downloadable file, keep that sentence outside the file. The file itself must contain only the JSON array.
-
-Before returning the result, silently validate the syntax, key count, key order, data types, and permitted category values.
-
-⸻
-
-5. Field-by-Field Rules
-
-de
-The German vocabulary item in its dictionary form.
-* Nouns: singular form without the article.
-* Verbs: infinitive.
-* Adjectives and adverbs: base form when appropriate.
-* Expressions: complete expression.
-
-art
-The definite article for German nouns: der, die, or das. For non-nouns, use "".
-
-fa
-A clear, natural Persian translation appropriate to the source context.
-* Include important meanings concisely when necessary.
-* For expressions, translate the complete expression rather than translating each word mechanically.
-* Avoid unnecessary repetition.
-
-syn
-One suitable German synonym. If it is a noun: include the definite article and keep the noun capitalized (e.g. der Kummer). Otherwise lowercase. Use "" if no suitable synonym exists.
-
-synFa
-Persian translations of the synonyms in syn, in the same order and separated by , . Use "" if syn is empty.
-
-ant
-One meaningful German antonym. If it is a noun: include the definite article and keep the noun capitalized. Otherwise lowercase. Use "" if no suitable antonym exists.
-
-antFa
-Persian translations of the antonyms in ant, in the same order and separated by , . Use "" if ant is empty.
-
-pl
-The plural form of a German noun. For non-nouns, use "". Never guess an uncertain plural form.
-
-pos
-Use a short, consistent part-of-speech label, such as: Nomen, Verb, Adjektiv, Adverb, Präposition, Konjunktion, Redewendung, Ausdruck.
-
-lvl
-The CEFR level: A1, A2, B1, B2, C1, or C2.
-
-ex
-A short German DEFINITION of the headword itself (Bedeutung) at B1–B2 level, in simple German, covering the most common everyday meaning first for polysemous words. Not an example sentence.
-
-en
-The closest English equivalent of the German headword — translated from the German meaning directly (never via the Persian translation). One natural English word or short expression, lowercase. Use "" only if no meaningful equivalent exists.
-
-exFa
-A natural Persian translation of the definition in ex.
-
-ex2
-One practical A1–A2 everyday example sentence or common spoken expression (Redemittel) that really contains the headword (or a natural inflected form), usable in daily life. Short and natural.
-
-ex2Fa
-A natural Persian translation of ex2.
-
-cloze
-A fill-in-the-blank version of ex2 (the practical example), not of the definition.* Replace the target word or expression with _____.
-* For a noun, hide both the article and noun together.
-* For a verb, hide the conjugated form appearing in the sentence.
-
-ans
-The exact German word or expression needed to fill cloze.
-
-conj
-For verbs, provide the six present-tense forms in this exact order:
-ich | du | er/sie/es | wir | ihr | sie/Sie
-Put only the six conjugated forms in the field, separated by |, without labels or commentary. For non-verbs, use "".
-
-prat
-For verbs, provide the third-person singular Präteritum form (e.g. siegte). For non-verbs, use "".
-
-perf
-For verbs, provide the third-person singular Perfekt form, including auxiliary and past participle (e.g. hat gesiegt, ist gegangen). For non-verbs, use "".
-
-sep
-For verbs, provide the separable prefix when applicable (e.g. for aufstehen, use auf). For non-prefixed or non-verbs, use "".
-
-⸻
-
-6. notes — Mandatory Word Family, Grammar, and Learning Notes
-
-The notes field must contain concise, practical supplementary explanations in Persian.
-Whenever relevant information exists, use this exact order:
-1. Line 1: word family and related parts of speech.
-2. Line 2: prepositions, grammatical structures, and cases.
-3. Line 3 onward: additional explanations and learning notes.
-Do not combine these sections into one continuous paragraph.
-
-Line 1 — Word Family
-Always begin with:
-خانواده واژگانی:
-Identify genuine and useful related words from the same word family (e.g. اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)).
-If no useful related form exists, write: خانواده واژگانی: شکل مرتبطِ رایج و مفیدی وجود ندارد.
-
-Line 2 — Prepositions and Grammatical Cases
-Always begin with:
-ساختار:
-Explain important prepositions, complements, and cases (NOM, AKK, DAT, GEN).
-Examples:
-* warten: ساختار: warten auf + AKK (منتظر کسی/چیزی بودن)
-* helfen: ساختار: helfen + DAT (به کسی کمک کردن)
-If no special structure is relevant, write: ساختار: حرف اضافه یا حالت دستوری ویژه‌ای ندارد.
-
-Line 3 Onward — Additional Learning Notes
-After the first two lines, include useful practical notes (تفاوت معنایی:, کاربرد:, نکته:).
-
-Mandatory Multiline Formatting:
-Add one final section "مقایسه با مترادف" inside notes: compare the headword with its German synonym (the one in "syn"; if empty, pick the closest common synonym and name it) — semantic nuances, tone/register (formal, informal, polite, rude) and typical usage contexts of each. Separate sections using newline characters in the decoded notes string. In raw JSON, encode each newline as \\n.
-
-Required formatting example:
-"notes": "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)\\nساختار: der Sieg über + AKK (پیروزی بر کسی/چیزی)؛ siegen über + AKK\\nتفاوت معنایی: Sieg بر پیروزی در رقابت تأکید دارد؛ Erfolg مفهوم گسترده‌تری از موفقیت دارد."
-
-⸻
-
-7. cat — Approved Categories
-
-Assign exactly one category to each vocabulary object.
-Use only these exact values:
-* ارتباطات (Kommunikation)
-* اصطلاحات (Redewendungen)
-* اکسل و اداری (Excel und Büro)
-* امور روزمره
-* پایه (Grundwortschatz)
-* پرکاربرد (Häufige Wörter)
-* دشوار (Schwierige Wörter)
-* روزمره (Alltag)
-* مالی (Finanzen und Buchhaltung)
-`;
-
-export function buildMasterPrompt(existingWords: Word[], targetCategory?: string): string {
-  const dynamicCats = getDynamicCategories(existingWords);
-  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
-  const catRule = targetCategory
-    ? `\nCRITICAL CATEGORY OVERRIDE:\nThe user specifically requested that ALL generated items MUST use this exact category in the "cat" field: "${targetCategory}".\n`
-    : `\nCRITICAL MANDATORY CATEGORY RESTRICTION:\nYou MUST assign every word strictly to one of the EXISTING categories below. Do NOT create or invent any new category name. Every word's "cat" value must be an exact string from this list:\n${catListStr}\n`;
-
-  return `${MASTER_PROMPT_STATIC}\n${catRule}\nEvery value must be a string. Return ONLY a valid JSON array.`;
+function normProvider(v: unknown): ProviderId | null {
+  const s = String(v || '').toLowerCase().trim();
+  if (s.includes('gemini') || s === 'google') return 'gemini';
+  if (s.includes('groq')) return 'groq';
+  if (s.includes('openrouter')) return 'openrouter';
+  return null;
 }
 
-export function buildFastSingleWordPrompt(de: string, existingWords: Word[], targetCategory?: string): string {
-  const dynamicCats = getDynamicCategories(existingWords);
-  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
-  const catRule = targetCategory
-    ? `CRITICAL CATEGORY OVERRIDE: Assign "cat": "${targetCategory}".`
-    : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories (do not create any new category name):\n${catListStr}`;
-
-  return `You are an expert German vocabulary assistant for a Persian learner.
-Generate the full 27-field profile for the German word or expression: "${de}".
-
-Output MUST be a JSON array containing exactly one object with these exact fields (all string values):
-1. "de": German dictionary form (without article)
-2. "art": "der" | "die" | "das" | ""
-3. "fa": precise, natural Persian translation
-4. "syn": German synonym or ""
-5. "synFa": Persian translation of synonym or ""
-6. "ant": German antonym or ""
-7. "antFa": Persian translation of antonym or ""
-8. "pl": plural form (e.g. "-en" or "Bücher") or ""
-9. "pos": "اسم" | "فعل" | "صفت" | "قید" | "حرف اضافه" | "اصطلاح"
-10. "lvl": "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
-11. "cat": ${catRule}
-12. "ex": a German DEFINITION of the word itself (Bedeutung), written at CEFR B1–B2 level, one or two sentences, in simple German. For polysemous words, define the most common everyday meaning first. Do NOT write an example sentence here.
-13. "exFa": an accurate natural Persian translation of the definition in ex.
-14. "ex2": ONE practical A1–A2 everyday example sentence or common spoken expression (Redemittel) that really contains the word (or a natural conjugated form), so the learner can use it in real life. Keep it short and natural.
-15. "ex2Fa": an accurate natural Persian translation of ex2.
-16. "cloze": the ex2 sentence where the target word/expression is replaced with _____17. "ans": the exact answer to fill cloze
-18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb)
-19. "prat": for verbs, 3rd person singular Präteritum (e.g. "ging") or ""
-20. "perf": for verbs, 3rd person singular Perfekt (e.g. "ist gegangen" / "hat gemacht") or ""
-21. "komparativ": comparative form for adjectives (e.g. "größer") or ""
-22. "superlativ": superlative form for adjectives (e.g. "am größten" or "der größte") or ""
-23. "imperativDu": informal singular imperative (e.g. "geh!") for verbs or ""
-24. "imperativIhr": informal plural imperative (e.g. "geht!") for verbs or ""
-25. "imperativSie": formal imperative (e.g. "Gehen Sie!") for verbs or ""
-26. "sep": for separable verbs, prefix (e.g. "auf") or ""
-22. "notes": multiline string with exact format:
-خانواده واژگانی: اسم: ... | فعل مرتبط: ... | صفت مرتبط: ...
-ساختار: حرف اضافه یا حالت دستوری...
-توضیحات کاربردی / کاربرد / تفاوت معنایی...
-مقایسه با مترادف: این واژه را با مترادف آلمانیِ فیلد "syn" مقایسه کن — تفاوت معنایی، لحن/ثبت (رسمی، خودمانی، مؤدبانه، خشن) و محل/بافتار کاربرد هرکدام؛ اگر syn خالی بود، نزدیک‌ترین مترادف رایج را خودت انتخاب و ذکر کن.
-
-Return ONLY valid JSON array with 1 object.`;
+/** نام مدل تمیز: حذف فاصله و پیشوند models/ که بعضی ذخیره‌ها دارند (۴۰۴ می‌دهد) */
+export function sanitizeModel(m: string): string {
+  let s = (m || '').trim();
+  while (s.toLowerCase().startsWith('models/')) s = s.slice(7);
+  return s.trim();
 }
 
-/* ==================================================================================
-   Phase 3 — new unified master prompt (single + group).
-   The old buildFastSingleWordPrompt / buildMasterPrompt are no longer used.
-   ================================================================================== */
-
-const PROMPT_FENCE = '```';
-
-function buildMasterPromptV2(targetBlock: string, countRule: string, catRule: string): string {
-  return `You are an expert German vocabulary assistant for Persian-speaking learners. Generate a linguistically accurate, pedagogically useful, and structurally valid vocabulary profile for the German word or expression(s) defined in this message.
-
- ${targetBlock}
-
- ${countRule}
-
-CRITICAL OUTPUT REQUIREMENTS — FOLLOW EXACTLY
-
-The output is intended to be copied directly into another software application that parses JSON. Correct JSON syntax is mandatory.
-
-Output format rules
-
-1. Put the entire output inside exactly one Markdown code block labelled json (${PROMPT_FENCE}json ... ${PROMPT_FENCE}). This is required so the complete result can be copied as a single block.
-2. The first character inside the code block must be [ and the last character inside it must be ].
-3. Do not put explanations, introductions, headings, comments, notes, or any other text inside or outside the code block.
-4. The JSON itself must contain no Markdown formatting, comments, trailing commas, or explanatory placeholders.
-5. Use standard JSON syntax: double quotes (") around every key and every string value, commas between properties, and square brackets around the array.
-6. Every value must be a string. If a field is inapplicable or no reliable information is available, use an empty string: "". Never use null, undefined, numbers, or Boolean values.
-7. Escape any double quote occurring inside a string as \\". Represent line breaks inside string values using the JSON escape sequence \\n, not literal line breaks.
-8. Use exactly the 27 field names listed below, with identical spelling, capitalization, and order. Do not add, remove, rename, or reorder fields. If the batch instructions later in this message ask for an extra technical id field, add only that one extra field per object.
-9. Do not output multiple alternatives or any JSON beyond what this message requires.
-10. Before responding, silently validate the complete JSON. It must be parseable by a standard JSON parser without manual repair. If any syntax error exists, fix it before returning the answer.
-
-1. Required fields
-
-The object(s) must contain exactly these fields in this exact order:
-
-1. de: German dictionary form, without an article where applicable. For non-nouns (verbs, adjectives, adverbs, prepositions, expressions) write the word with a LOWERCASE first letter (e.g. "machen", "schön"); only nouns are capitalized.
-2. art: For nouns, exactly der, die, or das. Otherwise, "".
-3. fa: Precise, natural Persian translation. Include the most relevant meanings without listing unnecessary synonyms.
-4. syn: One suitable, commonly used German synonym matching the target's meaning and part of speech, or "" if no reliable synonym is available. If the synonym is a NOUN, you MUST include its definite article and keep the noun capitalized — ALWAYS, without exception (correct: "der Kummer", "die Möglichkeit", "das Ergebnis"; WRONG: "Kummer"). Non-noun synonyms are lowercase.
-5. synFa: Accurate Persian translation of syn, matching its intended meaning in context, or "" if syn is empty.
-6. ant: One meaningful German antonym matching the target's part of speech and relevant sense, or "" if no reliable antonym exists. If the antonym is a NOUN, you MUST include its definite article and keep the noun capitalized — ALWAYS, without exception (correct: "der Vorteil", "die Annahme"; WRONG: "Vorteil"). Non-noun antonyms are lowercase.
-7. antFa: Accurate Persian translation of ant, or "" if ant is empty.
-8. pl: For nouns, the full plural form without an article, e.g. Möglichkeiten. Otherwise, "".
-9. pos: Choose exactly ONE of the following six labels and copy it exactly as written, including the Persian translation in parentheses: Nomen (اسم) | Verb (فعل) | Adjektiv (صفت) | Adverb (قید) | Präposition (حرف اضافه) | Redewendung (اصطلاح). Do not use Persian alone and do not use any other label.
-10. lvl: One of A1, A2, B1, B2, C1, C2. Choose a reasonable CEFR level for the word's typical use, not merely the difficulty of its definition.
-11. cat: ${catRule}
-12. ex: A German definition of the target word itself, written in simple, natural German at approximately B1–B2 level. Use one or two complete sentences. Explain the most common meaning first. Do not provide an example sentence here. Do not use sentence fragments, unnatural dictionary shorthand, or words from another language.
-13. exFa: A natural and accurate Persian translation of the entire definition in ex.
-14. ex2: Exactly one short, natural, practical A1–A2 German example sentence or common spoken expression that uses the target word in its correct form. Prefer a realistic everyday context. Avoid awkward, vague, or artificially constructed examples.
-15. ex2Fa: An accurate, natural Persian translation of ex2.
-16. cloze: Copy ex2 exactly, replacing only the target word or its relevant inflected form with exactly five underscores: _____. Preserve all remaining words, punctuation, capitalization, and spacing.
-17. ans: The exact removed word or inflected form, preserving its original spelling and capitalization. It must correctly complete cloze.
-18. conj: For verbs, provide all six present-tense forms in this exact person order — ich, du, er/sie/es, wir, ihr, sie/Sie — but write ONLY the verb forms, WITHOUT the subject pronouns, separated by |. Correct format example: gehe|gehst|geht|gehen|geht|gehen. Never include pronouns or labels inside the field. Otherwise, "".
-19. prat: For verbs, the third-person singular Präteritum form. Otherwise, "".
-20. perf: For verbs, the third-person singular Perfekt form, including the correct auxiliary. Otherwise, "".
-21. komparativ: For adjectives, the correct comparative form. Otherwise, "".
-22. superlativ: For adjectives, the correct superlative form, normally in the form am …-sten. Otherwise, "".
-23. imperativDu: For verbs, the standard informal singular imperative in the du-form: normally the verb stem WITHOUT -st and WITHOUT any -e ending (gehen → "geh!", machen → "mach!", sprechen → "sprich!"). The optional -e (e.g. "singe!") is only correct for a few verbs and is NOT preferred; never use the full conjugated form (WRONG: "mache!" for machen). Otherwise, "".
-24. imperativIhr: For verbs, the standard informal plural imperative. Otherwise, "".
-25. imperativSie: For verbs, the standard formal imperative. Otherwise, "".
-26. sep: For separable verbs, provide the separable prefix only. Otherwise, "".
-28. "en": the closest English equivalent of the German word — translate FROM THE GERMAN sense directly (not via Persian). One natural English word or short expression, lowercase. If none exists, use "".
-27. notes: A Persian-language multiline string containing exactly the following four sections, in this order. Separate the sections using the JSON escape sequence \\n within the string. Do not insert literal, unescaped line breaks inside the JSON string.
-
-خانواده واژگانی: اسم: … | فعل مرتبط: … | صفت مرتبط: …
-ساختار: …
-توضیحات کاربردی / کاربرد / تفاوت معنایی: …
-مقایسه با مترادف: …
-
-Replace all ellipses with useful content. Do not leave instructional placeholders in the final result.
-
-2. Part-of-speech rules (apply to the actual POS)
-
-Nomen: verify gender + plural; in notes give common prepositions/case government/typical constructions; separate the core meaning from related senses; never treat all translations as interchangeable.
-Verb: verify conjugations, tenses, auxiliaries, imperatives, separable prefixes; state transitivity + required complements/case/prepositions; distinguish from near-synonyms in real usage; no invented antonym for multi-sense verbs.
-Adjektiv: verify comparative/superlative; note predicative (sein/werden) vs attributive inflection; separate literal/figurative senses; syn/ant must match the intended sense.
-Adverb/Präposition/Redewendung: explain the fixed pattern, word order, or case government; leave inapplicable inflection fields "".
-
-3. Synonyms/antonyms: pick a common, context-fitting equivalent — not merely a related word. The notes' final section compares the chosen synonym with the target (meaning, register, tone, context); if syn = "", name the nearest alternative there and mark it as such. Never claim interchangeability unless true; antonym only for a genuine contrast — otherwise ant/antFa = "".
-
-4. Rules for word families and usage notes
-
-Write notes in Persian and preserve the exact four-section format specified above. اسم must contain a genuine noun from the same word family when one is commonly used. فعل مرتبط must contain a genuine related verb when available; distinguish a derived verb from a synonym or a verb that is merely related in meaning. صفت مرتبط must contain a genuine related adjective when available. Include German words and concise Persian meanings where useful. Do not repeat the target word as its own related form unless this is necessary and explicitly informative. Prefer common, pedagogically useful words; do not invent forms or add rare, awkward, or marginally useful derivatives merely to fill a section — use — when no suitable related form is available. In ساختار, explain relevant grammar accurately: gender and plural for nouns, case government and complements for verbs, adjective inflection and comparison for adjectives, or other relevant patterns for the target. In توضیحات کاربردی / کاربرد / تفاوت معنایی, explain common usage, typical collocations, register, and important meaning distinctions. In مقایسه با مترادف, provide an actual comparison based on the selected synonym. Never copy these instructions into the field. Do not include irrelevant information simply to make the notes longer.
-
-5. Translation and naturalness requirements
-
-All German content must be grammatical, idiomatic, and appropriate for the specified CEFR level. All Persian translations must accurately reflect the corresponding German text. Do not introduce meanings that the German sentence does not express. Prefer natural German collocations over literal translations from Persian. Ensure the example is genuinely useful to a learner in a real-life situation. Check that the definition and the example illustrate compatible senses of the target word. Do not use rare or specialized German constructions in an A1–A2 example unless unavoidable. The definition in ex must consist of one or two grammatically complete German sentences, each with a clear sentence structure — never a sentence fragment. Do not accidentally include words from a third language in German definitions or examples. In notes, write explanations in Persian while retaining German vocabulary examples where useful; avoid unnecessary English words.
-
-6. Final self-check (fix any violation before answering)
-
-- JSON parses; one array; exactly one object per target; only the required keys.
-- All values strings ("" when inapplicable); pos/lvl/cat exactly from the allowed lists.
-- de/art/fa/pl/pos mutually consistent; all forms correct for the actual POS.
-- ex = 1–2 complete German sentences, no foreign-language words; exFa translates ex exactly.
-- ex2 natural and A1–A2; ex2Fa translates it; cloze = ex2 with only the target replaced by _____; ans = the exact removed form.
-- syn/ant/word-family justified; notes = the 4 Persian sections joined with \\n, real content only.
-- No contradictions, invented forms, or padding; the code block contains ONLY the JSON array.
-
-If a field cannot be completed reliably, use an empty string where permitted instead of inventing information. Do not weaken the exact schema or omit required fields.
-
-Return only the single json code block containing the completed JSON array. Do not include any explanations or text before or after it.`;
+/** ارائه‌دهندهٔ معتبر از hint و کلید — idهای ناشناس (مثلاً openai قدیمی) را نرمال می‌کند */
+function knownProvider(hint: unknown, key?: string): ProviderId {
+  const h = normProvider(hint);
+  if (h) return h;
+  const mk = key ? matchKey(key) : null;
+  return mk?.provider || 'gemini';
 }
 
-export function buildSinglePromptV2(de: string, existingWords: Word[], targetCategory?: string): string {
-  const dynamicCats = getDynamicCategories(existingWords);
-  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
-  const catRule = targetCategory
-    ? `CRITICAL CATEGORY OVERRIDE: Assign "cat": "${targetCategory}". Ignore the category list.`
-    : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories of the app (do not create any new category name):\n${catListStr}\nSelect the category that best fits the word's typical meaning and learning context. Prefer a basic or everyday category for general vocabulary, and a specialized category only when clearly justified. Never invent, shorten, translate, or modify a category label.`;
-  return buildMasterPromptV2(
-    `TARGET: "${de}"`,
-    `Return exactly ONE JSON array containing exactly ONE object with exactly 27 fields in the required order.`,
-    catRule
-  );
+function fromJsonBlob(raw: string, source: string): Detected | null {
+  let o: any;
+  try { o = JSON.parse(raw); } catch { return null; }
+  if (!o || typeof o !== 'object') return null;
+  const blobs: any[] = [o, o.ai, o.aiSettings, o.ai_settings, o.aiConfig].filter(x => x && typeof x === 'object');
+  for (const b of blobs) {
+    let found: { key: string; provider: ProviderId } | null = null;
+    let model = '', providerHint: ProviderId | null = null;
+    for (const k of Object.keys(b)) {
+      const v = b[k];
+      if (typeof v !== 'string' || !v.trim()) continue;
+      if (!found && KEY_FIELDS.test(k)) { const mk = matchKey(v); if (mk) found = mk; }
+      else if (MODEL_FIELDS.test(k)) model = sanitizeModel(v);
+      else if (PROVIDER_FIELDS.test(k)) providerHint = normProvider(v);
+      if (!found && typeof v === 'string' && v.length < 500) { const mk = matchKey(v); if (mk) found = mk; }
+    }
+    if (found) {
+      const provider = providerHint || found.provider;
+      return { ...found, provider, model: model || DEFAULT_MODELS[provider], source, explicitModel: !!model };
+    }
+  }
+  return null;
 }
 
-export function buildGroupPromptV2(lines: string[], existingWords: Word[], targetCategory?: string): string {
-  const dynamicCats = getDynamicCategories(existingWords);
-  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
-  const catRule = targetCategory
-    ? `CRITICAL CATEGORY OVERRIDE: Assign "cat": "${targetCategory}" for every object. Ignore the category list.`
-    : `CRITICAL MANDATORY CATEGORY RESTRICTION: You MUST assign "cat" strictly from this list of EXISTING categories of the app (do not create any new category name):\n${catListStr}\nSelect the category that best fits each word's typical meaning and learning context. Prefer a basic or everyday category for general vocabulary, and a specialized category only when clearly justified. Never invent, shorten, translate, or modify a category label.`;
-  return (
-    buildMasterPromptV2(
-      `TARGETS: the German words/expressions listed in the === INPUT section at the end of this message (one per line). Process EVERY line; do not skip, merge, or add words.`,
-      `Return exactly ONE JSON array containing exactly ONE object PER INPUT LINE, in the same order as the input lines. Each object contains exactly the 27 fields in the required order. If an input line begins with [A1], [A2], [B1] or [B2], use that exact level for lvl.`,
-      catRule
-    ) +
-    `\n\n=== INPUT (Vocabulary List) ===\n${lines.join('\n')}`
-  );
-}
+/* ───────────── کشف تنظیمات ───────────── */
+let cache: Detected | null | undefined; // undefined = هنوز نشناخته، null = چیزی نبود
 
-/** Group prompt for light/mid depth: one object per target line. */
-export function buildGroupPromptDepth(
-  lines: string[],
-  words: Word[],
-  depth: 'light' | 'mid',
-  catOverride?: string
-): string {
-  const dynamicCats = getDynamicCategories(words);
-  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
-  const catRule = catOverride
-    ? `Assign "cat": "${catOverride}" to every object. Ignore the category list.`
-    : `Assign "cat" strictly from this list of EXISTING categories (never invent one):\n${catListStr}`;
-  const spec = DEPTH_FIELD_SPEC[depth].replace('exactly one object', 'exactly one object PER TARGET LINE');
-  const numbered = lines.map((l, i) => `[${i + 1}] ${l}`).join('\n');
-  return `You are an expert German vocabulary assistant for a Persian-speaking learner. Completion depth: ${depth}. There are ${lines.length} targets.\n\n=== TARGETS (one per line) ===\n${numbered}\n\n${spec}\n\nThe "de" of each object must be the exact target from its line, in the same order.\n- cat: ${catRule}`;
-}
+export function invalidateAiCache(): void { cache = undefined; }
 
-export const AIP = (de: string, words: Word[], catOverride?: string): string =>
-  buildSinglePromptV2(de, words, catOverride);
-
-export const AIPM = (lines: string[], words: Word[], catOverride?: string): string =>
-  buildGroupPromptV2(lines, words, catOverride);
-
-export function parseAI(t: string): any[] {
-  const raw = String(t || '');
-  const snippet = raw.trim().replace(/\s+/g, ' ').slice(0, 160);
-  let s = raw.replace(/```(?:json)?/gi, '').trim();
-  const i = s.search(/[\[{]/);
-  if (i < 0) throw new Error(`پاسخ هوش مصنوعی JSON نداشت. ابتدای پاسخ: «${snippet}»`);
-  s = s.slice(i);
-  // JSON.parse, then once more with trailing commas removed
-  const tryParse = (x: string): any => {
-    try { return JSON.parse(x); } catch { /* fall through */ }
-    try { return JSON.parse(x.replace(/,(\s*[}\]])/g, '$1')); } catch { return undefined; }
-  };
-  // Collect every COMPLETE top-level {...} object (string/escape aware) — rescues truncated answers
-  const salvage = (src: string): any[] => {
-    const out: any[] = [];
-    let inStr = false, esc = false, depth = 0, start = -1;
-    for (let k = 0; k < src.length; k++) {
-      const c = src[k];
-      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
-      if (c === '"') { inStr = true; continue; }
-      if (c === '{') { if (depth === 0) start = k; depth++; }
-      else if (c === '}') {
-        depth--;
-        if (depth === 0 && start >= 0) { const o = tryParse(src.slice(start, k + 1)); if (o !== undefined) out.push(o); start = -1; }
-        if (depth < 0) depth = 0;
+function detect(): Detected | null {
+  if (cache !== undefined) return cache;
+  let res: Detected | null = null;
+  try {
+    if (typeof localStorage === 'undefined') { cache = null; return null; }
+    // ۰) کلید نشستِ ارائه‌دهندهٔ فعال (persist=false کارت تنظیمات)
+    const ap0 = readStored().provider;
+    if (ap0 && PROVIDER_IDS.includes(ap0) && SESSION_KEYS[ap0]) {
+      const m = sanitizeModel(readStored().model || '');
+      res = { key: SESSION_KEYS[ap0] as string, provider: ap0, model: m || DEFAULT_MODELS[ap0], source: 'کلید نشست (بدون ذخیره)', explicitModel: !!m };
+    }
+    // ۱) آبجکت‌های تنظیمات JSON با نام‌های معروف
+    for (const k of JSON_SETTINGS_KEYS) {
+      const v = localStorage.getItem(k);
+      if (!v) continue;
+      const d = fromJsonBlob(v, k);
+      if (d) { res = d; break; }
+    }
+    // ۲) کلیدهای تخت معروف
+    if (!res) {
+      for (const k of PLAIN_KEY_CANDIDATES) {
+        const v = (localStorage.getItem(k) || '').trim();
+        if (!v) continue;
+        const mk = matchKey(v);
+        if (mk) { res = { ...mk, model: DEFAULT_MODELS[mk.provider], source: k, explicitModel: false }; break; }
       }
     }
-    return out;
-  };
-  let o: any = tryParse(s);
-  if (o === undefined) {
-    const j = Math.max(s.lastIndexOf(']'), s.lastIndexOf('}'));
-    if (j >= 0) o = tryParse(s.slice(0, j + 1));
-  }
-  if (o === undefined) {
-    let part = salvage(s);
-    if (!part.length && s.startsWith('{')) { const k = s.indexOf('['); if (k > 0) part = salvage(s.slice(k)); } // truncated {"words":[...]}
-    if (part.length) o = part;
-  }
-  if (o === undefined) throw new Error(`پاسخ هوش مصنوعی قابل تبدیل به JSON نبود (ناقص یا نامعتبر). ابتدای پاسخ: «${snippet}»`);
-  if (o && Array.isArray(o.words)) o = o.words;
-  return Array.isArray(o) ? o : [o];
+    // ۳) جستجوی عمیق در همهٔ ورودی‌ها
+    if (!res) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        const v = localStorage.getItem(k) || '';
+        if (!v || v.length > 100000) continue;
+        // مقدار تخت خودِ کلید
+        if (v.length < 500) { const mk = matchKey(v.trim()); if (mk) { res = { ...mk, model: DEFAULT_MODELS[mk.provider], source: k, explicitModel: false }; break; } }
+        // یا آبجکت JSON با فیلد کلید
+        if (v.trim().startsWith('{') || v.trim().startsWith('[')) {
+          const d = fromJsonBlob(v, k);
+          if (d) { res = d; break; }
+        }
+      }
+    }
+    // ۴) کلید ذخیره‌شدهٔ متعارف حتی اگر الگویش را نشناسیم (مثلاً کلید پروژه)
+    if (!res) {
+      const s = readStored();
+      if (s.key && s.key.length > 20) {
+        const p = knownProvider(s.provider, s.key);
+        const m = sanitizeModel(s.model || '');
+        res = { key: s.key, provider: p, model: m || DEFAULT_MODELS[p], source: CANON[0], explicitModel: !!m };
+      }
+    }
+    // ۵) مدل ذخیره‌شدهٔ متعارف حتی وقتی کلید از جای دیگری آمده
+    if (res && !res.explicitModel) {
+      const m = sanitizeModel(readStored().model || '');
+      if (m && m !== res.model) res = { ...res, model: m, explicitModel: true };
+    }
+    // ۶) کلید نشست هر ارائه‌دهندهٔ دیگر
+    if (!res) {
+      for (const p of PROVIDER_IDS) {
+        if (SESSION_KEYS[p]) {
+          res = { key: SESSION_KEYS[p] as string, provider: p, model: perProviderModel(p) || DEFAULT_MODELS[p], source: 'کلید نشست (بدون ذخیره)', explicitModel: false };
+          break;
+        }
+      }
+    }
+  } catch { /* localStorage در دسترس نیست */ }
+  cache = res;
+  return res;
 }
 
-export function aiFix(r: any): any {
-  if (!r || typeof r !== 'object') return null;
-  r = Object.assign({}, r);
-  for (const k in r) {
-    if (typeof r[k] !== 'string') {
-      r[k] = r[k] == null ? '' : Array.isArray(r[k]) ? r[k].join('|') : String(r[k]);
-    }
-  }
-  // Normalize lexical German fields to lowercase initial letters where appropriate.
-  // Keep the headword (de), nouns, sentence beginnings, and formal imperative capitalization intact.
-  for (const k of ['prat', 'perf', 'sep', 'komparativ', 'superlativ', 'imperativDu', 'imperativIhr']) {
-    if (typeof r[k] === 'string' && r[k]) r[k] = lcFirst(r[k]);
-  }
-  // Nouns keep their capital letters (also in synonyms, antonyms and the plural); articles stay with the noun
-  const nounWord = isNounEntry(r);
-  if (r.syn) r.syn = fixLexList(r.syn, nounWord);
-  if (r.ant) r.ant = fixLexList(r.ant, nounWord);
-  if (r.pl && nounWord) r.pl = fixPlural(r.pl);
-  if (r.conj) r.conj = normalizeConj(r.conj);
-  if (r.cloze) r.cloze = r.cloze.replace(/_{3,}/g, '_____');
-  if (!/_____/.test(r.cloze || '')) {
-    r.cloze = '';
-    r.ans = '';
-  }
-  return r;
+/** تنظیمات فعلی — حتی اگر صفحهٔ تنظیمات با قرارداد متفاوتی ذخیره کرده باشد */
+export function getAIConfig(): AIConfig {
+  const d = detect();
+  if (d) return { key: d.key, model: d.model, provider: d.provider, source: d.source };
+  return { key: '', model: '', provider: 'gemini', source: '' };
 }
 
-export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: string): { ws: Word[]; errs: string[] } {
-  const errs: string[] = [];
-  const ws: Word[] = [];
-  const seenC: string[] = [];
-  const existingCatNames = getDynamicCategories(existingWords);
-  const defaultFallbackCat = existingCatNames[0] || 'روزمره (Alltag)';
+/** ذخیرهٔ آگاهانهٔ تنظیمات (صفحهٔ تنظیمات می‌تواند از این استفاده کند) */
+export function setAIConfig(key: string, model: string, provider?: ProviderId): void {
+  const k = key.trim();
+  const mk = matchKey(k);
+  const p: ProviderId = provider || (mk ? mk.provider : 'gemini');
+  const m = model.trim() || DEFAULT_MODELS[p];
+  try {
+    localStorage.setItem('worter_ai_settings', JSON.stringify({ provider: p, key: k, model: m }));
+    localStorage.setItem('ai_settings', JSON.stringify({ provider: p, key: k, model: m }));
+    invalidateAiCache();
+  } catch { /* ignore */ }
+}
+/** نام‌های جایگزین رایج */
+export const saveAiSettings = setAIConfig;
+export const loadAiSettings = getAIConfig;
 
-  list.forEach((r, i) => {
-    r = aiFix(r);
-    // "Nomen (اسم)" → "اسم": the app stores Persian pos labels
-    if (r && typeof r.pos === 'string') {
-      const pm = /\(([^)]+)\)\s*$/.exec(r.pos.trim());
-      if (pm && pm[1].trim()) r.pos = pm[1].trim();
-    }
-    if (!r || !(r.de || '').trim()) {
-      errs.push(`مورد ${i + 1}: کلمهٔ آلمانی خالی است`);
-      return;
-    }
-    const m = /^(der|die|das)\s+(.+)$/i.exec(r.de.trim());
-    if (m && !r.art) {
-      r.art = m[1].toLowerCase();
-      r.de = m[2];
-    }
-    if (!(r.fa || '').trim()) {
-      errs.push(`مورد ${i + 1} (${r.de}): ترجمهٔ فارسی خالی است`);
-      return;
-    }
+/* ───────────── ذخیرهٔ متعارف — API صفحهٔ تنظیمات (GeminiKeyCard) ───────────── */
+const CANON = ['worter_ai_settings', 'ai_settings'];
 
-    let suggestedNewCat: string | undefined = undefined;
-    if (targetCategory) {
-      r.cat = targetCategory;
-    } else if (r.cat) {
-      const matched = matchCat(r.cat, existingWords, seenC);
-      if (matched) {
-        r.cat = matched;
-        if (!seenC.includes(matched)) seenC.push(matched);
-      } else {
-        // AI proposed a new category not in existing categories!
-        suggestedNewCat = String(r.cat).trim().slice(0, 40);
-        r.cat = defaultFallbackCat;
-      }
-    } else {
-      r.cat = defaultFallbackCat;
-    }
+/** کلیدهای نشست (persist=false کارت تنظیمات) — فقط در حافظه، هرگز در localStorage */
+const SESSION_KEYS: Partial<Record<ProviderId, string>> = {};
 
-    const w = norm(r);
-    if (w) {
-      if (typeof r.def === 'string' && r.def.trim()) w.def = r.def.trim();
-      if (typeof r.en === 'string' && r.en.trim()) w.en = r.en.trim();
-      // non-nouns are stored with a lowercase first letter (e.g. verbs "machen")
-      const posStr = String((w as any).pos || '').trim();
-      const looksVerb = /(?:en|eln|ern)$/.test(w.de.toLowerCase()) || ['فعل', 'Verb'].includes(posStr);
-      const looksAdjOrAdv = ['صفت', 'قید', 'Adjektiv', 'Adverb'].includes(posStr) || (!!w.komparativ || !!w.superlativ);
-      const nounLike = !!w.art || ['اسم', 'Nomen'].includes(posStr);
-      if (!nounLike && (looksVerb || looksAdjOrAdv) && /^[A-ZÄÖÜ]/.test(w.de)) {
-        w.de = w.de.charAt(0).toLocaleLowerCase('de') + w.de.slice(1);
-      }
-      // noun synonyms/antonyms keep article + capital letter as AI produced them; never lowercase them
-      const cv = validateConjTable(w.conj, w.de, w.sep);
-      if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
-      if (suggestedNewCat) {
-        w.suggestedNewCat = suggestedNewCat;
-      }
-      ws.push(w);
+/** کلید یک ارائه‌دهندهٔ مشخص — قرارداد کارت تنظیمات: wort_ai_key_<id> */
+function perProviderKey(p: ProviderId): string {
+  const s = SESSION_KEYS[p];
+  if (s) return s;
+  try {
+    const v = (localStorage.getItem('wort_ai_key_' + p) || '').trim();
+    if (v) return v;
+  } catch { /* ignore */ }
+  const st = readStored();
+  if (st.key && st.provider === p) return st.key;
+  return '';
+}
+
+/** مدل یک ارائه‌دهندهٔ مشخص — قرارداد کارت تنظیمات: wort_ai_model_<id> */
+function perProviderModel(p: ProviderId): string {
+  try {
+    const m = sanitizeModel(localStorage.getItem('wort_ai_model_' + p) || '');
+    if (m) return m;
+  } catch { /* ignore */ }
+  const st = readStored();
+  if (st.provider === p) return sanitizeModel(st.model || '');
+  return '';
+}
+
+function readStored(): { provider?: ProviderId; key?: string; model?: string } {
+  for (const k of CANON) {
+    try {
+      const o = JSON.parse(localStorage.getItem(k) || 'null');
+      if (o && typeof o === 'object') return o;
+    } catch { /* ignore */ }
+  }
+  return {};
+}
+
+function writeStored(patch: { provider?: ProviderId; key?: string; model?: string }): void {
+  const cur = readStored();
+  const next = { provider: patch.provider ?? cur.provider, key: patch.key ?? cur.key, model: patch.model ?? cur.model };
+  try {
+    const json = JSON.stringify(next);
+    localStorage.setItem(CANON[0], json);
+    localStorage.setItem(CANON[1], json);
+    if (next.key) {
+      const p = next.provider || matchKey(next.key)?.provider;
+      if (p) localStorage.setItem(p + '_api_key', next.key);
     }
-  });
-  return { ws, errs };
+    invalidateAiCache();
+  } catch { /* ignore */ }
 }
 
 /**
- * Generates text with the ACTIVE AI provider (Gemini, Groq or OpenRouter, see aiProvider.ts).
- * The historical name is kept so that every existing caller keeps working.
+ * ذخیرهٔ کلید — دو فرم:
+ *   setApiKey(key)                     فرم قدیمی: کلید سراسری در ذخیرهٔ متعارف
+ *   setApiKey(provider, key, persist)  فرم کارت تنظیمات: کلید مخصوص همان ارائه‌دهنده
+ * رشتهٔ خالی یعنی پاک کردن.
  */
-export async function generateWithGemini(
-  prompt: string,
-  options?: { timeoutMs?: number; model?: string; retries?: number }
-): Promise<string> {
-  return generateText(prompt, {
-    json: true,
-    timeoutMs: options?.timeoutMs || 60000,
-    retries: options?.retries ?? 1,
-    model: options?.model
-  });
-}
-
-export interface SpellResult {
-  status: 'ok' | 'corrected' | 'invalid';
-  suggestion?: string;
-}
-
-/**
- * Checks the spelling of German words typed by the learner.
- * - ok: a real German word (or expression), spelled correctly
- * - corrected: misspelled, a clear intended word exists (suggestion)
- * - invalid: no such German word
- * If the AI is unreachable the check is skipped (empty result), so adding words never gets blocked.
- */
-export async function checkGermanSpelling(inputs: string[]): Promise<Record<string, SpellResult>> {
-  const out: Record<string, SpellResult> = {};
-  const list = inputs.map(s => s.trim()).filter(Boolean);
-  const CHUNK = 30;
-  for (let i = 0; i < list.length; i += CHUNK) {
-    const chunk = list.slice(i, i + CHUNK);
-    const prompt = `You are a strict German spelling checker for a vocabulary learner.
-For every input entry below, decide:
-- "ok": it is a real German word or fixed expression, spelled correctly (inflected forms, compounds, separable verbs, and less common words are ok; an optional article like "der Tisch" is ok).
-- "corrected": it is misspelled but one specific German word is clearly meant. Give that word as "suggestion" in standard spelling (keep the article if the input had one, keep the same word type, same case as normal German spelling).
-- "invalid": it is not a German word and no clear intended word exists.
-Be conservative: never mark a valid word as corrected or invalid.
-Return ONLY a valid JSON array with exactly ${chunk.length} objects in the same order as the inputs, each shaped {"input":"...","status":"ok|corrected|invalid","suggestion":"..."} (use "" for suggestion unless status is corrected).
-
-Inputs:
-${chunk.map((x, n) => `${n + 1}. ${x}`).join('\n')}`;
-    try {
-      const text = await generateWithGemini(prompt, { timeoutMs: 20000, retries: 0 });
-      const arr = parseAI(text);
-      chunk.forEach((inp, idx) => {
-        const r: any = arr[idx];
-        if (!r) return;
-        if (r.status === 'invalid') out[inp] = { status: 'invalid' };
-        else if (r.status === 'corrected' && typeof r.suggestion === 'string' && r.suggestion.trim()) {
-          out[inp] = { status: 'corrected', suggestion: r.suggestion.trim() };
-        } else out[inp] = { status: 'ok' };
-      });
-    } catch {
-      // network / parsing problem: skip the spelling check for this chunk
-    }
+export function setApiKey(providerOrKey: ProviderId | string, key?: string, persist: boolean = true): void {
+  if (key === undefined) {
+    const k = (providerOrKey || '').trim();
+    if (!k) { clearApiKey(); return; }
+    writeStored({ key: k });
+    return;
   }
-  return out;
-}
-
-export async function processBatchWordsWithGemini(
-  lines: string[],
-  words: Word[],
-  catOverride?: string,
-  onProgress?: (doneCount: number, totalCount: number, currentMsg: string) => void,
-  depth: 'light' | 'mid' | 'full' = 'full'
-): Promise<{ ws: Word[]; errs: string[]; failed?: string[] }> {
-  // Full profiles are ~28 fields each: 4 per request keeps each answer clear of truncation/timeout limits.
-  const BATCH_SIZE = depth === 'full' ? 4 : 10;
-  const chunks: string[][] = [];
-  for (let i = 0; i < lines.length; i += BATCH_SIZE) chunks.push(lines.slice(i, i + BATCH_SIZE));
-
-  const allWords: Word[] = [];
-  const allErrs: string[] = [];
-  const failed: string[] = []; // input lines that produced no word
-
-  const ask = async (part: string[]): Promise<any[]> => {
-    const prompt = depth === 'full' ? AIPM(part, words, catOverride) : buildGroupPromptDepth(part, words, depth, catOverride);
-    // 90 s: a multi-word full profile can legitimately take 30-60 s (the old 30 s limit aborted it -> AI_TIMEOUT)
-    const resText = await generateWithGemini(prompt, { timeoutMs: 90000, retries: 1 });
-    try { return parseAI(resText); }
-    catch {
-      // one fresh attempt when the answer was unparsable/truncated beyond salvage
-      return parseAI(await generateWithGemini(prompt, { timeoutMs: 90000, retries: 0 }));
-    }
-  };
-
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    onProgress?.(
-      allWords.length,
-      lines.length,
-      `در حال تکمیل واژه‌های ${i * BATCH_SIZE + 1} تا ${Math.min((i + 1) * BATCH_SIZE, lines.length)} از مجموع ${lines.length} واژه...`
-    );
-    try {
-      let parsed = await ask(chunk);
-      // truncated answer: results follow input order, so re-ask only for the missing tail
-      if (parsed.length < chunk.length) {
-        try { parsed = parsed.concat(await ask(chunk.slice(parsed.length))); } catch { /* reported below */ }
-      }
-      const { ws, errs } = aiToIMP(parsed, words, catOverride);
-      if (parsed.length < chunk.length) {
-        failed.push(...chunk.slice(parsed.length));
-        allErrs.push(`دستهٔ ${i + 1}: فقط ${parsed.length} از ${chunk.length} واژه کامل شد — بقیه را دوباره بده.`);
-      }
-      allWords.push(...ws);
-      allErrs.push(...errs);
-    } catch (e: any) {
-      failed.push(...chunk);
-      if (e instanceof AiError && ['AI_HTTP_429', 'AI_HTTP_401', 'AI_HTTP_403', 'AI_HTTP_404', 'NO_KEY'].includes(e.code)) {
-        // Definitive answer (quota, bad key, unknown model, no key): do not hammer the provider with the remaining batches
-        allErrs.push(`${describeAiError(e)} (پردازش ${i + 1} تا ${chunks.length} متوقف شد؛ ${allWords.length} واژه تکمیل شده بود)`);
-        for (let k = i + 1; k < chunks.length; k++) failed.push(...chunks[k]);
-        break;
-      }
-      allErrs.push(`خطا در پردازش دسته ${i + 1}: ${e instanceof AiError ? describeAiError(e) : (e?.message || String(e))}`);
-    }
+  const p = providerOrKey as ProviderId;
+  const k = (key || '').trim();
+  if (!k) { clearApiKey(p); return; }
+  if (persist) {
+    try { localStorage.setItem('wort_ai_key_' + p, k); } catch { /* ignore */ }
+    delete SESSION_KEYS[p];
+    writeStored({ provider: p, key: k });
+  } else {
+    SESSION_KEYS[p] = k;
+    try { localStorage.removeItem('wort_ai_key_' + p); } catch { /* ignore */ }
+    // ارائه‌دهنده فعال می‌شود ولی کلید در localStorage نمی‌آید
+    writeStored({ provider: p, key: '' });
   }
-  return { ws: allWords, errs: allErrs, failed };
 }
 
-/** Streaming is not required by the app: the full answer is delivered as one chunk. */
-export async function generateStreamWithGemini(
-  prompt: string,
-  onChunk: (chunk: string) => void
-): Promise<string> {
-  const text = await generateText(prompt, { timeoutMs: 60000 });
-  onChunk(text);
+/** ذخیرهٔ مدل — setModel(model) فرم قدیمی، setModel(provider, model) فرم کارت تنظیمات */
+export function setModel(providerOrModel: ProviderId | string, model?: string): void {
+  if (model === undefined) {
+    writeStored({ model: (providerOrModel || '').trim() });
+    return;
+  }
+  const p = providerOrModel as ProviderId;
+  const m = (model || '').trim();
+  try { localStorage.setItem('wort_ai_model_' + p, m); } catch { /* ignore */ }
+  const st = readStored();
+  if (!st.provider || st.provider === p) writeStored({ model: m });
+}
+
+/** تغییر ارائه‌دهندهٔ فعال — مدل ناسازگار خودکار به پیش‌فرض همان ارائه‌دهنده می‌رود */
+export function setActiveProvider(p: ProviderId): void {
+  const m = (readStored().model || '').trim();
+  const fits = p === 'gemini' ? m.startsWith('gemini') : !!m && !m.startsWith('gemini');
+  writeStored({ provider: p, model: fits ? m : DEFAULT_MODELS[p] });
+}
+
+/** پاک کردن کلید و تنظیمات — با id فقط همان ارائه‌دهنده، بدون id همه */
+export function clearApiKey(provider?: ProviderId): void {
+  if (!provider) {
+    try {
+      for (const k of CANON) localStorage.removeItem(k);
+      for (const k of PLAIN_KEY_CANDIDATES) {
+        if (k === 'apiKey' || k === 'API_KEY') continue; // نام عمومی — ممکن است بخش دیگری استفاده کند
+        localStorage.removeItem(k);
+      }
+      for (const p of PROVIDER_IDS) {
+        localStorage.removeItem('wort_ai_key_' + p);
+        localStorage.removeItem('wort_ai_model_' + p);
+        localStorage.removeItem(p + '_api_key');
+      }
+    } catch { /* ignore */ }
+    for (const p of PROVIDER_IDS) delete SESSION_KEYS[p];
+    invalidateAiCache();
+    return;
+  }
+  try {
+    localStorage.removeItem('wort_ai_key_' + provider);
+    localStorage.removeItem('wort_ai_model_' + provider);
+    localStorage.removeItem(provider + '_api_key');
+    const st = readStored();
+    if (!st.provider || st.provider === provider) {
+      for (const k of CANON) localStorage.removeItem(k);
+    }
+  } catch { /* ignore */ }
+  delete SESSION_KEYS[provider];
+  invalidateAiCache();
+}
+
+/** کلید ذخیره‌شده در دسترس است؟ — با id فقط همان ارائه‌دهنده، بدون id کلاً */
+export function isKeyPersisted(provider?: ProviderId): boolean {
+  if (provider) {
+    if (SESSION_KEYS[provider]) return false; // فقط نشست — ذخیره نشده
+    try { if ((localStorage.getItem('wort_ai_key_' + provider) || '').trim()) return true; } catch { /* ignore */ }
+    const st = readStored();
+    return !!(st.key && st.provider === provider);
+  }
+  return !!detect();
+}
+
+export function hasApiKey(_provider?: ProviderId): boolean { return !!detect(); }
+
+export function getActiveProvider(): ProviderId {
+  const s = readStored();
+  if (s.provider && PROVIDER_IDS.includes(s.provider)) return s.provider;
+  return detect()?.provider || 'gemini';
+}
+
+export function getModel(provider?: ProviderId): string {
+  if (provider) return perProviderModel(provider) || DEFAULT_MODELS[provider];
+  const s = readStored();
+  const m = sanitizeModel(s.model || '');
+  if (m) return m;
+  return detect()?.model || DEFAULT_MODELS[getActiveProvider()];
+}
+
+/** اطلاعات وضعیت برای نمایش — بدون محتوای کلید */
+export function getAiDebugInfo(): AiDebugInfo {
+  const d = detect();
+  if (!d) return { found: false, source: 'هیچ کلیدی در حافظهٔ برنامه پیدا نشد', provider: 'gemini', model: '', keyLen: 0 };
+  return { found: true, source: d.source, provider: d.provider, model: d.model, keyLen: d.key.length };
+}
+
+/** کلید فعال (برای کدهای قدیمی که خودشان مستقیم REST می‌زنند) — با id فقط همان ارائه‌دهنده */
+export function getApiKey(provider?: ProviderId): string {
+  if (provider) return perProviderKey(provider);
+  return readStored().key || getAIConfig().key || '';
+}
+
+/** آزمون اتصال کارت تنظیمات — فقط کلید داده‌شده را امتحان می‌کند و هیچ چیز را ذخیره/تغییر نمی‌دهد */
+export async function testConnection(provider?: ProviderId, key?: string): Promise<{ ok: boolean; message: string }> {
+  const p = provider || getActiveProvider();
+  const k = (key || '').trim() || getApiKey(p);
+  if (!k) return { ok: false, message: 'ابتدا کلید API را وارد کنید.' };
+  const model = getModel(p) || DEFAULT_MODELS[p];
+  try {
+    await callProvider('Antworte nur mit: OK', [], { timeoutMs: 15000, retries: 0 }, { provider: p, key: k, model });
+    return { ok: true, message: 'اتصال با «' + (PROVIDERS[p]?.label || p) + '» برقرار است و مدل «' + model + '» پاسخ داد.' };
+  } catch (e) {
+    return { ok: false, message: describeAiError(e) };
+  }
+}
+
+/* ───────────── فراخوانی REST ───────────── */
+const aiErr = (code: string): AiError => new AiError(code);
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+  try { return await fetch(url, { ...init, signal: ac.signal }); }
+  finally { clearTimeout(t); }
+}
+
+function extractTextGemini(data: any): string {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts) ? parts.map((p: any) => p?.text || '').join('') : '';
+  if (!text.trim()) {
+    const reason = data?.candidates?.[0]?.finishReason || data?.promptFeedback?.blockReason || '';
+    throw aiErr(reason && reason !== 'STOP' ? 'AI_BLOCKED:' + String(reason) : 'AI_EMPTY');
+  }
   return text;
 }
 
-export async function checkServerAiStatus(): Promise<{ ok: boolean; hasKey: boolean; model: string }> {
-  const p = getActiveProvider();
-  return { ok: true, hasKey: hasApiKey(p), model: getModel(p) };
+function extractTextOpenAI(data: any): string {
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text || !String(text).trim()) throw aiErr('AI_EMPTY');
+  return String(text);
 }
 
-/* =====================================================================
-   Prompt depth (light / mid / full) — fast completion.
-   'full' delegates to the existing 28-field master prompt (AIP).
-   light/mid are short prompts: fewer fields = much faster responses.
-   ===================================================================== */
-export type PromptDepth = 'light' | 'mid' | 'full';
+function toOpenAiMessages(prompt: string, images: Array<{ mimeType: string; data: string }>, json: boolean): any[] {
+  const text = json ? prompt + '\n\nAntworte NUR mit gültigem JSON.' : prompt;
+  if (!images.length) return [{ role: 'user', content: text }];
+  return [{
+    role: 'user',
+    content: [
+      { type: 'text', text },
+      ...images.map(i => ({ type: 'image_url', image_url: { url: `data:${i.mimeType};base64,${i.data}` } })),
+    ],
+  }];
+}
 
-const DEPTH_FIELD_SPEC: Record<'light' | 'mid', string> = {
-  light: `Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:
-[{"de":"...","art":"der|die|das|","fa":"...","en":"...","lvl":"A1|A2|B1|B2|C1|C2","cat":"..."}]
-Field rules:
-- de: German dictionary form. Non-nouns (verbs/adjectives/adverbs) start lowercase (machen, schön); only nouns are capitalized.
-- art: exactly der|die|das for nouns, otherwise "".
-- fa: natural Persian translation, most common everyday meaning first.
-- en: closest English equivalent translated FROM THE GERMAN, lowercase; "" if none.
-- lvl: CEFR estimate of the word's typical use.`,
-  mid: `Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:
-[{"de":"...","art":"der|die|das|","fa":"...","en":"...","lvl":"...","pl":"...","pos":"...","cat":"..."}]
-Field rules:
-- de/art/fa/en/lvl: same rules as light depth.
-- pl: full plural WITHOUT article for nouns (e.g. Möglichkeiten), otherwise "".
-- pos: exactly one of: Nomen (اسم) | Verb (فعل) | Adjektiv (صفت) | Adverb (قید) | Präposition (حرف اضافه) | Redewendung (اصطلاح).`
-};
+/** لیست مدل‌های واقعی حساب از خود ارائه‌دهنده — برای خودترمیمی وقتی مدل ذخیره‌شده منقضی شده */
+async function fetchProviderModels(provider: ProviderId, key: string): Promise<string[] | null> {
+  const urls: Record<ProviderId, string> = {
+    gemini: 'https://generativelanguage.googleapis.com/v1beta/models',
+    groq: 'https://api.groq.com/openai/v1/models',
+    openrouter: 'https://openrouter.ai/api/v1/models',
+  };
+  const headers: Record<string, string> = provider === 'gemini'
+    ? { 'x-goog-api-key': key }
+    : { 'Authorization': `Bearer ${key}` };
+  try {
+    const res = await fetchWithTimeout(urls[provider], { method: 'GET', headers }, 15000);
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const raw: any[] = provider === 'gemini' ? (data?.models || []) : (data?.data || []);
+    const ids = raw
+      .map((m: any) => sanitizeModel(String(provider === 'gemini' ? (m?.name ?? '') : (m?.id ?? ''))))
+      .filter(Boolean);
+    return ids.length ? ids : null;
+  } catch { return null; }
+}
 
-export function buildSinglePromptDepth(
-  de: string,
-  words: Word[],
-  depth: 'light' | 'mid',
-  catOverride?: string
-): string {
-  const dynamicCats = getDynamicCategories(words);
-  const catListStr = dynamicCats.map(c => `* ${c}`).join('\n');
-  const catRule = catOverride
-    ? `Assign "cat": "${catOverride}". Ignore the category list.`
-    : `Assign "cat" strictly from this list of EXISTING categories (never invent one):\n${catListStr}`;
-  return `You are an expert German vocabulary assistant for a Persian-speaking learner. Completion depth: ${depth}.\n\nTARGET: "${de}"\n\n${DEPTH_FIELD_SPEC[depth]}\n- cat: ${catRule}\n- If a value is uncertain, use "" instead of inventing it.`;
+/** بهترین مدل چتِ در دسترس از میان لیست واقعی حساب */
+function pickChatModel(ids: string[], provider: ProviderId): string | null {
+  const BAD = /(whisper|tts|guard|embed|rank|aqa|imagen|veo|live|learnlm|playai|distil)/i;
+  const good = ids.filter(i => !BAD.test(i) && (provider !== 'gemini' || /gemini/i.test(i)));
+  if (!good.length) return null;
+  const PREF = provider === 'gemini'
+    ? ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite']
+    : provider === 'groq'
+      ? ['openai/gpt-oss-120b', 'qwen/qwen3-32b', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant']
+      : ['openrouter/auto', 'google/gemini-2.5-flash'];
+  for (const p of PREF) { const hit = good.find(i => i === p); if (hit) return hit; }
+  const RES: RegExp[] = provider === 'gemini'
+    ? [/gemini-2\.5.*flash/i, /flash/i, /gemini-2\.5/i]
+    : provider === 'groq'
+      ? [/120b/i, /qwen3/i, /20b/i, /instant/i]
+      : [/gemini-2\.5-flash/i, /flash/i];
+  for (const re of RES) { const hit = good.find(i => re.test(i)); if (hit) return hit; }
+  return good[0];
+}
+
+type CallOverride = { provider: ProviderId; key: string; model: string };
+
+async function callProvider(prompt: string, images: Array<{ mimeType: string; data: string }>, opts: GenerateOpts, override?: CallOverride): Promise<string> {
+  const cfg = override || getAIConfig();
+  if (!cfg.key) throw aiErr('NO_KEY');
+  const json = !!opts.json;
+  const timeoutMs = opts.timeoutMs ?? 60000;
+  const provider = cfg.provider;
+  const def = DEFAULT_MODELS[provider];
+  const primary = sanitizeModel(cfg.model) || def;
+
+  const attempt = async (model: string): Promise<string> => {
+    const url = {
+      gemini: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      groq: 'https://api.groq.com/openai/v1/chat/completions',
+      openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+    }[provider];
+
+    let init: RequestInit;
+    if (provider === 'gemini') {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': cfg.key },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [{ text: prompt }, ...images.map(i => ({ inlineData: { mimeType: i.mimeType, data: i.data } }))],
+          }],
+          // maxOutputTokens: the default can truncate several full 28-field profiles (thinking tokens count too)
+          generationConfig: { temperature: 0.8, maxOutputTokens: 32768, ...(json ? { responseMimeType: 'application/json' } : {}) },
+        }),
+      };
+    } else {
+      init = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.key}` },
+        body: JSON.stringify({ model, messages: toOpenAiMessages(prompt, images, json), temperature: 0.8 }),
+      };
+    }
+
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, init, timeoutMs);
+    } catch (e: any) {
+      if (e?.name === 'AbortError') throw aiErr('AI_TIMEOUT');
+      throw aiErr('AI_NETWORK');
+    }
+    if (!res.ok) throw aiErr('AI_HTTP_' + res.status);
+    let data: any;
+    try { data = await res.json(); } catch { throw aiErr('AI_EMPTY'); }
+    return provider === 'gemini' ? extractTextGemini(data) : extractTextOpenAI(data);
+  };
+
+  try {
+    return await attempt(primary);
+  } catch (e) {
+    if ((e as Error).message !== 'AI_HTTP_404') throw e;
+    const heal = (m: string): void => {
+      if (override) return; // آزمون اتصال هیچ چیز را ذخیره یا تغییر نمی‌دهد
+      try { setModel(m); } catch { /* ignore */ }
+      try { localStorage.setItem('wort_ai_model_' + provider, m); } catch { /* ignore */ }
+    };
+    // لایهٔ ۱: مدل پیش‌فرض ارائه‌دهنده — مدل ذخیره‌شده ممکن است منقضی شده باشد
+    if (primary !== def) {
+      try { const r = await attempt(def); heal(def); return r; }
+      catch (e2) { if ((e2 as Error).message !== 'AI_HTTP_404') throw e2; }
+    }
+    // لایهٔ ۲: کشف مدل از لیست واقعی حساب (گروق مدل‌های قدیمی را جمع کرده)
+    try {
+      const ids = await fetchProviderModels(provider, cfg.key);
+      const pick = ids ? pickChatModel(ids, provider) : null;
+      if (pick && pick !== primary && pick !== def) {
+        const r = await attempt(pick); heal(pick); return r;
+      }
+    } catch { /* لیست مدل‌ها در دسترس نبود — خطای اصلی ۴۰۴ را بده */ }
+    throw e;
+  }
+}
+
+const RETRYABLE = (code: string): boolean =>
+  code === 'AI_TIMEOUT' || code === 'AI_NETWORK' ||
+  code === 'AI_HTTP_429' || /^AI_HTTP_5/.test(code);
+
+/** متن ساده یا JSON (بسته به opts.json) — بازخوانی خودکار روی خطای موقت */
+export async function generateText(prompt: string, opts: GenerateOpts = {}): Promise<string> {
+  const attempts = 1 + Math.max(0, opts.retries ?? 0);
+  let last: unknown;
+  for (let a = 0; a < attempts; a++) {
+    try { return await callProvider(prompt, [], opts); }
+    catch (e) { last = e; if (a < attempts - 1 && RETRYABLE((e as Error).message)) { await new Promise(r => setTimeout(r, 800)); continue; } }
+  }
+  throw friendlyErr(last);
+}
+
+/** مثل generateText ولی با تصویر (OCR/تصحیح عکس) */
+export async function generateWithImages(
+  prompt: string,
+  images: Array<{ mimeType: string; data: string }>,
+  opts: GenerateOpts = {}
+): Promise<string> {
+  const attempts = 1 + Math.max(0, opts.retries ?? 0);
+  let last: unknown;
+  for (let a = 0; a < attempts; a++) {
+    try { return await callProvider(prompt, images.filter(i => i && i.data), opts); }
+    catch (e) { last = e; if (a < attempts - 1 && RETRYABLE((e as Error).message)) { await new Promise(r => setTimeout(r, 800)); continue; } }
+  }
+  throw friendlyErr(last);
+}
+/** نام جایگزین رایج */
+export const callAI = generateText;
+
+/** پیام خطا را خوانا می‌کند ولی code را نگه می‌دارد (همه‌جا e.message فارسی می‌شود) */
+function friendlyErr(e: unknown): unknown {
+  return e instanceof AiError ? new AiError(e.code, describeAiError(e)) : e;
+}
+
+/** پیام خطای خوانا برای کاربر */
+export function describeAiError(e: unknown): string {
+  const msg = e instanceof AiError && e.code ? e.code : (e instanceof Error ? e.message : String(e || ''));
+  if (msg === 'NO_KEY') return 'کلید هوش مصنوعی در تنظیمات وارد نشده است';
+  if (msg === 'AI_TIMEOUT') return 'هوش مصنوعی دیر جواب داد (timeout) — کمی بعد دوباره تلاش کن.';
+  if (msg === 'AI_NETWORK') return 'اتصال به سرور هوش مصنوعی برقرار نشد — اینترنت را چک کن.';
+  if (msg.startsWith('AI_BLOCKED')) return 'پاسخ توسط فیلتر ایمنی ارائه‌دهنده بازداشته شد — سؤال را کمی عوض کن.';
+  if (msg.startsWith('AI_HTTP_401') || msg.startsWith('AI_HTTP_403')) return 'کلید هوش مصنوعی نامعتبر است یا اجازه ندارد — در تنظیمات چک کن.';
+  if (msg.startsWith('AI_HTTP_404')) return 'مدل انتخابی پیدا نشد — در تنظیمات مدل را عوض کن.';
+  if (msg.startsWith('AI_HTTP_429')) {
+    const cur = getActiveProvider();
+    const others = PROVIDER_IDS.filter(p => p !== cur).map(p => PROVIDERS[p].label).join(' یا ');
+    return `سقف درخواست «${PROVIDERS[cur].label}» پر شده (محدودیت دقیقه‌ای یا روزانه). چند دقیقه صبر کن، یا از منوی ⋮ ← تنظیمات ← «اتصال به هوش مصنوعی» سرویس دیگر (${others}) را انتخاب و «ذخیره و فعال‌سازی» بزن.`;
+  }
+  if (/^AI_HTTP_5/.test(msg)) return 'خطای سرور ارائه‌دهنده (' + msg.replace('AI_HTTP_', 'کد ') + ') — کمی بعد تلاش کن.';
+  if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرویس هوش مصنوعی (کد HTTP ' + msg.replace('AI_HTTP_', '') + ') — کلید، مدل و اینترنت را چک کن.';
+  if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
+  if (msg === 'AI_PARSE') return 'پاسخ هوش مصنوعی قابل تبدیل به JSON نبود — دوباره تلاش کن.';
+  return 'خطای نامشخص در اتصال به هوش مصنوعی: ' + msg.slice(0, 120);
 }
