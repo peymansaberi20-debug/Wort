@@ -1972,9 +1972,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     >{t.label}</button>
                   ))}
                 </div>
-                <p className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] px-1">
-                  روی تب هر تمرین بزن تا همان تمرین باز شود؛ موقع تمرین هم نوار تب‌ها بالای صفحه می‌ماند تا بین تمرین‌های همین دسته جابه‌جا شوی.
-                </p>
               </>
             )}
           </div>
@@ -2223,6 +2220,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       )}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2 min-w-0">
+          <span className="text-lg flex-shrink-0">{EXERCISE_NAMES[activeMode]?.icon}</span>
           <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100 break-words">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
@@ -2244,10 +2242,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <IconBtn onClick={() => setShadowWord(currentItem as Word)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
             </>
           )}
-          {!isSelfContainedMode(qMode) && (
-            <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
-          )}
-          {activeMode !== 'hard' && qMode && (
+          <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
+          {!isSelfContainedMode(qMode) && activeMode !== 'hard' && qMode && (
             <span className="relative">
               <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}><TimerIcon size={18} className={timerCfg.on ? 'text-orange-500' : 'text-slate-500'} /></IconBtn>
               {timerCfg.on && <span className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded-full bg-red-500" />}
