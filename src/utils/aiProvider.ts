@@ -170,8 +170,16 @@ function detect(): Detected | null {
       const m = sanitizeModel(readStored().model || '');
       res = { key: SESSION_KEYS[ap0] as string, provider: ap0, model: m || DEFAULT_MODELS[ap0], source: 'کلید نشست (بدون ذخیره)', explicitModel: !!m };
     }
+    // ۰.۵) ارائه‌دهندهٔ فعال با کلید مخصوص خودش (wort_ai_key_<id>) — همیشه بر کلیدِ قدیمیِ ذخیره‌شدهٔ ارائه‌دهندهٔ دیگر مقدم است
+    if (!res) {
+      const ap1 = readStored().provider;
+      if (ap1 && PROVIDER_IDS.includes(ap1)) {
+        const k1 = perProviderKey(ap1);
+        if (k1) { const m1 = perProviderModel(ap1); res = { key: k1, provider: ap1, model: m1 || DEFAULT_MODELS[ap1], source: 'کلید ' + ap1, explicitModel: !!m1 }; }
+      }
+    }
     // ۱) آبجکت‌های تنظیمات JSON با نام‌های معروف
-    for (const k of JSON_SETTINGS_KEYS) {
+    for (const k of (res ? [] : JSON_SETTINGS_KEYS)) {
       const v = localStorage.getItem(k);
       if (!v) continue;
       const d = fromJsonBlob(v, k);
@@ -525,10 +533,17 @@ function pickChatModel(ids: string[], provider: ProviderId): string | null {
 type CallOverride = { provider: ProviderId; key: string; model: string };
 
 async function callProvider(prompt: string, images: Array<{ mimeType: string; data: string }>, opts: GenerateOpts, override?: CallOverride): Promise<string> {
-  const cfg = override || getAIConfig();
+  let cfg: AIConfig | CallOverride = override || getAIConfig();
   if (!cfg.key) throw aiErr('NO_KEY');
-  // Groq's configured models are text-only: sending an image gives a bare HTTP 400
-  if (images.length && !PROVIDERS[cfg.provider].vision) throw aiErr('AI_NO_VISION');
+  let altUsed = false;
+  // Groq's configured models are text-only (an image gives a bare HTTP 400):
+  // use another provider that has its own saved key, otherwise explain what is missing
+  if (images.length && !PROVIDERS[cfg.provider].vision) {
+    const alt = (['gemini', 'openrouter'] as ProviderId[]).find(p => !!perProviderKey(p));
+    if (!alt) throw aiErr('AI_NO_VISION');
+    cfg = { provider: alt, key: perProviderKey(alt), model: perProviderModel(alt) || DEFAULT_MODELS[alt] };
+    altUsed = true;
+  }
   const json = !!opts.json;
   const timeoutMs = opts.timeoutMs ?? 60000;
   const provider = cfg.provider;
@@ -591,7 +606,7 @@ async function callProvider(prompt: string, images: Array<{ mimeType: string; da
   } catch (e) {
     if ((e as Error).message !== 'AI_HTTP_404') throw e;
     const heal = (m: string): void => {
-      if (override) return; // آزمون اتصال هیچ چیز را ذخیره یا تغییر نمی‌دهد
+      if (override || altUsed) return; // آزمون اتصال هیچ چیز را ذخیره یا تغییر نمی‌دهد
       try { setModel(m); } catch { /* ignore */ }
       try { localStorage.setItem('wort_ai_model_' + provider, m); } catch { /* ignore */ }
     };
@@ -665,7 +680,7 @@ export function describeAiError(e: unknown): string {
   }
   if (/^AI_HTTP_5/.test(msg)) return 'خطای سرور ارائه‌دهنده (' + msg.replace('AI_HTTP_', 'کد ') + ') — کمی بعد تلاش کن.';
   if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرویس هوش مصنوعی (کد HTTP ' + msg.replace('AI_HTTP_', '') + ')' + (e instanceof AiError && e.detail ? ' — ' + e.detail : ' — کلید، مدل و اینترنت را چک کن.');
-  if (msg === 'AI_NO_VISION') return 'سرویس فعلی (' + PROVIDERS[getActiveProvider()].label + ') تصویر را نمی‌خواند — در تنظیمات ← «اتصال به هوش مصنوعی» Gemini یا OpenRouter را فعال کن.';
+  if (msg === 'AI_NO_VISION') return 'سرویس فعلی (' + PROVIDERS[getActiveProvider()].label + ') فقط متن را می‌فهمد و برای عکس باید کلید Gemini یا OpenRouter هم ذخیره شده باشد — در تنظیمات ← «اتصال به هوش مصنوعی» کلید Gemini را وارد و «ذخیره و فعال‌سازی» بزن (کلید رایگان: aistudio.google.com/apikey).';
   if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
   if (msg === 'AI_PARSE') return 'پاسخ هوش مصنوعی قابل تبدیل به JSON نبود — دوباره تلاش کن.';
   return 'خطای نامشخص در اتصال به هوش مصنوعی: ' + msg.slice(0, 120);
