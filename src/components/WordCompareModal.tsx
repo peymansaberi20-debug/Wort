@@ -12,6 +12,8 @@ interface WordCompareModalProps {
   onSaveWord: (wordData: Partial<Word>, isEdit: boolean) => void;
   onSelectWord: (word: Word) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  /** rendered inside a vocabulary sub-tab: no overlay, no own header (the tab provides it) */
+  embedded?: boolean;
 }
 
 interface CompareRow {
@@ -28,7 +30,7 @@ interface CompareRow {
 const FENCE = '```';
 
 export const WordCompareModal: React.FC<WordCompareModalProps> = ({
-  open, onClose, words, onSaveWord, onSelectWord, onShowToast
+  open, onClose, words, onSaveWord, onSelectWord, onShowToast, embedded
 }) => {
   const [fields, setFields] = useState<string[]>(['', '', '', '']);
   const [rows, setRows] = useState<CompareRow[] | null>(null);
@@ -37,7 +39,9 @@ export const WordCompareModal: React.FC<WordCompareModalProps> = ({
   const [addingIdx, setAddingIdx] = useState<number | null>(null);
 
   // kept mounted (hidden) so results survive closing/reopening and profile visits
-  const shown = open
+  const shown = embedded
+    ? ''
+    : open
     ? 'fixed inset-0 z-40 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 md:p-6 overflow-y-auto'
     : 'hidden';
 
@@ -122,14 +126,16 @@ RULES
   return (
     <div
       className={shown}
-      onClick={e => { if (open && e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (open && !embedded && e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col" dir="rtl">
-        {/* Header — standardized icon strip, close leftmost */}
+      <div className={embedded ? 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full flex flex-col' : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col'} dir="rtl">
+        {/* Header — standardized icon strip, close leftmost (embedded: the sub-tab provides its own) */}
+        {!embedded && (
         <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center gap-2">
                     <IconBtn onClick={onClose} title="بستن مقایسه"><X size={18} className="text-red-500" /></IconBtn>
           <h3 className="flex-1 text-right font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">⚖️ مقایسه واژه‌ها (۲ تا ۴ واژه)</h3>
         </div>
+        )}
 
         <div className="p-4 md:p-5 space-y-4">
           {/* Input area */}
@@ -162,9 +168,6 @@ RULES
                 <span>⚖️ مقایسه کن</span>
               )}
             </button>
-            <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
-              مثال: sich entschließen / sich entscheiden / beschließen — یا: enttäuscht sein / verzweifelt sein
-            </p>
           </div>
 
           {errMsg && (
@@ -222,9 +225,6 @@ RULES
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
-                  پس از بستن پروفایل واژه، به همین جدول با همین نتایج برمی‌گردی.
-                </p>
               </div>
             </div>
           )}
