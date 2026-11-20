@@ -1,11 +1,45 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, buildSinglePromptDepth } from "../utils/ai";
+import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
+import { generateImage, describeAiError } from "../utils/aiProvider";
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
 import { X, Save, HelpCircle } from 'lucide-react';
+
+/** تصویر خام AI + زیرنویس آلمانی/فارسی → یک JPEG (متن را خودمان روی بوم می‌نویسیم تا املا و فارسی خراب نشود) */
+const composeCaptionedImage = (img: { mimeType: string; data: string }, de: string, fa: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => {
+      const W = 560;
+      const H = Math.round(im.height * (W / im.width));
+      const capH = fa ? 96 : 60;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H + capH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('بوم تصویر در دسترس نیست.')); return; }
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H + capH);
+      ctx.drawImage(im, 0, 0, W, H);
+      const fit = (text: string, weight: string, size: number, family: string) => {
+        let s = size;
+        do { ctx.font = `${weight} ${s}px ${family}`; s -= 2; } while (ctx.measureText(text).width > W - 24 && s > 12);
+      };
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#1d2330';
+      ctx.direction = 'ltr';
+      fit(de, '800', 30, 'Segoe UI, Arial, sans-serif');
+      ctx.fillText(de, W / 2, H + (fa ? 28 : capH / 2));
+      if (fa) {
+        ctx.direction = 'rtl'; ctx.fillStyle = '#1f5fbf';
+        fit(fa, '700', 26, 'Vazirmatn, Tahoma, Arial, sans-serif');
+        ctx.fillText(fa, W / 2, H + 68);
+      }
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    im.onerror = () => reject(new Error('تصویر ساخته‌شده قابل خواندن نبود.'));
+    im.src = `data:${img.mimeType};base64,${img.data}`;
+  });
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -151,6 +185,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [formTags, setFormTags] = useState(editingWord?.tags || '');
   const [formNotes, setFormNotes] = useState(editingWord?.notes || '');
   const [formImg, setFormImg] = useState(editingWord?.img || '');
+  const [imgLoading, setImgLoading] = useState(false);
 
   // AI loading in form
   const [aiLoading, setAiLoading] = useState(false);
@@ -730,6 +765,29 @@ Answer ONLY a JSON array, no code fence, no commentary:
     onShowToast(`«${c.de}» انتخاب شد؛ حالا تکمیل خودکار یا دستی ادامه بده.`, false);
   };
 
+  // Gemini draws a memorable picture for the word; the German + Persian caption is added on a canvas
+  const handleGenerateImage = async () => {
+    const de = formDe.trim();
+    if (!de || imgLoading) return;
+    const fa = formFa.trim();
+    const art = (formArt || '').trim();
+    setImgLoading(true);
+    try {
+      const prompt = `Create ONE clear, memorable illustration that helps a language learner remember the German word "${art ? art + ' ' : ''}${de}"${fa ? ` (Persian meaning: ${fa})` : ''}.
+Show the meaning of the word directly with one central, easily recognizable subject or a very simple scene (for verbs/adjectives/abstract words show a concrete everyday situation that makes the meaning obvious).
+Style: bright, friendly, clean, uncluttered background, square composition.
+IMPORTANT: do NOT put any text, letters, numbers, labels, logos or watermarks in the image.`;
+      const raw = await generateImage(prompt);
+      const finalImg = await composeCaptionedImage(raw, `${art ? art + ' ' : ''}${de}`, fa);
+      setFormImg(finalImg);
+      onShowToast('تصویر واژه ساخته شد و به واژه اضافه شد.');
+    } catch (e: any) {
+      onShowToast(e?.message ? (e.code ? describeAiError(e) : e.message) : 'ساخت تصویر ناموفق بود.', true);
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
   const handleCopyPrompt = async () => {
     if (!formDe.trim()) {
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
@@ -1019,12 +1077,20 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             </div>
           {/* AI Helper Bar */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-2.5">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => { aiDepthRef.current = 'full'; void handleAiAutoFill(); }}
+                disabled={aiLoading || translateLoading || !formDe.trim()}
+                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center justify-center gap-1"
+              >
+                {aiLoading && aiDepthRef.current === 'full' ? <span className="inline-block animate-spin">⏳</span> : <span>💎 تکمیل کامل</span>}
+              </button>
               <button
                 type="button"
                 onClick={() => { aiDepthRef.current = 'light'; void handleAiAutoFill(); }}
                 disabled={aiLoading || translateLoading || !formDe.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1 flex-1 min-w-[140px]"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1"
               >
                 {aiLoading && aiDepthRef.current === 'light' ? <span className="inline-block animate-spin">⏳</span> : <span>⚡ تکمیل سبک</span>}
               </button>
@@ -1032,28 +1098,35 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 type="button"
                 onClick={() => { aiDepthRef.current = 'mid'; void handleAiAutoFill(); }}
                 disabled={aiLoading || translateLoading || !formDe.trim()}
-                className="bg-[#b45309] hover:bg-[#92400e] text-white px-3 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1 flex-1 min-w-[150px]"
+                className="bg-[#b45309] hover:bg-[#92400e] text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1"
               >
                 {aiLoading && aiDepthRef.current === 'mid' ? <span className="inline-block animate-spin">⏳</span> : <span>⚙️ تکمیل نیمه</span>}
-              </button>
-              <button
-                type="button"
-                onClick={() => { aiDepthRef.current = 'full'; void handleAiAutoFill(); }}
-                disabled={aiLoading || translateLoading || !formDe.trim()}
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 h-11 rounded-xl text-xs font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center justify-center gap-1 flex-1 min-w-[160px]"
-              >
-                {aiLoading && aiDepthRef.current === 'full' ? <span className="inline-block animate-spin">⏳</span> : <span>💎 تکمیل کامل (۲۸)</span>}
               </button>
 
               <button
                 type="button"
                 onClick={handleCopyPrompt}
                 disabled={!formDe.trim()}
-                className="bg-[#0f766e] hover:bg-[#115e59] text-white px-4 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5 flex-1 min-w-[180px]"
+                className="col-span-2 bg-[#0f766e] hover:bg-[#115e59] text-white px-3 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5"
               >
                 📋 کپی دستور هوش مصنوعی
               </button>
+              <button
+                type="button"
+                onClick={() => void handleGenerateImage()}
+                disabled={imgLoading || aiLoading || !formDe.trim()}
+                className="bg-rose-600 hover:bg-rose-700 text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1"
+              >
+                {imgLoading ? <span className="inline-block animate-spin">⏳</span> : <span>🖼 افزودن عکس</span>}
+              </button>
             </div>
+
+            {formImg && (
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a]">
+                <img src={formImg} alt="تصویر واژه" className="w-24 h-auto rounded-lg border border-[#dde1ea] dark:border-[#333b4a]" />
+                <IconBtn onClick={() => setFormImg('')} title="حذف تصویر" danger><X size={18} className="text-red-500" /></IconBtn>
+              </div>
+            )}
 
             {/*
               Fulfills User Request #26:
