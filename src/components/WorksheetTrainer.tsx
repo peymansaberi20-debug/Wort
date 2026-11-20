@@ -13,7 +13,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey, getActiveProvider, getModel, getAiDebugInfo } from '../utils/aiProvider';
-import { Lvl, LVL_ORDER, LVL_INFO } from '../data/konnektorenData';
+import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 
 /* ───────────── مدل برگه (همان منطق نمونه‌ها) ───────────── */
 
@@ -631,33 +631,9 @@ export const WorksheetTrainer: React.FC<{
   if (phase === 'config' || !sess) {
     return (
       <div dir="rtl" className="bg-white dark:bg-[#1b2030] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-bold flex items-center gap-2"><span>{info.icon}</span><span>{info.title}</span></h3>
-          {onClose && <button onClick={onClose} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">بازگشت ✕</button>}
-        </div>
-        <p className="text-sm text-[#5d6676] dark:text-[#a3adbd] leading-7">
-          منطق برگهٔ نمونه تحلیل شده و حالا <b>هر بار</b> هوش مصنوعی با همان منطق یک برگهٔ تازه می‌سازد:
-          سطح و تعداد مورد را انتخاب کن، «ساخت برگه» را بزن. برگه‌ها با نمره و گفتگوهایشان در آرشیو می‌مانند و دوباره باز می‌شوند.
-        </p>
-        <ul className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-6 space-y-1 pr-1">
-          {info.logic.map((l, i) => <li key={i}>• {l}</li>)}
-        </ul>
-
-        {/* وضعیت هوش مصنوعی — کلید از تنظیمات برنامه */}
-        <div className={`rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
-          hasAIKey()
-            ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-            : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-        }`}>
-          {hasAIKey()
-            ? <>🤖 متصل: <b dir="ltr">{aiLabel()}</b> — کلید از «{getAiDebugInfo().source}» خوانده شد.</>
-            : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — بدون کلید نمی‌توان برگهٔ جدید ساخت؛ از صفحهٔ تنظیمات کلید را وارد و <b>ذخیره</b> کن.
-                <span className="block text-[10px] font-normal mt-0.5 opacity-80">چک فنی: {getAiDebugInfo().source}</span></>}
-        </div>
-
         {/* سطح */}
         <div>
-          <div className="text-xs font-bold text-[#5d6676] mb-1.5">۱. سطح — برگه فقط با واژگان و ساختارهای همین سطح</div>
+          <div className="text-xs font-bold text-[#5d6676] mb-1.5">۱. سطح</div>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
             {LVL_ORDER.map((l) => (
               <button
@@ -673,7 +649,6 @@ export const WorksheetTrainer: React.FC<{
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-[#5d6676] mt-2 leading-5">{LVL_INFO[level].label}</p>
         </div>
 
         {/* تعداد */}
