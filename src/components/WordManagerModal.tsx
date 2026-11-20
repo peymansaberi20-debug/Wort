@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { SORT_LABELS, SortKey, hasTimestamp, sortWords, splitCategoryName } from '../utils/wordSort';
 import { Word } from '../types';
 import { getCategories, resolveCat } from '../utils/storage';
+import { IconBtn } from './IconBtn';
+import { X } from 'lucide-react';
 
 interface WordManagerModalProps {
   words: Word[];
@@ -12,6 +14,8 @@ interface WordManagerModalProps {
   onOpenQualityControl?: () => void;
   onOpenCategoryManager?: () => void;
   qualityIssueCount?: number;
+  /** inside the vocabulary sub-tab: no overlay, no own header (the tab provides it) */
+  embedded?: boolean;
 }
 
 export const WordManagerModal: React.FC<WordManagerModalProps> = ({
@@ -22,14 +26,14 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
   onOpenDuplicateDetector,
   onOpenQualityControl,
   onOpenCategoryManager,
-  qualityIssueCount = 0
+  qualityIssueCount = 0,
+  embedded
 }) => {
   const [srcCat, setSrcCat] = useState<string>('*'); // default: all words!
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [targetCat, setTargetCat] = useState<string>('');
   const [newCatName, setNewCatName] = useState<string>('');
-  const [showHelp, setShowHelp] = useState<boolean>(false);
   const [sortKey, setSortKey] = useState<SortKey>('cat');
 
   const categories = useMemo(() => getCategories(words), [words]);
@@ -111,51 +115,21 @@ export const WordManagerModal: React.FC<WordManagerModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+      className={embedded ? '' : 'fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto'}
       onClick={e => {
-        if (e.target === e.currentTarget) onClose();
+        if (!embedded && e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col text-right">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🗂</span>
-            <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
-              مدیریت و انتقال گروهی واژه‌ها
+      <div className={embedded
+        ? 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full overflow-hidden flex flex-col text-right'
+        : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col text-right'}>
+        {/* Header (standalone popup only — the vocabulary sub-tab provides its own uniform header; help lives in HelpModal 'manager') */}
+        {!embedded && (
+          <div dir="ltr" className="px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center gap-2 bg-slate-50 dark:bg-[#141923]">
+            <IconBtn onClick={onClose} title="خروج"><X size={18} className="text-red-500" /></IconBtn>
+            <h3 dir="rtl" className="flex-1 text-right font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
+              🗂 مدیریت و انتقال گروهی واژه‌ها
             </h3>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowHelp(prev => !prev)}
-              aria-label="راهنما"
-              title="راهنما"
-              className="w-8 h-8 rounded-full bg-blue-50 text-[#1f5fbf] hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 text-base font-extrabold transition flex items-center justify-center"
-            >
-              !
-            </button>
-            <button
-              onClick={onClose}
-              aria-label="خروج"
-              title="خروج"
-              className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 text-base font-semibold transition flex items-center justify-center"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Collapsible Help Section */}
-        {showHelp && (
-          <div className="p-4 bg-blue-50/70 dark:bg-blue-950/40 border-b border-[#dde1ea] dark:border-[#333b4a] text-xs text-slate-700 dark:text-slate-300 space-y-1.5 leading-relaxed">
-            <p className="font-bold text-sm text-[#1f5fbf] dark:text-[#7fb0ff]">راهنمای استفاده از مدیریت واژه‌ها:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>پیش‌فرض این بخش، نمایش <b>همهٔ واژگان</b> در جدول منظم است.</li>
-              <li>می‌توانید دستهٔ مبدأ را فیلتر کنید یا واژه‌ای را جستجو نمایید.</li>
-              <li>واژه‌های دلخواه را تیک بزنید (یا از دکمهٔ «انتخاب همه» استفاده کنید).</li>
-              <li>برای <b>انتقال</b>: دستهٔ مقصد را از پایین انتخاب کرده و «انتقال واژه‌ها» را بزنید.</li>
-              <li>برای <b>حذف گروهی</b>: پس از تیک زدن واژه‌ها، دکمهٔ «حذف واژه‌های انتخاب‌شده» را بزنید.</li>
-            </ul>
           </div>
         )}
 
