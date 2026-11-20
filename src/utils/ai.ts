@@ -588,10 +588,21 @@ export const AIPM = (lines: string[], words: Word[], catOverride?: string): stri
 export function parseAI(t: string): any[] {
   t = t.replace(/```(?:json)?/gi, '').trim();
   const i = t.search(/[\[{]/);
-  if (i < 0) throw new Error('محتوای JSON در پاسخ یافت نشد.');
+  if (i < 0) throw new Error('پاسخ هوش مصنوعی خالی بود یا JSON نداشت — دوباره تلاش کن.');
   t = t.slice(i);
+  const tryParse = (s: string): any => { try { return JSON.parse(s); } catch { return undefined; } };
+  let o: any;
   const j = Math.max(t.lastIndexOf(']'), t.lastIndexOf('}'));
-  let o = JSON.parse(t.slice(0, j + 1));
+  if (j >= 0) o = tryParse(t.slice(0, j + 1));
+  if (o === undefined) {
+    // پاسخ نیمه‌کاره: تا آخرین شیء کامل نجات بده
+    let cut = t.lastIndexOf('},');
+    while (cut > 0 && o === undefined) {
+      o = tryParse(t.slice(0, cut + 1) + ']');
+      if (o === undefined) cut = t.lastIndexOf('},', cut - 1);
+    }
+  }
+  if (o === undefined) throw new Error('پاسخ هوش مصنوعی ناقص برگشت (JSON کامل نبود). دوباره امتحان کن؛ اگر تکرار شد سقف سرویس نزدیک است — سرویس دیگر را در تنظیمات فعال کن یا تعداد واژه‌ها را کم کن.');
   if (o && Array.isArray(o.words)) o = o.words;
   return Array.isArray(o) ? o : [o];
 }
@@ -754,27 +765,6 @@ ${chunk.map((x, n) => `${n + 1}. ${x}`).join('\n')}`;
   return out;
 }
 
-export async function quickTranslateWithGemini(
-  text: string
-): Promise<{ de: string; art?: string; fa: string; pos?: string; lvl?: string }> {
-  const t = String(text || '').trim();
-  if (!t) throw new Error('کلمه یا عبارت برای ترجمه الزامی است.');
-  const prompt = `You are a German-Persian dictionary assistant. Translate the following German word/phrase into natural, accurate Persian.
-Input: "${t.replace(/"/g, "'")}"
-Return ONLY a JSON object (no Markdown, no commentary) with this exact shape:
-{
-  "de": "the German word",
-  "art": "der" or "die" or "das" or "",
-  "fa": "Persian translation",
-  "pos": "اسم" or "فعل" or "صفت" or "قید" or "اصطلاح",
-  "lvl": "A1" or "A2" or "B1" or "B2" or "C1"
-}`;
-  const out = await generateText(prompt, { json: true, timeoutMs: 15000, retries: 1 });
-  const parsed = parseAI(out)[0];
-  if (!parsed || typeof parsed !== 'object') throw new Error('پاسخ ترجمه معتبر نبود.');
-  return parsed;
-}
-
 export async function processBatchWordsWithGemini(
   lines: string[],
   words: Word[],
@@ -807,10 +797,11 @@ export async function processBatchWordsWithGemini(
       const resText = await generateWithGemini(prompt, { timeoutMs: 30000 });
       const parsed = parseAI(resText);
       const { ws, errs } = aiToIMP(parsed, words, catOverride);
+      if (parsed.length < chunk.length) allErrs.push(`دستهٔ ${i + 1}: فقط ${parsed.length} از ${chunk.length} واژه کامل شد (پاسخ ناقص بود) — بقیه را دوباره بده.`);
       allWords.push(...ws);
       allErrs.push(...errs);
     } catch (e: any) {
-      if (e instanceof AiError && ['quota', 'auth', 'no_key', 'model'].includes(e.kind)) {
+      if (e instanceof AiError && ['AI_HTTP_429', 'AI_HTTP_401', 'AI_HTTP_403', 'AI_HTTP_404', 'NO_KEY'].includes(e.code)) {
         // A definitive answer (quota exhausted, bad key, unknown model): do not hammer the provider with the remaining batches
         allErrs.push(`${describeAiError(e)} (پردازش ${i + 1} تا ${chunks.length} متوقف شد؛ ${allWords.length} واژه تکمیل شده بود)`);
         break;
