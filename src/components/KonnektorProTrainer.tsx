@@ -16,7 +16,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AppSettings, Word } from '../types';
 import { speak } from '../utils/audio';
-import { Lvl, Kat, KAT_LABEL, LVL_INFO, LVL_ORDER, KonnektorItem, connectorsFor, findKonnektor } from '../data/konnektorenData';
+import { Lvl, Kat, KAT_LABEL, LVL_ORDER, KonnektorItem, connectorsFor, findKonnektor } from '../data/konnektorenData';
 import { SYS_AI, buildExercisePrompt, buildCorrectionPrompt, buildWordPrompt, buildChatPrompt, ChatCtx } from '../utils/konnektorPrompts';
 
 /* ───────────────────────── پل هوش مصنوعی برنامه ─────────────────────────
@@ -475,28 +475,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       {screen === 'config' && (
         <div className="space-y-3">
           <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 shadow-xs">
-            <p className="text-sm text-[#5d6676] dark:text-[#a3adbd] leading-6">
-              مثل تمرین کتاب: بخش اول جمله با حرف ربطِ هدف داده می‌شود و شما ادامه را می‌نویسید — اما <b>یکی‌یکی</b>:
-              هر جمله را که نوشتی همان‌جا سه‌لایه تصحیح و بازخورد می‌گیری (گرامری / مفهومی / تفکر آلمانی)،
-              می‌توانی همان‌جا با معلم گفتگو کنی و بعد با «بعدی» بروی سراغ جملهٔ بعد تا تعدادی که انتخاب کردی.
-              جملات را <b>هوش مصنوعی</b> طبق سطح می‌سازد.
-            </p>
-
-            {/* وضعیت هوش مصنوعی — فقط نمایش؛ تنظیم در صفحهٔ تنظیمات برنامه */}
-            <div className={`rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
-              hasAIKey()
-                ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-                : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-            }`}>
-              {hasAIKey()
-                ? <>🤖 متصل: <b dir="ltr">{aiStatusLabel()}</b> — کلید از «{getAiDebugInfo().source}» خوانده شد.</>
-                : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — در صفحهٔ تنظیمات کلید را وارد و <b>ذخیره</b> کن؛ بدون کلید هم می‌توانی حروف ربط را از بانک مرور کنی.
-                    <span className="block text-[10px] font-normal mt-0.5 opacity-80">چک فنی: {getAiDebugInfo().source}</span></>}
-            </div>
-
             {/* سطح */}
             <div>
-              <div className="text-xs font-bold text-[#5d6676] mb-1.5">۱. سطح — حروف ربط و جملات فقط از همین سطح می‌آیند</div>
+              <div className="text-xs font-bold text-[#5d6676] mb-1.5">۱. سطح</div>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {LVL_ORDER.map(l => (
                   <button
@@ -512,7 +493,6 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-[#5d6676] mt-2 leading-5">{LVL_INFO[level].label}</p>
             </div>
 
             {/* تعداد + موضوع */}
