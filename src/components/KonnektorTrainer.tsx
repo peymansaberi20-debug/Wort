@@ -20,7 +20,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey, getActiveProvider, getModel, getAiDebugInfo } from '../utils/aiProvider';
-import { Lvl, LVL_ORDER, LVL_INFO } from '../data/konnektorenData';
+import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 
 interface KonnektorTrainerProps {
   onClose: () => void;
@@ -530,34 +530,13 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
       {/* استایل چاپ — در DOM باقی می‌ماند تا Safari در print هم آن را اعمال کند */}
       <style>{PRINT_CSS}</style>
 
-      {/* هدر — فقط عنوان؛ خروج با ضربدرِ نوار تمرین‌ها بالای صفحه انجام می‌شود و چاپ پایین صفحه است.
-          min-w-0/break-words تا عنوان بلند در گوشی از صفحه بیرون نزند. */}
-      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-xs">
-        <span className="text-xl flex-shrink-0">📝</span>
-        <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100 min-w-0 break-words">
-          متن جای‌خالی (Konnektoren)
-        </span>
-      </div>
-
       {/* پیکربندی: سطح + تعداد جای خالی + موضوع → ساخت تمرین جدید با AI */}
       <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 shadow-xs">
         <div className="text-sm font-bold text-slate-700 dark:text-slate-300">✨ ساخت تمرین جدید با هوش مصنوعی</div>
 
-        {/* وضعیت هوش مصنوعی — کلید از تنظیمات برنامه */}
-        <div className={`rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${
-          hasAIKey()
-            ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-            : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300'
-        }`}>
-          {hasAIKey()
-            ? <>🤖 متصل: <b dir="ltr">{aiLabel()}</b> — کلید از «{getAiDebugInfo().source}» خوانده شد.</>
-            : <>🔌 هوش مصنوعی در تنظیمات برنامه فعال نشده — بدون کلید ساخت تمرین و چت کار نمی‌کند؛ از صفحهٔ تنظیمات کلید را وارد و <b>ذخیره</b> کن. تمرین‌های آرشیو شده همچنان قابل اجرا هستند.
-                <span className="block text-[10px] font-normal mt-0.5 opacity-80">چک فنی: {getAiDebugInfo().source}</span></>}
-        </div>
-
         {/* سطح */}
         <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1.5">۱. سطح — حروف ربط و واژگان فقط از همین سطح</div>
+          <div className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1.5">۱. سطح</div>
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
             {LVL_ORDER.map(l => (
               <button
@@ -573,7 +552,6 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] mt-2 leading-5">{LVL_INFO[level].label}</p>
         </div>
 
         {/* تعداد جای خالی */}
