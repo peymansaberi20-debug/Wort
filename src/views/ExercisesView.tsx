@@ -877,6 +877,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [isFlashConfigured, setIsFlashConfigured] = useState<boolean>(false);
 
   const [queue, setQueue] = useState<string[]>([]);
+  // صف برای کدام mode ساخته شده — تا هنگام جابه‌جایی تب‌ها کارت کهنهٔ «تبریک» فلش نزند
+  const [queueMode, setQueueMode] = useState<ExerciseMode | null>(activeMode);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
 
   const [revealedCardId, setRevealedCardId] = useState<string | null>(null);
@@ -1101,6 +1103,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       qIds = ['freesent-self'];
     }
     setQueue(qIds);
+    setQueueMode(activeMode);
     setCurrentIndex(0);
     setRevealedCardId(null);
     setUserInput('');
@@ -1780,7 +1783,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // تب‌های مستقل (کامپوننت خودشان همهٔ UI را دارند و از مسیر activeMode نمی‌گذرند)
   if (!activeMode && mainTab === 'sprechen') {
     return (
-      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
         <SprechenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} />
       </div>
@@ -1789,7 +1792,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   if (!activeMode && mainTab === 'lesen') {
     return (
-      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
         <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />
       </div>
@@ -1798,7 +1801,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   if (!activeMode && mainTab === 'hoeren') {
     return (
-      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
         {/* هر تمرین Hören در صفحهٔ جدا باز می‌شود (از مسیر activeMode) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1828,7 +1831,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     const hardWordsCount = allWords.filter(w => (w.bad || 0) > 3).length;
 
     return (
-      <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+      <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
 
         {mainTab === 'flash' && (
@@ -2042,7 +2045,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   if (activeMode === 'flash' && !isFlashConfigured) {
     return (
-      <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-4 text-right max-w-xl mx-auto">
+      <div ref={topRef} className="relative z-0 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-6 shadow-sm space-y-4 text-right max-w-xl mx-auto">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <h2 className="text-base md:text-lg font-bold flex items-center gap-2">
             <span>🃏</span>
@@ -2165,16 +2168,25 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   if (activeMode === 'hoeren' || activeMode === 'hoeren_new' || activeMode === 'hoeren_archive') {
     return (
-      <HoerenTrainer
-        initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
-        onClose={() => onSelectMode(null)}
-      />
+      <div className="relative z-0">
+        <HoerenTrainer
+          initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
+          onClose={() => onSelectMode(null)}
+        />
+      </div>
     );
   }
     
-  if (queue.length === 0 || currentIndex >= queue.length || !currentItem) {
+  // فریم انتقال بین تمرین‌ها: تا صفِ تمرین جدید ساخته شود، کارتِ «تبریک» کهنه فلش نزند
+  if (queueMode !== activeMode) {
+    return <div ref={topRef} className="min-h-[180px]" aria-hidden="true" />;
+  }
+
+  // کارت پایان فقط برای تمرین‌های صف‌محور (فلش‌کارت/جلسهٔ روزانه/مرور و …)؛
+  // تمرین‌های خودگردانِ گرامر UI خودشان را دارند و هرگز نباید به این کارت بیفتند.
+  if (!isSelfContainedMode(activeMode) && (queue.length === 0 || currentIndex >= queue.length || !currentItem)) {
     return (
-      <div ref={topRef} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
+      <div ref={topRef} className="relative z-0 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-7 text-center space-y-4 max-w-xl mx-auto shadow-sm">
         <span className="text-4xl block">🎉</span>
         <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">
           تبریک! تمرین به پایان رسید.
@@ -2197,7 +2209,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   }
 
   return (
-    <div ref={topRef} className="space-y-4 text-right max-w-2xl mx-auto pb-10">
+    <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
       {mainTab === 'grammatik' && gramSec && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 flex gap-1.5 overflow-x-auto">
           {gramSec.tabs.map(t => (
@@ -2210,8 +2222,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         </div>
       )}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100 break-words">
             {EXERCISE_NAMES[activeMode]?.title}
           </span>
           {isFlashType && (currentItem as Word)?.stage !== undefined && (
