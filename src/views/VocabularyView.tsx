@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word } from '../types';
 import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, fullWord } from '../utils/storage';
-import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
+import { AIP, generateWithGemini, parseAI, aiToIMP, buildSinglePromptDepth } from "../utils/ai";
 import { speak } from '../utils/audio';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
