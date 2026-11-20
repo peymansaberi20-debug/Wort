@@ -627,6 +627,60 @@ async function callProvider(prompt: string, images: Array<{ mimeType: string; da
   }
 }
 
+/**
+ * ساخت تصویر با Gemini (مدل «Nano Banana»). فقط با کلید Gemini کار می‌کند.
+ * خروجی: تصویر خام (base64)؛ نوشتن متن روی تصویر کار صفحهٔ فراخواننده است.
+ */
+export async function generateImage(prompt: string, timeoutMs = 90000): Promise<{ mimeType: string; data: string }> {
+  const cfg = getAIConfig();
+  const key = perProviderKey('gemini') || (cfg.provider === 'gemini' ? cfg.key : '');
+  if (!key) throw aiErr('AI_NO_GEMINI_KEY');
+  const models = ['gemini-2.5-flash-image', 'gemini-3.1-flash-image-preview'];
+  let lastErr: unknown;
+  for (const model of models) {
+    try {
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+            }),
+          },
+          timeoutMs
+        );
+      } catch (e: any) {
+        throw aiErr(e?.name === 'AbortError' ? 'AI_TIMEOUT' : 'AI_NETWORK');
+      }
+      if (!res.ok) {
+        const err = aiErr('AI_HTTP_' + res.status);
+        try {
+          const raw = await res.text();
+          let d = raw;
+          try { const j = JSON.parse(raw); d = j?.error?.message || j?.message || raw; } catch { /* keep raw */ }
+          err.detail = String(d || '').replace(/\s+/g, ' ').slice(0, 220);
+        } catch { /* body unreadable */ }
+        throw err;
+      }
+      const data: any = await res.json();
+      const parts: any[] = data?.candidates?.[0]?.content?.parts || [];
+      const hit = parts.find(p => (p?.inlineData || p?.inline_data)?.data);
+      if (!hit) throw aiErr('AI_NO_IMAGE');
+      const inl = hit.inlineData || hit.inline_data;
+      return { mimeType: inl.mimeType || inl.mime_type || 'image/png', data: inl.data };
+    } catch (e) {
+      lastErr = e;
+      if ((e as Error).message === 'AI_HTTP_404') continue; // model name not available for this key → try the next one
+      throw friendlyErr(e);
+    }
+  }
+  throw friendlyErr(lastErr);
+}
+
 const RETRYABLE = (code: string): boolean =>
   code === 'AI_TIMEOUT' || code === 'AI_NETWORK' ||
   code === 'AI_HTTP_429' || /^AI_HTTP_5/.test(code);
@@ -676,11 +730,13 @@ export function describeAiError(e: unknown): string {
   if (msg.startsWith('AI_HTTP_429')) {
     const cur = getActiveProvider();
     const others = PROVIDER_IDS.filter(p => p !== cur).map(p => PROVIDERS[p].label).join(' یا ');
-    return `سقف درخواست «${PROVIDERS[cur].label}» پر شده (محدودیت دقیقه‌ای یا روزانه). چند دقیقه صبر کن، یا از منوی ⋮ ← تنظیمات ← «اتصال به هوش مصنوعی» سرویس دیگر (${others}) را انتخاب و «ذخیره و فعال‌سازی» بزن.`;
+    return `سقف درخواست «${PROVIDERS[cur].label}» پر شده (محدودیت دقیقه‌ای یا روزانه). چند دقیقه صبر کن، یا از منوی ⋮ ← تنظیمات ← «اتصال به هوش مصنوعی» سرویس دیگر (${others}) را انتخاب و «ذخیره و فعال‌سازی» بزن.` + (e instanceof AiError && e.detail ? ' — ' + e.detail : '');
   }
   if (/^AI_HTTP_5/.test(msg)) return 'خطای سرور ارائه‌دهنده (' + msg.replace('AI_HTTP_', 'کد ') + ') — کمی بعد تلاش کن.';
   if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرویس هوش مصنوعی (کد HTTP ' + msg.replace('AI_HTTP_', '') + ')' + (e instanceof AiError && e.detail ? ' — ' + e.detail : ' — کلید، مدل و اینترنت را چک کن.');
   if (msg === 'AI_NO_VISION') return 'سرویس فعلی (' + PROVIDERS[getActiveProvider()].label + ') فقط متن را می‌فهمد و برای عکس باید کلید Gemini یا OpenRouter هم ذخیره شده باشد — در تنظیمات ← «اتصال به هوش مصنوعی» کلید Gemini را وارد و «ذخیره و فعال‌سازی» بزن (کلید رایگان: aistudio.google.com/apikey).';
+  if (msg === 'AI_NO_GEMINI_KEY') return 'ساخت تصویر فقط با Gemini ممکن است — در تنظیمات ← «اتصال به هوش مصنوعی» کلید Gemini را وارد و «ذخیره و فعال‌سازی» بزن.';
+  if (msg === 'AI_NO_IMAGE') return 'Gemini این بار تصویری برنگرداند (احتمالاً فیلتر ایمنی یا فقط متن) — دوباره امتحان کن.';
   if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
   if (msg === 'AI_PARSE') return 'پاسخ هوش مصنوعی قابل تبدیل به JSON نبود — دوباره تلاش کن.';
   return 'خطای نامشخص در اتصال به هوش مصنوعی: ' + msg.slice(0, 120);
