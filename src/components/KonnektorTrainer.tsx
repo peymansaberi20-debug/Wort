@@ -249,7 +249,7 @@ const PRINT_CSS = `
 }
 `;
 
-export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onClose, onShowToast }) => {
+export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast }) => {
   const [exercises, setExercises] = useState<KonnektorItem[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -530,26 +530,13 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onClose, onS
       {/* استایل چاپ — در DOM باقی می‌ماند تا Safari در print هم آن را اعمال کند */}
       <style>{PRINT_CSS}</style>
 
-      {/* هدر مشابه سایر بخش‌ها */}
-      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">📝</span>
-          <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100">
-            متن جای‌خالی (Konnektoren)
-          </span>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handlePrint}
-            className="bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs"
-            title="چاپ تمرین + پاسخنامه (دو صفحه)"
-          >
-            🖨️ چاپ
-          </button>
-          <button onClick={onClose} className="text-sm bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-xl font-semibold">
-            ✕ خروج
-          </button>
-        </div>
+      {/* هدر — فقط عنوان؛ خروج با ضربدرِ نوار تمرین‌ها بالای صفحه انجام می‌شود و چاپ پایین صفحه است.
+          min-w-0/break-words تا عنوان بلند در گوشی از صفحه بیرون نزند. */}
+      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-xs">
+        <span className="text-xl flex-shrink-0">📝</span>
+        <span className="font-extrabold text-sm md:text-base text-slate-900 dark:text-slate-100 min-w-0 break-words">
+          متن جای‌خالی (Konnektoren)
+        </span>
       </div>
 
       {/* پیکربندی: سطح + تعداد جای خالی + موضوع → ساخت تمرین جدید با AI */}
@@ -778,6 +765,17 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onClose, onS
             </div>
           </>
         )}
+      </div>
+
+      {/* 🖨️ چاپ — پایین صفحه (طبق درخواست کاربر) */}
+      <div className="konn-interactive">
+        <button
+          onClick={handlePrint}
+          className="w-full bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white py-3 rounded-xl text-sm font-bold shadow-md"
+          title="چاپ تمرین + پاسخنامه (دو صفحه)"
+        >
+          🖨️ چاپ تمرین + پاسخنامه
+        </button>
       </div>
 
       {/*
