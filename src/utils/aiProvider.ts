@@ -54,6 +54,8 @@ export const PROVIDER_IDS: ProviderId[] = ['gemini', 'groq', 'openrouter'];
 /** خطای استاندارد هوش مصنوعی — کد در code و message */
 export class AiError extends Error {
   code: string;
+  /** short provider error text (from the HTTP response body), shown to the user for unknown HTTP errors */
+  detail?: string;
   constructor(code: string, message?: string) {
     super(message || code);
     this.name = 'AiError';
@@ -61,7 +63,7 @@ export class AiError extends Error {
   }
 }
 
-export interface GenerateOpts { json?: boolean; timeoutMs?: number; retries?: number; }
+export interface GenerateOpts { json?: boolean; timeoutMs?: number; retries?: number; model?: string; }
 export interface AIConfig { key: string; model: string; provider: ProviderId; source: string; }
 export interface AiDebugInfo { found: boolean; source: string; provider: ProviderId; model: string; keyLen: number; }
 
@@ -397,7 +399,7 @@ export function isKeyPersisted(provider?: ProviderId): boolean {
   return !!detect();
 }
 
-export function hasApiKey(): boolean { return !!detect(); }
+export function hasApiKey(_provider?: ProviderId): boolean { return !!detect(); }
 
 export function getActiveProvider(): ProviderId {
   const s = readStored();
@@ -525,6 +527,8 @@ type CallOverride = { provider: ProviderId; key: string; model: string };
 async function callProvider(prompt: string, images: Array<{ mimeType: string; data: string }>, opts: GenerateOpts, override?: CallOverride): Promise<string> {
   const cfg = override || getAIConfig();
   if (!cfg.key) throw aiErr('NO_KEY');
+  // Groq's configured models are text-only: sending an image gives a bare HTTP 400
+  if (images.length && !PROVIDERS[cfg.provider].vision) throw aiErr('AI_NO_VISION');
   const json = !!opts.json;
   const timeoutMs = opts.timeoutMs ?? 60000;
   const provider = cfg.provider;
@@ -548,7 +552,8 @@ async function callProvider(prompt: string, images: Array<{ mimeType: string; da
             role: 'user',
             parts: [{ text: prompt }, ...images.map(i => ({ inlineData: { mimeType: i.mimeType, data: i.data } }))],
           }],
-          generationConfig: { temperature: 0.8, ...(json ? { responseMimeType: 'application/json' } : {}) },
+          // maxOutputTokens: the default can truncate several full 28-field profiles (thinking tokens count too)
+          generationConfig: { temperature: 0.8, maxOutputTokens: 32768, ...(json ? { responseMimeType: 'application/json' } : {}) },
         }),
       };
     } else {
@@ -566,7 +571,16 @@ async function callProvider(prompt: string, images: Array<{ mimeType: string; da
       if (e?.name === 'AbortError') throw aiErr('AI_TIMEOUT');
       throw aiErr('AI_NETWORK');
     }
-    if (!res.ok) throw aiErr('AI_HTTP_' + res.status);
+    if (!res.ok) {
+      const err = aiErr('AI_HTTP_' + res.status);
+      try {
+        const raw = await res.text();
+        let d = raw;
+        try { const j = JSON.parse(raw); d = j?.error?.message || j?.message || raw; } catch { /* keep raw */ }
+        err.detail = String(d || '').replace(/\s+/g, ' ').slice(0, 220);
+      } catch { /* body unreadable */ }
+      throw err;
+    }
     let data: any;
     try { data = await res.json(); } catch { throw aiErr('AI_EMPTY'); }
     return provider === 'gemini' ? extractTextGemini(data) : extractTextOpenAI(data);
@@ -638,7 +652,7 @@ function friendlyErr(e: unknown): unknown {
 /** پیام خطای خوانا برای کاربر */
 export function describeAiError(e: unknown): string {
   const msg = e instanceof AiError && e.code ? e.code : (e instanceof Error ? e.message : String(e || ''));
-  if (msg === 'NO_KEY') return 'هوش مصنوعی در تنظیمات برنامه فعال نیست — کلید را در صفحهٔ تنظیمات وارد کن.';
+  if (msg === 'NO_KEY') return 'کلید هوش مصنوعی در تنظیمات وارد نشده است';
   if (msg === 'AI_TIMEOUT') return 'هوش مصنوعی دیر جواب داد (timeout) — کمی بعد دوباره تلاش کن.';
   if (msg === 'AI_NETWORK') return 'اتصال به سرور هوش مصنوعی برقرار نشد — اینترنت را چک کن.';
   if (msg.startsWith('AI_BLOCKED')) return 'پاسخ توسط فیلتر ایمنی ارائه‌دهنده بازداشته شد — سؤال را کمی عوض کن.';
@@ -650,7 +664,8 @@ export function describeAiError(e: unknown): string {
     return `سقف درخواست «${PROVIDERS[cur].label}» پر شده (محدودیت دقیقه‌ای یا روزانه). چند دقیقه صبر کن، یا از منوی ⋮ ← تنظیمات ← «اتصال به هوش مصنوعی» سرویس دیگر (${others}) را انتخاب و «ذخیره و فعال‌سازی» بزن.`;
   }
   if (/^AI_HTTP_5/.test(msg)) return 'خطای سرور ارائه‌دهنده (' + msg.replace('AI_HTTP_', 'کد ') + ') — کمی بعد تلاش کن.';
-  if (msg.startsWith('AI_HTTP_')) return 'خطای HTTP ارائه‌دهنده: ' + msg.replace('AI_HTTP_', '');
+  if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرویس هوش مصنوعی (کد HTTP ' + msg.replace('AI_HTTP_', '') + ')' + (e instanceof AiError && e.detail ? ' — ' + e.detail : ' — کلید، مدل و اینترنت را چک کن.');
+  if (msg === 'AI_NO_VISION') return 'سرویس فعلی (' + PROVIDERS[getActiveProvider()].label + ') تصویر را نمی‌خواند — در تنظیمات ← «اتصال به هوش مصنوعی» Gemini یا OpenRouter را فعال کن.';
   if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
   if (msg === 'AI_PARSE') return 'پاسخ هوش مصنوعی قابل تبدیل به JSON نبود — دوباره تلاش کن.';
   return 'خطای نامشخص در اتصال به هوش مصنوعی: ' + msg.slice(0, 120);
