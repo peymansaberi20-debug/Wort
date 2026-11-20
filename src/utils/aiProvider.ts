@@ -610,7 +610,7 @@ export async function generateText(prompt: string, opts: GenerateOpts = {}): Pro
     try { return await callProvider(prompt, [], opts); }
     catch (e) { last = e; if (a < attempts - 1 && RETRYABLE((e as Error).message)) { await new Promise(r => setTimeout(r, 800)); continue; } }
   }
-  throw last;
+  throw friendlyErr(last);
 }
 
 /** مثل generateText ولی با تصویر (OCR/تصحیح عکس) */
@@ -625,10 +625,15 @@ export async function generateWithImages(
     try { return await callProvider(prompt, images.filter(i => i && i.data), opts); }
     catch (e) { last = e; if (a < attempts - 1 && RETRYABLE((e as Error).message)) { await new Promise(r => setTimeout(r, 800)); continue; } }
   }
-  throw last;
+  throw friendlyErr(last);
 }
 /** نام جایگزین رایج */
 export const callAI = generateText;
+
+/** پیام خطا را خوانا می‌کند ولی code را نگه می‌دارد (همه‌جا e.message فارسی می‌شود) */
+function friendlyErr(e: unknown): unknown {
+  return e instanceof AiError ? new AiError(e.code, describeAiError(e)) : e;
+}
 
 /** پیام خطای خوانا برای کاربر */
 export function describeAiError(e: unknown): string {
@@ -639,7 +644,11 @@ export function describeAiError(e: unknown): string {
   if (msg.startsWith('AI_BLOCKED')) return 'پاسخ توسط فیلتر ایمنی ارائه‌دهنده بازداشته شد — سؤال را کمی عوض کن.';
   if (msg.startsWith('AI_HTTP_401') || msg.startsWith('AI_HTTP_403')) return 'کلید هوش مصنوعی نامعتبر است یا اجازه ندارد — در تنظیمات چک کن.';
   if (msg.startsWith('AI_HTTP_404')) return 'مدل انتخابی پیدا نشد — در تنظیمات مدل را عوض کن.';
-  if (msg.startsWith('AI_HTTP_429')) return 'محدودیت تعداد درخواست — کمی بعد دوباره تلاش کن.';
+  if (msg.startsWith('AI_HTTP_429')) {
+    const cur = getActiveProvider();
+    const others = PROVIDER_IDS.filter(p => p !== cur).map(p => PROVIDERS[p].label).join(' یا ');
+    return `سقف درخواست «${PROVIDERS[cur].label}» پر شده (محدودیت دقیقه‌ای یا روزانه). چند دقیقه صبر کن، یا از منوی ⋮ ← تنظیمات ← «اتصال به هوش مصنوعی» سرویس دیگر (${others}) را انتخاب و «ذخیره و فعال‌سازی» بزن.`;
+  }
   if (/^AI_HTTP_5/.test(msg)) return 'خطای سرور ارائه‌دهنده (' + msg.replace('AI_HTTP_', 'کد ') + ') — کمی بعد تلاش کن.';
   if (msg.startsWith('AI_HTTP_')) return 'خطای HTTP ارائه‌دهنده: ' + msg.replace('AI_HTTP_', '');
   if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
