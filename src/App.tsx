@@ -778,6 +778,7 @@ export default function App() {
                       onAddEnrichedWords={ws => setState(prev => ({ ...prev, words: [...prev.words, ...ws] }))}
                       onClose={close}
                       onShowToast={showToast}
+                      embedded
                     />
                   )}
                   renderManager={close => (
@@ -790,6 +791,7 @@ export default function App() {
                       onOpenDuplicateDetector={() => setIsDuplicateModalOpen(true)}
                       onOpenQualityControl={() => setIsQualityModalOpen(true)}
                       qualityIssueCount={qualityIssueCount}
+                      embedded
                     />
                   )}
                   renderQuality={close => (
@@ -800,6 +802,7 @@ export default function App() {
                       onEditWord={handleEditWord}
                       onIgnoreWord={handleIgnoreQualityWord}
                       onDeleteWord={handleDeleteWord}
+                      embedded
                     />
                   )}
                   onOpenGroupImport={() => setShowGroupImport(true)}
