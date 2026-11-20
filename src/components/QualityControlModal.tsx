@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Word } from '../types';
 import { auditWord } from '../utils/storage';
+import { IconBtn } from './IconBtn';
+import { X } from 'lucide-react';
 
 interface QualityControlModalProps {
   words: Word[];
@@ -9,6 +11,8 @@ interface QualityControlModalProps {
   onEditWord: (word: Word) => void;
   onIgnoreWord: (wordId: string) => void;
   onDeleteWord: (word: Word) => void;
+  /** inside the vocabulary sub-tab: no overlay, no own header (the tab provides it) */
+  embedded?: boolean;
 }
 
 export const QualityControlModal: React.FC<QualityControlModalProps> = ({
@@ -17,7 +21,8 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
   onClose,
   onEditWord,
   onIgnoreWord,
-  onDeleteWord
+  onDeleteWord,
+  embedded
 }) => {
   // Collect all problematic words and their audit issues
   const problematicWords = words
@@ -48,38 +53,36 @@ export const QualityControlModal: React.FC<QualityControlModalProps> = ({
     setOpenCats(prev => (prev[cat] ? {} : { [cat]: true }));
   };
 
+  const shellCls = embedded
+    ? ''
+    : 'fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto';
+  const cardCls = embedded
+    ? 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full flex flex-col text-right'
+    : 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col text-right';
+
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+      className={shellCls}
       onClick={e => {
-        if (e.target === e.currentTarget) onClose();
+        if (!embedded && e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col text-right">
-        {/* Header */}
-        <div className="px-5 py-3.5 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923]">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🔍</span>
-            <h3 className="font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
-              کنترل کیفیت واژگان ({problematicWords.length} مورد نیازمند بررسی)
+      <div className={cardCls}>
+        {embedded ? (
+          <div className="px-4 py-2 border-b border-[#dde1ea] dark:border-[#333b4a] text-xs font-bold text-slate-700 dark:text-slate-300">
+            {problematicWords.length} مورد نیازمند بررسی
+          </div>
+        ) : (
+          <div dir="ltr" className="px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center gap-2 bg-slate-50 dark:bg-[#141923]">
+            <IconBtn onClick={onClose} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
+            <h3 dir="rtl" className="flex-1 text-right font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
+              🔍 کنترل کیفیت واژگان ({problematicWords.length} مورد)
             </h3>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 px-3 py-1 rounded-xl text-xs md:text-sm font-semibold transition"
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Description */}
-        <div className="p-4 bg-blue-50/50 dark:bg-blue-950/20 border-b border-[#dde1ea] dark:border-[#333b4a] text-xs text-[#5d6676] dark:text-[#a3adbd]">
-          واژه‌هایی که آرتیکل، صرف، مثال یا ترجمهٔ آن‌ها ناقص یا نامعمول است در دسته‌های زیر مرتب شده‌اند.
-          می‌توانید هر واژه را ویرایش کنید، در صورت اطمینان نادیده بگیرید یا کاملاً حذف کنید.
-        </div>
+        )}
 
         {/* Content List grouped by Category */}
-        <div className="p-4 overflow-y-auto flex-1 space-y-3">
+        <div className={embedded ? 'p-3 space-y-3' : 'p-4 overflow-y-auto flex-1 space-y-3'}>
           {problematicWords.length === 0 ? (
             <div className="text-center py-12 text-emerald-600 dark:text-emerald-400">
               <span className="text-4xl block mb-2">🎉</span>
