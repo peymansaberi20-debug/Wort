@@ -15,6 +15,8 @@ interface GroupImportViewProps {
   onAddEnrichedWords: (ws: Word[]) => void;
   onClose: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  /** inside the vocabulary sub-tab: no full-screen overlay, no own header (the tab provides it) */
+  embedded?: boolean;
 }
 
 interface GCand {
@@ -30,7 +32,8 @@ const isBelowLevel = (cefr: string, min: string) => {
   return !!cefr && a > 0 && b > 0 && a <= b;
 };
 
-export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEnrichedWords, onClose, onShowToast }) => {
+export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEnrichedWords, onClose, onShowToast, embedded }) => {
+  const [errMsg, setErrMsg] = useState('');
   const [source, setSource] = useState<'file' | 'text' | null>(null);
   const [method, setMethod] = useState<'ai' | 'noai'>('ai');
   const [files, setFiles] = useState<File[]>([]);
@@ -419,7 +422,7 @@ Return ONLY a JSON array, no Markdown:
     const eff = (c: GCand) => ((c.fix || '').trim() || c.de).trim();
     const selected = cands.filter(c => c.on && eff(c).length >= 2);
     if (!selected.length) { onShowToast('حداقل یک واژه را انتخاب کن.', true); return; }
-    setEnriching(true); setProgressPercent(5);
+    setEnriching(true); setProgressPercent(5); setErrMsg('');
     setProgressMsg(`تکمیل ${selected.length} واژه (${depth === 'full' ? 'کامل' : depth === 'mid' ? 'نیمه' : 'سبک'})…`);
     try {
       const userCatMap = new Map<string, string>();
@@ -430,6 +433,7 @@ Return ONLY a JSON array, no Markdown:
       });
 
       const done: Word[] = [];
+      let enrichErrs: string[] = [];
       let skippedByLevel = 0;
       // 1) complete ones (from structured files) go straight in
       selected.filter(c => c.complete && c.full).forEach(c => {
@@ -440,7 +444,7 @@ Return ONLY a JSON array, no Markdown:
       const rest = selected.filter(c => !c.complete);
       if (rest.length) {
         const lines = rest.map(c => eff(c));
-        const { ws } = await processBatchWordsWithGemini(
+        const { ws, errs } = await processBatchWordsWithGemini(
           lines, words, undefined,
           (d, t, m) => { setProgressPercent(Math.round((d / Math.max(1, t)) * 85) + 5); setProgressMsg(m); },
           depth
@@ -458,31 +462,56 @@ Return ONLY a JSON array, no Markdown:
             done.push(v);
           }
         });
+        enrichErrs = errs;
       }
 
-      if (done.length === 0) throw new Error(skippedByLevel ? 'همهٔ واژه‌ها به‌خاطر فیلتر سطح حذف شدند.' : 'هیچ واژه‌ای تکمیل/ثبت نشد.');
-      onAddEnrichedWords(done);
+      // skip words already in the library (and repeats inside this batch)
+      const keyOf = (w: Word) => `${(w.art || '').toLowerCase()}|${w.de.toLowerCase()}`;
+      const seenKeys = new Set(words.map(keyOf));
+      const toAdd: Word[] = [];
+      let dupCount = 0;
+      for (const w of done) {
+        const k = keyOf(w);
+        if (seenKeys.has(k)) { dupCount++; continue; }
+        seenKeys.add(k);
+        toAdd.push(w);
+      }
+      const failedCount = Math.max(0, selected.length - toAdd.length - dupCount);
+
+      if (toAdd.length === 0) {
+        // never hide the real cause: show what the AI layer reported (no key / HTTP status / parse snippet)
+        const why = enrichErrs.slice(0, 3).join('\n');
+        throw new Error(why || (dupCount ? `همهٔ ${dupCount} واژه از قبل در کتابخانه بودند.` : (skippedByLevel ? 'همهٔ واژه‌ها به‌خاطر فیلتر سطح حذف شدند.' : 'هیچ واژه‌ای تکمیل/ثبت نشد.')));
+      }
+      onAddEnrichedWords(toAdd);
       setProgressPercent(100);
-      onShowToast(`${done.length} واژه ثبت شد.${skippedByLevel ? ` (${skippedByLevel} واژه با فیلتر سطح حذف شد)` : ''}`, false);
-      setCands([]);
-      onClose();
+      onShowToast(`${toAdd.length} واژه ثبت شد` + (dupCount ? `، ${dupCount} تکراری رد شد` : '') + (failedCount ? `، ${failedCount} ناموفق` : '') + '.', failedCount > 0);
+      if (failedCount > 0) {
+        // keep only the failed rows so the user can retry them; show the reasons
+        const okKeys = new Set(toAdd.map(w => w.de.toLowerCase()));
+        setCands(prev => prev.filter(c => c.on && !c.complete && !okKeys.has(eff(c).toLowerCase()) && !words.some(w => w.de.toLowerCase() === eff(c).toLowerCase())));
+        setErrMsg(enrichErrs.slice(0, 3).join('\n'));
+      } else {
+        setCands([]);
+        onClose();
+      }
     } catch (e: any) {
+      setErrMsg(e?.message || 'خطا در ثبت گروهی');
       onShowToast(e?.friendly || e?.message || 'خطا در ثبت گروهی', true);
       setProgressMsg(`خطا: ${e?.message || ''}`);
     } finally { setEnriching(false); }
   };
 
-  const errMsg = '';
-
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans">
+    <div className={embedded ? 'text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans' : 'fixed inset-0 z-[60] overflow-y-auto bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] flex flex-col font-sans'}>
+      {!embedded && (
       <header className="sticky top-0 z-20 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 md:px-5 h-14 md:h-16 flex items-center gap-2 shadow-lg">
         <h1 className="flex-1 text-right font-bold text-base md:text-lg">📦 افزودن واژگان گروهی</h1>
-        <span className="hidden sm:inline text-[11px] text-white/70">گام ۱: ورودی ← گام ۲: روش ← گام ۳: تنظیم و ثبت</span>
         <IconBtn onClick={onClose} title="بازگشت به واژگان"><X size={18} className="text-red-500" /></IconBtn>
       </header>
+      )}
 
-      <main className="flex-1 max-w-3xl w-full mx-auto p-3.5 md:p-6 space-y-4 pb-16">
+      <main className={embedded ? 'w-full space-y-4 p-3' : 'flex-1 max-w-3xl w-full mx-auto p-3.5 md:p-6 space-y-4 pb-16'}>
         {/* Step 1 — source */}
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3">
           <button onClick={() => setInputOpen(o => !o)} className="w-full flex items-center justify-between text-sm md:text-base font-bold"><span>۱. ورودی را انتخاب کن</span><span className="text-xs text-[#5d6676]">{inputOpen ? '▲ بستن' : '▼ باز کردن'}</span></button>
@@ -514,7 +543,7 @@ Return ONLY a JSON array, no Markdown:
               </div>
               <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold">
                 <input type="checkbox" checked={method === 'noai'} onChange={e => setMethod(e.target.checked ? 'noai' : 'ai')} className="w-4 h-4 accent-[#1f5fbf]" />
-                <span>بدون هوش مصنوعی (فقط OCR محلی برای تصویر — بقیهٔ فرمت‌ها نیازی به AI ندارند)</span>
+                <span>بدون هوش مصنوعی (OCR محلی)</span>
               </label>
               {files.length > 0 && (
                 <div className="flex items-center justify-between text-[11px] text-[#5d6676]">
@@ -535,7 +564,7 @@ Return ONLY a JSON array, no Markdown:
               />
               <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold">
                 <input type="checkbox" checked={method === 'noai'} onChange={e => setMethod(e.target.checked ? 'noai' : 'ai')} className="w-4 h-4 accent-[#1f5fbf]" />
-                <span>بدون هوش مصنوعی (جداسازی سادهٔ واژه‌ها)</span>
+                <span>بدون هوش مصنوعی</span>
               </label>
             </div>
           )}
@@ -650,7 +679,7 @@ Return ONLY a JSON array, no Markdown:
           </div>
         )}
 
-        {errMsg && <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{errMsg}</div>}
+        {errMsg && <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300 whitespace-pre-line break-words">{errMsg}</div>}
       </main>
     </div>
   );
