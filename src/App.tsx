@@ -33,6 +33,16 @@ import { HelpModal } from './components/HelpModal';
 import { ImageExtractModal } from './components/ImageExtractModal';
 import { AboutModal } from './components/AboutModal';
 import { DuplicateDetectorModal } from './components/DuplicateDetectorModal';
+import { VerbPrep } from './components/VerbPrep';
+import { WorksheetTrainer } from './components/WorksheetTrainer';
+import { KonnektorTrainer } from './components/KonnektorTrainer';
+import { KonnektorProTrainer } from './components/KonnektorProTrainer';
+import { SatzPuzzle } from './components/SentenceDrills';
+import { TenseStoryTrainer } from './views/TenseStoryTrainer';
+
+/** تمرین‌های خودگردان گرامر — بدنه‌شان در لایهٔ keep-alive زیر رندر می‌شود تا با
+ *  جابجایی تب‌ها (اصلی یا زیرتب‌های گرامر) باز بمانند؛ بستن فقط با ضربدرِ خود تمرین. */
+const GRAM_SELF_MODES: string[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle'];
 
 import { DashboardView } from './views/DashboardView';
 import { ExercisesView, ExerciseMode } from './views/ExercisesView';
@@ -57,6 +67,13 @@ export default function App() {
   const [activeExercise, setActiveExercise] = useState<ExerciseMode | null>(null);
   const [practiceWordIds, setPracticeWordIds] = useState<string[] | null>(null);
   const [lastTargetedMode, setLastTargetedMode] = useState<ExerciseMode | null>(null);
+
+  /** منوی تمرین‌ها به‌جای تمرین باز نمایش داده شود (جابجایی تب‌های اصلی بدون بستن تمرین‌های گرامر) */
+  const [exMenuMode, setExMenuMode] = useState(false);
+  /** تب فعال VerbPrep (یادگیری/تمرین/افزودن) — بیرون از ExercisesView تا تمرین باز بماند */
+  const [vprepTab, setVprepTab] = useState<'learn' | 'practice' | 'add'>('practice');
+  /** شمارندهٔ ریست هر تمرین گرامر — با ضربدر، همان تمرین از نو (config) شروع می‌شود */
+  const [gramResets, setGramResets] = useState<Record<string, number>>({});
 
   // Active Modals
   const [selectedWord, setSelectedWord] = useState<Word | null>(null);
@@ -237,6 +254,17 @@ export default function App() {
       ...prev,
       set: { ...prev.set, theme: nextTheme }
     }));
+  };
+
+  /** مسیر یکدست باز/بستن تمرین‌ها: ضربدرِ تمرین گرامر همان تمرین را ریست می‌کند (فقط ضربدر بسته می‌بندد) */
+  const handleSelectExercise = (mode: ExerciseMode | null) => {
+    if (mode === null && activeExercise && GRAM_SELF_MODES.includes(activeExercise)) {
+      setGramResets(prev => ({ ...prev, [activeExercise]: (prev[activeExercise] || 0) + 1 }));
+    }
+    setExMenuMode(false);
+    setExerciseHidden(false);
+    setActiveExercise(mode);
+    if (mode === null) setPracticeWordIds(null);
   };
   
   const handleSaveAndExit = () => {
@@ -644,11 +672,11 @@ export default function App() {
               onQuickAddWord={handleQuickAddWord}
               practiceWordIds={practiceWordIds}
               dailyProgress={state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 }}
-              onSelectMode={mode => {
-                setExerciseHidden(false);
-                setActiveExercise(mode);
-                if (mode === null) setPracticeWordIds(null);
-              }}
+              menuMode={exMenuMode}
+              onEnterMenu={() => setExMenuMode(true)}
+              vprepTab={vprepTab}
+              onSetVprepTab={setVprepTab}
+              onSelectMode={handleSelectExercise}
               onStartHard={ids => { setPracticeWordIds(ids); setExerciseHidden(false); setActiveExercise('hard'); }}
               onRecordResult={handleRecordResult}
               onOpenHelp={setActiveHelpTopic}
@@ -748,7 +776,9 @@ export default function App() {
                   settings={state.set}
                   activeMode={null}
                   onQuickAddWord={handleQuickAddWord}
-                  onSelectMode={setActiveExercise}
+                  vprepTab={vprepTab}
+                  onSetVprepTab={setVprepTab}
+                  onSelectMode={handleSelectExercise}
                   onStartHard={ids => { setPracticeWordIds(ids); setExerciseHidden(false); setActiveExercise('hard'); }}
                   onRecordResult={handleRecordResult}
                   onOpenHelp={setActiveHelpTopic}
@@ -815,6 +845,36 @@ export default function App() {
 
             </>
           )}
+          {/* ── لایهٔ keep-alive تمرین‌های گرامر ──
+              بدنهٔ همهٔ تمرین‌های خودگردان گرامر اینجا (بیرون از چرخهٔ باز/بستن تمرین) mount می‌ماند؛
+              با جابجایی تب اصلی یا زیرتب‌های گرامر فقط نمایش عوض می‌شود و تمرین باز می‌ماند.
+              بستن واقعی فقط با ضربدرِ تمرین است (handleSelectExercise → ریست همان تمرین). */}
+          <div className={(!activeExercise || exerciseSuspended || exerciseHidden || exMenuMode) ? 'hidden' : ''}>
+            {/* عرض تمرین‌های گرامر مثل قبل (max-w-2xl) — همه زیر یک پوسته */}
+            <div className="max-w-2xl mx-auto">
+              <div className={activeExercise === 'vprep' ? '' : 'hidden'}>
+                <VerbPrep key={`vprep-${gramResets.vprep || 0}`} initialTab={vprepTab} showTabBar={false} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} />
+              </div>
+              <div className={activeExercise === 'wsh' ? '' : 'hidden'}>
+                <WorksheetTrainer key={`wsh-${gramResets.wsh || 0}`} kind="prep" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'wsh2' ? '' : 'hidden'}>
+                <WorksheetTrainer key={`wsh2-${gramResets.wsh2 || 0}`} kind="klasse" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'konnektoren' ? '' : 'hidden'}>
+                <KonnektorTrainer key={`konn-${gramResets.konnektoren || 0}`} onClose={() => handleSelectExercise(null)} onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'kpro' ? '' : 'hidden'}>
+                <KonnektorProTrainer key={`kpro-${gramResets.kpro || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onClose={() => handleSelectExercise(null)} />
+              </div>
+              <div className={activeExercise === 'tstory' ? '' : 'hidden'}>
+                <TenseStoryTrainer key={`tstory-${gramResets.tstory || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onClose={() => handleSelectExercise(null)} />
+              </div>
+              <div className={activeExercise === 'puzzle' ? '' : 'hidden'}>
+                <SatzPuzzle key={`puzzle-${gramResets.puzzle || 0}`} words={state.words} onShowToast={showToast} />
+              </div>
+            </div>
+          </div>
         </main>
       </div>
 
