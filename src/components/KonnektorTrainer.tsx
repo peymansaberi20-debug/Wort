@@ -9,9 +9,9 @@
  *    را انتخاب می‌کند و AI یک متن تازه با همان منطق (جای‌خالی + استخر کلمات با ۲ تله) می‌سازد.
  *  - جای‌گذاری با کشیدن‌ورها (Drag & Drop) یا کلیک روی کلمه و بعد جای خالی — مثل برگهٔ کاغذی.
  *  - تصحیح فوری: سبز/قرمز، نمایش پاسخ درست زیر پاسخ غلطِ خط‌خورده، پاک‌کردن تک‌جای خالی.
+ *  - ترجمهٔ فارسی کل متن با همان دستور اول ساخته می‌شود و فقط بعد از «تصحیح» نمایش داده می‌شود.
  *  - 💬 چت با معلم دربارهٔ همین متن (با حافظهٔ گفتگو) — ذخیره‌شده در آرشیو.
- *  - 🗂 آرشیو: همهٔ تمرین‌های ساخته‌شده (با سطح، موضوع و چت‌ها) در localStorage — همان کلید قبلی،
- *    پس تمرین‌های قدیمیِ ذخیره‌شده از قبل باقی می‌مانند.
+ *  - 🗂 آرشیو یکدست (مثل بقیهٔ تمرین‌ها): فهرست جمع‌شونده + اجرا + حذف با تأییدیه.
  *  - 🖨 چاپ دو صفحه‌ای سازگار با iOS Safari: صفحهٔ ۱ تمرین + استخر کلمات، صفحهٔ ۲ پاسخنامه.
  *
  * پل هوش مصنوعی: کلید و مدل از تنظیمات برنامه (src/utils/aiProvider) می‌آید — بدون کلید،
@@ -19,8 +19,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { describeAiError, generateText, hasApiKey, getActiveProvider, getModel, getAiDebugInfo } from '../utils/aiProvider';
+import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
+import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, Section, SqBtn, TopicInput, faDate, toFa, useConfirm } from './trainerUI';
 
 interface KonnektorTrainerProps {
   onClose: () => void;
@@ -39,15 +40,13 @@ interface KonnektorItem {
   level?: string;
   topic?: string;
   chats?: ChatMsg[];
+  /** ترجمهٔ فارسی کل متن — با همان دستور اول AI گرفته می‌شود، بعد از تصحیح نمایش داده می‌شود */
+  fa?: string;
 }
 
 const STORAGE_KEY = 'wb_konnektor_archive_v1'; // همان کلید قبلی — آرشیو قبلی حفظ می‌شود
-const COUNTS = [5, 8, 10, 12];
 const TOPIC_CHIPS = ['Alltag', 'Beruf', 'Reise', 'Umwelt', 'Technik', 'Gesundheit'];
 const QUICK_QS = ['چرا این‌طور درست است؟', 'قاعدهٔ جایگاه فعل را بگو', 'یک مثال مشابه بده', 'فرق wenn و als چیست؟'];
-
-const FA_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-const toFa = (n: number | string): string => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[+d]);
 
 const DEFAULT_EXERCISES: KonnektorItem[] = [
   {
@@ -77,13 +76,6 @@ const askJsonAI = async (prompt: string): Promise<string> => generateText(prompt
 const askChatAI = async (prompt: string): Promise<string> => generateText(prompt, { timeoutMs: 60000, retries: 1 });
 const aiErr = (e: unknown): string => { try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به هوش مصنوعی.'; } };
 const hasAIKey = (): boolean => { try { return !!hasApiKey(); } catch { return false; } };
-const aiLabel = (): string => {
-  try {
-    const p = String(getActiveProvider() || 'AI');
-    const m = String(getModel() || '').trim();
-    return m ? `${p} · ${m}` : p;
-  } catch { return 'AI'; }
-};
 
 /** پاسخ AI → JSON حتی وقتی ```json یا متن اضافه دارد */
 function parseJSONLoose<T>(raw: string): T {
@@ -117,7 +109,8 @@ Die Lücken im Text werden als (1) (2) (3) ... markiert.
 Jede Lücke testet genau einen Konnektor aus dieser Niveau-Liste (abwechselnd, jede Lösung höchstens einmal): ${KONN_LIST(level)}.
 Die Lösungen müssen eindeutig sein — genau eine Option aus dem Pool passt sinnvoll in die Lücke.
 Der "pool" enthält ALLE Lösungen plus GENAU 2 weitere Konnektoren aus der Liste als Fangantworten (Distraktoren).
-Gib NUR JSON zurück: {"title":"Kurzer deutscher Titel","text":"Text mit (1) (2) ...","blanks":[{"id":1,"answer":"..."}],"pool":["alle Lösungen + 2 Fallen"]}`;
+"fa": ترجمهٔ فارسی روانِ کل متن کامل (با جاهای خالی پرشده) — این ترجمه تا زمان تصحیح پنهان می‌ماند.
+Gib NUR JSON zurück: {"title":"Kurzer deutscher Titel","text":"Text mit (1) (2) ...","blanks":[{"id":1,"answer":"..."}],"pool":["alle Lösungen + 2 Fallen"],"fa":"ترجمهٔ فارسی کل متن"}`;
 
 /* ───────────── چت معلم ───────────── */
 
@@ -265,6 +258,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const { ask, dialog } = useConfirm();
 
   // پیکربندی ساخت تمرین جدید
   const [level, setLevel] = useState<Lvl>('B1');
@@ -307,7 +301,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
     setGenerating(true);
     try {
       const raw = await askJsonAI(buildPrompt(level, count, topic));
-      const res = parseJSONLoose<{ title?: string; text?: string; blanks?: { id?: number; answer?: string }[]; pool?: unknown[] }>(raw);
+      const res = parseJSONLoose<{ title?: string; text?: string; blanks?: { id?: number; answer?: string }[]; pool?: unknown[]; fa?: string }>(raw);
 
       // اعتبارسنجی و یکسان‌سازی متن و blanks:
       // 1) تمام مارکرها را به شکل استاندارد (N) تبدیل می‌کنیم
@@ -347,7 +341,8 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
         pool,
         level,
         topic: topic.trim(),
-        chats: []
+        chats: [],
+        fa: String(res.fa || '').trim() || undefined
       };
 
       const updated = [newItem, ...exercises];
@@ -411,7 +406,6 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
 
   const handlePrint = () => {
     // iOS Safari نیاز به تأخیر کوتاه دارد تا استایل چاپ در DOM قرار گیرد و layout محاسبه شود.
-    // ۵۰ms کافی است و تأخیر قابل‌ملاحظه‌ای برای کاربر ایجاد نمی‌کند.
     setTimeout(() => {
       window.print();
     }, 50);
@@ -526,108 +520,34 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
   const chatMsgs = currentEx.chats || [];
 
   return (
-    <div className="space-y-4 text-right max-w-2xl mx-auto pb-10" dir="rtl">
+    <div className="space-y-3 text-right max-w-2xl mx-auto pb-10" dir="rtl">
       {/* استایل چاپ — در DOM باقی می‌ماند تا Safari در print هم آن را اعمال کند */}
       <style>{PRINT_CSS}</style>
 
-      {/* پیکربندی: سطح + تعداد جای خالی + موضوع → ساخت تمرین جدید با AI */}
-      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3 shadow-xs">
-        <div className="text-sm font-bold text-slate-700 dark:text-slate-300">✨ ساخت تمرین جدید با هوش مصنوعی</div>
+      {/* پیکربندی: سطح + تعداد جای خالی + موضوع → دکمهٔ ساخت تمرین (پوستهٔ یکدست، بدون تیتر اضافه) */}
+      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
+        <Section n="۱" label="سطح">
+          <LevelChips value={level} onChange={l => setLevel(l as Lvl)} levels={LVL_ORDER as unknown as string[]} />
+        </Section>
 
-        {/* سطح */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1.5">۱. سطح</div>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {LVL_ORDER.map(l => (
-              <button
-                key={l}
-                onClick={() => setLevel(l)}
-                className={`py-2.5 rounded-xl text-xs font-bold border transition ${
-                  level === l
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Section n="۲" label="تعداد جای خالی">
+          <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} unit="جای خالی" />
+        </Section>
 
-        {/* تعداد جای خالی */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1.5">۲. تعداد جای خالی</div>
-          <div className="flex gap-2 flex-wrap">
-            {COUNTS.map(n => (
-              <button
-                key={n}
-                onClick={() => setCount(n)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
-                  count === n
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Section n="۳" label="موضوع (اختیاری)">
+          <TopicInput value={topic} onChange={setTopic} chips={TOPIC_CHIPS} placeholder="مثلاً: Beruf, Reise, Umwelt … (خالی = موضوع آزاد)" />
+        </Section>
 
-        {/* موضوع */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] mb-1.5">۳. موضوع (اختیاری)</div>
-          <input
-            value={topic}
-            onChange={e => setTopic(e.target.value)}
-            placeholder="مثلاً: Beruf, Reise, Umwelt … (خالی = موضوع آزاد)"
-            className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-[#141923] outline-none"
-          />
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {TOPIC_CHIPS.map(t => (
-              <button
-                key={t}
-                onClick={() => setTopic(t === topic ? '' : t)}
-                dir="ltr"
-                className={`text-[11px] rounded-full px-2.5 py-1 border transition ${topic === t
-                  ? 'bg-[#1f5fbf] text-white border-transparent'
-                  : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={handleGenerateNew}
-          disabled={generating}
-          className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3 rounded-xl font-bold text-sm shadow-xs active:scale-[.99] transition disabled:opacity-50"
-        >
-          {generating ? '⏳ در حال ساخت…' : '✨ ساخت تمرین جدید'}
-        </button>
+        <PrimaryBtn onClick={handleGenerateNew} busy={generating} busyLabel="⏳ در حال ساخت…" label="🚀 ساخت تمرین" />
       </div>
 
-      {/* انتخابگر تمرین‌های آرشیو شده */}
+      {/* تمرین جاری — جای‌گذاری کلمات */}
       <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">🗂 انتخاب از آرشیو ({toFa(exercises.length)}):</span>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-blue-300 rounded-full px-2 py-0.5">
-              سطح {currentEx.level || 'B1'}
-            </span>
-            <select
-              value={currentId}
-              onChange={e => setCurrentId(e.target.value)}
-              className="bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold max-w-[240px]"
-            >
-              {exercises.map(ex => (
-                <option key={ex.id} value={ex.id}>
-                  {ex.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">📝 {currentEx.title}</span>
+          <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-blue-300 rounded-full px-2 py-0.5 flex-shrink-0">
+            سطح {currentEx.level || 'B1'}
+          </span>
         </div>
 
         {/* جعبه کلمات (Pool) برای کشیدن یا کلیک */}
@@ -662,8 +582,15 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
           {renderInteractiveText()}
         </div>
 
+        {/* ترجمهٔ فارسی متن — با همان دستور اول ساخته شده و فقط بعد از تصحیح نمایش داده می‌شود */}
+        {checked && currentEx.fa && (
+          <div className="rounded-xl px-3 py-2.5 text-sm bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7">
+            🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}
+          </div>
+        )}
+
         {/* دکمه تصحیح */}
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-1">
           {!checked ? (
             <button
               onClick={() => setChecked(true)}
@@ -756,6 +683,55 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
         </button>
       </div>
 
+      {/* 🗂 آرشیو یکدست (مثل بقیهٔ تمرین‌ها) — اجرا + حذف با تأییدیه */}
+      <div className="konn-interactive">
+        <ArchivePanel
+          title="آرشیو تمرین‌های ساخته‌شده"
+          count={exercises.length}
+          emptyText="تمرینی ذخیره نشده است."
+          footer={exercises.length > 0 ? (
+            <button
+              onClick={async () => {
+                if (await ask('پاک کردن کل آرشیو', `همهٔ ${exercises.length} تمرین ذخیره‌شده برای همیشه حذف می‌شوند. مطمئن هستی؟`)) {
+                  saveArchive(DEFAULT_EXERCISES);
+                  setCurrentId(DEFAULT_EXERCISES[0].id);
+                }
+              }}
+              className="text-[11px] text-red-500 px-2 py-1"
+            >
+              پاک کردن کل آرشیو (بازگشت به تمرین نمونه)
+            </button>
+          ) : undefined}
+        >
+          {exercises.map(ex => (
+            <ArchiveRow
+              key={ex.id}
+              title={<>{ex.id === currentId && <span className="text-emerald-600">● </span>}{ex.title}</>}
+              chips={<>
+                <MiniChip tone="blue">سطح {ex.level || 'B1'}</MiniChip>
+                <MiniChip>{toFa(ex.blanks.length)} جای خالی</MiniChip>
+                {ex.topic && <MiniChip>{ex.topic}</MiniChip>}
+                {ex.chats && ex.chats.length > 0 && <MiniChip tone="blue">💬 {toFa(ex.chats.length)}</MiniChip>}
+              </>}
+            >
+              <SqBtn onClick={() => setCurrentId(ex.id)} title="اجرای این تمرین">▶</SqBtn>
+              <SqBtn
+                tone="red"
+                onClick={async () => {
+                  if (await ask('حذف تمرین', `«${ex.title}» از آرشیو برای همیشه حذف می‌شود. مطمئن هستی؟`)) {
+                    const next = exercises.filter(x => x.id !== ex.id);
+                    const finalList = next.length ? next : DEFAULT_EXERCISES;
+                    saveArchive(finalList);
+                    if (ex.id === currentId) setCurrentId(finalList[0].id);
+                  }
+                }}
+                title="حذف"
+              >🗑</SqBtn>
+            </ArchiveRow>
+          ))}
+        </ArchivePanel>
+      </div>
+
       {/*
         ناحیهٔ چاپ — در screen پنهان، در print نمایش داده می‌شود.
         صفحهٔ اول: متن تمرین با جای‌خالی شماره‌دار + استخر کلمات.
@@ -786,11 +762,18 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
               </li>
             ))}
           </ol>
+          {currentEx.fa && (
+            <div style={{ marginTop: 10, fontSize: 10, color: '#333', fontFamily: "'Tahoma', 'Vazirmatn', sans-serif", direction: 'rtl', textAlign: 'right' }}>
+              🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}
+            </div>
+          )}
           <div className="konn-print-footer">
             WörterBuchMitPeyman — Konnektoren & Präpositionen
           </div>
         </div>
       </div>
+
+      {dialog}
     </div>
   );
 };
