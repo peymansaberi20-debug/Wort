@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Word } from '../types';
 import { speak } from '../utils/audio';
+import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
+import { Lvl, LVL_ORDER } from '../data/konnektorenData';
+import { CountChips, LevelChips, PrimaryBtn, Section, toFa } from './trainerUI';
 
-interface Item { de: string; fa: string }
+interface Item { de: string; fa: string; src: 'own' | 'ai' }
 interface DrillProps { words: Word[]; onShowToast: (m: string, e?: boolean) => void }
 
 const card = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3';
@@ -15,7 +18,7 @@ const collect = (words: Word[], min = 4, max = 14): Item[] => {
   for (const w of words) {
     for (const [de, fa] of [[w.ex, w.exFa], [w.ex2, w.ex2Fa]] as [string, string][]) {
       const s = (de || '').trim(); const n = s.split(/\s+/).length;
-      if (n >= min && n <= max && !seen.has(s)) { seen.add(s); out.push({ de: s, fa: (fa || '').trim() }); }
+      if (n >= min && n <= max && !seen.has(s)) { seen.add(s); out.push({ de: s, fa: (fa || '').trim(), src: 'own' }); }
     }
   }
   return out;
@@ -24,43 +27,140 @@ const collect = (words: Word[], min = 4, max = 14): Item[] => {
 const Done: React.FC<{ score: number; total: number; onAgain: () => void }> = ({ score, total, onAgain }) => (
   <div className={card + ' text-center'}>
     <div className="text-5xl">{score / total >= 0.8 ? '🏆' : score / total >= 0.5 ? '👍' : '💪'}</div>
-    <div className="font-extrabold text-lg" dir="ltr">{score} / {total}</div>
+    <div className="font-extrabold text-lg" dir="ltr">{toFa(score)} / {toFa(total)}</div>
     <button onClick={onAgain} className="w-full h-12 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">🔄 یک دور دیگر</button>
   </div>
 );
 
-const Empty: React.FC = () => (
-  <div className={card + ' text-sm leading-7 text-center'}>برای این تمرین به جمله‌های مثال نیاز است. در واژگانت چند واژه با «مثال» (ex) داشته باش، یا واژه‌ها را با پرامپت کامل اضافه کن.</div>
-);
-
 // ---------------------------------------------------------------- Satzbau puzzle
+/**
+ * چیدن جمله (Satzbau) — با پیکربندی یکدست مثل بقیهٔ تمرین‌ها (درخواست کاربر):
+ *  - «جمله‌های خودت»: از مثال‌های واژگان کاربر (مثل قبل)
+ *  - «ساخت با هوش مصنوعی»: انتخاب سطح + تعداد جمله → AI جمله‌های تازهٔ هم‌سطح می‌سازد
+ */
 export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast }) => {
-  const pool = useMemo(() => collect(words), [words]);
-  const make = () => shuffle(pool).slice(0, 10);
-  const [queue, setQueue] = useState<Item[]>(make);
+  const ownPool = useMemo(() => collect(words), [words]);
+  const [screen, setScreen] = useState<'config' | 'run'>('config');
+  const [mode, setMode] = useState<'own' | 'ai'>(ownPool.length >= 3 ? 'own' : 'ai');
+  const [level, setLevel] = useState<Lvl>('A2');
+  const [count, setCount] = useState(8);
+  const [busy, setBusy] = useState(false);
+
+  const [queue, setQueue] = useState<Item[]>([]);
   const [idx, setIdx] = useState(0);
   const split = (s: string) => s.split(/\s+/);
   const scramble = (s: string) => { const t = split(s); let b = shuffle(t); for (let k = 0; k < 6 && b.join(' ') === t.join(' '); k++) b = shuffle(t); return b.map((text, id) => ({ id, text })); };
-  const [bank, setBank] = useState(() => (queue[0] ? scramble(queue[0].de) : []));
+  const [bank, setBank] = useState<{ id: number; text: string }[]>([]);
   const [ans, setAns] = useState<{ id: number; text: string }[]>([]);
   const [res, setRes] = useState<null | boolean>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
 
-  if (pool.length < 3) return <Empty />;
+  /** شروع با جمله‌های خودت */
+  const startOwn = () => {
+    const q = shuffle(ownPool).slice(0, 10);
+    setQueue(q); setScore(0); setDone(false); setIdx(0);
+    setBank(q[0] ? scramble(q[0].de) : []); setAns([]); setRes(null);
+    setScreen('run');
+  };
+
+  /** ساخت جمله‌های هم‌سطح با هوش مصنوعی (سطح + تعداد از پیکربندی) */
+  const startAi = async () => {
+    if (!hasApiKey()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
+    setBusy(true);
+    try {
+      const prompt = `Du bist ein erfahrener Deutschlehrer (Niveau ${level}).
+Erstelle GENAU ${count} vollständige, einfache deutsche Beispielsätze für einen Lückentext-Übungstyp «Satzbau»: der Lerner sieht die Wörter durcheinander und ordnet sie.
+Regeln:
+- Jeder Satz hat 5–10 Wörter, ist grammatisch korrekt und typisch für Niveau ${level}.
+- Themen: Alltag, Familie, Arbeit, Schule, Reisen, Wetter, Einkommen — abwechslungsreich, jeder Satz ein anderes Thema.
+- "de": der vollständige Satz (mit Endpunkt). "fa": natürliche persische Übersetzung des Satzes.
+- Keine Satzzeichen im Satzinneren außer Kommas; keine Anführungszeichen.
+Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
+      const raw = await generateText(prompt, { json: true, timeoutMs: 90000, retries: 1 });
+      let arr: any[] = [];
+      try {
+        const s = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+        const a = s.indexOf('['), b = s.lastIndexOf(']');
+        arr = JSON.parse(a >= 0 && b > a ? s.slice(a, b + 1) : s);
+      } catch { arr = []; }
+      const items: Item[] = (Array.isArray(arr) ? arr : [])
+        .filter((x: any) => x && typeof x.de === 'string' && x.de.trim().split(/\s+/).length >= 4)
+        .map((x: any) => ({ de: String(x.de).trim(), fa: String(x.fa || '').trim(), src: 'ai' as const }))
+        .slice(0, count);
+      if (!items.length) throw new Error('پاسخ هوش مصنوعی ساختار معتبر نداشت — دوباره تلاش کن.');
+      setQueue(items); setScore(0); setDone(false); setIdx(0);
+      setBank(scramble(items[0].de)); setAns([]); setRes(null);
+      setScreen('run');
+      onShowToast(`${items.length} جمله ساخته شد ✓`);
+    } catch (e) {
+      onShowToast(describeAiError ? describeAiError(e) : String(e), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const cur = queue[idx];
   const goto = (q: Item[], i: number) => { setIdx(i); setBank(scramble(q[i].de)); setAns([]); setRes(null); };
-  const restart = () => { const q = make(); setQueue(q); setScore(0); setDone(false); goto(q, 0); };
+  const restart = () => { setScreen('config'); setDone(false); };
   const next = () => { if (idx + 1 >= queue.length) setDone(true); else goto(queue, idx + 1); };
   const pick = (t: { id: number; text: string }) => { if (res !== null) return; setBank(b => b.filter(x => x.id !== t.id)); setAns(a => [...a, t]); };
   const back = (t: { id: number; text: string }) => { if (res !== null) return; setAns(a => a.filter(x => x.id !== t.id)); setBank(b => [...b, t]); };
   const check = () => { const ok = ans.map(t => t.text).join(' ') === split(cur.de).join(' '); setRes(ok); if (ok) setScore(s => s + 1); };
   const say = () => speak(cur.de, { onErr: m => onShowToast(m, true) });
 
+  /* ── پیکربندی یکدست: نوع جمله‌ها + (سطح و تعداد برای AI) ── */
+  if (screen === 'config') {
+    return (
+      <div className="space-y-3 text-right max-w-xl mx-auto">
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
+          <Section n="۱" label="جمله‌ها از کجا بیایند؟">
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setMode('own')} disabled={ownPool.length < 3} className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition disabled:opacity-40 ${mode === 'own' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>
+                📚 جمله‌های خودت
+                <span className="block text-[10px] font-medium mt-0.5 opacity-80">از مثال‌های واژگان ({toFa(ownPool.length)})</span>
+              </button>
+              <button onClick={() => setMode('ai')} className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition ${mode === 'ai' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>
+                🤖 ساخت با هوش مصنوعی
+                <span className="block text-[10px] font-medium mt-0.5 opacity-80">جمله‌های تازهٔ هم‌سطح</span>
+              </button>
+            </div>
+          </Section>
+
+          {mode === 'ai' && (
+            <>
+              <Section n="۲" label="سطح">
+                <LevelChips value={level} onChange={l => setLevel(l as Lvl)} levels={LVL_ORDER as unknown as string[]} />
+              </Section>
+              <Section n="۳" label="تعداد جمله‌ها">
+                <CountChips value={count} onChange={setCount} counts={[5, 8, 10]} unit="جمله" />
+              </Section>
+            </>
+          )}
+
+          {mode === 'own' && ownPool.length < 3 && (
+            <p className="text-xs text-amber-700 dark:text-amber-300 leading-6">
+              برای این حالت به جمله‌های مثال نیاز است. در واژگانت چند واژه با «مثال» (ex) داشته باش، یا «ساخت با هوش مصنوعی» را انتخاب کن.
+            </p>
+          )}
+
+          <PrimaryBtn
+            onClick={() => { if (mode === 'own') startOwn(); else void startAi(); }}
+            busy={busy}
+            busyLabel="⏳ هوش مصنوعی دارد جمله‌ها را می‌سازد…"
+            label={mode === 'own' ? '▶️ شروع تمرین' : '🚀 ساخت تمرین'}
+            disabled={mode === 'own' && ownPool.length < 3}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (done) return <Done score={score} total={queue.length} onAgain={restart} />;
+  if (!cur) return null;
   return (
     <div className="space-y-3 text-right max-w-xl mx-auto">
-      <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>جمله {idx + 1} از {queue.length}</span><span>امتیاز: {score}</span></div>
+      <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>جمله {toFa(idx + 1)} از {toFa(queue.length)}</span><span>امتیاز: {toFa(score)}</span></div>
       <div className={card}>
         <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🧩 کلمه‌ها را به ترتیب درست آلمانی بچین</div>
         {cur.fa && <div className="text-base font-bold leading-8">{cur.fa}</div>}
@@ -117,7 +217,9 @@ export const Diktat: React.FC<DrillProps> = ({ words, onShowToast }) => {
   const [total, setTotal] = useState(0);
   const [done, setDone] = useState(false);
 
-  if (pool.length < 3) return <Empty />;
+  if (pool.length < 3) return (
+    <div className={card + ' text-sm leading-7 text-center'}>برای این تمرین به جمله‌های مثال نیاز است. در واژگانت چند واژه با «مثال» (ex) داشته باش، یا واژه‌ها را با پرامپت کامل اضافه کن.</div>
+  );
   const cur = queue[idx];
   const play = (forceSlow?: boolean) => speak(cur.de, { rate: (forceSlow ?? slow) ? 0.7 : 1, onErr: m => onShowToast(m, true) });
   const check = () => { const r = diff(cur.de, text); setRes(r); setTotal(t => t + r.pct); };
@@ -127,7 +229,7 @@ export const Diktat: React.FC<DrillProps> = ({ words, onShowToast }) => {
   if (done) return <Done score={Math.round(total / queue.length)} total={100} onAgain={restart} />;
   return (
     <div className="space-y-3 text-right max-w-xl mx-auto">
-      <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>جمله {idx + 1} از {queue.length}</span><span>میانگین دقت: {idx + (res ? 1 : 0) ? Math.round(total / (idx + (res ? 1 : 0))) : 0}٪</span></div>
+      <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>جمله {toFa(idx + 1)} از {toFa(queue.length)}</span><span>میانگین دقت: {idx + (res ? 1 : 0) ? Math.round(total / (idx + (res ? 1 : 0))) : 0}٪</span></div>
       <div className={card}>
         <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎧 جمله را بشنو و دقیقاً بنویس (با حروف بزرگ اسم‌ها و نشانه‌گذاری)</div>
         <div className="flex gap-2">
