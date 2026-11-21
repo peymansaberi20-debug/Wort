@@ -7,6 +7,7 @@ import { addErrors } from '../utils/errorBook';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { CountChips, LevelChips, PrimaryBtn, Section, toFa, useConfirm } from './trainerUI';
+import { PageOverlay } from './PageOverlay';
 
 const STATS_KEY = 'wb_vprep_stats';
 const CUSTOM_KEY = 'wb_vprep_custom';
@@ -87,9 +88,13 @@ function sentenceParts(v: VP): { before: string; art: string | null; rest: strin
 }
 
 export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
-  const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab || 'practice');
-  // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان
-  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]);
+  const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab === 'add' ? 'learn' : (initialTab || 'practice'));
+  // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان؛ «افزودن» دیگر تب بالا نیست (درخواست کاربر) → پاپ‌آپ پایین صفحه
+  const [addOpen, setAddOpen] = useState(initialTab === 'add');
+  useEffect(() => {
+    if (initialTab === 'add') { setTab('learn'); setAddOpen(true); }
+    else if (initialTab) setTab(initialTab);
+  }, [initialTab]);
   const [custom, setCustom] = useState<VP[]>(() => load<VP[]>(CUSTOM_KEY, []));
   const [stats, setStats] = useState<Record<string, St>>(() => load(STATS_KEY, {}));
   const all = useMemo(() => [...VERB_PREPS, ...custom], [custom]);
@@ -315,11 +320,11 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     <select value={v} onChange={e => set(e.target.value)} className={inp}>{all0 !== undefined && <option value="">{all0}</option>}{PREPS.map(p => <option key={p} value={p}>{p}</option>)}</select>
   );
 
-  /** جملهٔ تمرین با جاهای خالی (فاز جاری) */
+  /** جملهٔ تمرین با جاهای خالی (فاز جاری) — آرتیکلِ جاخالی دوم از همان اول پنهان است
+   *  تا پاسخ مرحلهٔ بعد لو نرود (درخواست کاربر، تصویر ۱۰) */
   const renderSentence = () => {
     if (!cur || !sParts) return null;
     const prepDone = phase === 'art' || phase === 'res';
-    const artBlankVisible = phase === 'art';
     const artDone = phase === 'res';
     return (
       <div dir="ltr" className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-base font-sans leading-9 text-center">
@@ -329,11 +334,11 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
           ? <b className="text-[#1f5fbf] dark:text-[#7fb0ff] underline decoration-2">{cur.prep}</b>
           : <span className="inline-block min-w-[64px] border-b-2 border-dashed border-[#1f5fbf] mx-1 text-slate-400">____</span>}
         {' '}
-        {sParts.art && (artBlankVisible || artDone)
+        {sParts.art
           ? (artDone
             ? <b className={good && artPick.toLowerCase() === sParts.art.toLowerCase() ? 'text-emerald-600 underline decoration-2' : 'text-red-500 line-through'}>{artPick || '—'}</b>
             : <span className="inline-block min-w-[64px] border-b-2 border-dashed border-[#6b4fd8] mx-1 text-slate-400">____</span>)
-          : <span>{sParts.art}</span>}
+          : null}
         {sParts.rest && <TapText text={sParts.rest} onTap={w => tapWord(w, cur.ex)} />}
       </div>
     );
@@ -341,7 +346,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
 
   return (
     <div className="space-y-4 text-right max-w-3xl mx-auto">
-      {showTabBar !== false && <div className="flex gap-2">{Tab('practice', '🎯 تمرین')}{Tab('learn', '📚 یادگیری')}{Tab('add', '➕ افزودن')}</div>}
+      {showTabBar !== false && <div className="flex gap-2">{Tab('practice', '🎯 تمرین')}{Tab('learn', '📚 یادگیری')}</div>}
 
       {/* ---------------- LEARN ---------------- */}
       {tab === 'learn' && (
@@ -379,20 +384,34 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
               <div className="text-sm text-[#5d6676] py-3 text-center">ففعلی با این فیلتر/جستجو پیدا نشد.</div>
             )}
             {learnList.map(v => (
-              <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-0.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <b dir="ltr" className="font-sans text-base">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
-                  <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
-                  <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
-                  {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600">✓ یاد گرفته</span>}
+              <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-1">
+                {/* فعل + حرف اضافه: سمت چپ و چپ‌به‌راست — چیپ حالت/سطح + بلندگو + چت: سمت راست روبه‌رویش (تصویر ۶) */}
+                <div className="flex items-center justify-between gap-2">
+                  <b dir="ltr" className="font-sans text-base text-left">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
+                    <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
+                    <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
+                    {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap">✓ یاد گرفته</span>}
+                  </div>
                 </div>
-                <div className="text-sm">{v.fa}</div>
-                <div className="text-sm leading-7"><Ex v={v} onTap={w => tapWord(w, v.ex)} /></div>
+                {/* ترجمهٔ فارسی: راست‌به‌چپ، راست‌چین */}
+                <div className="text-sm text-right">{v.fa}</div>
+                {/* مثال آلمانی: چپ‌به‌راست، چپ‌چین */}
+                <div dir="ltr" className="text-sm leading-7 text-left"><Ex v={v} onTap={w => tapWord(w, v.ex)} /></div>
               </div>
             ))}
           </div>
+
+          {/* افزودن فعل — دکمهٔ پایین فهرست؛ باز کردن پاپ‌آپ (درخواست کاربر، تصویر ۱) */}
+          <button
+            onClick={() => setAddOpen(true)}
+            className="w-full py-3 rounded-xl border-2 border-dashed border-[#1f5fbf]/50 text-[#1f5fbf] dark:text-[#7fb0ff] text-sm font-bold hover:bg-[#1f5fbf]/5 active:scale-[.99] transition"
+          >
+            ➕ افزودن فعل جدید
+            <span className="block text-[10px] font-medium mt-0.5 opacity-80">ساخت با هوش مصنوعی، افزودن دستی یا گروهی — با بستن، به همین‌جا برمی‌گردی</span>
+          </button>
         </div>
       )}
 
@@ -595,9 +614,10 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         </div>
       )}
 
-      {/* ---------------- ADD ---------------- */}
-      {tab === 'add' && (
-        <div className="space-y-3">
+      {/* ---------------- ADD — پاپ‌آپ پایین صفحه (درخواست کاربر: از ردیف بالا حذف شد) ---------------- */}
+      {addOpen && (
+        <PageOverlay icon="➕" title="افزودن فعل جدید" subtitle="با بستن، دقیقاً به همان جای قبلی برمی‌گردی" onClose={() => setAddOpen(false)}>
+          <div className="space-y-3">
           <div className={card + ' !p-3 flex items-center gap-3'}>
             <span className="text-xs font-bold flex-shrink-0">سطح فعل‌های افزوده:</span>
             <select value={addLvl} onChange={e => setAddLvl(e.target.value)} className={inp}>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
@@ -640,7 +660,8 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
               ))}
             </div>
           )}
-        </div>
+          </div>
+        </PageOverlay>
       )}
 
       {/* کارت واژه (لمس کلمه) */}

@@ -134,7 +134,7 @@ const GRAMMATIK_CATS: GramCat[] = [
     tabs: [
       { id: 'vprepl', label: 'یادگیری فعل‌ها', mode: 'vprep', vTab: 'learn' },
       { id: 'vprepp', label: 'تمرین فعل‌ها', mode: 'vprep', vTab: 'practice' },
-      { id: 'vprepa', label: 'افزودن فعل', mode: 'vprep', vTab: 'add' },
+      // «افزودن فعل» از ردیف بالا حذف شد — دکمهٔ آن پایین فهرست یادگیری است و پاپ‌آپ باز می‌کند (درخواست کاربر)
       { id: 'wsh', label: 'جای‌خالی فعل+حرف اضافه', mode: 'wsh' },
       { id: 'wsh2', label: 'تکمیل جمله', mode: 'wsh2' },
     ],
@@ -1599,7 +1599,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   // ⚠️ همهٔ hookها باید بالاتر از این خط باشند؛ از اینجا به بعد return زودهنگام داریم.
   /** نوار چسبان: تب‌های اصلی + (اختیاری) نوار زیرتب‌های گرامر — همیشه هنگام اسکرول ثابت می‌ماند */
   const renderTabHeader = (extras?: React.ReactNode) => (
-    <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2 space-y-1.5">
+    <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb] dark:bg-[#12151c] -mx-2 px-2 py-2 space-y-1.5">
       <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
         {MAIN_TABS.map(t => (
           <button

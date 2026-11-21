@@ -21,7 +21,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
-import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, Section, SqBtn, TopicInput, faDate, toFa, useConfirm } from './trainerUI';
+import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
 
 interface KonnektorTrainerProps {
   onClose: () => void;
@@ -127,120 +127,8 @@ Kontext — Lückentext-Arbeitsblatt «${ex.title}». Der Text mit den Lösungen
 ${convo.length ? 'Bisheriges Gespräch:\n' + convo.map((m) => (m.role === 'user' ? 'Lerner: ' : 'Lehrer: ') + m.text).join('\n') + '\n' : ''}Frage des Lerners: ${q}
 Antworte kurz und klar auf Persisch (Farsi); Fachbegriffe und Beispiele auf Deutsch.`;
 
-/**
- * استایل چاپ: در حالت screen، ناحیهٔ چاپ پنهان است؛ در حالت print،
- * کل UI تعاملی پنهان می‌شود و دو صفحه نمایش داده می‌شود:
- *   صفحه ۱: متن تمرین با جای‌خالی‌های شماره‌دار + استخر کلمات
- *   صفحه ۲: پاسخ‌نامه
- *
- * نکات iOS Safari:
- *   - page-break-after: always و معادل مدرن break-after: page هر دو نوشته شده‌اند.
- *   - display: none برای پنهان‌کردن در Safari مدرن پشتیبانی می‌شود.
- *   - @page size A4 با margin مشخص برای اطمینان از جا شدن در یک صفحه.
- *   - position static (نه fixed/absolute) تا Safari ارتفاع را درست محاسبه کند.
- */
-const PRINT_CSS = `
-@media screen {
-  .konn-print-area { display: none !important; }
-}
-@media print {
-  @page { size: A4; margin: 1.4cm 1.6cm; }
-  html, body { background: #fff !important; }
-  .konn-interactive { display: none !important; }
-  .konn-print-area {
-    display: block !important;
-    position: static !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    color: #000 !important;
-    font-family: Georgia, 'Times New Roman', 'Noto Serif', serif !important;
-  }
-  .konn-print-exercise {
-    page-break-after: always;
-    break-after: page;
-  }
-  .konn-print-title {
-    direction: ltr;
-    text-align: left;
-    font-size: 14pt;
-    font-weight: 700;
-    margin: 0 0 8pt 0;
-    color: #000;
-  }
-  .konn-print-sub {
-    direction: rtl;
-    text-align: right;
-    font-size: 10pt;
-    color: #444;
-    margin: 0 0 10pt 0;
-    font-family: 'Tahoma', 'Vazirmatn', sans-serif;
-  }
-  .konn-print-text {
-    direction: ltr;
-    text-align: left;
-    font-size: 12pt;
-    line-height: 1.7;
-    color: #000;
-    white-space: normal;
-    word-wrap: break-word;
-  }
-  .konn-print-blank {
-    display: inline-block;
-    min-width: 64px;
-    border-bottom: 1.5px solid #000;
-    text-align: center;
-    font-weight: 700;
-    font-size: 11pt;
-    color: #000;
-    margin: 0 2px;
-    padding: 0 4px;
-    line-height: 1.4;
-  }
-  .konn-print-pool {
-    direction: ltr;
-    text-align: left;
-    margin-top: 14pt;
-    padding: 8pt 10pt;
-    border: 1.2px solid #555;
-    border-radius: 5px;
-    font-size: 11pt;
-    color: #000;
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-  .konn-print-pool b { font-size: 11pt; }
-  .konn-print-answers-title {
-    direction: ltr;
-    text-align: left;
-    font-size: 14pt;
-    font-weight: 700;
-    margin: 0 0 8pt 0;
-    color: #000;
-  }
-  .konn-print-answers-list {
-    direction: ltr;
-    text-align: left;
-    font-size: 12pt;
-    line-height: 1.9;
-    color: #000;
-    list-style: decimal;
-    padding-left: 20pt;
-    margin: 0;
-  }
-  .konn-print-answers-list li { margin-bottom: 3pt; }
-  .konn-print-answers-list b { color: #000; }
-  .konn-print-footer {
-    direction: rtl;
-    text-align: right;
-    font-size: 9pt;
-    color: #666;
-    margin-top: 14pt;
-    border-top: 1px solid #ccc;
-    padding-top: 4pt;
-    font-family: 'Tahoma', 'Vazirmatn', sans-serif;
-  }
-}
-`;
+/* استایل چاپ → PrintPreview مشترک در trainerUI (نمای یکدست همهٔ تمرین‌ها) */
+
 
 export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast }) => {
   const [exercises, setExercises] = useState<KonnektorItem[]>(() => {
@@ -258,6 +146,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const { ask, dialog } = useConfirm();
 
   // پیکربندی ساخت تمرین جدید
@@ -404,13 +293,6 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
     }
   };
 
-  const handlePrint = () => {
-    // iOS Safari نیاز به تأخیر کوتاه دارد تا استایل چاپ در DOM قرار گیرد و layout محاسبه شود.
-    setTimeout(() => {
-      window.print();
-    }, 50);
-  };
-
   // تفکیک متن و جای‌گذاری باکس‌ها
   // پشتیبانی از انواع مارکر جای‌خالی:
   //   _____  (هر تعداد خط‌زیر ≥ ۳)
@@ -519,11 +401,50 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
 
   const chatMsgs = currentEx.chats || [];
 
+  /* ── برگهٔ چاپ مشترک: صفحهٔ ۱ متن تمرین + جعبهٔ کلمات، صفحهٔ ۲ پاسخنامه ──
+     (Portal به body — نوارها و هدر برنامه داخل برگه چاپ نمی‌شوند) */
+  const printMeta = `${currentEx.level || 'B1'} · ${toFa(currentEx.blanks.length)} جای خالی${currentEx.topic ? ` · ${currentEx.topic}` : ''} · ${faDate(Date.now())} · نام و تاریخ: ...........................`;
+  const printQuestions = (
+    <>
+      <div style={prFa({ fontSize: 10.5, color: '#555', marginBottom: 8 })}>
+        جای خالی‌های شماره‌دار را با کلماتِ مناسب از جعبهٔ «Wörter» پر کنید.
+      </div>
+      <div style={prG({ fontSize: 12.5, lineHeight: 2.1 })}>{renderPrintText()}</div>
+      {currentEx.pool.length > 0 && (
+        <div style={{ marginTop: 14, padding: '8pt 10pt', border: '1.2px solid #555', borderRadius: 5 }}>
+          <div style={prG({ fontSize: 11.5, fontWeight: 700 })}>Wörter: {currentEx.pool.join('   |   ')}</div>
+        </div>
+      )}
+    </>
+  );
+  const printSolutions = (
+    <>
+      <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
+        {currentEx.blanks.map(b => (
+          <li key={b.id} style={{ fontSize: 12, marginBottom: 5 }}>
+            <span style={prG({})}><b>({b.id})</b> {b.answer}</span>
+          </li>
+        ))}
+      </ol>
+      {currentEx.fa && (
+        <div style={prFa({ marginTop: 12, fontSize: 10, color: '#333' })}>🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}</div>
+      )}
+      <div style={prFa({ marginTop: 14, fontSize: 9, color: '#666', borderTop: '1px solid #ccc', paddingTop: 6 })}>WörterBuchMitPeyman — Konnektoren &amp; Präpositionen</div>
+    </>
+  );
+  const printPreview = (
+    <PrintPreview
+      open={printOpen}
+      onClose={() => setPrintOpen(false)}
+      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{currentEx.title}</span>}
+      meta={<>{`تمرین حروف ربط و اضافه — سطح ${currentEx.level || 'B1'}`}</>}
+      questions={printQuestions}
+      solutions={printSolutions}
+    />
+  );
+
   return (
     <div className="space-y-3 text-right max-w-2xl mx-auto pb-10" dir="rtl">
-      {/* استایل چاپ — در DOM باقی می‌ماند تا Safari در print هم آن را اعمال کند */}
-      <style>{PRINT_CSS}</style>
-
       {/* پیکربندی: سطح + تعداد جای خالی + موضوع → دکمهٔ ساخت تمرین (پوستهٔ یکدست، بدون تیتر اضافه) */}
       <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
         <Section n="۱" label="سطح">
@@ -672,16 +593,18 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
         )}
       </div>
 
-      {/* 🖨️ چاپ — پایین صفحه (طبق درخواست کاربر) */}
-      <div className="konn-interactive">
-        <button
-          onClick={handlePrint}
-          className="w-full bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white py-3 rounded-xl text-sm font-bold shadow-md"
-          title="چاپ تمرین + پاسخنامه (دو صفحه)"
-        >
-          🖨️ چاپ تمرین + پاسخنامه
-        </button>
-      </div>
+      {/* 🖨️ چاپ — فقط در پایان تمرین (بعد از تصحیح) طبق درخواست کاربر */}
+      {checked && (
+        <div className="konn-interactive">
+          <button
+            onClick={() => setPrintOpen(true)}
+            className="w-full bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white py-3 rounded-xl text-sm font-bold shadow-md"
+            title="پیش‌نمایش چاپ — صفحهٔ ۱ سؤال، صفحهٔ ۲ پاسخنامه"
+          >
+            🖨️ چاپ تمرین + پاسخنامه
+          </button>
+        </div>
+      )}
 
       {/* 🗂 آرشیو یکدست (مثل بقیهٔ تمرین‌ها) — اجرا + حذف با تأییدیه */}
       <div className="konn-interactive">
@@ -732,47 +655,9 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
         </ArchivePanel>
       </div>
 
-      {/*
-        ناحیهٔ چاپ — در screen پنهان، در print نمایش داده می‌شود.
-        صفحهٔ اول: متن تمرین با جای‌خالی شماره‌دار + استخر کلمات.
-        صفحهٔ دوم: پاسخ‌نامه.
-      */}
-      <div className="konn-print-area" aria-hidden="true">
-        {/* صفحه ۱: تمرین */}
-        <div className="konn-print-exercise">
-          <div className="konn-print-title">{currentEx.title}</div>
-          <div className="konn-print-sub">
-            تمرین حروف ربط و اضافه (سطح {currentEx.level || 'B1'}) — جای‌خالی‌ها را با کلمات مناسب پر کنید.
-          </div>
-          {renderPrintText()}
-          {currentEx.pool.length > 0 && (
-            <div className="konn-print-pool">
-              <b>Wörter:</b> {currentEx.pool.join('   |   ')}
-            </div>
-          )}
-        </div>
+      {printPreview}
 
-        {/* صفحه ۲: پاسخ‌نامه */}
-        <div className="konn-print-answers">
-          <div className="konn-print-answers-title">Lösungen — پاسخ‌نامه</div>
-          <ol className="konn-print-answers-list">
-            {currentEx.blanks.map(b => (
-              <li key={b.id}>
-                <b>({b.id})</b> &nbsp; {b.answer}
-              </li>
-            ))}
-          </ol>
-          {currentEx.fa && (
-            <div style={{ marginTop: 10, fontSize: 10, color: '#333', fontFamily: "'Tahoma', 'Vazirmatn', sans-serif", direction: 'rtl', textAlign: 'right' }}>
-              🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}
-            </div>
-          )}
-          <div className="konn-print-footer">
-            WörterBuchMitPeyman — Konnektoren & Präpositionen
-          </div>
-        </div>
-      </div>
-
+      {dialog}
       {dialog}
     </div>
   );

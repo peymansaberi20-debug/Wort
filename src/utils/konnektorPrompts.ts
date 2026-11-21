@@ -67,15 +67,16 @@ Prüfe für jede Antwort DREI Dinge und antworte pro Aufgabe:
 1) „grammar“ (auf Persisch, 1–2 Sätze): Konnektor richtig gesetzt und an richtiger Position? Wortstellung: Verb am Ende im Nebensatz, Position 2 im Hauptsatz? Kommas? Zeitformen stimmig? Nenne den Fachbegriff und zeige die Berichtigung kurz (deutsch).
 2) „meaning“ (auf Persisch, 1–2 Sätze): Passt der Inhalt logisch zum ersten Teilsatz? Ist die Ergänzung sinnvoll oder widersprüchlich?
 3) „thinking“ (auf Persisch, 1–2 Sätze): „Deutsches Denken“ — wie würde ein/e Muttersprachler/in das natürlich formulieren? Gib gern eine idiomatischere Alternative (deutsch). Wenn die Antwort schon natürlich ist: sage das und gib einen kleinen Zusatz-Tipp.
-4) „fa“ (auf Persisch): die Übersetzung des GESAMTEN korrigierten Satzes („corrected“) ins Persische — nur der Übersetzungstext, ohne Erklärung.
+4) „userFa“ (auf Persisch): die Übersetzung des Satzes DES LERNERS — erster Teilsatz + Konnektor + seine Ergänzung, GENAU so wie er geschrieben ist (auch wenn er fehlerhaft ist) — nur der Übersetzungstext, ohne Erklärung.
+5) „fa“ (auf Persisch): die Übersetzung des GESAMTEN korrigierten Satzes („corrected“) ins Persische — nur der Übersetzungstext, ohne Erklärung.
 
 Regeln:
 - „corrected“: der komplett korrigierte GESAMTSATZ (erster Teilsatz + korrigierte Ergänzung) auf Deutsch. Wenn die Antwort schon perfekt ist: exakt der Satz des Lerners.
 - „ok“: true nur, wenn Ergänzung inhaltlich und grammatisch akzeptabel ist (kleine Rechtschreibfehler: noch ok=true, aber im „grammar“ erwähnen).
-- Wenn die Antwort leer ist: ok=false, corrected="", fa="", grammar="پاسخ ندادی", meaning="", thinking="گزینهٔ نمونه در فیلد corrected خالی است؛ در چت بخواه تا نمونه بدهم."
+- Wenn die Antwort leer ist: ok=false, corrected="", userFa="", fa="", grammar="پاسخ ندادی", meaning="", thinking="گزینهٔ نمونه در فیلد corrected خالی است؛ در چت بخواه تا نمونه بدهم."
 - Antworte auf Persisch, deutsche Beispiele auf Deutsch.
 - Antworte NUR mit JSON-Array:
-[{"no":1,"ok":true,"corrected":"…","fa":"…","grammar":"…","meaning":"…","thinking":"…"}]`;
+[{"no":1,"ok":true,"corrected":"…","userFa":"…","fa":"…","grammar":"…","meaning":"…","thinking":"…"}]`;
 }
 
 /** پراخت ترجمهٔ واژه با کلیک (متن‌ها AI تولید کرده‌اند، پس واژه‌نامهٔ ثابت کافی نیست) */

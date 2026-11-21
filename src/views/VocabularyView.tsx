@@ -878,7 +878,7 @@ IMPORTANT: do NOT put any text, letters, numbers, labels, logos or watermarks in
   return (
     <div className="space-y-4 text-right">
       {/* Tab bar (same look as the exercises tabs) */}
-      <div className="sticky top-16 md:top-[4.5rem] z-10 -mx-1 px-1 py-2 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur">
+      <div className="sticky top-16 md:top-[4.5rem] z-10 -mx-1 px-1 py-2 bg-[#f6f7fb] dark:bg-[#12151c]">
         <div className="grid grid-cols-6 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a]">
           {([
             { id: 'list', icon: '📚', label: 'لیست واژگان' },

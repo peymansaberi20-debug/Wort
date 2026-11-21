@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Word } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
@@ -297,9 +298,9 @@ const seg = pluralSegments2();
     );
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[1000] bg-black/60 flex items-center justify-center p-3 md:p-6 overflow-y-auto"
       onClick={e => {
         if (e.target === e.currentTarget) { setShowFa(false); onClose(); }
       }}
@@ -552,6 +553,7 @@ const seg = pluralSegments2();
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

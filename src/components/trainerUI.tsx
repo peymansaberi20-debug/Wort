@@ -1,5 +1,5 @@
 /**
- * trainerUI.tsx — پوستهٔ بصری مشترک همهٔ تمرین‌های گرامر(درخواست یکدست‌سازی)
+ * trainerUI.tsx — پوستهٔ بصری مشترک همهٔ تمرین‌های گرامر (درخواست یکدست‌سازی)
  *
  * همهٔ تمرین‌های زیرمجموعهٔ گرامر (متن جای‌خالی، حرف ربط انتخابی، جای‌خالی فعل+حرف اضافه،
  * تکمیل جمله، چیدن جمله، فعل+حرف اضافه، داستان زمان‌ها) از همین اجزا استفاده می‌کنند تا
@@ -14,12 +14,93 @@
  */
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export const FA_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
 export const toFa = (n: number | string): string => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[+d]);
 export const faDate = (ts: number): string => {
   try { return new Date(ts).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }); }
   catch { return new Date(ts).toLocaleDateString(); }
+};
+
+/* ───────────────────────── پیش‌نمایش چاپ مشترک ─────────────────────────
+ * همهٔ تمرین‌هایی که چاپ دارند از همین یک نمای استفاده می‌کنند (درخواست کاربر):
+ *   - اورلی تمام‌صفحه با «🖨 چاپ / PDF» و «✕ بستن» بالای صفحه
+ *   - صفحهٔ ۱ = سؤال‌ها با جای کافی برای نوشتن با خودکار
+ *   - صفحهٔ ۲ = پاسخنامه (Lösungen)
+ *   - جمله‌های آلمانی چپ‌به‌راست، توضیح فارسی خط مستقل راست‌به‌چپ
+ *   - بدون صفحهٔ خالی اضافی در انتهای چاپ
+ * راه چاپ: Portal به body + پنهان‌کردن هر چیز غیر از .wpr-screen در print —
+ * همین باعث می‌شود نوارها و هدر برنامه داخل برگه چاپ نشوند (باگ تصویر ۱۵). */
+
+export const PRINT_PREVIEW_CSS = `
+.wpr-screen { position: fixed; inset: 0; z-index: 1000; background: #3f4753; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.wpr-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1f2937; color: #fff; flex-wrap: wrap; }
+.wpr-btn { border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.14); color: #fff; }
+.wpr-btn-primary { background: #1f5fbf; }
+.wpr-hint { font-size: 11px; opacity: .85; margin-inline-start: auto; }
+.wpr-pages { max-width: 780px; margin: 18px auto 48px; padding: 0 10px; }
+.wpr-page { background: #fff; color: #111; padding: 42px 46px; min-height: 1010px; box-shadow: 0 3px 18px rgba(0,0,0,.45); margin-bottom: 20px; }
+.wpr-head { border-bottom: 2px solid #1f5fbf; padding-bottom: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.wpr-title { font-size: 15px; font-weight: 800; }
+.wpr-meta { font-size: 10.5px; color: #555; }
+@media print {
+  body > *:not(.wpr-screen) { display: none !important; }
+  .wpr-screen { position: static !important; background: #fff !important; overflow: visible !important; }
+  .wpr-bar { display: none !important; }
+  .wpr-pages { max-width: none; margin: 0; padding: 0; }
+  .wpr-page { box-shadow: none; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  .wpr-page:not(:last-child) { page-break-after: always; break-after: page; }
+  @page { size: A4; margin: 13mm 13mm; }
+}
+.wpr-screen, .wpr-screen * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+`;
+
+/** سبک‌های متن داخل برگه — همهٔ تمرین‌ها یک شکل: آلمانی LTR چپ‌چین، فارسی RTL راست‌چین */
+export const prG = (extra?: React.CSSProperties): React.CSSProperties =>
+  ({ direction: 'ltr' as const, unicodeBidi: 'embed', textAlign: 'left', ...extra });
+export const prFa = (extra?: React.CSSProperties): React.CSSProperties =>
+  ({ direction: 'rtl' as const, unicodeBidi: 'embed', textAlign: 'right', ...extra });
+
+export const PrintPreview: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  title: React.ReactNode;
+  meta?: React.ReactNode;
+  questions: React.ReactNode;
+  solutions?: React.ReactNode;
+  solutionsMeta?: React.ReactNode;
+}> = ({ open, onClose, title, meta, questions, solutions, solutionsMeta }) => {
+  if (!open) return null;
+  return createPortal(
+    <div className="wpr-screen" role="dialog" aria-modal="true" dir="rtl">
+      <style>{PRINT_PREVIEW_CSS}</style>
+      <div className="wpr-bar">
+        <button onClick={onClose} className="wpr-btn">✕ بستن</button>
+        <button onClick={() => window.print()} className="wpr-btn wpr-btn-primary">🖨 چاپ / PDF</button>
+        <span className="wpr-hint">پیش‌نمایش چاپ — صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه</span>
+      </div>
+      <div className="wpr-pages">
+        <div className="wpr-page">
+          <div className="wpr-head">
+            <div className="wpr-title">{title}</div>
+            {meta && <div className="wpr-meta">{meta}</div>}
+          </div>
+          {questions}
+        </div>
+        {solutions && (
+          <div className="wpr-page">
+            <div className="wpr-head">
+              <div className="wpr-title">Lösungen — پاسخنامه</div>
+              {solutionsMeta || meta}
+            </div>
+            {solutions}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
 };
 
 /* ───────────────────────── تأییدیهٔ حذف ───────────────────────── */
@@ -30,9 +111,9 @@ export const ConfirmDialog: React.FC<{
   confirmLabel?: string;
   onCancel: () => void;
   onConfirm: () => void;
-}> = ({ title, message, confirmLabel, onCancel, onConfirm }) => (
+}> = ({ title, message, confirmLabel, onCancel, onConfirm }) => createPortal(
   <div
-    className="fixed inset-0 z-[95] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+    className="fixed inset-0 z-[1001] bg-black/60 flex items-center justify-center p-4"
     role="presentation"
     onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
   >
@@ -49,7 +130,8 @@ export const ConfirmDialog: React.FC<{
         <button onClick={onConfirm} className="flex-1 rounded-xl px-4 py-2.5 text-sm font-bold bg-red-600 hover:bg-red-700 text-white">{confirmLabel || 'بله، حذف شود'}</button>
       </div>
     </section>
-  </div>
+  </div>,
+  document.body
 );
 
 /** هوک تأییدیه: const { ask, dialog } = useConfirm();  if (await ask('…','…')) … ; رندر {dialog} */

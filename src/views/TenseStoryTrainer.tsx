@@ -27,7 +27,7 @@ import { STORIES, Story } from './tenseStoryBank';
 import { parseBlanks, parseSegments, lookupWord, explainBlank, isCorrect, normalizeAnswer, Blank, Lookup } from './tenseStoryHelpers';
 import { TLvl, TLVL_ORDER, TLVL_INFO, LEVEL_VERBS, LEVEL_PREPS, bandOf } from '../data/tenseStoryVerbs';
 import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
-import { ArchivePanel, ArchiveRow, MiniChip, SqBtn, toFa, useConfirm } from '../components/trainerUI';
+import { ArchivePanel, ArchiveRow, MiniChip, PrintPreview, SqBtn, prFa, prG, toFa, useConfirm } from '../components/trainerUI';
 
 /* ─────────────────────────── پل هوش مصنوعی برنامه ───────────────────────────
  * کلید و مدل از تنظیمات برنامه (aiProvider — Gemini/Groq/OpenRouter) می‌آید.
@@ -278,7 +278,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   const [verbCard, setVerbCard] = useState<string | null>(null);
   const [history, setHistory] = useState<Attempt[]>(loadHist);
   const { ask, dialog } = useConfirm();
-  const [dictCard, setDictCard] = useState<{ word: string; lk: Lookup; ai?: Lookup | null } | null>(null);
+  const [dictCard, setDictCard] = useState<{ word: string; lk: Lookup | null; ai?: Lookup | null } | null>(null);
   const [chatGap, setChatGap] = useState<number | null>(null);
   const [chats, setChats] = useState<Record<number, ChatMsg[]>>({});
   const [chatDraft, setChatDraft] = useState('');
@@ -550,67 +550,70 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
 
     /* ───────── پورتال‌های مشترک: چاپ، کارت واژه، چت ───────── */
 
-  const PRINT_CSS = `@media print {
-    body * { visibility: hidden !important; }
-    .print-root, .print-root * { visibility: visible !important; }
-    .print-root { position: absolute !important; top: 0; right: 0; left: 0; }
-    .pbreak { page-break-after: always; }
-    .no-print { display: none !important; }
-  }
-  .print-root { position: fixed; inset: 0; z-index: 80; overflow: auto; background: #fff; color: #111; }
-  .p-page { padding: 28px 32px; font-size: 13px; line-height: 2.1; }`;
+  /* برگهٔ چاپ مشترک: صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه (PrintPreview مشترک) */
+  const printMeta = ex
+    ? `${ex.lvl} · ${TENSE_INFO[ex.tense].de}${ex.topic ? ` · ${ex.topic}` : ''} · ${faDate(ex.ts)} · نام و تاریخ: ...........................`
+    : '';
+
+  const printQuestions = ex ? (
+    <>
+      <p style={prFa({ fontSize: 11, color: '#333', marginBottom: 8 })}>
+        فعل داخل پرانتز به شکل مصدر است — شکل درستِ زمان را در جای خالی بنویس: <b>Ergänzen Sie die Verben!</b>
+      </p>
+      <p dir="ltr" style={prG({ fontSize: 12.5, lineHeight: 2.1, whiteSpace: 'pre-wrap' })}>
+        {ex.segs.map(s => (s.t === 'txt' ? s.x : ` ______( ${s.no} ) (${s.inf}) `)).join('')}
+      </p>
+      <p style={prFa({ fontSize: 11, fontWeight: 700, margin: '16px 0 6px' })}>پاسخ‌های تو (با شمارهٔ جای خالی):</p>
+      <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
+        {gaps.map(g => (
+          <li key={g.no} style={{ fontSize: 12, borderBottom: '1.1px solid #999', height: 30, listStylePosition: 'inside', marginBottom: 6 }} />
+        ))}
+      </ol>
+    </>
+  ) : null;
+
+  const printSolutions = ex ? (
+    <>
+      <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
+        {gaps.map(g => {
+          const chain = VERBS[g.inf];
+          return (
+            <li key={g.no} style={{ fontSize: 11.5, marginBottom: 7, lineHeight: 1.8, breakInside: 'avoid' }}>
+              <span style={prG({ fontWeight: 700 })}>
+                ({g.no}) <b>{g.inf} → {g.ans}</b>
+                {chain ? <span style={{ color: '#666', fontSize: 10.5 }}> ({chain.prt3} → {chain.pp}, Perfekt mit {chain.aux})</span> : null}
+              </span>
+              <div style={prFa({ color: '#444', fontSize: 10, marginTop: 1 })}>💡 {explainBlank({ inf: g.inf, ans: g.ans, kind: g.kind, tense: g.tense }, !!chain)}</div>
+            </li>
+          );
+        })}
+      </ol>
+      <p style={prFa({ fontWeight: 700, marginTop: 14, fontSize: 11 })}>متن کامل و درست:</p>
+      <p dir="ltr" style={prG({ fontSize: 11.5, lineHeight: 2, color: '#333', whiteSpace: 'pre-wrap' })}>{storyPlain(ex.segs, true)}</p>
+    </>
+  ) : null;
+
+  const printPreview = ex ? (
+    <PrintPreview
+      open={printOpen}
+      onClose={() => setPrintOpen(false)}
+      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{ex.title}</span>}
+      meta={<>{ex.titleFa ? `${ex.titleFa} · ` : ''}{printMeta}</>}
+      questions={printQuestions}
+      solutions={printSolutions}
+    />
+  ) : null;
 
   const PORTALS = ex ? (
     <>
-      {/* چاپ / PDF */}
-      {printOpen && createPortal(
-        <div className="print-root" dir="rtl">
-          <style>{PRINT_CSS}</style>
-          <div className="no-print flex items-center justify-between px-6 py-3 bg-[#1f5fbf] text-white sticky top-0">
-            <span className="text-xs font-bold">پیش‌نمایش چاپ — صفحهٔ ۱ سؤال، صفحهٔ ۲ پاسخنامه</span>
-            <button onClick={() => setPrintOpen(false)} className="px-3 py-1.5 rounded-lg bg-white/20 text-xs font-bold">بستن ✕</button>
-          </div>
-          <div className="p-page">
-            <h3 style={{ fontWeight: 800, fontSize: 16 }}>{ex.title}</h3>
-            {ex.titleFa && <p style={{ color: '#555', fontSize: 11 }}>{ex.titleFa}</p>}
-            <p style={{ fontSize: 11, color: '#555' }}>
-              {ex.lvl} · {TENSE_INFO[ex.tense].de} {ex.topic ? `· ${ex.topic}` : ''} · {faDate(ex.ts)} · نام و تاریخ: ...........................
-            </p>
-            <p style={{ marginTop: 10, fontWeight: 700 }}>Ergänzen Sie die Verben!</p>
-            <p dir="ltr" style={{ textAlign: 'left' }}>
-              {ex.segs.map(s => s.t === 'txt' ? s.x : ` ______ (${s.no}) (${s.inf}) `).join('')}
-            </p>
-          </div>
-          <div className="p-page pbreak">
-            <h3 style={{ fontWeight: 800, fontSize: 16 }}>پاسخنامه — {ex.title}</h3>
-            <ol style={{ paddingRight: 20 }}>
-              {gaps.map(g => {
-                const r = results[g.no];
-                const shown = (r && r.correct) || g.ans;
-                const chain = VERBS[g.inf];
-                const note = r && (r.thinking || r.grammar) ? (r.thinking || r.grammar) : explainBlank({ inf: g.inf, ans: g.ans, kind: g.kind, tense: g.tense }, !!chain);
-                return (
-                  <li key={g.no} style={{ marginBottom: 4 }}>
-                    <b dir="ltr">{g.inf} → {shown}</b>
-                    {chain ? <span style={{ color: '#666', fontSize: 11 }} dir="ltr"> ({chain.prt3} → {chain.pp}, Perfekt mit {chain.aux})</span> : null}
-                    <div style={{ color: '#444', fontSize: 11 }}>{note}</div>
-                  </li>
-                );
-              })}
-            </ol>
-            <p style={{ fontWeight: 700, marginTop: 10 }}>متن کامل:</p>
-            <p dir="ltr" style={{ textAlign: 'left', color: '#333' }}>{storyPlain(ex.segs, true)}</p>
-          </div>
-        </div>,
-        document.body
-      )}
+      {printPreview}
 
       {/* کارت واژه (لمس کلمه) */}
       {dictCard && createPortal(
         <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/40 px-4" onClick={() => setDictCard(null)}>
           <div dir="rtl" className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#141923] shadow-2xl border border-[#dde1ea] dark:border-[#333b4a] p-4" onClick={e => e.stopPropagation()}>
-            {(() => {
-              const LK = dictCard.ai || dictCard.lk;
+          {(() => {
+            const LK = dictCard.ai || dictCard.lk || { fa: 'ترجمه‌ای برای این واژه پیدا نشد.', pos: 'other' } as Lookup;
               const chain = LK.inf && VERBS[LK.inf];
               return (
                 <div className="space-y-2">
@@ -928,7 +931,6 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           </div>
           <div className="flex gap-1.5">
             <button onClick={() => doSpeak(storyPlain(ex.segs, false))} title="خواندن داستان" className="px-2.5 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]">🔊</button>
-            <button onClick={() => setPrintOpen(true)} title="چاپ/PDF" className="px-2.5 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]">🖨️</button>
             <button onClick={() => setScreen('config')} className="px-3 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]">تمرین جدید</button>
           </div>
         </div>
@@ -948,9 +950,9 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           )}
         </div>
 
-        {/* متن داستان */}
-        <div className="rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-4 py-4 shadow-sm">
-          <p className="text-[15px] leading-[2.4] text-[#1f2a3d] dark:text-[#e7ecf5] text-justify">
+        {/* متن داستان — آلمانی: چپ‌به‌راست (درخواست کاربر، تصویر ۵) */}
+        <div className="rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-4 py-4 shadow-sm" dir="ltr" style={{ textAlign: 'left' }}>
+          <p className="text-[15px] leading-[2.4] text-[#1f2a3d] dark:text-[#e7ecf5]" style={{ textAlign: 'left' }}>
             {ex.segs.map((s, i) => {
               if (s.t === 'txt') {
                 return tokenize(s.x).map((tk, j) =>
@@ -1004,7 +1006,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
               );
             })}
           </p>
-          <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#dde1ea] dark:border-[#333b4a]">
+          <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#dde1ea] dark:border-[#333b4a]" dir="rtl" style={{ direction: 'rtl' }}>
             <span className="text-[10px] text-[#5d6676] dark:text-[#8b95a7]">💡 هر کلمهٔ متن را لمس کن: ترجمه + مثال + افزودن به واژگان</span>
             <button onClick={() => doSpeak(storyPlain(ex.segs, false))} className="text-[10px] font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🔊 خواندن داستان</button>
           </div>

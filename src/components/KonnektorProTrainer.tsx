@@ -15,13 +15,12 @@
  */
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { AppSettings, Word } from '../types';
 import { speak } from '../utils/audio';
 import { Lvl, Kat, KAT_LABEL, LVL_ORDER, KonnektorItem, KONNEKTOREN, connectorsFor, findKonnektor } from '../data/konnektorenData';
 import { SYS_AI, buildExercisePrompt, buildCorrectionPrompt, buildWordPrompt, buildChatPrompt, ChatCtx } from '../utils/konnektorPrompts';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
-import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, Section, SqBtn, TopicInput, faDate, toFa, useConfirm } from './trainerUI';
+import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
 
 /* ───────────────────────── پل هوش مصنوعی برنامه ───────────────────────── */
 
@@ -56,7 +55,7 @@ const QUICK_QS = ['چرا این‌طور درست است؟', 'یک مثال م�
 const TOPIC_CHIPS = ['Alltag', 'Reise', 'Arbeit', 'Umwelt', 'Technik', 'Medien', 'Gesundheit'];
 
 interface KItem { no: number; connector: string; first: string; hint?: string; }
-interface Correction { no: number; ok: boolean; corrected: string; fa?: string; grammar: string; meaning: string; thinking: string; }
+interface Correction { no: number; ok: boolean; corrected: string; userFa?: string; fa?: string; grammar: string; meaning: string; thinking: string; }
 interface ChatMsg { role: 'user' | 'ai'; text: string; }
 interface KExercise {
   id: string; ts: number; level: Lvl; topic: string;
@@ -112,6 +111,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState<number | null>(null);
   const [wCard, setWCard] = useState<{ word: string; sentence: string; info: WInfo | null; loading: boolean } | null>(null);
+  const [printOpen, setPrintOpen] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [hist, setHist] = useState<KExercise[]>(loadHist);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -414,74 +414,68 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     );
   };
 
-  // ────────── برگهٔ چاپ (Portal به body) ──────────
-  const printRoot = ex ? (
-    <div className="kpp-print-root" dir="rtl">
-      <style>{`
-        .kpp-print-root { display: none; }
-        @media print {
-          body > *:not(.kpp-print-root) { display: none !important; }
-          .kpp-print-root { display: block !important; position: static !important; }
-          .kpp-print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .kpp-pagebreak { break-before: page; page-break-before: always; }
-          @page { size: A4; margin: 14mm 13mm; }
-        }
-      `}</style>
+  // ────────── برگهٔ چاپ مشترک (PrintPreview): صفحهٔ ۱ سؤال‌ها، صفحهٔ ۲ تصحیح‌شده ──────────
+  const printMeta = ex
+    ? `سطح ${ex.level}${ex.topic ? ` • ${ex.topic}` : ''} • تاریخ: ${faDate(ex.ts)} • ${ex.items.length} جمله • امتیاز: … / ${ex.items.length}`
+    : '';
 
-      {/* صفحهٔ ۱: سؤالات */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '2px solid #1f5fbf', paddingBottom: 6 }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800 }}>Sätze komplettieren — حرف ربط انتخابی (سطح {ex.level})</div>
-            <div style={{ fontSize: 10, color: '#555' }}>
-              موضوع: {ex.topic || 'آزاد'} • تاریخ: {faDate(ex.ts)} • {ex.items.length} جمله
+  const printQuestions = ex ? (
+    <>
+      <p style={prFa({ fontSize: 11, color: '#333', marginBottom: 10 })}>
+        Ergänzen Sie die Sätze sinnvoll und sprachlich richtig! — ادامهٔ هر جمله را طوری بنویسید که معنایی کامل و ساختار درست (جایگاه فعل، کاما) داشته باشد.
+      </p>
+      <ol style={{ margin: '10px 0 0', paddingInlineStart: 20, listStyle: 'decimal' }}>
+        {ex.items.map(it => (
+          <li key={it.no} style={{ fontSize: 12.5, marginBottom: 18, lineHeight: 1.9, breakInside: 'avoid' }}>
+            <span style={prG()}>
+              {it.first} <span style={{ letterSpacing: 1 }}>__________________</span>
+              {it.hint ? <b> ({it.hint})</b> : null}
+            </span>
+            <div style={{ borderBottom: '1.1px solid #999', height: 24, marginTop: 10 }} />
+          </li>
+        ))}
+      </ol>
+    </>
+  ) : null;
+
+  const printSolutions = ex && Object.keys(ex.corrections).length > 0 ? (
+    <>
+      {ex.items.map(it => {
+        const c = ex.corrections[it.no];
+        return (
+          <div key={it.no} style={{ fontSize: 11, marginBottom: 12, breakInside: 'avoid' }}>
+            <div style={prG({ fontSize: 11.5, fontWeight: 700, color: c?.ok ? '#047857' : '#b45309' })}>
+              {it.no}. {c?.corrected || '(بدون پاسخ)'}
             </div>
+            {c?.userFa && <div style={prFa({ color: '#333', marginTop: 2 })}>🇮🇷 ترجمهٔ جملهٔ تو: {c.userFa}</div>}
+            {c?.fa && <div style={prFa({ color: '#333', marginTop: 1 })}>🇮🇷 ترجمهٔ جملهٔ اصلاح‌شده: {c.fa}</div>}
+            <div style={prFa({ color: '#555', marginTop: 1 })}>پاسخ شما: {(ex.answers[it.no] || '').trim() || '—'}</div>
+            {c?.grammar && <div style={prFa({ marginTop: 2 })}>• گرامری: {c.grammar}</div>}
+            {c?.meaning && <div style={prFa({})}>• مفهومی: {c.meaning}</div>}
+            {c?.thinking && <div style={prFa({})}>• تفکر آلمانی: {c.thinking}</div>}
           </div>
-          <div style={{ fontSize: 11, color: '#555' }}>امتیاز: … / {ex.items.length}</div>
-        </div>
-        <p style={{ fontSize: 11, marginTop: 8, color: '#333' }}>
-          Ergänzen Sie die Sätze sinnvoll und sprachlich richtig! — ادامهٔ هر جمله را طوری بنویسید که معنایی کامل و ساختار درست (جایگاه فعل، کاما) داشته باشد.
-        </p>
-        <ol style={{ margin: '10px 0 0', paddingInlineStart: 18, listStyle: 'decimal' }}>
-          {ex.items.map(it => (
-            <li key={it.no} style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.9, breakInside: 'avoid' }}>
-              <span dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>
-                {it.first} <span style={{ letterSpacing: 1 }}>__________________</span>
-                {it.hint ? <b> ({it.hint})</b> : null}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
+        );
+      })}
+    </>
+  ) : ex ? (
+    <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
+      {ex.items.map(it => (
+        <li key={it.no} style={{ fontSize: 11.5, marginBottom: 7, lineHeight: 1.8, breakInside: 'avoid' }}>
+          <span style={prG()}>{it.no}. <b>{it.first}</b> — پاسخ تو: {(ex.answers[it.no] || '').trim() || '(بدون پاسخ)'}</span>
+        </li>
+      ))}
+    </ol>
+  ) : null;
 
-      {/* صفحهٔ ۲: پاسخنامهٔ تصحیح‌شده */}
-      {Object.keys(ex.corrections).length > 0 && (
-        <div className="kpp-pagebreak" dir="rtl">
-          <div style={{ borderBottom: '2px solid #1f5fbf', paddingBottom: 6, marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 800 }}>پاسخنامهٔ تصحیح‌شده + بازخورد</div>
-            <div style={{ fontSize: 10, color: '#555' }}>سطح {ex.level} • موضوع: {ex.topic || 'آزاد'}</div>
-          </div>
-          {ex.items.map(it => {
-            const c = ex.corrections[it.no];
-            return (
-              <div key={it.no} style={{ fontSize: 11, marginBottom: 10, breakInside: 'avoid' }}>
-                <div style={{ fontSize: 11.5 }}>
-                  <b>{it.no}. </b>
-                  <span dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'embed', fontWeight: 700, color: c?.ok ? '#047857' : '#b45309' }}>
-                    {c?.corrected || '(بدون پاسخ)'}
-                  </span>
-                </div>
-                {c?.fa && <div style={{ color: '#333', marginTop: 1 }}>🇮🇷 {c.fa}</div>}
-                <div style={{ color: '#555', marginTop: 1 }}>پاسخ شما: {(ex.answers[it.no] || '').trim() || '—'}</div>
-                {c?.grammar && <div style={{ marginTop: 2 }}>• گرامری: {c.grammar}</div>}
-                {c?.meaning && <div>• مفهومی: {c.meaning}</div>}
-                {c?.thinking && <div>• تفکر آلمانی: {c.thinking}</div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+  const printPreview = ex ? (
+    <PrintPreview
+      open={printOpen}
+      onClose={() => setPrintOpen(false)}
+      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>Sätze komplettieren</span>}
+      meta={<>{`حرف ربط انتخابی (سطح ${ex.level})`}</>}
+      questions={printQuestions}
+      solutions={printSolutions}
+    />
   ) : null;
 
   // ═══════════════════ رندر ═══════════════════
@@ -739,10 +733,16 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     {c.corrected && (
                       <div dir="ltr" className="text-sm leading-7 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}>{c.corrected}</div>
                     )}
-                    {/* ترجمهٔ فارسی — با همان دستور تصحیح گرفته شده و فقط بعد از بررسی نمایش داده می‌شود */}
-                    {c.fa && (
+                    {/* ترجمهٔ جملهٔ کاربر — اول از همه (درخواست کاربر) */}
+                    {c.userFa && (
                       <div className="text-xs leading-6 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 p-2.5">
-                        <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ فارسی:</b> {c.fa}
+                        <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ جملهٔ تو:</b> {c.userFa}
+                      </div>
+                    )}
+                    {/* ترجمهٔ فارسی جملهٔ اصلاح‌شده — بعد از آن */}
+                    {c.fa && (
+                      <div className="text-xs leading-6 rounded-lg bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-2.5">
+                        <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ جملهٔ اصلاح‌شده:</b> {c.fa}
                       </div>
                     )}
                     {c.grammar && (
@@ -791,15 +791,35 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => window.print()} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold transition">🖨 چاپ / PDF</button>
+            <div className="grid grid-cols-1 gap-2">
               <button onClick={() => { setScreen('config'); setEx(null); setChatOpen(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold transition">بازگشت به فهرست</button>
             </div>
           </div>
         );
       })()}
 
-      {/* ═════════ نتیجهٔ جلسه و مرور ═════════ */}
+      {/* ═════════ نتیجهٔ جلسه و مرور — حتی وقتی هیچ جمله‌ای بررسی نشده (تصویر ۱۴) ═════════ */}
+      {screen === 'review' && ex && Object.keys(ex.corrections).length === 0 && (
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-6 text-center space-y-3 shadow-xs">
+          <div className="text-5xl">🤷</div>
+          <div className="text-lg font-extrabold">هیچ جمله‌ای را بررسی نکردی!</div>
+          <p className="text-xs text-[#5d6676] leading-6">
+            هر {toFa(ex.items.length)} جمله را بدون جواب رد کردی — نتیجه‌ای برای نمایش نیست.
+            برای تصحیح معلم، جمله‌ها را کامل کن و «بررسی همین جمله» را بزن؛ یا یک تمرین تازه بساز.
+          </p>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button onClick={continueRemaining} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-2.5 rounded-xl text-xs font-bold">
+              ✏️ شروع از جملهٔ اول
+            </button>
+            <button onClick={generate} disabled={generating} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold disabled:opacity-60">
+              {generating ? '⏳ …' : '✨ تمرین جدید'}
+            </button>
+          </div>
+          <button onClick={() => { setScreen('config'); setEx(null); setChatOpen(null); }} className="w-full bg-slate-100 dark:bg-slate-800 py-2 rounded-xl text-xs font-bold">
+            بازگشت به فهرست
+          </button>
+        </div>
+      )}
       {screen === 'review' && ex && Object.keys(ex.corrections).length > 0 && (
         <div className="space-y-3">
           <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 text-center shadow-xs">
@@ -817,7 +837,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               {uncheckedCount > 0
                 ? <button onClick={continueRemaining} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ ادامهٔ {uncheckedCount} جملهٔ باقی‌مانده</button>
                 : <button onClick={() => { setScreen('play'); setChatOpen(null); }} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ مرور جمله‌ها</button>}
-              <button onClick={() => window.print()} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">🖨 چاپ / PDF (با پاسخنامه)</button>
+              <button onClick={() => setPrintOpen(true)} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">🖨 چاپ / PDF (با پاسخنامه)</button>
               <button onClick={() => { setScreen('config'); setEx(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">بازگشت به فهرست</button>
             </div>
           </div>
@@ -872,9 +892,15 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     </div>
                   )}
 
-                  {c.fa && (
+                  {c.userFa && (
                     <div className="text-xs leading-6 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 p-2.5">
-                      <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ فارسی:</b> {c.fa}
+                      <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ جملهٔ تو:</b> {c.userFa}
+                    </div>
+                  )}
+
+                  {c.fa && (
+                    <div className="text-xs leading-6 rounded-lg bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-2.5">
+                      <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ جملهٔ اصلاح‌شده:</b> {c.fa}
                     </div>
                   )}
 
@@ -955,7 +981,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       )}
 
       {/* برگهٔ چاپ */}
-      {printRoot && createPortal(printRoot, document.body)}
+      {printPreview}
       {dialog}
     </div>
   );
