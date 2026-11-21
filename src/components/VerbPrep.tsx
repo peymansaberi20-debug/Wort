@@ -5,7 +5,8 @@ import { LEVELS, PREPS, VERB_PREPS, VP, blankEx, daForm, levelOf, makeId, parseV
 import { speak } from '../utils/audio';
 import { addErrors } from '../utils/errorBook';
 import { generateWithGemini, parseAI } from '../utils/ai';
-import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
+import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
+import { CountChips, LevelChips, PrimaryBtn, Section, toFa, useConfirm } from './trainerUI';
 
 const STATS_KEY = 'wb_vprep_stats';
 const CUSTOM_KEY = 'wb_vprep_custom';
@@ -15,7 +16,8 @@ interface St { box: number; due: number; ok: number; bad: number }
 const card = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3';
 const inp = 'w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-sm outline-none focus:border-[#1f5fbf]';
 const kName = (k: string) => (k === 'A' ? 'Akkusativ' : 'Dativ');
-const kCol = (k: string) => (k === 'A' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300');
+/* حالت اکوزاتیو: نارنجی کمرنگ (درخواست کاربر) — داتیو: سبز کمرنگ */
+const kCol = (k: string) => (k === 'A' ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300');
 const shuffle = <T,>(a: T[]): T[] => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const load = <T,>(k: string, d: T): T => { try { const v = JSON.parse(localStorage.getItem(k) || ''); return v ?? d; } catch { return d; } };
 const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
@@ -24,13 +26,6 @@ const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringi
  * هیچ کارت کلیدی داخل تمرین نیست؛ اگر کلید در تنظیمات نباشد فقط پیام راهنما می‌بینی
  * و تمرین/یادگیری/افزودن دستی مثل قبل کار می‌کنند. */
 const aiReadyFn = (): boolean => { try { return !!hasApiKey(); } catch { return false; } };
-const aiLabel = (): string => {
-  try {
-    const p = String(getActiveProvider() || 'AI');
-    const m = String(getModel() || '').trim();
-    return m ? `${p} · ${m}` : p;
-  } catch { return 'AI'; }
-};
 const WORD_RE = /[A-Za-zÄÖÜäöüß]+(?:-[A-Za-zÄÖÜäöüß]+)*/g;
 
 /** تبدیل پاسخ AI به JSON حتی وقتی ```json یا متن اضافه دارد */
@@ -73,6 +68,24 @@ const Ex: React.FC<{ v: VP; onTap?: (w: string) => void }> = ({ v, onTap }) => {
   return <span dir="ltr" className="font-sans">{p ? <><TapText text={p[0]} onTap={onTap} />{p[0] && !p[0].endsWith(' ') ? ' ' : ''}<b className="text-[#1f5fbf] dark:text-[#7fb0ff] underline decoration-2"><TapText text={p[1]} onTap={onTap} /></b><TapText text={p[2]} onTap={onTap} /></> : <TapText text={v.ex} onTap={onTap} />}</span>;
 };
 
+/* ───────── حالت‌های آرتیکل برای جاخالی دومِ تمرین جمله‌ای ───────── */
+const ART_POOL = ['der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einen', 'einem', 'einer', 'eines'];
+/** تعیین‌کننده‌هایی که می‌توانند بعد از حرف اضافه جاخالی شوند (آزمون حالت دستوری) */
+const DET_RE = /^(?:der|die|das|den|dem|des|ein|eine|einen|einem|einer|eines|mein|meine|meinen|meinem|meiner|dein|deine|deinen|deinem|sein|seine|seinen|seinem|unser|unsere|unseren|unserem|euer|eure|euren|eurem|ihr|ihre|ihren|ihrem)\b/i;
+
+/** تجزیهٔ مثال به قطعه‌های تمرین جمله‌ای: قبلِ حرف اضافه | آرتیکل بعدش (یا null) | ادامه */
+function sentenceParts(v: VP): { before: string; art: string | null; rest: string } | null {
+  const p = splitEx(v.ex, v.prep);
+  if (!p) return null;
+  const [before, , after] = p;
+  const trimmed = after.replace(/^\s+/, '');
+  const m = trimmed.match(DET_RE);
+  if (m) {
+    return { before, art: m[0], rest: trimmed.slice(m[0].length) };
+  }
+  return { before, art: null, rest: trimmed };
+}
+
 export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
   const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab || 'practice');
   // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان
@@ -84,11 +97,15 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [fLvl, setFLvl] = useState<string>(() => load<string>('wb_vprep_lvl', ''));
   const setLvl = (x: string) => { setFLvl(x); save('wb_vprep_lvl', x); };
   const [addLvl, setAddLvl] = useState('B1');
+  // جستجوی یادگیری (آلمانی + فارسی)
+  const [search, setSearch] = useState('');
   // practice session
   const [count, setCount] = useState(10);
-  const [sess, setSess] = useState<null | { q: string[]; i: number; ok: number; bad: number; again: Set<string>; goodIds: string[]; badIds: string[] }>(null);
-  const [phase, setPhase] = useState<'prep' | 'case' | 'res'>('prep');
+  const [pMode, setPMode] = useState<'sentence' | 'classic'>('sentence');
+  const [sess, setSess] = useState<null | { q: string[]; arts: Record<string, string | null>; i: number; ok: number; bad: number; again: Set<string>; goodIds: string[]; badIds: string[] }>(null);
+  const [phase, setPhase] = useState<'prep' | 'art' | 'case' | 'res'>('prep');
   const [pick, setPick] = useState(''); const [typed, setTyped] = useState('');
+  const [artPick, setArtPick] = useState('');
   const [kase, setKase] = useState<'' | 'A' | 'D'>(''); const [good, setGood] = useState<boolean | null>(null);
   // add
   const [f, setF] = useState({ verb: '', prep: 'an', kase: 'A', fa: '', ex: '' });
@@ -102,6 +119,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [chatDraft, setChatDraft] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  const { ask, dialog } = useConfirm();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => new Map(all.map(v => [v.id, v])), [all]);
@@ -111,21 +129,68 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
 
   useEffect(() => { if (chatId !== null) setTimeout(() => chatEndRef.current?.scrollIntoView({ block: 'end' }), 120); }, [chatId, chats]);
 
+  /* ── یادگیری: فیلتر جستجو + سورت بر اساس معنی (نزدیک‌ها کنار هم) سپس الفبای آلمانی ── */
+  const learnList = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const matches = all.filter(v => {
+      if (fPrep && v.prep !== fPrep) return false;
+      if (fLvl && levelOf(v) !== fLvl) return false;
+      if (!q) return true;
+      return v.verb.toLowerCase().includes(q)
+        || v.prep.toLowerCase() === q
+        || (v.fa || '').includes(search.trim())
+        || v.ex.toLowerCase().includes(q);
+    });
+    // معنی‌های نزدیک به هم کنار هم، بعد الفبای آلمانی (درخواست کاربر)
+    return [...matches].sort((a, b) => (a.fa || '').localeCompare(b.fa || '', 'fa') || a.verb.localeCompare(b.verb, 'de'));
+  }, [all, fPrep, fLvl, search]);
+
   const start = () => {
     const now = Date.now();
-    const dueList = pool.filter(v => stats[v.id] && stats[v.id].due <= now).sort((a, b) => stats[a.id].box - stats[b.id].box);
-    const fresh = shuffle(pool.filter(v => !stats[v.id]));
-    const later = pool.filter(v => stats[v.id] && stats[v.id].due > now).sort((a, b) => stats[a.id].due - stats[b.id].due);
-    const q = [...dueList, ...fresh, ...later].slice(0, count).map(v => v.id);
-    if (!q.length) { onShowToast('فعلی برای تمرین نیست.', true); return; }
-    setSess({ q: shuffle(q), i: 0, ok: 0, bad: 0, again: new Set(), goodIds: [], badIds: [] }); resetQ();
+    const base = pool.filter(v => pMode === 'classic' || splitEx(v.ex, v.prep));
+    if (!base.length) { onShowToast('برای این فیلتر فعلِ مناسب پیدا نشد.', true); return; }
+    const dueList = base.filter(v => stats[v.id] && stats[v.id].due <= now).sort((a, b) => stats[a.id].box - stats[b.id].box);
+    const fresh = shuffle(base.filter(v => !stats[v.id]));
+    const later = base.filter(v => stats[v.id] && stats[v.id].due > now).sort((a, b) => stats[a.id].due - stats[b.id].due);
+    const chosen = [...dueList, ...fresh, ...later].slice(0, count);
+    if (!chosen.length) { onShowToast('فعلی برای تمرین نیست.', true); return; }
+    // آرتیکل جاخالی‌شوندهٔ هر جمله (تمرین جمله‌ای: حرف اضافه + حالت کلمهٔ بعد)
+    const arts: Record<string, string | null> = {};
+    chosen.forEach(v => { arts[v.id] = pMode === 'sentence' ? (sentenceParts(v)?.art ?? null) : null; });
+    setSess({ q: shuffle(chosen.map(v => v.id)), arts, i: 0, ok: 0, bad: 0, again: new Set(), goodIds: [], badIds: [] });
+    resetQ();
   };
-  const resetQ = () => { setPhase('prep'); setPick(''); setTyped(''); setKase(''); setGood(null); };
+  const resetQ = () => { setPhase('prep'); setPick(''); setTyped(''); setArtPick(''); setKase(''); setGood(null); };
   const cur = sess ? byId.get(sess.q[sess.i]) : undefined;
-  const typedMode = cur ? (stats[cur.id]?.box || 0) >= 2 : false;
+  const typedMode = pMode === 'classic' && cur ? (stats[cur.id]?.box || 0) >= 2 : false;
+  const sParts = useMemo(() => (cur && pMode === 'sentence' ? sentenceParts(cur) : null), [cur?.id, pMode]);
   const options = useMemo(() => (cur ? shuffle([cur.prep, ...shuffle(PREPS.filter(p => p !== cur.prep)).slice(0, 3)]) : []), [cur?.id, sess?.i]);
+  const artOptions = useMemo(() => {
+    if (!cur || pMode !== 'sentence' || !sess || !sess.arts[cur.id]) return [];
+    const correct = sess.arts[cur.id]!;
+    return shuffle([correct, ...shuffle(ART_POOL.filter(a => a !== correct)).slice(0, 3)]);
+  }, [cur?.id, sess?.i, sess, pMode]);
 
-  const choosePrep = (p: string) => { setPick(p.trim().toLowerCase()); setPhase('case'); };
+  /** ثبت نتیجه در سیستم مرور فاصله‌دار + دفتر خطاها */
+  const gradeAnswer = (v: VP, ok: boolean, prepOk: boolean, wrongPrep: string, artAns: string | null, wrongArt: string) => {
+    const s = { ...(stats[v.id] || { box: 0, due: 0, ok: 0, bad: 0 }) };
+    if (ok) { s.ok++; s.box = Math.min(6, s.box + 1); s.due = Date.now() + GAPS[s.box] * DAY; } else { s.bad++; s.box = 0; s.due = Date.now(); }
+    const ns = { ...stats, [v.id]: s }; setStats(ns); save(STATS_KEY, ns);
+    setSess(prev => prev ? { ...prev, ok: prev.ok + (ok ? 1 : 0), bad: prev.bad + (ok ? 0 : 1), goodIds: ok ? [...prev.goodIds, v.id] : prev.goodIds, badIds: ok ? prev.badIds : [...prev.badIds, v.id] } : prev);
+    if (!ok) {
+      const wrongEx = prepOk
+        ? (artAns && wrongArt ? v.ex.replace(new RegExp('(^|\\s)' + artAns + '(?=[\\s.,!?]|$)', 'i'), `$1${wrongArt}`) : v.ex)
+        : v.ex.replace(new RegExp('(^|\\s)' + v.prep + '(?=[\\s.,!?]|$)', 'i'), `$1${wrongPrep || '___'}`);
+      addErrors([{ original: wrongEx, corrected: v.ex, type: 'حرف اضافه و حالت دستوری', why: `${v.verb} + ${v.prep} + ${kName(v.kase)} — ${v.fa}` }]);
+    }
+  };
+
+  const choosePrep = (p: string) => {
+    setPick(p.trim().toLowerCase());
+    if (pMode === 'sentence' && sParts?.art) setPhase('art');
+    else if (pMode === 'sentence') setPhase('res'), finishSentence(p.trim().toLowerCase(), '');
+    else setPhase('case');
+  };
   const chooseCase = (k: 'A' | 'D') => {
     if (!cur || !sess) return;
     setKase(k);
@@ -139,6 +204,17 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
       const wrongEx = prepOk ? cur.ex : cur.ex.replace(new RegExp('(^|\\s)' + cur.prep + '(?=[\\s.,!?]|$)', 'i'), `$1${pick || '___'}`);
       addErrors([{ original: wrongEx, corrected: cur.ex, type: 'حرف اضافه و حالت دستوری', why: `${cur.verb} + ${cur.prep} + ${kName(cur.kase)} — ${cur.fa}` }]);
     }
+  };
+  /** مرحلهٔ نهایی تمرین جمله‌ای: آرتیکل انتخاب شد → نتیجه */
+  const finishSentence = (prepAns: string, artAns: string) => {
+    if (!cur || !sess) return;
+    const prepOk = prepAns === cur.prep;
+    const artOk = !sParts?.art || artAns.toLowerCase() === sParts.art.toLowerCase();
+    const ok = prepOk && artOk;
+    setArtPick(artAns);
+    setGood(ok);
+    setPhase('res');
+    gradeAnswer(cur, ok, prepOk, prepAns, sParts?.art ?? null, artAns);
   };
   const next = () => {
     if (!sess || !cur) return;
@@ -239,6 +315,30 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     <select value={v} onChange={e => set(e.target.value)} className={inp}>{all0 !== undefined && <option value="">{all0}</option>}{PREPS.map(p => <option key={p} value={p}>{p}</option>)}</select>
   );
 
+  /** جملهٔ تمرین با جاهای خالی (فاز جاری) */
+  const renderSentence = () => {
+    if (!cur || !sParts) return null;
+    const prepDone = phase === 'art' || phase === 'res';
+    const artBlankVisible = phase === 'art';
+    const artDone = phase === 'res';
+    return (
+      <div dir="ltr" className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-base font-sans leading-9 text-center">
+        <TapText text={sParts.before} onTap={w => tapWord(w, cur.ex)} />
+        {sParts.before && !sParts.before.endsWith(' ') ? ' ' : ''}
+        {prepDone
+          ? <b className="text-[#1f5fbf] dark:text-[#7fb0ff] underline decoration-2">{cur.prep}</b>
+          : <span className="inline-block min-w-[64px] border-b-2 border-dashed border-[#1f5fbf] mx-1 text-slate-400">____</span>}
+        {' '}
+        {sParts.art && (artBlankVisible || artDone)
+          ? (artDone
+            ? <b className={good && artPick.toLowerCase() === sParts.art.toLowerCase() ? 'text-emerald-600 underline decoration-2' : 'text-red-500 line-through'}>{artPick || '—'}</b>
+            : <span className="inline-block min-w-[64px] border-b-2 border-dashed border-[#6b4fd8] mx-1 text-slate-400">____</span>)
+          : <span>{sParts.art}</span>}
+        {sParts.rest && <TapText text={sParts.rest} onTap={w => tapWord(w, cur.ex)} />}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4 text-right max-w-3xl mx-auto">
       {showTabBar !== false && <div className="flex gap-2">{Tab('practice', '🎯 تمرین')}{Tab('learn', '📚 یادگیری')}{Tab('add', '➕ افزودن')}</div>}
@@ -246,6 +346,18 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
       {/* ---------------- LEARN ---------------- */}
       {tab === 'learn' && (
         <div className="space-y-3">
+          {/* جستجو: هم آلمانی هم فارسی (درخواست کاربر) */}
+          <div className="relative">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="🔍 جستجو: واژهٔ آلمانی یا معنی فارسی …"
+              className="w-full bg-white dark:bg-[#1b2029] border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:border-[#1f5fbf]"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold">✕</button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {['', ...PREPS].map(p => (
               <button key={p || 'all'} onClick={() => setFPrep(p)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${fPrep === p ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>{p || 'همه'}</button>
@@ -257,48 +369,73 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
               <button key={l || 'all'} onClick={() => setLvl(l)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${fLvl === l ? 'bg-[#6b4fd8] text-white border-[#6b4fd8]' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>{l || 'همه'}</button>
             ))}
           </div>
-          {(fPrep ? [fPrep] : PREPS).map(p => {
-            const list = all.filter(v => v.prep === p && (!fLvl || levelOf(v) === fLvl)); if (!list.length) return null;
-            return (
-              <div key={p} className={card + ' !p-3'}>
-                <div className="flex items-center justify-between">
-                  <b className="text-lg font-sans" dir="ltr">{p} <span className="text-xs font-normal text-[#5d6676]">({list.length})</span></b>
-                  <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">{woForm(p)}? → {daForm(p)}</span>
+
+          <div className={card + ' !p-3'}>
+            <div className="flex items-center justify-between flex-wrap gap-1">
+              <b className="text-base font-sans" dir="ltr">{fPrep || 'همهٔ حرف‌های اضافه'} <span className="text-xs font-normal text-[#5d6676]">({toFa(learnList.length)})</span></b>
+              <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">مرتب بر اساس معنی‌های نزدیک، سپس الفبای آلمانی</span>
+            </div>
+            {learnList.length === 0 && (
+              <div className="text-sm text-[#5d6676] py-3 text-center">ففعلی با این فیلتر/جستجو پیدا نشد.</div>
+            )}
+            {learnList.map(v => (
+              <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <b dir="ltr" className="font-sans text-base">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
+                  <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
+                  <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
+                  {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600">✓ یاد گرفته</span>}
                 </div>
-                {list.map(v => (
-                  <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-0.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <b dir="ltr" className="font-sans text-base">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
-                      <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
-                      <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
-                      {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600">✓ یاد گرفته</span>}
-                    </div>
-                    <div className="text-sm">{v.fa}</div>
-                    <div className="text-sm leading-7"><Ex v={v} onTap={w => tapWord(w, v.ex)} /></div>
-                  </div>
-                ))}
+                <div className="text-sm">{v.fa}</div>
+                <div className="text-sm leading-7"><Ex v={v} onTap={w => tapWord(w, v.ex)} /></div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ---------------- PRACTICE ---------------- */}
+      {/* ---------------- PRACTICE — پیکربندی یکدست ---------------- */}
       {tab === 'practice' && !sess && (
-        <div className={card}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2"><div className="font-extrabold text-lg" dir="ltr">{pool.length}</div><div className="text-[11px]">فعل در این فیلتر</div></div>
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 py-2"><div className="font-extrabold text-lg text-emerald-700 dark:text-emerald-300" dir="ltr">{learned}</div><div className="text-[11px]">یاد گرفته</div></div>
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 py-2"><div className="font-extrabold text-lg text-amber-700 dark:text-amber-300" dir="ltr">{all.filter(v => stats[v.id] && stats[v.id].due <= Date.now()).length}</div><div className="text-[11px]">نوبت مرور</div></div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2"><div className="font-extrabold text-lg" dir="ltr">{toFa(pool.length)}</div><div className="text-[11px]">فعل در این فیلتر</div></div>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 py-2"><div className="font-extrabold text-lg text-emerald-700 dark:text-emerald-300" dir="ltr">{toFa(learned)}</div><div className="text-[11px]">یاد گرفته</div></div>
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 py-2"><div className="font-extrabold text-lg text-amber-700 dark:text-amber-300" dir="ltr">{toFa(all.filter(v => stats[v.id] && stats[v.id].due <= Date.now()).length)}</div><div className="text-[11px]">نوبت مرور</div></div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <select value={fLvl} onChange={e => setLvl(e.target.value)} className={inp}><option value="">همهٔ سطوح</option>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
-            {PrepSel(fPrep, setFPrep, 'همهٔ حرف‌ها')}
-            <select value={count} onChange={e => setCount(Number(e.target.value))} className={inp}>{[10, 20, 30].map(n => <option key={n} value={n}>{n} سؤال</option>)}</select>
-          </div>
-          <button onClick={start} className="w-full h-12 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">▶️ شروع تمرین</button>
+
+          <Section n="۱" label="سطح">
+            <LevelChips value={fLvl} onChange={setLvl} levels={LEVELS} />
+          </Section>
+
+          <Section n="۲" label="حرف اضافه (اختیاری)">
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => setFPrep('')} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${fPrep === '' ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>همهٔ حرف‌ها</button>
+              {PREPS.map(p => (
+                <button key={p} onClick={() => setFPrep(p)} dir="ltr" className={`px-3 py-1.5 rounded-full text-xs font-bold border font-sans ${fPrep === p ? 'bg-[#1f5fbf] text-white border-[#1f5fbf]' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>{p}</button>
+              ))}
+            </div>
+          </Section>
+
+          <Section n="۳" label="نوع تمرین">
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setPMode('sentence')} className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition ${pMode === 'sentence' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>
+                🧩 جمله با دو جای خالی
+                <span className="block text-[10px] font-medium mt-0.5 opacity-80">حرف اضافه + آرتیکلِ کلمهٔ بعد (۴ گزینه)</span>
+              </button>
+              <button onClick={() => setPMode('classic')} className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition ${pMode === 'classic' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>
+                🔗 فعل + حرف اضافه
+                <span className="block text-[10px] font-medium mt-0.5 opacity-80">کلاسیک: فعل، حرف اضافه و حالت</span>
+              </button>
+            </div>
+          </Section>
+
+          <Section n="۴" label="تعداد سؤال">
+            <CountChips value={count} onChange={setCount} counts={[10, 20, 30]} unit="سؤال" />
+          </Section>
+
+          <PrimaryBtn onClick={start} label="▶️ شروع تمرین" busyLabel="…" />
         </div>
       )}
 
@@ -307,7 +444,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         const right = [...new Set(sess.goodIds)].filter(id => !wrong.includes(id));
         const Col = (title: string, ids: string[], cls: string) => (
           <div className="space-y-1.5">
-            <div className={`text-xs font-extrabold text-center py-1.5 rounded-lg ${cls}`}>{title} ({ids.length})</div>
+            <div className={`text-xs font-extrabold text-center py-1.5 rounded-lg ${cls}`}>{title} ({toFa(ids.length)})</div>
             {ids.length === 0 && <div className="text-center text-xs text-[#5d6676]">—</div>}
             {ids.map(id => { const v = byId.get(id); if (!v) return null; return (
               <div key={id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-2 text-sm">
@@ -320,7 +457,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         return (
           <div className={card}>
             <div className="text-center"><div className="text-4xl">🎉</div><div className="font-extrabold">جلسه تمام شد</div>
-              <div className="text-sm mt-1">درست: <b className="text-emerald-600">{sess.ok}</b> — غلط: <b className="text-rose-600">{sess.bad}</b></div></div>
+              <div className="text-sm mt-1">درست: <b className="text-emerald-600">{toFa(sess.ok)}</b> — غلط: <b className="text-rose-600">{toFa(sess.bad)}</b></div></div>
             <div className="grid grid-cols-2 gap-2.5 items-start">
               {Col('✅ درست‌ها', right, 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300')}
               {Col('❌ غلط‌ها', wrong, 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300')}
@@ -332,62 +469,127 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
 
       {tab === 'practice' && sess && cur && sess.i < sess.q.length && (
         <div className="space-y-3">
-          <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>{sess.i + 1} / {sess.q.length}</span><button onClick={() => setSess(null)} className="text-red-600">✕ پایان</button></div>
+          <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>{toFa(sess.i + 1)} / {toFa(sess.q.length)}</span><button onClick={() => setSess(null)} className="text-red-600">✕ پایان</button></div>
           <div className={card}>
-            <div className="text-center space-y-1">
-              <div dir="ltr" className="text-2xl font-extrabold font-sans">{cur.verb} <span className="text-slate-400">___</span></div>
-              <div className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{cur.fa}</div>
-            </div>
-            <div dir="ltr" className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-base font-sans leading-8 text-center">{phase === 'res' ? <Ex v={cur} onTap={w => tapWord(w, cur.ex)} /> : blankEx(cur.ex, cur.prep)}</div>
-
-            {phase === 'prep' && (typedMode ? (
-              <div className="space-y-2">
-                <input dir="ltr" autoFocus value={typed} onChange={e => setTyped(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && typed.trim()) choosePrep(typed); }} placeholder="حرف اضافه را تایپ کن …" className={inp + ' text-center text-base font-bold'} />
-                <button disabled={!typed.trim()} onClick={() => choosePrep(typed)} className="w-full h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm disabled:opacity-40">ادامه</button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">{options.map(o => <button key={o} onClick={() => choosePrep(o)} className="h-12 rounded-xl border-2 border-[#dde1ea] dark:border-[#333b4a] font-extrabold text-lg font-sans hover:border-[#1f5fbf] active:scale-95 transition">{o}</button>)}</div>
-            ))}
-
-            {phase === 'case' && (
-              <div className="space-y-2">
-                <div className="text-center text-sm font-bold">حالت دستوری بعد از «<span dir="ltr" className="font-sans">{pick}</span>» در این فعل؟</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => chooseCase('A')} className="h-12 rounded-xl bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200 font-bold">Akkusativ</button>
-                  <button onClick={() => chooseCase('D')} className="h-12 rounded-xl bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold">Dativ</button>
+            {pMode === 'sentence' ? (
+              <>
+                {/* ── تمرین جمله‌ای: حرف اضافه + آرتیکل/حالتِ کلمهٔ بعد، هرکدام با ۴ گزینه ── */}
+                <div className="text-center space-y-1">
+                  <div dir="ltr" className="text-lg font-extrabold font-sans text-[#1f5fbf] dark:text-[#7fb0ff]">{cur.verb}</div>
+                  <div className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{cur.fa}</div>
                 </div>
-              </div>
-            )}
+                {renderSentence()}
 
-            {phase === 'res' && (
-              <div className="space-y-2.5">
-                <div className={`p-3 rounded-xl text-sm font-bold leading-7 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
-                  {good ? '✅ درست!' : `❌ ${pick !== cur.prep ? `حرف اضافه «${pick}» نبود. ` : ''}${kase !== cur.kase ? `حالت دستوری ${kName(cur.kase)} است. ` : ''}`}
-                  <div dir="ltr" className="font-sans text-base mt-1">{cur.verb} <u>{cur.prep}</u> + {kName(cur.kase)}</div>
-                </div>
-
-                {/* توضیح معلم برای پاسخ نادرست */}
-                {!good && (
-                  <div className="space-y-1.5">
-                    {(aiExpl[cur.id] || whyBusy === cur.id) ? (
-                      <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[12px] leading-6 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
-                        {whyBusy === cur.id ? '🤖 معلم در حال توضیح…' : aiExpl[cur.id]}
-                      </div>
-                    ) : (
-                      <button onClick={() => askWhy(cur, pick, kase)} disabled={whyBusy !== null} className="w-full h-10 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] text-xs font-bold disabled:opacity-50">
-                        🤖 چرا؟ توضیح معلم
-                      </button>
-                    )}
+                {phase === 'prep' && (
+                  <div className="space-y-2">
+                    <div className="text-center text-sm font-bold">حرف اضافهٔ درست این فعل کدام است؟</div>
+                    <div className="grid grid-cols-2 gap-2">{options.map(o => <button key={o} onClick={() => choosePrep(o)} className="h-12 rounded-xl border-2 border-[#dde1ea] dark:border-[#333b4a] font-extrabold text-lg font-sans hover:border-[#1f5fbf] active:scale-95 transition">{o}</button>)}</div>
                   </div>
                 )}
 
-                <div dir="ltr" className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-center">Frage: <b>{woForm(cur.prep)}</b> …? — Antwort: <b>{daForm(cur.prep)}</b> …</div>
-                <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => speak(cur.ex)} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 font-bold text-sm">🔊 بشنو</button>
-                  <button onClick={() => setChatId(cur.id)} className="h-11 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] font-bold text-sm">💬 معلم{(chats[cur.id] || []).length ? ` (${(chats[cur.id] || []).length})` : ''}</button>
-                  <button onClick={next} className="h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm">بعدی ←</button>
+                {phase === 'art' && sParts?.art && (
+                  <div className="space-y-2">
+                    <div className="text-center text-sm font-bold">حالتِ کلمهٔ بعد از «<span dir="ltr" className="font-sans">{cur.prep}</span>» — شکل درست کدام است؟</div>
+                    <div className="grid grid-cols-2 gap-2">{artOptions.map(o => <button key={o} onClick={() => finishSentence(pick, o)} dir="ltr" className="h-12 rounded-xl border-2 border-[#dde1ea] dark:border-[#333b4a] font-extrabold text-lg font-sans hover:border-[#6b4fd8] active:scale-95 transition">{o}</button>)}</div>
+                  </div>
+                )}
+
+                {phase === 'res' && (
+                  <div className="space-y-2.5">
+                    <div className={`p-3 rounded-xl text-sm font-bold leading-7 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
+                      {good ? '✅ درست!' : (
+                        <>
+                          ❌ {pick !== cur.prep ? `حرف اضافه «${pick}» نبود. ` : ''}
+                          {sParts?.art && artPick && artPick.toLowerCase() !== (sParts.art || '').toLowerCase() ? `شکل کلمهٔ بعد «${artPick}» نبود؛ درست: «${sParts.art}». ` : ''}
+                          {!sParts?.art && kase !== cur.kase && pick === cur.prep ? `این فعل ${kName(cur.kase)} می‌گیرد. ` : ''}
+                        </>
+                      )}
+                      <div dir="ltr" className="font-sans text-base mt-1">{cur.verb} <u>{cur.prep}</u> + {kName(cur.kase)}</div>
+                    </div>
+
+                    {/* توضیح معلم برای پاسخ نادرست */}
+                    {!good && (
+                      <div className="space-y-1.5">
+                        {(aiExpl[cur.id] || whyBusy === cur.id) ? (
+                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[12px] leading-6 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
+                            {whyBusy === cur.id ? '🤖 معلم در حال توضیح…' : aiExpl[cur.id]}
+                          </div>
+                        ) : (
+                          <button onClick={() => askWhy(cur, pick, cur.kase)} disabled={whyBusy !== null} className="w-full h-10 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] text-xs font-bold disabled:opacity-50">
+                            🤖 چرا؟ توضیح معلم
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div dir="ltr" className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-center">Frage: <b>{woForm(cur.prep)}</b> …? — Antwort: <b>{daForm(cur.prep)}</b> …</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => speak(cur.ex)} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 font-bold text-sm">🔊 بشنو</button>
+                      <button onClick={() => setChatId(cur.id)} className="h-11 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] font-bold text-sm">💬 معلم{(chats[cur.id] || []).length ? ` (${toFa((chats[cur.id] || []).length)})` : ''}</button>
+                      <button onClick={next} className="h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm">بعدی ←</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* ── تمرین کلاسیک: فعل → حرف اضافه → حالت ── */}
+                <div className="text-center space-y-1">
+                  <div dir="ltr" className="text-2xl font-extrabold font-sans">{cur.verb} <span className="text-slate-400">___</span></div>
+                  <div className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{cur.fa}</div>
                 </div>
-              </div>
+                <div dir="ltr" className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-base font-sans leading-8 text-center">{phase === 'res' ? <Ex v={cur} onTap={w => tapWord(w, cur.ex)} /> : blankEx(cur.ex, cur.prep)}</div>
+
+                {phase === 'prep' && (typedMode ? (
+                  <div className="space-y-2">
+                    <input dir="ltr" autoFocus value={typed} onChange={e => setTyped(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && typed.trim()) choosePrep(typed); }} placeholder="حرف اضافه را تایپ کن …" className={inp + ' text-center text-base font-bold'} />
+                    <button disabled={!typed.trim()} onClick={() => choosePrep(typed)} className="w-full h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm disabled:opacity-40">ادامه</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">{options.map(o => <button key={o} onClick={() => choosePrep(o)} className="h-12 rounded-xl border-2 border-[#dde1ea] dark:border-[#333b4a] font-extrabold text-lg font-sans hover:border-[#1f5fbf] active:scale-95 transition">{o}</button>)}</div>
+                ))}
+
+                {phase === 'case' && (
+                  <div className="space-y-2">
+                    <div className="text-center text-sm font-bold">حالت دستوری بعد از «<span dir="ltr" className="font-sans">{pick}</span>» در این فعل؟</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => chooseCase('A')} className="h-12 rounded-xl bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 font-bold">Akkusativ</button>
+                      <button onClick={() => chooseCase('D')} className="h-12 rounded-xl bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold">Dativ</button>
+                    </div>
+                  </div>
+                )}
+
+                {phase === 'res' && (
+                  <div className="space-y-2.5">
+                    <div className={`p-3 rounded-xl text-sm font-bold leading-7 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
+                      {good ? '✅ درست!' : `❌ ${pick !== cur.prep ? `حرف اضافه «${pick}» نبود. ` : ''}${kase !== cur.kase ? `حالت دستوری ${kName(cur.kase)} است. ` : ''}`}
+                      <div dir="ltr" className="font-sans text-base mt-1">{cur.verb} <u>{cur.prep}</u> + {kName(cur.kase)}</div>
+                    </div>
+
+                    {/* توضیح معلم برای پاسخ نادرست */}
+                    {!good && (
+                      <div className="space-y-1.5">
+                        {(aiExpl[cur.id] || whyBusy === cur.id) ? (
+                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[12px] leading-6 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
+                            {whyBusy === cur.id ? '🤖 معلم در حال توضیح…' : aiExpl[cur.id]}
+                          </div>
+                        ) : (
+                          <button onClick={() => askWhy(cur, pick, kase)} disabled={whyBusy !== null} className="w-full h-10 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] text-xs font-bold disabled:opacity-50">
+                            🤖 چرا؟ توضیح معلم
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div dir="ltr" className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-center">Frage: <b>{woForm(cur.prep)}</b> …? — Antwort: <b>{daForm(cur.prep)}</b> …</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => speak(cur.ex)} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 font-bold text-sm">🔊 بشنو</button>
+                      <button onClick={() => setChatId(cur.id)} className="h-11 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] font-bold text-sm">💬 معلم{(chats[cur.id] || []).length ? ` (${toFa((chats[cur.id] || []).length)})` : ''}</button>
+                      <button onClick={next} className="h-11 rounded-xl bg-[#1f5fbf] text-white font-bold text-sm">بعدی ←</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -421,11 +623,19 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
           </div>
           {custom.length > 0 && (
             <div className={card}>
-              <div className="font-extrabold text-sm">فعل‌های افزودهٔ من ({custom.length})</div>
+              <div className="font-extrabold text-sm">فعل‌های افزودهٔ من ({toFa(custom.length)})</div>
               {custom.map(v => (
                 <div key={v.id} className="flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-2">
                   <div className="min-w-0 text-sm"><b dir="ltr" className="font-sans">{v.verb} {v.prep}</b> <span className={`text-[10px] px-1.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span> <span className="text-[10px] text-slate-500">{levelOf(v)}</span><div className="truncate text-xs text-[#5d6676]">{v.fa}</div></div>
-                  <button onClick={() => { const nc = custom.filter(c => c.id !== v.id); setCustom(nc); save(CUSTOM_KEY, nc); }} className="text-red-500 text-xl px-1">✕</button>
+                  <button
+                    onClick={async () => {
+                      if (await ask('حذف فعل', `«${v.verb} ${v.prep}» از فهرست فعل‌های افزودهٔ تو حذف می‌شود. مطمئن هستی؟`)) {
+                        const nc = custom.filter(c => c.id !== v.id); setCustom(nc); save(CUSTOM_KEY, nc);
+                      }
+                    }}
+                    className="text-red-500 text-xl px-1"
+                    title="حذف (با تأییدیه)"
+                  >✕</button>
                 </div>
               ))}
             </div>
@@ -526,6 +736,8 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         </div>,
         document.body
       )}
+
+      {dialog}
     </div>
   );
 };
