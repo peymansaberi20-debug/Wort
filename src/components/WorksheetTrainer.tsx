@@ -1,24 +1,26 @@
 /**
- * WorksheetTrainer.tsx — برگه‌های تمرین با هوش مصنوعی (Arbeitsblatt AI) — دو تمرین جداگانه
+ * WorksheetTrainer.tsx — دو تمرین برگه‌ای با هوش مصنوعی (Arbeitsblatt AI)
  *
- * منطق دو برگهٔ نمونهٔ کاربر تحلیل شد و حالا هوش مصنوعی هر بار با همان منطق یک برگهٔ تازه می‌سازد:
- *   kind='prep'   → «برگهٔ فعل + حرف اضافه»: جمله با ۱–۲ جای خالی برای حرف اضافهٔ ثابتِ فعل/صفت؛
+ *   kind='prep'   → «جای‌خالی فعل + حرف اضافه (AI)»: جمله با ۱–۲ جای خالی برای حرف اضافهٔ ثابتِ فعل/صفت؛
  *                   پاسخ‌ها را AI همراه برگه می‌سازد → بررسی محلیِ فوری + «چرا این جواب؟» + چت با معلم.
- *   kind='klasse' → «برگهٔ کلاس»: نیمی توضیح واژهٔ سطح‌دار، نیمی کامل‌کردن جمله با حرف ربط
- *                   (تمرین جایگاه فعل: قید → فعل در جایگاه ۲، وابسته‌ساز → فعل در انتها)؛ تصحیح سه‌لایهٔ AI.
- * پیکربندی هر بار: سطح (A1–C2) + تعداد مورد (۵/۸/۱۰/۱۲) + موضوع اختیاری — سپس «ساخت برگه» با AI.
- * هر برگهٔ ساخته‌شده با نمره و گفتگوهایش در آرشیو (localStorage) ذخیره می‌شود و دوباره باز می‌شود.
- * اجرا مثل قبل جمله‌به‌جمله است: هر مورد یک کارت مستقل → پاسخ → بررسی → توضیح → مورد بعدی.
+ *                   ترجمهٔ فارسی هر جمله با همان دستور اول ساخته می‌شود ولی تا زمان «بررسی» پنهان می‌ماند.
+ *   kind='klasse' → «تکمیل جمله»: طرف اول جمله + حرف ربطِ انتها داده می‌شود و کاربر ادامهٔ جمله را
+ *                   می‌نویسد (تمرین جایگاه فعل: قید → فعل در جایگاه ۲، وابسته‌ساز → فعل در انتها)؛
+ *                   تصحیح AI + ترجمهٔ فارسی پس از بررسی + دکمهٔ «تمرین بعدی» بلافاصله زیر نتیجه.
+ *
+ * پوستهٔ یکدست (trainerUI): پیکربندی سطح/تعداد/موضوع → دکمهٔ «ساخت تمرین»؛ آرشیو یکدست؛
+ * هر حذفی با تأییدیه؛ دکمهٔ 🖨 چاپِ کل برگه در یک صفحه (سازگار با Safari و webapp).
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { describeAiError, generateText, hasApiKey, getActiveProvider, getModel, getAiDebugInfo } from '../utils/aiProvider';
+import { createPortal } from 'react-dom';
+import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
+import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, Section, SqBtn, TopicInput, faDate, toFa, useConfirm } from './trainerUI';
 
-/* ───────────── مدل برگه (همان منطق نمونه‌ها) ───────────── */
+/* ───────────── مدل برگه ───────────── */
 
 export interface WshItem {
-  /** 'gap' پیش‌فرض — جای‌خالی با پاسخ مشخص؛ چند جای‌خالی پشتیبانی می‌شود */
   kind?: 'gap';
   /** قطعه‌های جمله؛ اندیس‌های فرد جای خالی هستند */
   seg: string[];
@@ -28,19 +30,23 @@ export interface WshItem {
   note: string;
   /** پاسخ‌های جایگزین پذیرفته برای هر جای خالی */
   alt?: string[][];
+  /** ترجمهٔ فارسی کامل جمله — با همان دستور اول AI گرفته می‌شود ولی تا «بررسی» پنهان است */
+  fa?: string;
 }
 
-/** تمرین آزاد: توضیح واژه یا کامل‌کردن جمله با حرف ربط — تصحیح با هوش مصنوعی */
+/** تمرین نوشتاری: ادامهٔ جمله با حرف ربط — تصحیح با هوش مصنوعی */
 export interface WshOpenItem {
   kind: 'open';
-  /** بخش ثابت سؤال یا شروع جمله */
+  /** طرف اول جمله (قبل از حرف ربط) */
   prompt: string;
   /** حرف ربط داده‌شده (پررنگ نمایش داده می‌شود) */
   connector?: string;
-  /** پاسخ نمونهٔ خوب */
+  /** ادامهٔ نمونهٔ خوب (بعد از حرف ربط) */
   model: string;
-  /** نکتهٔ کوتاه فارسی (معنای واژه یا قاعدهٔ جایگاه فعل) */
+  /** نکتهٔ کوتاه فارسی (قاعدهٔ جایگاه فعل) */
   note: string;
+  /** ترجمهٔ فارسی کل جملهٔ نمونه — پس از بررسی نمایش داده می‌شود */
+  fa?: string;
 }
 
 export type WshEntry = WshItem | WshOpenItem;
@@ -74,13 +80,6 @@ const askJson = async (prompt: string): Promise<string> => generateText(prompt, 
 const askChat = async (prompt: string): Promise<string> => generateText(prompt, { timeoutMs: 60000, retries: 1 });
 const aiErr = (e: unknown): string => { try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به هوش مصنوعی.'; } };
 const hasAIKey = (): boolean => { try { return !!hasApiKey(); } catch { return false; } };
-const aiLabel = (): string => {
-  try {
-    const p = String(getActiveProvider() || 'AI');
-    const m = String(getModel() || '').trim();
-    return m ? `${p} · ${m}` : p;
-  } catch { return 'AI'; }
-};
 
 /** پاسخ AI → JSON حتی وقتی ```json یا متن اضافه دارد */
 function parseJSONLoose<T>(raw: string): T {
@@ -95,14 +94,12 @@ function parseJSONLoose<T>(raw: string): T {
   throw new Error('AI_PARSE');
 }
 
-/* ───────────── پرامپت‌ها — منطقِ برگه‌های نمونه ───────────── */
+/* ───────────── پرامپت‌ها ───────────── */
 
-const COUNTS = [5, 8, 10, 12];
 const TOPIC_CHIPS = ['Alltag', 'Reise', 'Arbeit', 'Umwelt', 'Technik', 'Gesundheit', 'Freizeit'];
 
 /* ── استخر ساختارهای فعل/صفت + حرف اضافه به تفکیک سطح ──
-   مشکل قبلی: انتخابِ آزاد توسط مدل هر بار به همان ۴–۵ ساختار محدود و تکراری ختم می‌شد.
-   حالا برنامه خودش تصادفی از این استخر انتخاب می‌کند (ساختارهای برگه‌های اخیر کنار گذاشته
+   برنامه خودش تصادفی از این استخر انتخاب می‌کند (ساختارهای برگه‌های اخیر کنار گذاشته
    می‌شوند) و مدل فقط برای همین ساختارها جمله می‌سازد — تنوع تضمینی است. */
 const PREP_POOL: Record<string, string[]> = {
   A1: [
@@ -151,10 +148,10 @@ const PREP_POOL: Record<string, string[]> = {
     'zeugen von + Dat', 'berichten von + Dat', 'hinweisen auf + Akk', 'verweisen auf + Akk',
     'sich auswirken auf + Akk', 'Einfluss haben auf + Akk', 'Einfluss ausüben auf + Akk',
     'verzichten auf + Akk', 'eingehen auf + Akk (auf ein Thema eingehen)', 'sich vorbereiten auf + Akk',
-  'Kritik üben an + Dat', 'mitwirken an + Dat', 'hindern an + Dat', 'verzweifeln an + Dat',
-  'sich erfreuen + Gen (gehoben)', 'sich bedienen + Gen (gehoben)', 'unterscheiden zwischen + Dat',
-  'vermitteln zwischen + Dat', 'resultieren aus + Dat', 'hervorgehen aus + Dat',
-  'sich zusammensetzen aus + Dat', 'in Kauf nehmen (Akk)', 'anpassen an + Akk (sich anpassen an)'
+    'Kritik üben an + Dat', 'mitwirken an + Dat', 'hindern an + Dat', 'verzweifeln an + Dat',
+    'sich erfreuen + Gen (gehoben)', 'sich bedienen + Gen (gehoben)', 'unterscheiden zwischen + Dat',
+    'vermitteln zwischen + Dat', 'resultieren aus + Dat', 'hervorgehen aus + Dat',
+    'sich zusammensetzen aus + Dat', 'in Kauf nehmen (Akk)', 'anpassen an + Akk (sich anpassen an)'
   ]
 };
 const C1_COMBOS: string[] = [
@@ -205,7 +202,7 @@ const pickPrepCombos = (lvl: string, n: number): string[] => {
     .slice(0, Math.max(1, n));
 };
 
-const SAMPLE_PREP = '{"seg":["Erika freut sich schon "," ihren Geburtstag."],"answers":["auf"],"note":"sich freuen auf + Akk — شادی برای رویداد آینده"}';
+const SAMPLE_PREP = '{"seg":["Erika freut sich schon "," ihren Geburtstag."],"answers":["auf"],"note":"sich freuen auf + Akk — شادی برای رویداد آینده","fa":"اریکا برای تولدش حسابی لحظه‌شماری می‌کند."}';
 
 const buildPrepPrompt = (level: string, count: number, topic: string, combos: string[]): string =>
   `Du bist ein erfahrener Deutschlehrer und erstellst ein Arbeitsblatt «Verben mit Präpositionen».
@@ -220,11 +217,11 @@ Regeln:
 - Steht die Lücke am Satzanfang, großgeschrieben (z. B. "Mit wem hast du dich unterhalten?").
 - "answers": NUR die Präposition(en) in der Reihenfolge der Lücken (z. B. "auf" — ohne Kasus-Angabe).
 - "note": ۱–۲ جملهٔ فارسی — فعل/ساختار + حرف اضافه + حالت (+ معنی فعل در صورت لزوم)، مثل نمونه.
+- "fa": ترجمهٔ فارسی روانِ جملهٔ کامل (با پاسخ‌های درست). این ترجمه تا زمان بررسیِ پاسخ دانش‌آموز پنهان می‌ماند.
 - "alt" (اختیاری): پاسخ‌های جایگزینِ درستِ هر Lücke.
 Gib NUR ein JSON-Array zurück.`;
 
-const SAMPLE_KL1 = '{"prompt":"(im Boden / in der Erde) versickern","model":"Wenn Wasser langsam in den Boden fließt und dort verschwindet, versickert es.","note":"versickern = فرو رفتن/نفوذ کردن آب در خاک"}';
-const SAMPLE_KL2 = '{"prompt":"Die Parkgebühren wurden stark erhöht,","connector":"trotzdem","model":"…, trotzdem fahren viele Menschen immer noch mit dem Auto in die Stadt.","note":"trotzdem = قید؛ فعل بلافاصله بعد از آن (جایگاه ۲)"}';
+const SAMPLE_COMPLETE = '{"prompt":"Die Parkgebühren wurden stark erhöht,","connector":"trotzdem","model":"fahren viele Menschen immer noch mit dem Auto in die Stadt.","fa":"هزینهٔ پارک خیلی زیاد شد؛ با این حال خیلی‌ها هنوز با ماشین به شهر می‌آیند.","note":"trotzdem = قید؛ فعل بلافاصله بعد از آن (جایگاه ۲)"}';
 
 const KONNS_FOR = (level: string): string =>
   level === 'A1' || level === 'A2'
@@ -233,21 +230,23 @@ const KONNS_FOR = (level: string): string =>
       ? 'weil, obwohl, damit, deshalb, darum, trotzdem, dennoch, während, bevor, nachdem, denn'
       : 'obwohl, damit, sodass, allerdings, dennoch, infolgedessen, einerseits … andererseits, je … desto, zum einen … zum anderen';
 
-const buildKlassePrompt = (level: string, count: number, topic: string): string =>
-  `Du bist ein erfahrener Deutschlehrer und erstellst ein Arbeitsblatt wie in einem Deutschkurs.
+/** پرامت تمرین «تکمیل جمله»: طرف اول + حرف ربطِ انتها → کاربر ادامه را می‌نویسد */
+const buildCompletePrompt = (level: string, count: number, topic: string): string =>
+  `Du bist ein erfahrener Deutschlehrer und erstellst ein Arbeitsblatt «Sätze komplettieren».
 Niveau: ${level}. Thema: ${topic.trim() || 'Stadt, Alltag, Umwelt und Arbeit'}.
-Erstelle GENAU ${count} Aufgaben in diesem gemischten Format (Logik des Original-Arbeitsblattes):
-A) Etwa die Hälfte — «Wort erklären»: ein Niveau-${level}-Wort (Nomen mit Artikel, Verb oder Wendung) in Klammern; der Lerner schreibt einen definierenden Beispielsatz.
-   ${SAMPLE_KL1}
-B) Die andere Hälfte — «Sätze komplettieren mit Konnektor»: erster Teilsatz + vorgegebener Konnektor; der Lerner schreibt den zweiten Teilsatz.
-   ${SAMPLE_KL2}
-Konnektoren für Niveau ${level} (abwechselnd): ${KONNS_FOR(level)}.
+Erstelle GENAU ${count} Aufgaben nach genau diesem Muster:
+  ${SAMPLE_COMPLETE}
+Format jeder Aufgabe:
+- "prompt": der vorgegebene ERSTE Teilsatz des Satzes — er endet mit einem Komma (oder passendem Satzzeichen).
+- "connector": EIN Konnektor passend zu Niveau ${level}, der direkt nach dem Komma steht (abwechselnd aus dieser Liste): ${KONNS_FOR(level)}.
+- Der Lerner sieht den ersten Teilsatz und den Konnektor und schreibt NUR die Fortsetzung (den zweiten Teil) selbst.
 Regeln:
-- Wortstellungs-Fokus: Adverb-Konnektoren (darum/daher/trotzdem/dennoch/allerdings) → Verb direkt danach (Position 2). Nebensatz-Konnektoren (obwohl/damit/weil/sodass) → Verb am Ende des Nebensatzes. Die Modellantwort muss das genau zeigen (beginnt mit „…, ").
-- "note": قاعدهٔ کوتاه فارسی — برای نوع A: معنی واژه؛ برای نوع B: قاعدهٔ جایگاه فعل آن Konnektor.
-- "model": یک پاسخ نمونهٔ کامل، طبیعی و درست.
-- Wortschatz und Themen passend zu Niveau ${level}, keine Wiederholung.
-Gib NUR ein JSON-Array zurück (Typ A ohne "connector", Typ B mit "connector").`;
+- Wortstellungs-Fokus: Adverb-Konnektoren (darum/daher/trotzdem/dennoch/allerdings) → im Modell beginnt die Fortsetzung direkt mit dem Verb (Position 2). Nebensatz-Konnektoren (obwohl/damit/weil/sodass/bevor/nachdem) → im Modell steht das Verb am Ende des Nebensatzes; die Fortsetzung beginnt mit dem Subjekt.
+- "model": NUR die Fortsetzung — der Konnektor wird NICHT wiederholt. Logisch sinnvoll, Niveau ${level}, natürliche Alltagssprache.
+- "fa": ترجمهٔ فارسی روانِ کل جمله (prompt + connector + model). این ترجمه تا زمان بررسیِ پاسخ پنهان می‌ماند.
+- "note": یک قاعدهٔ کوتاه فارسی — جایگاه فعل آن حرف ربط یا معنی آن.
+- Wortschatz und Themen passend zu Niveau ${level}, keine Wiederholung, abwechslungsreiche Konnektoren.
+Gib NUR ein JSON-Array zurück.`;
 
 /* ───────────── پاک‌سازی پاسخ AI ───────────── */
 
@@ -261,11 +260,11 @@ const cleanPrep = (raw: string): WshItem[] => {
       const alt = Array.isArray(o.alt)
         ? o.alt.map((a) => (Array.isArray(a) ? a.map((v) => String(v ?? '')) : []))
         : undefined;
-      return { seg, answers, alt, note: String(o.note ?? '').trim() };
+      return { seg, answers, alt, note: String(o.note ?? '').trim(), fa: String(o.fa ?? '').trim() };
     })
     .filter((it) => it.seg.length >= 2 && it.answers.length === it.seg.length - 1
       && it.answers.every((a) => a.length > 0 && a.length < 30) && it.note.length > 0)
-    .map((it) => ({ seg: it.seg, answers: it.answers, note: it.note, alt: it.alt }))
+    .map((it) => ({ seg: it.seg, answers: it.answers, note: it.note, alt: it.alt, fa: it.fa || undefined }))
     .slice(0, 20);
 };
 
@@ -280,9 +279,10 @@ const cleanKlasse = (raw: string): WshOpenItem[] => {
         connector: o.connector ? String(o.connector).trim() : undefined,
         model: String(o.model ?? '').trim(),
         note: String(o.note ?? '').trim(),
+        fa: String(o.fa ?? '').trim() || undefined,
       };
     })
-    .filter((it) => it.prompt.length > 3 && it.model.length > 3 && it.note.length > 0)
+    .filter((it) => it.prompt.length > 3 && it.connector && it.model.length > 3 && it.note.length > 0)
     .slice(0, 20);
 };
 
@@ -297,12 +297,8 @@ const itemFull = (it: WshItem): string => {
   return s;
 };
 
-const FA_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-const toFa = (n: number | string): string => String(n).replace(/[0-9]/g, (d) => FA_DIGITS[+d]);
-const faDate = (ts: number): string => {
-  try { return new Date(ts).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }); }
-  catch { return new Date(ts).toLocaleDateString(); }
-};
+/** جملهٔ کامل نمونهٔ تمرین تکمیل جمله (prompt + connector + model) */
+const openFull = (it: WshOpenItem): string => `${it.prompt} ${it.connector || ''} ${it.model}`.replace(/\s+/g, ' ').trim();
 
 const gapGood = (it: WshItem, g: number, v: string): boolean => {
   const got = norm(v || '');
@@ -344,7 +340,7 @@ const saveAllArch = (a: WshArch[]): void => {
 
 const buildChatPrompt = (level: string, it: WshEntry, q: string, convo: ChatMsg[]): string => {
   const ctx = isOpen(it)
-    ? `Aufgabe: "${it.prompt}"${it.connector ? ` (vorgegebener Konnektor: ${it.connector})` : ''} | Musterantwort: "${it.model}"`
+    ? `Aufgabe: "${openFull(it)}" (vorgegebener Konnektor: ${it.connector}) | Musterantwort: "${openFull(it)}"`
     : `Lückensatz: "${itemFull(it)}" (Lösung: ${it.answers.join(' + ')})`;
   return `Du bist ein geduldiger Deutschlehrer. Niveau: ${level}. Kontext vom Arbeitsblatt: ${ctx}
 ${convo.length ? 'Bisheriges Gespräch:\n' + convo.map((m) => (m.role === 'user' ? 'Lerner: ' : 'Lehrer: ') + m.text).join('\n') + '\n' : ''}Frage des Lerners: ${q}
@@ -353,24 +349,22 @@ Antworte kurz und klar auf Persisch (Farsi); Fachbegriffe und Beispiele auf Deut
 
 const QUICK_QS = ['چرا این‌طور درست است؟', 'یک مثال مشابه بده', 'ساده‌تر چطور بگویم؟', 'قاعدهٔ جایگاه فعل را بگو'];
 
-const KIND_INFO: Record<Kind, { title: string; icon: string; logic: string[] }> = {
-  prep: {
-    title: 'برگهٔ فعل + حرف اضافه (AI)',
-    icon: '📄',
-    logic: [
-      'جمله‌های آلمانی با ۱ تا ۲ جای خالی برای حرف اضافهٔ ثابتِ فعل/صفت (sich freuen auf, Angst haben vor, sich bewerben um, …).',
-      'پاسخ‌ها را هوش مصنوعی همراه برگه می‌سازد → بررسی همان‌جا و فوری؛ «چرا این جواب؟» هم توضیح می‌دهد.',
-    ],
-  },
-  klasse: {
-    title: 'برگهٔ کلاس (AI)',
-    icon: '🧾',
-    logic: [
-      'نیمی از موارد: توضیح یک واژهٔ سطح‌دار در یک جملهٔ تعریفی (مثل تمرین Vokabeln erklären برگهٔ کلاس).',
-      'نیمی دیگر: کامل‌کردن جمله با حرف ربط — قیدها (darum/trotzdem/…) فعل در جایگاه ۲، وابسته‌سازها (obwohl/damit/…) فعل در انتها؛ با تصحیح هوش مصنوعی و پاسخ نمونه.',
-    ],
-  },
+const KIND_INFO: Record<Kind, { title: string; icon: string }> = {
+  prep: { title: 'جای‌خالی فعل + حرف اضافه (AI)', icon: '📄' },
+  klasse: { title: 'تکمیل جمله', icon: '🧾' },
 };
+
+/* ───────────── چاپ کل برگه در یک صفحه (Portal به body — سازگار با Safari/webapp) ───────────── */
+
+const PRINT_CSS = `
+.wsh-print-root { display: none; }
+@media print {
+  body > *:not(.wsh-print-root) { display: none !important; }
+  .wsh-print-root { display: block !important; position: static !important; }
+  .wsh-print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { size: A4; margin: 12mm 12mm; }
+}
+`;
 
 /* ───────────── کامپوننت ───────────── */
 
@@ -378,7 +372,7 @@ export const WorksheetTrainer: React.FC<{
   kind: Kind;
   onShowToast?: (m: string, e?: boolean) => void;
   onClose?: () => void;
-}> = ({ kind, onShowToast, onClose }) => {
+}> = ({ kind, onShowToast }) => {
   const info = KIND_INFO[kind];
   const [phase, setPhase] = useState<Phase>('config');
   const [sess, setSess] = useState<Session | null>(null);
@@ -399,7 +393,7 @@ export const WorksheetTrainer: React.FC<{
   const [chatDraft, setChatDraft] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [arch, setArch] = useState<WshArch[]>(() => loadArch().filter((a) => a.kind === kind));
-  const [archOpen, setArchOpen] = useState(false);
+  const { ask, dialog } = useConfirm();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (chatIdx !== null) setTimeout(() => chatEndRef.current?.scrollIntoView({ block: 'end' }), 120); }, [chatIdx, sess?.chats]);
@@ -448,7 +442,7 @@ export const WorksheetTrainer: React.FC<{
       const combos = kind === 'prep' ? pickPrepCombos(theLvl, theCnt) : [];
       const prompt = kind === 'prep'
         ? buildPrepPrompt(theLvl, theCnt, topic, combos)
-        : buildKlassePrompt(theLvl, theCnt, topic);
+        : buildCompletePrompt(theLvl, theCnt, topic);
       const raw = await askJson(prompt);
       const items: WshEntry[] = kind === 'prep' ? cleanPrep(raw) : cleanKlasse(raw);
       if (!items.length) throw new Error('پاسخ هوش مصنوعی ساختار معتبر نداشت — دوباره تلاش کن.');
@@ -520,13 +514,10 @@ export const WorksheetTrainer: React.FC<{
     try {
       const prompt =
         `Du bist ein geduldiger Deutschlehrer (Niveau ${sess.level}). Der Lerner löst eine Aufgabe vom Arbeitsblatt.\n` +
-        `Aufgabe/Anfang: "${it.prompt}"\n` +
-        (it.connector ? `Vorgegebener Konnektor: "${it.connector}"\n` : '') +
-        `Antwort des Lerners: "${openText.trim()}"\n` +
-        (it.connector
-          ? `Prüfe Inhalt, Grammatik und die korrekte Verwendung des Konnektors (Wortstellung! Adverb-Konnektoren wie "darum/daher/trotzdem/dennoch": direkt danach das Verb (Position 2); Nebensatz-Konnektoren wie "obwohl/damit": Verb am Ende).\n`
-          : `Prüfe, ob die Antwort die Aufgabe (Worterklärung) sinnvoll und grammatikalisch korrekt erfüllt.\n`) +
-        `Antworte NUR mit JSON: {"ok": true|false, "feedback": "<2-3 kurze Sätze auf Persisch (Farsi): Fehler + Regel>", "model": "<eine gute Modellantwort auf Deutsch>"}`;
+        `Aufgabe: "${it.prompt}" — vorgegebener Konnektor: "${it.connector}"\n` +
+        `Antwort des Lerners (Fortsetzung nach dem Konnektor): "${openText.trim()}"\n` +
+        `Prüfe Inhalt, Grammatik und die korrekte Verwendung des Konnektors (Wortstellung! Adverb-Konnektoren wie "darum/daher/trotzdem/dennoch": direkt danach das Verb (Position 2); Nebensatz-Konnektoren wie "obwohl/damit": Verb am Ende).\n` +
+        `Antworte NUR mit JSON: {"ok": true|false, "feedback": "<2-3 kurze Sätze auf Persisch (Farsi): Fehler + Regel>", "model": "<eine gute Modellfortsetzung auf Deutsch, ohne den Konnektor zu wiederholen>"}`;
       const t = await askJson(prompt);
       const v = parseVerdict(t);
       if (v) setOpenVerdict({ ok: v.ok, feedback: v.feedback, model: v.model || it.model });
@@ -573,7 +564,9 @@ export const WorksheetTrainer: React.FC<{
     }
   };
 
-  const ChatBox = ({ itemIdx }: { itemIdx: number }): React.ReactElement => {
+  /* ⚠️ رندر مستقیم (نه به شکل کامپوننت داخل رندر) — وگرنه با هر حرف تایپی کل چت
+     دوباره mount می‌شود و کیبورد موبایل بسته می‌شود (باگ شناخته‌شدهٔ درخواست کاربر). */
+  const renderChatBox = (itemIdx: number): React.ReactElement => {
     const msgs = sess?.chats[itemIdx] || [];
     return (
       <div className="rounded-xl border border-[#1f5fbf]/40 bg-blue-50/40 dark:bg-blue-950/20 dark:border-[#7fb0ff]/30 p-2.5 space-y-2" dir="rtl">
@@ -627,137 +620,114 @@ export const WorksheetTrainer: React.FC<{
     );
   };
 
-  /* ── پیکربندی + آرشیو ── */
+  /* ── برگهٔ چاپ (کل تمرین در یک صفحه) ── */
+  const printRoot = sess && phase !== 'config' ? (
+    <div className="wsh-print-root" dir="rtl">
+      <style>{PRINT_CSS}</style>
+      <div style={{ borderBottom: '2px solid #1f5fbf', paddingBottom: 6, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', justifyContent: 'space-between' }}>
+          <span>{kind === 'prep' ? 'Jiaye-khāli: Verben mit Präpositionen — جای‌خالی فعل + حرف اضافه' : 'Sätze komplettieren — تکمیل جمله'}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: '#555' }}>Niveau {sess.level}{sess.topic ? ` • ${sess.topic}` : ''}</span>
+        </div>
+        <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
+          {faDate(sess.ts)} • {sess.items.length} مورد • Lösungsschlüssel در همان جمله (پرنگ)
+        </div>
+      </div>
+      <ol style={{ margin: 0, paddingInlineStart: 18, listStyle: 'decimal' }}>
+        {sess.items.map((entry, i) => (
+          <li key={i} style={{ fontSize: 11.5, marginBottom: 9, lineHeight: 1.8, breakInside: 'avoid' }}>
+            {isOpen(entry) ? (
+              <>
+                <span dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>
+                  {entry.prompt} <b>{entry.connector}</b> <u>{entry.model}</u>
+                </span>
+                <div style={{ fontSize: 9.5, color: '#555', marginTop: 1 }}>💡 {entry.note}{entry.fa ? ` — ${entry.fa}` : ''}</div>
+              </>
+            ) : (
+              <>
+                <span dir="ltr" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>
+                  {entry.seg.map((s, j) => (
+                    <React.Fragment key={j}>
+                      <span>{s}</span>
+                      {j < entry.answers.length && <b style={{ margin: '0 2px' }}>{entry.answers[j]}</b>}
+                    </React.Fragment>
+                  ))}
+                </span>
+                <div style={{ fontSize: 9.5, color: '#555', marginTop: 1 }}>💡 {entry.note}{entry.fa ? ` — ${entry.fa}` : ''}</div>
+              </>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  ) : null;
+
+  /* ── پیکربندی + آرشیو (پوستهٔ یکدست) ── */
   if (phase === 'config' || !sess) {
     return (
-      <div dir="rtl" className="bg-white dark:bg-[#1b2030] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 space-y-4">
-        {/* سطح */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] mb-1.5">۱. سطح</div>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {LVL_ORDER.map((l) => (
-              <button
-                key={l}
-                onClick={() => setLevel(l)}
-                className={`py-2.5 rounded-xl text-xs font-bold border transition ${
-                  level === l
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
+      <div dir="rtl" className="space-y-3">
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
+          <Section n="۱" label="سطح">
+            <LevelChips value={level} onChange={l => setLevel(l as Lvl)} levels={LVL_ORDER as unknown as string[]} />
+          </Section>
+
+          <Section n="۲" label={kind === 'prep' ? 'تعداد جمله‌های برگه' : 'تعداد تمرین‌ها'}>
+            <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} />
+          </Section>
+
+          <Section n="۳" label="موضوع (اختیاری)">
+            <TopicInput value={topic} onChange={setTopic} chips={TOPIC_CHIPS} />
+          </Section>
+
+          <PrimaryBtn onClick={() => generate()} busy={busy} label="🚀 ساخت تمرین" />
         </div>
 
-        {/* تعداد */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] mb-1.5">۲. تعداد موارد برگه</div>
-          <div className="flex gap-2 flex-wrap">
-            {COUNTS.map((n) => (
-              <button
-                key={n}
-                onClick={() => setCount(n)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition ${
-                  count === n
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* موضوع */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] mb-1.5">۳. موضوع (اختیاری)</div>
-          <input
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="مثلاً: Umwelt, mein Job, Reisen … (خالی = موضوع آزاد)"
-            className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-[#141923] outline-none"
-          />
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {TOPIC_CHIPS.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTopic(t === topic ? '' : t)}
-                dir="ltr"
-                className={`text-[11px] rounded-full px-2.5 py-1 border transition ${topic === t
-                  ? 'bg-[#1f5fbf] text-white border-transparent'
-                  : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={() => generate()}
-          disabled={busy}
-          className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3 rounded-xl font-bold text-sm shadow-xs active:scale-[.99] transition disabled:opacity-60"
+        {/* آرشیو یکدست */}
+        <ArchivePanel
+          title="آرشیو برگه‌های ساخته‌شده"
+          count={arch.length}
+          emptyText="هنوز برگه‌ای ساخته نشده است."
+          footer={arch.length > 0 ? (
+            <button
+              onClick={async () => {
+                if (await ask('پاک کردن کل آرشیو', `همهٔ ${arch.length} برگهٔ ذخیره‌شدهٔ این تمرین برای همیشه حذف می‌شوند. مطمئن هستی؟`)) {
+                  const next = loadArch().filter((x) => x.kind !== kind);
+                  saveAllArch(next);
+                  setArch([]);
+                }
+              }}
+              className="text-[11px] text-red-500 px-2 py-1"
+            >
+              پاک کردن کل آرشیو این تمرین
+            </button>
+          ) : undefined}
         >
-          {busy ? '⏳ هوش مصنوعی دارد برگه را می‌سازد…' : '✨ ساخت برگهٔ جدید با هوش مصنوعی'}
-        </button>
+          {arch.map((a) => (
+            <ArchiveRow
+              key={a.id}
+              title={<>سطح {a.level} • {toFa(a.items.length)} مورد{a.topic ? ` • ${a.topic}` : ''}{a.score ? <span className="text-emerald-600"> • نتیجه: {toFa(a.score.ok)}/{toFa(a.score.total)}</span> : ''}</>}
+              chips={<>
+                <MiniChip>{faDate(a.ts)}</MiniChip>
+                {a.chats && Object.keys(a.chats).length > 0 && <MiniChip tone="blue">💬 {toFa(Object.keys(a.chats).length)}</MiniChip>}
+              </>}
+            >
+              <SqBtn onClick={() => openArch(a)} title="اجرای دوبارهٔ این برگه">▶</SqBtn>
+              <SqBtn
+                tone="red"
+                onClick={async () => {
+                  if (await ask('حذف برگه', 'این برگه از آرشیو برای همیشه حذف می‌شود. مطمئن هستی؟')) {
+                    const next = loadArch().filter((x) => x.id !== a.id);
+                    saveAllArch(next);
+                    setArch(next.filter((x) => x.kind === kind));
+                  }
+                }}
+                title="حذف"
+              >🗑</SqBtn>
+            </ArchiveRow>
+          ))}
+        </ArchivePanel>
 
-        {/* آرشیو برگه‌های این نوع */}
-        <div className="rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] p-4 shadow-xs">
-          <button onClick={() => setArchOpen((o) => !o)} className="w-full flex items-center justify-between text-sm font-bold">
-            <span>🗂 آرشیو برگه‌های ساخته‌شده ({toFa(arch.length)})</span>
-            <span className="text-[#5d6676]">{archOpen ? '▲' : '▼'}</span>
-          </button>
-          {archOpen && (
-            <div className="mt-3 space-y-2">
-              {arch.length === 0 && <p className="text-xs text-[#5d6676] py-2">هنوز برگه‌ای ساخته نشده است.</p>}
-              {arch.map((a) => (
-                <div key={a.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold">
-                      سطح {a.level} • {toFa(a.items.length)} مورد{a.topic ? ` • ${a.topic}` : ''}
-                      {a.score ? <span className="text-emerald-600"> • نتیجه: {toFa(a.score.ok)}/{toFa(a.score.total)}</span> : ''}
-                    </div>
-                    <div className="text-[10px] text-[#5d6676] flex flex-wrap gap-1.5 mt-1">
-                      <span className="bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5">{faDate(a.ts)}</span>
-                      {a.chats && Object.keys(a.chats).length > 0 && (
-                        <span className="bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-[#7fb0ff] rounded px-1.5 py-0.5">💬 {toFa(Object.keys(a.chats).length)}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => openArch(a)}
-                      className="w-9 h-9 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center text-sm"
-                      title="اجرای دوبارهٔ این برگه"
-                      aria-label="اجرای دوبارهٔ این برگه"
-                    >
-                      ▶
-                    </button>
-                    <button
-                      onClick={() => { const next = loadArch().filter((x) => x.id !== a.id); saveAllArch(next); setArch(next.filter((x) => x.kind === kind)); }}
-                      className="w-9 h-9 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 flex items-center justify-center text-sm"
-                      title="حذف"
-                      aria-label="حذف"
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {arch.length > 0 && (
-                <button
-                  onClick={() => { const next = loadArch().filter((x) => x.kind !== kind); saveAllArch(next); setArch([]); }}
-                  className="text-[11px] text-red-500 px-2 py-1"
-                >
-                  پاک کردن آرشیو این برگه
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {dialog}
       </div>
     );
   }
@@ -767,58 +737,62 @@ export const WorksheetTrainer: React.FC<{
     const total = sess.order.length;
     const good = sess.ok === total;
     return (
-      <div dir="rtl" className="bg-white dark:bg-[#1b2030] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 space-y-4">
-        <div className="text-center space-y-1">
-          <div className="text-4xl">{good ? '🏆' : sess.ok >= total * 0.7 ? '👍' : '💪'}</div>
-          <div className="text-2xl font-extrabold">{toFa(sess.ok)} / {toFa(total)}</div>
-          <div className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
-            {good ? 'همه درست! فوق‌العاده بود.' : sess.ok >= total * 0.7 ? 'خیلی خوب بود — چند مورد را دوباره مرور کن.' : 'اشکالی ندارد؛ تمرین یعنی همین — غلط‌ها را تکرار کن.'}
-            <span className="block text-xs mt-1">برگه در آرشیو ذخیره شد (سطح {sess.level}{sess.topic ? ` • ${sess.topic}` : ''}).</span>
+      <div dir="rtl" className="space-y-3">
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 space-y-4 text-center">
+          <div>
+            <div className="text-4xl">{good ? '🏆' : sess.ok >= total * 0.7 ? '👍' : '💪'}</div>
+            <div className="text-2xl font-extrabold">{toFa(sess.ok)} / {toFa(total)}</div>
+            <div className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
+              {good ? 'همه درست! فوق‌العاده بود.' : sess.ok >= total * 0.7 ? 'خیلی خوب بود — چند مورد را دوباره مرور کن.' : 'اشکالی ندارد؛ تمرین یعنی همین — غلط‌ها را تکرار کن.'}
+              <span className="block text-xs mt-1">برگه در آرشیو ذخیره شد (سطح {sess.level}{sess.topic ? ` • ${sess.topic}` : ''}).</span>
+            </div>
           </div>
-        </div>
-        {sess.wrong.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-sm font-bold">مورد نادرست ({toFa(sess.wrong.length)}):</div>
-            {sess.wrong.map((wi) => {
-              const w = sess.items[wi];
-              if (isOpen(w)) {
+          {sess.wrong.length > 0 && (
+            <div className="space-y-2 text-right">
+              <div className="text-sm font-bold">مورد نادرست ({toFa(sess.wrong.length)}):</div>
+              {sess.wrong.map((wi) => {
+                const w = sess.items[wi];
+                if (isOpen(w)) {
+                  return (
+                    <div key={wi} className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-3 space-y-1">
+                      <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">مورد {toFa(wi + 1)}</div>
+                      <div dir="ltr" className="font-sans text-sm leading-7">
+                        {w.prompt} <b className="text-[#6b4fd8] dark:text-[#a68bff]">{w.connector}</b> <span className="text-emerald-700 dark:text-emerald-300">✓ {w.model}</span>
+                      </div>
+                      <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">💡 {w.note}</div>
+                    </div>
+                  );
+                }
                 return (
                   <div key={wi} className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-3 space-y-1">
-                    <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">مورد {toFa(wi + 1)}</div>
+                    <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">جملهٔ {toFa(wi + 1)}</div>
                     <div dir="ltr" className="font-sans text-sm leading-7">
-                      {w.prompt} {w.connector && <b className="text-[#6b4fd8] dark:text-[#a68bff]">{w.connector}</b>} <span className="text-[#9aa3b2]">______</span>
+                      {w.seg.map((s, i) => (
+                        <React.Fragment key={i}>
+                          <span className="whitespace-pre-wrap">{s}</span>
+                          {i < w.answers.length && <b className="text-emerald-600 dark:text-emerald-400 mx-0.5">{w.answers[i]}</b>}
+                        </React.Fragment>
+                      ))}
                     </div>
-                    <div dir="ltr" className="text-sm leading-7 text-emerald-700 dark:text-emerald-300">✓ {w.model}</div>
                     <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">💡 {w.note}</div>
                   </div>
                 );
-              }
-              return (
-                <div key={wi} className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-3 space-y-1">
-                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">جملهٔ {toFa(wi + 1)}</div>
-                  <div dir="ltr" className="font-sans text-sm leading-7">
-                    {w.seg.map((s, i) => (
-                      <React.Fragment key={i}>
-                        <span className="whitespace-pre-wrap">{s}</span>
-                        {i < w.answers.length && <b className="text-emerald-600 dark:text-emerald-400 mx-0.5">{w.answers[i]}</b>}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">💡 {w.note}</div>
-                </div>
-              );
-            })}
-            <button onClick={() => { runSheet(sess.items, { id: sess.id, ts: sess.ts, level: sess.level, topic: sess.topic, chats: sess.chats, score: sess.score }); setSess((s) => s ? { ...s, order: sess.wrong } : s); }} className="w-full py-2 rounded-xl bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 text-sm font-bold">
-              تکرار همین {toFa(sess.wrong.length)} مورد غلط
-            </button>
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => generate(sess.level, sess.items.length)} disabled={busy} className="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold disabled:opacity-60">
+              })}
+              <button onClick={() => { runSheet(sess.items, { id: sess.id, ts: sess.ts, level: sess.level, topic: sess.topic, chats: sess.chats, score: sess.score }); setSess((s) => s ? { ...s, order: sess.wrong } : s); }} className="w-full py-2 rounded-xl bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 text-sm font-bold">
+                تکرار همین {toFa(sess.wrong.length)} مورد غلط
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => generate(sess.level, sess.items.length)} disabled={busy} className="py-2.5 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold disabled:opacity-60">
             {busy ? '⏳ …' : '✨ برگهٔ جدید (همین تنظیمات)'}
           </button>
-          <button onClick={() => { setPhase('config'); setSess(null); }} className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">پیکربندی و آرشیو</button>
+          <button onClick={() => window.print()} className="py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">🖨 چاپ کل برگه</button>
         </div>
+        <button onClick={() => { setPhase('config'); setSess(null); }} className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">پیکربندی و آرشیو</button>
+        {printRoot && createPortal(printRoot, document.body)}
+        {dialog}
       </div>
     );
   }
@@ -830,166 +804,196 @@ export const WorksheetTrainer: React.FC<{
   const last = sess.idx + 1 >= total;
   const curIdx = sess.order[sess.idx];
   return (
-    <div dir="rtl" className="bg-white dark:bg-[#1b2030] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-bold text-[#5d6676] dark:text-[#a3adbd] flex items-center gap-1.5 flex-wrap">
-          <span>{info.icon} {info.title}</span>
-          <span className="bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-[#7fb0ff] rounded-full px-2 py-0.5 text-[11px] font-bold">سطح {sess.level}</span>
-          {sess.topic && <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full px-2 py-0.5 text-[11px] font-bold">{sess.topic}</span>}
-        </div>
-        <button onClick={() => { setPhase('config'); setChatIdx(null); }} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold flex-shrink-0">پایان ⏹</button>
-      </div>
-
-      <div>
-        <div className="flex justify-between text-xs text-[#5d6676] dark:text-[#a3adbd] mb-1">
-          <span>{isOpen(it) ? 'مورد' : 'جملهٔ'} {toFa(sess.idx + 1)} از {toFa(total)}</span>
-          <span>درست: {toFa(sess.ok)} · نادرست: {toFa(sess.wrong.length)}</span>
-        </div>
-        <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-
-      {isOpen(it) ? (
-        <>
-          <div dir="ltr" className="text-lg md:text-xl leading-9 font-sans text-slate-800 dark:text-slate-100">
-            <span className="whitespace-pre-wrap">{it.prompt} </span>
-            {it.connector && <b className="text-[#6b4fd8] dark:text-[#a68bff]">{it.connector}</b>}
-            <span className="text-[#9aa3b2]"> ______</span>
+    <div dir="rtl" className="space-y-3">
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-bold text-[#5d6676] dark:text-[#a3adbd] flex items-center gap-1.5 flex-wrap">
+            <span>{info.icon} {info.title}</span>
+            <span className="bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-[#7fb0ff] rounded-full px-2 py-0.5 text-[11px] font-bold">سطح {sess.level}</span>
+            {sess.topic && <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full px-2 py-0.5 text-[11px] font-bold">{sess.topic}</span>}
           </div>
-          <textarea
-            dir="ltr"
-            rows={3}
-            value={openText}
-            onChange={(e) => setOpenText(e.target.value)}
-            disabled={!!openVerdict && openVerdict.ok !== null}
-            spellCheck={false}
-            placeholder="پاسخ خود را به آلمانی بنویسید…"
-            className="w-full rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-[#f6f7fb] dark:bg-[#12151c] p-3 font-sans text-base outline-none focus:border-[#1f5fbf] disabled:opacity-70"
-          />
-          {openModel && (
-            <div className="rounded-xl px-3 py-2 text-sm bg-[#f6f7fb] dark:bg-[#12151c] leading-7">
-              پاسخ نمونه: <b dir="ltr">{it.model}</b>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button onClick={() => window.print()} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold" title="چاپ کل برگه در یک صفحه">🖨</button>
+            <button onClick={() => { setPhase('config'); setChatIdx(null); }} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold flex-shrink-0">پایان ⏹</button>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex justify-between text-xs text-[#5d6676] dark:text-[#a3adbd] mb-1">
+            <span>{isOpen(it) ? 'مورد' : 'جملهٔ'} {toFa(sess.idx + 1)} از {toFa(total)}</span>
+            <span>درست: {toFa(sess.ok)} · نادرست: {toFa(sess.wrong.length)}</span>
+          </div>
+          <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+
+        {isOpen(it) ? (
+          <>
+            <div dir="ltr" className="text-lg md:text-xl leading-9 font-sans text-slate-800 dark:text-slate-100">
+              <span className="whitespace-pre-wrap">{it.prompt} </span>
+              {it.connector && <b className="text-[#6b4fd8] dark:text-[#a68bff]">{it.connector}</b>}
+              <span className="text-[#9aa3b2]"> ______</span>
             </div>
-          )}
-          {openVerdict && openVerdict.ok === true && (
-            <div className="rounded-xl px-3 py-2 text-sm space-y-1 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-              <div>✅ {openVerdict.feedback || 'پاسخ قابل قبول بود!'}</div>
-              <div dir="ltr" className="leading-7">پاسخ نمونه: <b>{openVerdict.model}</b></div>
-            </div>
-          )}
-          {openVerdict && openVerdict.ok === false && (
-            <div className="rounded-xl px-3 py-2 text-sm space-y-1 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200">
-              <div>❌ {openVerdict.feedback}</div>
-              <div dir="ltr" className="leading-7">پاسخ بهتر: <b>{openVerdict.model}</b></div>
-              <div>💡 {it.note}</div>
-            </div>
-          )}
-          {openVerdict && openVerdict.ok === null && (
-            <div className="rounded-xl px-3 py-2 text-sm space-y-2 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              <div>{openVerdict.feedback || 'بررسی هوش مصنوعی در دسترس نبود.'}</div>
-              <div dir="ltr" className="leading-7">پاسخ نمونه: <b>{openVerdict.model}</b></div>
-              <div>خودت با پاسخ نمونه مقایسه کن و بگو:</div>
-              <div className="flex gap-2">
-                <button onClick={() => selfCheck(true)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold">درست بود ✓</button>
-                <button onClick={() => selfCheck(false)} className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-bold">نادرست بود ✗</button>
+            <textarea
+              dir="ltr"
+              rows={3}
+              value={openText}
+              onChange={(e) => setOpenText(e.target.value)}
+              disabled={!!openVerdict && openVerdict.ok !== null}
+              spellCheck={false}
+              placeholder="ادامهٔ جمله را بعد از حرف ربط بنویس…"
+              className="w-full rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-[#f6f7fb] dark:bg-[#12151c] p-3 font-sans text-base outline-none focus:border-[#1f5fbf] disabled:opacity-70"
+            />
+            {openModel && (
+              <div className="rounded-xl px-3 py-2 text-sm bg-[#f6f7fb] dark:bg-[#12151c] leading-7">
+                ادامهٔ نمونه: <b dir="ltr">{it.connector} {it.model}</b>
               </div>
-            </div>
-          )}
-          {chatIdx === curIdx && <ChatBox itemIdx={curIdx} />}
-          <div className="flex flex-wrap gap-2">
-            {!(openVerdict && openVerdict.ok !== null) ? (
-              <>
+            )}
+            {openVerdict && openVerdict.ok === true && (
+              <div className="rounded-xl px-3 py-2 text-sm space-y-1 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+                <div>✅ {openVerdict.feedback || 'پاسخ قابل قبول بود!'}</div>
+                <div dir="ltr" className="leading-7">جملهٔ کامل: <b>{it.prompt} {it.connector} {openVerdict.model}</b></div>
+              </div>
+            )}
+            {openVerdict && openVerdict.ok === false && (
+              <div className="rounded-xl px-3 py-2 text-sm space-y-1 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200">
+                <div>❌ {openVerdict.feedback}</div>
+                <div dir="ltr" className="leading-7">جملهٔ بهتر: <b>{it.prompt} {it.connector} {openVerdict.model}</b></div>
+                <div>💡 {it.note}</div>
+              </div>
+            )}
+            {openVerdict && openVerdict.ok === null && (
+              <div className="rounded-xl px-3 py-2 text-sm space-y-2 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                <div>{openVerdict.feedback || 'بررسی هوش مصنوعی در دسترس نبود.'}</div>
+                <div dir="ltr" className="leading-7">جملهٔ نمونه: <b>{it.prompt} {it.connector} {openVerdict.model}</b></div>
+                <div>خودت با پاسخ نمونه مقایسه کن و بگو:</div>
+                <div className="flex gap-2">
+                  <button onClick={() => selfCheck(true)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold">درست بود ✓</button>
+                  <button onClick={() => selfCheck(false)} className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-bold">نادرست بود ✗</button>
+                </div>
+              </div>
+            )}
+
+            {/* ترجمهٔ فارسی — با همان دستور اول AI گرفته شده و فقط بعد از بررسی نمایش داده می‌شود */}
+            {openVerdict && openVerdict.ok !== null && it.fa && (
+              <div className="rounded-xl px-3 py-2 text-sm bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7">
+                🇮🇷 ترجمهٔ فارسی: {it.fa}
+              </div>
+            )}
+
+            {chatIdx === curIdx && renderChatBox(curIdx)}
+
+            {/* بعد از بررسی: دکمهٔ «تمرین بعدی» بلافاصله زیر نتیجه (درخواست کاربر) */}
+            {openVerdict && openVerdict.ok !== null ? (
+              <div className="space-y-2">
+                <button onClick={next} className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold">
+                  {last ? '🏁 دیدن نتیجه' : 'تمرین بعدی ←'}
+                </button>
+                <button
+                  onClick={() => setChatIdx(chatIdx === curIdx ? null : curIdx)}
+                  className={`w-full py-2.5 rounded-xl text-sm font-bold transition ${(sess.chats[curIdx] || []).length || chatIdx === curIdx ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}
+                >
+                  💬 چت با معلم{(sess.chats[curIdx] || []).length ? ` (${toFa((sess.chats[curIdx] || []).length)})` : ''}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
                 <button onClick={checkOpen} disabled={openBusy || !openText.trim()} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-sm font-bold disabled:opacity-60">
                   {openBusy ? 'در حال بررسی…' : 'بررسی با AI 🤖'}
                 </button>
                 <button onClick={() => setOpenModel(true)} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">پاسخ نمونه 💡</button>
-              </>
-            ) : (
-              <button onClick={next} className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold">
-                {last ? 'دیدن نتیجه' : 'مورد بعدی ←'}
+                <button
+                  onClick={() => setChatIdx(chatIdx === curIdx ? null : curIdx)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition ${(sess.chats[curIdx] || []).length || chatIdx === curIdx ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}
+                >
+                  💬 چت{(sess.chats[curIdx] || []).length ? ` (${toFa((sess.chats[curIdx] || []).length)})` : ''}
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div dir="ltr" className="text-lg md:text-xl leading-10 font-sans text-slate-800 dark:text-slate-100">
+              {it.seg.map((s, i) => (
+                <React.Fragment key={i}>
+                  <span className="whitespace-pre-wrap">{s}</span>
+                  {i < it.answers.length && (() => {
+                    const good = checked ? checked[i] : null;
+                    return (
+                      <input
+                        dir="ltr"
+                        value={inputs[i] || ''}
+                        onChange={(e) => { const v = e.target.value; setInputs((prev) => prev.map((x, j) => (j === i ? v : x))); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (checked) next(); else check(); } }}
+                        disabled={!!checked}
+                        spellCheck={false}
+                        autoComplete="off"
+                        className={`inline-block w-28 mx-1 px-2 py-0.5 rounded-lg border-b-2 text-center font-bold outline-none transition ${
+                          good === true ? 'border-emerald-500 text-emerald-600'
+                            : good === false ? 'border-red-400 text-red-500'
+                              : 'border-[#1f5fbf] bg-[#f6f7fb] dark:bg-[#12151c]'}`}
+                      />
+                    );
+                  })()}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {hint && !checked && (
+              <div className="rounded-xl px-3 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                راهنما — حرف اول پاسخ‌ها: <b dir="ltr">{it.answers.map((a) => a[0] + '…').join(' + ')}</b>
+              </div>
+            )}
+
+            {checked && (
+              <div className={`rounded-xl px-3 py-2 text-sm space-y-1 ${itemOk ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200'}`}>
+                <div>{itemOk ? '✅ درست بود!' : <>❌ نادرست — پاسخ درست: <b dir="ltr">{it.answers.join(' + ')}</b></>}</div>
+                <div>💡 {it.note}</div>
+              </div>
+            )}
+
+            {/* ترجمهٔ فارسی — فقط بعد از بررسی */}
+            {checked && it.fa && (
+              <div className="rounded-xl px-3 py-2 text-sm bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7">
+                🇮🇷 ترجمهٔ فارسی: {it.fa}
+              </div>
+            )}
+
+            {why.err && <div className="rounded-xl px-3 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">{why.err}</div>}
+            {why.text && why.idx === sess.idx && (
+              <div className="rounded-xl px-3 py-2 text-sm bg-[#f6f7fb] dark:bg-[#12151c] leading-7 whitespace-pre-wrap">{why.text}</div>
+            )}
+
+            {chatIdx === curIdx && renderChatBox(curIdx)}
+            <div className="flex flex-wrap gap-2">
+              {!checked ? (
+                <>
+                  <button onClick={check} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-sm font-bold">بررسی (Enter)</button>
+                  <button onClick={() => setHint(true)} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">راهنما</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={next} className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold">
+                    {last ? 'دیدن نتیجه' : 'جملهٔ بعدی ←'} (Enter)
+                  </button>
+                  <button onClick={() => askWhy(it)} disabled={why.busy} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold disabled:opacity-60">
+                    {why.busy ? 'در حال توضیح…' : '🤖 چرا این جواب؟'}
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setChatIdx(chatIdx === curIdx ? null : curIdx)}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition ${(sess.chats[curIdx] || []).length || chatIdx === curIdx ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}
+              >
+                💬 چت با معلم{(sess.chats[curIdx] || []).length ? ` (${toFa((sess.chats[curIdx] || []).length)})` : ''}
               </button>
-            )}
-            <button
-              onClick={() => setChatIdx(chatIdx === curIdx ? null : curIdx)}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition ${(sess.chats[curIdx] || []).length || chatIdx === curIdx ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}
-            >
-              💬 چت با معلم{(sess.chats[curIdx] || []).length ? ` (${toFa((sess.chats[curIdx] || []).length)})` : ''}
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div dir="ltr" className="text-lg md:text-xl leading-10 font-sans text-slate-800 dark:text-slate-100">
-            {it.seg.map((s, i) => (
-              <React.Fragment key={i}>
-                <span className="whitespace-pre-wrap">{s}</span>
-                {i < it.answers.length && (() => {
-                  const good = checked ? checked[i] : null;
-                  return (
-                    <input
-                      dir="ltr"
-                      value={inputs[i] || ''}
-                      onChange={(e) => { const v = e.target.value; setInputs((prev) => prev.map((x, j) => (j === i ? v : x))); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (checked) next(); else check(); } }}
-                      disabled={!!checked}
-                      spellCheck={false}
-                      autoComplete="off"
-                      className={`inline-block w-28 mx-1 px-2 py-0.5 rounded-lg border-b-2 text-center font-bold outline-none transition ${
-                        good === true ? 'border-emerald-500 text-emerald-600'
-                          : good === false ? 'border-red-400 text-red-500'
-                            : 'border-[#1f5fbf] bg-[#f6f7fb] dark:bg-[#12151c]'}`}
-                    />
-                  );
-                })()}
-              </React.Fragment>
-            ))}
-          </div>
-
-          {hint && !checked && (
-            <div className="rounded-xl px-3 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              راهنما — حرف اول پاسخ‌ها: <b dir="ltr">{it.answers.map((a) => a[0] + '…').join(' + ')}</b>
             </div>
-          )}
-
-          {checked && (
-            <div className={`rounded-xl px-3 py-2 text-sm space-y-1 ${itemOk ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200'}`}>
-              <div>{itemOk ? '✅ درست بود!' : <>❌ نادرست — پاسخ درست: <b dir="ltr">{it.answers.join(' + ')}</b></>}</div>
-              <div>💡 {it.note}</div>
-            </div>
-          )}
-
-          {why.err && <div className="rounded-xl px-3 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">{why.err}</div>}
-          {why.text && why.idx === sess.idx && (
-            <div className="rounded-xl px-3 py-2 text-sm bg-[#f6f7fb] dark:bg-[#12151c] leading-7 whitespace-pre-wrap">{why.text}</div>
-          )}
-
-          {chatIdx === curIdx && <ChatBox itemIdx={curIdx} />}
-          <div className="flex flex-wrap gap-2">
-            {!checked ? (
-              <>
-                <button onClick={check} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-sm font-bold">بررسی (Enter)</button>
-                <button onClick={() => setHint(true)} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">راهنما</button>
-              </>
-            ) : (
-              <>
-                <button onClick={next} className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold">
-                  {last ? 'دیدن نتیجه' : 'جملهٔ بعدی ←'} (Enter)
-                </button>
-                <button onClick={() => askWhy(it)} disabled={why.busy} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold disabled:opacity-60">
-                  {why.busy ? 'در حال توضیح…' : '🤖 چرا این جواب؟'}
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => setChatIdx(chatIdx === curIdx ? null : curIdx)}
-              className={`px-4 py-2 rounded-xl text-sm font-bold transition ${(sess.chats[curIdx] || []).length || chatIdx === curIdx ? 'bg-[#1f5fbf] text-white' : 'bg-slate-100 dark:bg-slate-800'}`}
-            >
-              💬 چت با معلم{(sess.chats[curIdx] || []).length ? ` (${toFa((sess.chats[curIdx] || []).length)})` : ''}
-            </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
+      {printRoot && createPortal(printRoot, document.body)}
+      {dialog}
     </div>
   );
 };
