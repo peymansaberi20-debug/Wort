@@ -27,6 +27,7 @@ import { STORIES, Story } from './tenseStoryBank';
 import { parseBlanks, parseSegments, lookupWord, explainBlank, isCorrect, normalizeAnswer, Blank, Lookup } from './tenseStoryHelpers';
 import { TLvl, TLVL_ORDER, TLVL_INFO, LEVEL_VERBS, LEVEL_PREPS, bandOf } from '../data/tenseStoryVerbs';
 import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
+import { ArchivePanel, ArchiveRow, MiniChip, SqBtn, toFa, useConfirm } from '../components/trainerUI';
 
 /* ─────────────────────────── پل هوش مصنوعی برنامه ───────────────────────────
  * کلید و مدل از تنظیمات برنامه (aiProvider — Gemini/Groq/OpenRouter) می‌آید.
@@ -275,8 +276,8 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   const [score, setScore] = useState<{ ok: number; total: number } | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [verbCard, setVerbCard] = useState<string | null>(null);
-  const [histOpen, setHistOpen] = useState(false);
   const [history, setHistory] = useState<Attempt[]>(loadHist);
+  const { ask, dialog } = useConfirm();
   const [dictCard, setDictCard] = useState<{ word: string; lk: Lookup; ai?: Lookup | null } | null>(null);
   const [chatGap, setChatGap] = useState<number | null>(null);
   const [chats, setChats] = useState<Record<number, ChatMsg[]>>({});
@@ -401,7 +402,6 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
     setResults(a.results || {});
     setChecked(!!a.results && Object.keys(a.results).length > 0);
     setScore(a.results ? { ok: Object.values(a.results).filter(r => r.ok).length, total: gapList(e.segs).length } : null);
-    setHistOpen(false);
     setScreen(a.results && Object.keys(a.results).length ? 'review' : 'play');
   };
 
@@ -873,37 +873,39 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           </button>
         </div>
 
-        {/* تاریخچه */}
-        <div className="border border-[#dde1ea] dark:border-[#333b4a] rounded-xl overflow-hidden">
-          <button
-            onClick={() => setHistOpen(o => !o)}
-            className="w-full px-3 py-2.5 flex items-center justify-between text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] bg-slate-50 dark:bg-[#0f141d]"
-          >
-            <span>🗂️ تمرین‌های ذخیره‌شده ({history.length})</span>
-            <span className={`transition-transform text-[10px] ${histOpen ? 'rotate-180' : ''}`}>▼</span>
-          </button>
-          {histOpen && (
-            <div className="px-3 pb-3 pt-1 space-y-1.5">
-              {history.length === 0 && <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] py-2">هنوز تمرینی ذخیره نشده.</p>}
-              {history.map(a => {
-                const tot = gapList(a.segs).length;
-                const okN = a.results ? Object.values(a.results).filter(r => r.ok).length : 0;
-                return (
-                  <div key={a.id} className="flex items-center gap-2 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] px-2.5 py-2 bg-white dark:bg-[#141923]">
-                    <button onClick={() => reopen(a)} className="flex-1 text-right min-w-0">
-                      <div className="text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] truncate">{a.title}</div>
-                      <div className="text-[10px] text-[#5d6676] dark:text-[#8b95a7]">
-                        {a.lvl} · {TENSE_INFO[a.tense].fa} · {faDate(a.ts)}
-                        {a.done && a.results ? ` · ${okN}/${tot} درست ✓` : ' · ناتمام'}
-                      </div>
-                    </button>
-                    <button onClick={() => removeFromHist(a.id)} className="px-2 py-1 rounded-md text-[10px] text-[#b91c1c] border border-red-200 dark:border-red-900">حذف</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* تاریخچه — آرشیو یکدست (مثل بقیهٔ تمرین‌ها) + حذف با تأییدیه */}
+        <ArchivePanel
+          title="تمرین‌های ذخیره‌شده"
+          count={history.length}
+          emptyText="هنوز تمرینی ذخیره نشده."
+        >
+          {history.map(a => {
+            const tot = gapList(a.segs).length;
+            const okN = a.results ? Object.values(a.results).filter(r => r.ok).length : 0;
+            return (
+              <ArchiveRow
+                key={a.id}
+                title={<button onClick={() => reopen(a)} className="text-right w-full text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] truncate">{a.title}</button>}
+                chips={<>
+                  <MiniChip tone="blue">{a.lvl}</MiniChip>
+                  <MiniChip>{TENSE_INFO[a.tense].fa}</MiniChip>
+                  <MiniChip>{faDate(a.ts)}</MiniChip>
+                  {a.done && a.results ? <MiniChip tone="green">{toFa(okN)}/{toFa(tot)} درست ✓</MiniChip> : <MiniChip>ناتمام</MiniChip>}
+                </>}
+              >
+                <SqBtn onClick={() => reopen(a)} title="بازگشایی این داستان">▶</SqBtn>
+                <SqBtn
+                  tone="red"
+                  onClick={async () => {
+                    if (await ask('حذف داستان', `«${a.title}» از تاریخچه برای همیشه حذف می‌شود. مطمئن هستی؟`)) removeFromHist(a.id);
+                  }}
+                  title="حذف"
+                >🗑</SqBtn>
+              </ArchiveRow>
+            );
+          })}
+        </ArchivePanel>
+        {dialog}
       </div>
     );
   }
@@ -1081,6 +1083,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           </div>
         )}
         {PORTALS}
+        {dialog}
       </div>
     );
   }
@@ -1154,6 +1157,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           </div>
         </div>
         {PORTALS}
+        {dialog}
       </div>
     );
   }
