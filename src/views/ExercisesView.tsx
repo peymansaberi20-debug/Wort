@@ -18,18 +18,14 @@ const splitConjColumns = (forms: string[]): [string[], string[]] =>
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
 import { SchreibenCorrector } from '../components/SchreibenCorrector';
-import { SatzPuzzle, Diktat } from '../components/SentenceDrills';
+import { Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
-import { VerbPrep } from '../components/VerbPrep';
-import { WorksheetTrainer } from '../components/WorksheetTrainer';
-import { KonnektorTrainer } from '../components/KonnektorTrainer';
-import { KonnektorProTrainer } from '../components/KonnektorProTrainer';
-import { TenseStoryTrainer } from './TenseStoryTrainer';
+import { FreeSentencePractice, FREE_SENT_WORD } from '../components/FreeSentencePractice';
 import { PageOverlay } from '../components/PageOverlay';
 import { today } from '../utils/dates';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
-import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic } from 'lucide-react';
+import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic, Sparkles } from 'lucide-react';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { HoerenTrainer } from '../components/HoerenTrainer';
@@ -98,15 +94,15 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   freesent: { title: 'تولید جملهٔ آزاد', icon: '✒️', desc: 'هر جمله‌ای بساز؛ تصحیح کامل گرامر، حروف ربط، حرف اضافه و حالت، آرتیکل و صرف صفت با نمره' },
   schreiben: { title: 'Schreiben prüfen', icon: '📸', desc: 'عکس دست‌نویس (چند صفحه)، فایل یا متن خودت را بفرست؛ تصحیح کامل با تفکر آلمانی، سبک و گرامر' },
   schreiben_exam: { title: 'Schreiben Prüfung', icon: '📝', desc: 'انتخاب سطح و سناریوی استاندارد آزمون (ایمیل رسمی، وبلاگ، درخواست کار) و نمره‌دهی' },
-  puzzle: { title: 'چیدن جمله (Satzbau)', icon: '🧩', desc: 'کلمه‌های درهم‌ریختهٔ جمله‌های مثال خودت را به ترتیب درست آلمانی بچین' },
+  puzzle: { title: 'چیدن جمله (Satzbau)', icon: '🧩', desc: 'انتخاب نوع جمله‌ها (خودت یا ساخت با هوش مصنوعی + سطح و تعداد)؛ کلمه‌های درهم‌ریخته را به ترتیب درست آلمانی بچین' },
   dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: '۱۰۰+ فعل مهم با حرف اضافه و حالت دستوری؛ سه تمرین جدا: یادگیری با فیلتر و مثال لمس‌پذیر، تمرین فاصله‌دار و افزودن فعل جدید' },
   konnektoren: { title: 'متن جای‌خالی (Konnektoren)', icon: '📝', desc: 'متن جای‌خالی با حروف ربط؛ سطح و تعداد جای خالی را انتخاب کن تا AI هر بار متن تازه بسازد؛ کشیدن/کلیک کلمه‌ها، تصحیح فوری، چت با معلم، چاپ دو صفحه‌ای و آرشیو' },
   tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و چاپ' },
-  kpro: { title: 'کامل‌کردن جمله با AI (Sätze komplettieren)', icon: '🤖', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ تصحیح سه‌لایه (گرامر، جایگاه فعل، منطق)، گفتگو با معلم، واژه‌کارت و چاپ — سطح A1 تا C2' },
-  wsh: { title: 'برگهٔ فعل + حرف اضافه (AI)', icon: '📄', desc: 'هوش مصنوعی هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، چت با معلم و آرشیو برگه‌ها' },
-  wsh2: { title: 'برگهٔ کلاس (AI) — واژه و حروف ربط', icon: '🧾', desc: 'مثل برگهٔ نمونهٔ کلاس: توضیح واژه‌های سطح‌دار + کامل‌کردن جمله با حرف ربط (جایگاه فعل)؛ ساخت با AI هر بار، تصحیح، چت با معلم و آرشیو' },
+  kpro: { title: 'حرف ربط انتخابی', icon: '🤖', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ حروف ربط را می‌توانی خودت انتخاب کنی (یکی یا چندتا از همهٔ سطوح)؛ تصحیح سه‌لایه، ترجمهٔ فارسی بعد از بررسی، گفتگو با معلم، آزمون دوباره و چاپ — سطح A1 تا C2' },
+  wsh: { title: 'جای‌خالی فعل + حرف اضافه (AI)', icon: '📄', desc: 'هوش مصنوعی هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، ترجمهٔ فارسی بعد از بررسی، چت با معلم، تولید جملهٔ آزاد و چاپ کل برگه' },
+  wsh2: { title: 'تکمیل جمله', icon: '🧾', desc: 'طرف اول جمله + حرف ربطِ انتها را می‌بینی و ادامهٔ جمله را با جایگاه فعل درست می‌نویسی؛ تصحیح با AI، ترجمهٔ فارسی بعد از بررسی، چت با معلم و آرشیو' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
@@ -134,20 +130,20 @@ const GRAMMATIK_CATS: GramCat[] = [
     ],
   },
   {
-    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ دو برگهٔ AI: جای‌خالی فعل+حرف اضافه و برگهٔ کلاس',
+    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ جای‌خالی فعل+حرف اضافه و تکمیل جمله',
     tabs: [
       { id: 'vprepl', label: 'یادگیری فعل‌ها', mode: 'vprep', vTab: 'learn' },
       { id: 'vprepp', label: 'تمرین فعل‌ها', mode: 'vprep', vTab: 'practice' },
       { id: 'vprepa', label: 'افزودن فعل', mode: 'vprep', vTab: 'add' },
-      { id: 'wsh', label: 'برگهٔ فعل+حرف اضافه', mode: 'wsh' },
-      { id: 'wsh2', label: 'برگهٔ کلاس', mode: 'wsh2' },
+      { id: 'wsh', label: 'جای‌خالی فعل+حرف اضافه', mode: 'wsh' },
+      { id: 'wsh2', label: 'تکمیل جمله', mode: 'wsh2' },
     ],
   },
   {
-    icon: '🧩', label: 'حروف ربط و جمله‌سازی', desc: 'متن جای‌خالی با حروف ربط، کامل‌کردن جمله با AI و چیدن جمله',
+    icon: '🧩', label: 'حروف ربط و جمله‌سازی', desc: 'متن جای‌خالی با حروف ربط، حرف ربط انتخابی و چیدن جمله',
     tabs: [
       { id: 'konnektoren', label: 'متن جای‌خالی', mode: 'konnektoren' },
-      { id: 'kpro', label: 'کامل‌کردن جمله با AI', mode: 'kpro' },
+      { id: 'kpro', label: 'حرف ربط انتخابی', mode: 'kpro' },
       { id: 'puzzle', label: 'چیدن جمله', mode: 'puzzle' },
     ],
   },
@@ -168,6 +164,11 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
   m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'wsh2';
+
+/** تمرین‌های خودگردان گرامر — بدنهٔ آن‌ها در لایهٔ keep-alive در App.tsx رندر می‌شود
+ *  تا با جابجایی تب‌ها باز بمانند (تا وقتی کاربر ضربدر را نزده). */
+const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle'];
+const isGramSelfMode = (m: ExerciseMode | null): boolean => !!m && GRAM_SELF_MODES.includes(m);
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -432,11 +433,12 @@ const SentencePractice: React.FC<{
       const prompt = `You are a German teacher. A learner wrote one German sentence using the word "${fullWord(w)}" (meaning: ${w.fa}).
 Sentence: ${text.trim()}
 Check grammar, word order, cases, articles, verb forms and whether the target word is used correctly.
-Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentence (same as input if correct)", "explanation": "short explanation in Persian"}]`;
+Also translate the corrected sentence into Persian.
+Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentence (same as input if correct)", "fa": "ترجمهٔ فارسی جملهٔ درست‌شده", "explanation": "short explanation in Persian"}]`;
       const out = await generateWithGemini(prompt, { timeoutMs: 20000, retries: 0 });
       const r: any = parseAI(out)[0] || {};
       setAiMsg(
-        `${r.correct ? '✔ از نظر هوش مصنوعی جمله درست است.' : '✘ پیشنهاد اصلاح: ' + (r.corrected || '')}${r.explanation ? '\n' + r.explanation : ''}`
+        `${r.correct ? '✔ از نظر هوش مصنوعی جمله درست است.' : '✘ پیشنهاد اصلاح: ' + (r.corrected || '')}${r.explanation ? '\n' + r.explanation : ''}${r.fa ? '\n\n🇮🇷 ترجمهٔ فارسی: ' + r.fa : ''}`
       );
     } catch (e: any) {
       setAiMsg('اتصال به هوش مصنوعی ممکن نشد؛ بررسی خودکار بالا همچنان معتبر است. (' + (e?.message || 'خطا') + ')');
@@ -511,196 +513,6 @@ Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentenc
   );
 };
 
-interface FreeReport {
-  understood_fa: string;
-  score: number;
-  corrected_de: string;
-  issues: { type: string; wrong: string; correct: string; why_fa: string }[];
-  tip_fa: string;
-}
-
-const FREE_ISSUE_BADGE: Record<string, string> = {
-  'گرامر': 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
-  'املا': 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
-  'حرف اضافه و حالت دستوری': 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
-  'واژه‌گزینی': 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300',
-  'حروف ربط و ترتیب جمله': 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300',
-  'آرتیکل و صرف صفت': 'bg-pink-100 text-pink-800 dark:bg-pink-950/60 dark:text-pink-300',
-  'معنا و منطق جمله': 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-};
-
-const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => void }> = ({ onShowToast }) => {
-  const [text, setText] = useState('');
-  const [report, setReport] = useState<FreeReport | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [errMsg, setErrMsg] = useState('');
-  const [chat, setChat] = useState<{ q: string; a: string; err?: boolean }[]>([]);
-  const [shadowOpen, setShadowOpen] = useState(false);
-  const [chatQ, setChatQ] = useState('');
-  const [chatBusy, setChatBusy] = useState(false);
-
-  const runCheck = async () => {
-    const s = text.trim();
-    if (!s || busy) return;
-    setBusy(true); setErrMsg(''); setReport(null);
-    const prompt = `You are an expert German teacher who checks BOTH grammar AND meaning/logic ("deutsches Denken") for Persian-speaking learners. Evaluate the sentence.\n\nINPUT: "${s}"\n\nCHECK:\n1) Meaning & logic FIRST: does the sentence make sense? Is the connector logically correct for the intended meaning? obwohl = concession AGAINST the expectation, trotzdem = nevertheless, weil = reason. If the logic contradicts the connector (e.g. "wenig Geld, obwohl große Reise" — the money is a REASON against the trip), that is a serious error: fix the connector or the logic and explain.\n2) Grammar and verb conjugation.\n3) Connectors and clause order (Hauptsatz/Nebensatz, verb position).\n4) Prepositions and required cases.\n5) Articles, gender, adjective endings.\n6) Word order.\n7) Spelling and capitalization.\n8) Naturalness and register.\n\nRULES:\n- Correct genuine errors only; preserve meaning as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".\n- Score 0-100 (integer): meaning/logic errors cost the most.\n- Explanations and the tip: concise Persian, no repetition.\n- A greeting, a single word or a fragment without a verb is NOT a sentence: score ≤ 20, add an issue of type "معنا و منطق جمله", and understood_fa must say there is no real message.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
-    try {
-      const out = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
-      const r: any = parseAI(out)[0] || {};
-      if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
-      setReport({
-        understood_fa: String(r.understood_fa || ''),
-        score: Math.min(Math.max(0, Math.min(100, Math.round(Number(r.score)))), germanTokens(s).length < 3 ? 20 : 100),
-        corrected_de: String(r.corrected_de || ''),
-        issues: Array.isArray(r.issues) ? r.issues : [],
-        tip_fa: String(r.tip_fa || '')
-      });
-    } catch (e: any) {
-      setErrMsg(e?.message || 'تصحیح با هوش مصنوعی ناموفق بود.');
-      onShowToast(e?.message || 'تصحیح ناموفق بود.', true);
-    } finally { setBusy(false); }
-  };
-
-  const askChat = async () => {
-    const q = chatQ.trim();
-    if (!q || chatBusy || !report) return;
-    setChatBusy(true);
-    const ctx = `Sentence: "${text.trim()}" | Score: ${report.score}/100 | Corrected: "${report.corrected_de}" | Issues: ${report.issues.map(i => `${i.type}: "${i.wrong}" -> "${i.correct}"`).join('; ') || 'none'}`;
-    setChat(prev => [...prev, { q, a: '…' }]);
-    setChatQ('');
-    try {
-      const out = await generateWithGemini(`You are an expert German teacher. A learner's sentence was just proofread.\n${ctx}\nThe learner asks (in Persian): "${q}"If the question concerns meaning, logic or connector choice (e.g. obwohl vs trotzdem), explain the German thinking with mini examples.\nAnswer ONLY a JSON array with one object — nothing outside it:\n[{"answer":"پاسخ کوتاه فارسی (۳ تا ۶ خط). واژه‌ها و مثال‌های آلمانی به آلمانی بمانند."}]`, { timeoutMs: 30000, retries: 1 });
-      let answer = out.trim();
-      try {
-        const parsed = parseAI(out)[0];
-        if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) answer = parsed.answer.trim();
-      } catch { /* ignore */ }
-      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: answer || 'پاسخی دریافت نشد.' }; return next; });
-    } catch (e: any) {
-      setChat(prev => { const next = [...prev]; next[next.length - 1] = { q, a: e?.friendly || e?.message || 'پاسخی دریافت نشد.', err: true }; return next; });
-    } finally { setChatBusy(false); }
-  };
-
-  return (
-    <div className="space-y-3 text-right">
-      <p className="text-sm font-semibold text-[#5d6676] dark:text-[#a3adbd] text-center">
-        هر جملهٔ آلمانی که می‌خواهی بنویس — گرامر، حروف ربط، حرف اضافه و حالت، آرتیکل و صرف صفت بررسی می‌شود:
-      </p>
-      <textarea
-        dir="ltr" rows={4} value={text} onChange={e => setText(e.target.value)}
-        placeholder="Schreiben Sie einen beliebigen deutschen Satz …"
-        className="w-full bg-slate-50 dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3.5 py-2.5 font-sans text-base outline-none"
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => void runCheck()}
-          disabled={busy || !text.trim()}
-          className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-1.5"
-        >
-          {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال تصحیح…</span></> : <span>🤖 تصحیح و نمره‌دهی</span>}
-        </button>
-        {report && (
-          <button onClick={() => { setReport(null); setText(''); setChat([]); setChatQ(''); }} className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold">
-            🔄 جملهٔ جدید
-          </button>
-        )}
-      </div>
-
-      {errMsg && (
-        <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{errMsg}</div>
-      )}
-
-      {report && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className={`px-3.5 py-1 rounded-xl text-sm font-extrabold ${report.score >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : report.score >= 50 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'}`}>
-              نمره: {report.score}/100
-            </span>
-            {report.issues.length === 0 && report.score >= 80 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
-          </div>
-          <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
-          {report.understood_fa && (
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-sm leading-7">
-              <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت آلمانی‌زبان: </b>{report.understood_fa}
-            </div>
-          )}
-
-          {report.issues.length > 0 && (
-            <div className="space-y-2">
-              {report.issues.map((it, i) => (
-                <div key={i} className="p-3 rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold ${FREE_ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
-                  {(it.wrong || it.correct) && (
-                    <div className="flex flex-wrap items-baseline gap-2 text-base" dir="ltr">
-                      {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
-                      {it.wrong && it.correct && <span className="text-slate-400">→</span>}
-                      {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
-                    </div>
-                  )}
-                  {it.why_fa && <div className="text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
-          {report.tip_fa && (
-            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm leading-7">
-              <b className="text-indigo-700 dark:text-indigo-300">💡 نکته: </b>{report.tip_fa}
-            </div>
-          )}
-
-          {report.corrected_de && (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
-              <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
-              <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
-              <button
-                onClick={() => setShadowOpen(true)}
-                className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-1.5"
-              >
-                🎙 تمرین تلفظ این جمله
-              </button>
-            </div>
-          )}
-          {shadowOpen && (
-            <ShadowingModal freeText={report.corrected_de} word={FREE_SENT_WORD} onClose={() => setShadowOpen(false)} />
-          )}
-
-          <div className="pt-1 border-t border-slate-200 dark:border-slate-800 space-y-2">
-            <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">💬 سوالی دربارهٔ این جمله یا تصحیحش داری؟ بپرس:</div>
-            {chat.map((m, i) => (
-              <div key={i} className="space-y-1">
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-2xl rounded-se-sm px-3.5 py-2 text-sm text-slate-800 dark:text-slate-100">{m.q}</div>
-                </div>
-                <div className="flex justify-end">
-                  <div className={`max-w-[92%] rounded-2xl rounded-ss-sm px-3.5 py-2 text-sm leading-7 whitespace-pre-wrap border ${m.err ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300' : 'bg-white dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-slate-800 dark:text-slate-100'}`}>{m.a}</div>
-                </div>
-              </div>
-            ))}
-            <div className="flex items-end gap-2">
-              <textarea
-                dir="rtl" rows={2} value={chatQ}
-                onChange={e => setChatQ(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) { e.preventDefault(); void askChat(); } }}
-                placeholder="سوالت را اینجا بنویس…"
-                className="flex-1 bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm outline-none resize-none"
-              />
-              <button
-                onClick={() => void askChat()}
-                disabled={chatBusy || !chatQ.trim()}
-                className="bg-[#1f5fbf] hover:bg-[#194ea0] disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition"
-              >
-                {chatBusy ? '⏳' : '➤ ارسال'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export { getTimerCfg };
 
 const shuffleArr = <T,>(arr: T[]): T[] => {
@@ -716,13 +528,6 @@ const splitList = (s: string): string[] =>
   (s || '').split(/[,;،؛/|]/).map(x => x.trim()).filter(Boolean);
 
 const ALL_CASEQ: CaseQuestion[] = [...CASEQ, ...EXTRA_CASEQ];
-
-const FREE_SENT_WORD: Word = {
-  id: 'freesent-self', de: '', art: '', fa: '', syn: '', synFa: '', ant: '', antFa: '',
-  pl: '', pos: '', lvl: 'A2', ex: '', exFa: '', ex2: '', ex2Fa: '', conj: '', prat: '',
-  perf: '', sep: '', cat: 'گرامر', cloze: '', ans: '', acc: [], tags: '', img: '',
-  notes: '', added: 0, last: 0, due: 0, ivl: 0, ease: 2.5, stage: 0, ok: 0, bad: 0, res: ''
-};
 
 const pickCaseQueue = (): string[] => {
   const byLevel = new Map<number, CaseQuestion[]>();
@@ -827,6 +632,13 @@ interface ExercisesViewProps {
   onStartHard?: (ids: string[]) => void;
   dailyProgress?: { d: string; n: number; r: number };
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** منو به‌جای تمرین نمایش داده شود (جابجایی بین تب‌های اصلی بدون بستن تمرین‌های گرامر) */
+  menuMode?: boolean;
+  /** کلیک روی یکی از تب‌های اصلی وقتی تمرینی باز است → نمایش منو (تمرین‌های گرامر باز می‌مانند) */
+  onEnterMenu?: () => void;
+  /** تب فعال VerbPrep (یادگیری/تمرین/افزودن) — وضعیت در App نگه داشته می‌شود تا تمرین باز بماند */
+  vprepTab?: 'learn' | 'practice' | 'add';
+  onSetVprepTab?: (t: 'learn' | 'practice' | 'add') => void;
 }
 
 const ALLOC_KEY = 'wb_flash_new_alloc';
@@ -851,7 +663,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onUpdateSettings,
   onStartHard,
   dailyProgress,
-  onQuickAddWord
+  onQuickAddWord,
+  menuMode: menuModeProp,
+  onEnterMenu,
+  vprepTab: vprepTabProp,
+  onSetVprepTab
 }) => {
   const topRef = useRef<HTMLDivElement>(null);
   const words = useMemo(() => {
@@ -886,12 +702,19 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   /** تب گرامر دو سطحی: دستهٔ بازشده در فهرست + تب فعال VerbPrep (سه تمرین جدا) */
   const [gramCat, setGramCat] = useState<number | null>(null);
-  const [vprepTab, setVprepTab] = useState<'learn' | 'practice' | 'add'>('practice');
+  /** دستهٔ گرامر انتخاب‌شده در نوار چسبان تمرین (null = دنبال کردن تمرین فعال) */
+  const [exCat, setExCat] = useState<number | null>(null);
+  // تب فعال VerbPrep در App نگه داشته می‌شود تا با جابجایی تب‌ها تمرین باز بماند
+  const vprepTab = vprepTabProp || 'practice';
+  const setVprepTab = (t: 'learn' | 'practice' | 'add') => onSetVprepTab?.(t);
+  /** نمایش منو به‌جای تمرین: وقتی تمرینی باز نیست یا کاربر از داخل تمرین به تب اصلی رفته است */
+  const showMenu = !activeMode || !!menuModeProp;
   const openGramTab = (t: GramTab): void => {
     if (t.vTab) setVprepTab(t.vTab);
+    setExCat(null);
     onSelectMode(t.mode);
   };
-  const gramSec = activeMode
+  const gramSec = activeMode && !showMenu
     ? GRAMMATIK_CATS.find(c => c.tabs.some(t => t.mode === activeMode)) || null
     : (gramCat !== null ? GRAMMATIK_CATS[gramCat] || null : null);
   const activeGramTabId = activeMode && gramSec
@@ -1761,15 +1584,27 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [mainTab, setMainTab] = useState<MainTab>(() => (sessionStorage.getItem('wb_main_tab') as MainTab) || 'flash');
   useEffect(() => { try { sessionStorage.setItem('wb_main_tab', mainTab); } catch { /* ignore */ } }, [mainTab]);
   const [showHard, setShowHard] = useState(false);
+  /** پنجرهٔ «تولید جملهٔ آزاد» در تمرین جای‌خالی فعل+حرف اضافه (کنار آیکن راهنما) */
+  const [freeOpen, setFreeOpen] = useState(false);
+
+  /**
+   * کلیک روی تب اصلی: در حالت منو فقط تب عوض می‌شود؛ اما وقتی تمرینی باز است
+   * به منو برمی‌گردیم بدون بستن تمرین (تمرین‌های گرامر در App باز می‌مانند).
+   */
+  const handleMainTab = (id: MainTab) => {
+    setMainTab(id);
+    if (!showMenu) onEnterMenu?.();
+  };
 
   // ⚠️ همهٔ hookها باید بالاتر از این خط باشند؛ از اینجا به بعد return زودهنگام داریم.
-  const renderTabHeader = () => (
-    <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2">
+  /** نوار چسبان: تب‌های اصلی + (اختیاری) نوار زیرتب‌های گرامر — همیشه هنگام اسکرول ثابت می‌ماند */
+  const renderTabHeader = (extras?: React.ReactNode) => (
+    <div className="sticky top-16 md:top-[4.5rem] z-20 bg-[#f6f7fb]/95 dark:bg-[#12151c]/95 backdrop-blur -mx-2 px-2 py-2 space-y-1.5">
       <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1.5 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] text-xs sm:text-sm font-bold shadow-xs">
         {MAIN_TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setMainTab(t.id)}
+            onClick={() => handleMainTab(t.id)}
             className={`flex-1 min-w-[68px] shrink-0 py-2.5 px-1 rounded-xl transition flex flex-col items-center gap-1 ${mainTab === t.id ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md' : 'text-slate-700 dark:text-slate-300'}`}
           >
             <span className="text-base leading-none">{t.icon}</span>
@@ -1777,11 +1612,42 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           </button>
         ))}
       </div>
+      {extras}
     </div>
   );
 
+  /** زیرتب‌های گرامر برای نوار چسبان: ردیف دسته‌ها + ردیف تب‌های دستهٔ نمایش‌داده‌شده */
+  const gramStickyBars = (mainTab === 'grammatik' && !showMenu) ? (() => {
+    const curIdx = gramSec ? GRAMMATIK_CATS.indexOf(gramSec) : (gramCat ?? 0);
+    const shown = GRAMMATIK_CATS[exCat !== null ? exCat : curIdx] || gramSec || GRAMMATIK_CATS[0];
+    return (
+      <div className="space-y-1.5">
+        <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1 bg-slate-100 dark:bg-[#141923] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
+          {GRAMMATIK_CATS.map((c, i) => (
+            <button
+              key={c.label}
+              onClick={() => setExCat(i)}
+              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition flex-shrink-0 ${(exCat !== null ? exCat : curIdx) === i ? 'bg-[#6b4fd8] text-white shadow-xs' : 'text-[#5d6676] dark:text-[#a3adbd]'}`}
+            >
+              {c.icon} {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-1 bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
+          {shown.tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => openGramTab(t)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition flex-shrink-0 ${t.id === activeGramTabId ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]'}`}
+            >{t.label}</button>
+          ))}
+        </div>
+      </div>
+    );
+  })() : undefined;
+
   // تب‌های مستقل (کامپوننت خودشان همهٔ UI را دارند و از مسیر activeMode نمی‌گذرند)
-  if (!activeMode && mainTab === 'sprechen') {
+  if (showMenu && mainTab === 'sprechen') {
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
@@ -1790,7 +1656,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  if (!activeMode && mainTab === 'lesen') {
+  if (showMenu && mainTab === 'lesen') {
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
@@ -1799,7 +1665,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  if (!activeMode && mainTab === 'hoeren') {
+  if (showMenu && mainTab === 'hoeren') {
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
@@ -1826,7 +1692,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   }
 
-  if (!activeMode) {
+  if (showMenu) {
     const activeCatCount = settings?.activeCats?.length || 0;
     const hardWordsCount = allWords.filter(w => (w.bad || 0) > 3).length;
 
@@ -2176,7 +2042,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     
   // فریم انتقال بین تمرین‌ها: تا صفِ تمرین جدید ساخته شود، کارتِ «تبریک» کهنه فلش نزند
   if (queueMode !== activeMode) {
-    return <div ref={topRef} className="min-h-[180px]" aria-hidden="true" />;
+    return (
+      <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10" aria-hidden="true">
+        {renderTabHeader(mainTab === 'grammatik' ? gramStickyBars : undefined)}
+        <div className="min-h-[180px]" />
+      </div>
+    );
   }
 
   // کارت پایان فقط برای تمرین‌های صف‌محور (فلش‌کارت/جلسهٔ روزانه/مرور و …)؛
@@ -2207,17 +2078,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   return (
     <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
-      {mainTab === 'grammatik' && gramSec && (
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 flex gap-1.5 overflow-x-auto">
-          {gramSec.tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => openGramTab(t)}
-              className={`px-3.5 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition flex-shrink-0 ${t.id === activeGramTabId ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow' : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]'}`}
-            >{t.label}</button>
-          ))}
-        </div>
-      )}
+      {/* نوار چسبان: تب‌های اصلی + زیرتب‌های گرامر — هنگام اسکرول ثابت می‌مانند */}
+      {renderTabHeader(mainTab === 'grammatik' ? gramStickyBars : undefined)}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg flex-shrink-0">{EXERCISE_NAMES[activeMode]?.icon}</span>
@@ -2243,6 +2105,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </>
           )}
           <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
+          {activeMode === 'wsh' && (
+            <IconBtn onClick={() => setFreeOpen(true)} title="تولید جملهٔ آزاد"><Sparkles size={18} className="text-emerald-600" /></IconBtn>
+          )}
           {!isSelfContainedMode(qMode) && activeMode !== 'hard' && qMode && (
             <span className="relative">
               <IconBtn onClick={() => { setTimerSecDraft(null); setTimerPopupOpen(true); }} title="تایمر این تمرین" active={timerCfg.on}><TimerIcon size={18} className={timerCfg.on ? 'text-orange-500' : 'text-slate-500'} /></IconBtn>
@@ -2261,6 +2126,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           onClose={() => setSentenceModalWord(null)}
           onShowToast={onShowToast}
         />
+      )}
+
+      {/* تولید جملهٔ آزاد — کنار آیکن راهنما در تمرین «جای‌خالی فعل + حرف اضافه (AI)»؛
+          با بستن، کاربر دقیقاً به همان جای تمرین برمی‌گردد */}
+      {freeOpen && (
+        <PageOverlay icon="✒️" title="تولید جملهٔ آزاد" onClose={() => setFreeOpen(false)}>
+          <FreeSentencePractice onShowToast={onShowToast} />
+        </PageOverlay>
       )}
 
       {!isSelfContainedMode(qMode) && (
@@ -2285,6 +2158,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       </div>
       )}
 
+      {/* بدنهٔ تمرین‌های خودگردان گرامر در لایهٔ keep-alive در App رندر می‌شود */}
+      {!isGramSelfMode(activeMode) && (
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-5 md:p-7 shadow-sm space-y-4">
         {activeMode === 'hard' && qMode && (
           <div className="flex justify-center">
@@ -2757,50 +2632,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   onShowToast={onShowToast}
                 />
               )}
-              {qMode === 'puzzle' && <SatzPuzzle key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
-              {qMode === 'vprep' && <VerbPrep key={currentKey} initialTab={vprepTab} showTabBar={false} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />}
-              {activeMode === 'konnektoren' && (
-                <div className="col-span-full">
-                  <KonnektorTrainer
-                    key={currentKey}
-                    onClose={() => onSelectMode(null)}
-                    onShowToast={onShowToast}
-                  />
-                </div>
-              )}
-              {activeMode === 'kpro' && (
-                <div className="col-span-full">
-                  <KonnektorProTrainer
-                    key={currentKey}
-                    settings={settings}
-                    onShowToast={onShowToast}
-                    onQuickAddWord={onQuickAddWord}
-                    onClose={() => onSelectMode(null)}
-                  />
-                </div>
-              )}
-              {activeMode === 'tstory' && (
-                <div className="col-span-full">
-                  <TenseStoryTrainer
-                    settings={settings}
-                    onShowToast={onShowToast}
-                    onQuickAddWord={onQuickAddWord}
-                    onClose={() => onSelectMode(null)}
-                  />
-                </div>
-              )}
-              {(activeMode === 'wsh' || activeMode === 'wsh2') && (
-                <div className="col-span-full">
-                  <WorksheetTrainer
-                    key={currentKey}
-                    kind={activeMode === 'wsh' ? 'prep' : 'klasse'}
-                    onShowToast={onShowToast}
-                    onClose={() => onSelectMode(null)}
-                  />
-                </div>
-              )}
               {qMode === 'prod' && (
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[#5d6676]">معادل آلمانی را تایپ کنید (با آرتیکل در صورت اسم بودن):</p>
@@ -2904,6 +2737,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           );
         })()}
       </div>
+      )}
 
       {timerPopupOpen && qMode && activeMode !== 'hard' && (
         <div
