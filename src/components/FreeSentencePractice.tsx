@@ -10,6 +10,7 @@
 import React, { useState } from 'react';
 import { Word } from '../types';
 import { ShadowingModal } from './ShadowingModal';
+import { toFa } from './trainerUI';
 import { generateWithGemini, parseAI } from '../utils/ai';
 
 const germanTokens = (t: string): string[] => t.split(/[^\p{L}]+/u).filter(Boolean);
@@ -21,10 +22,17 @@ export const FREE_SENT_WORD: Word = {
   notes: '', added: 0, last: 0, due: 0, ivl: 0, ease: 2.5, stage: 0, ok: 0, bad: 0, res: ''
 };
 
+interface FreeGood { text: string; why_fa: string }
+
+/** نتیجهٔ تصحیح — بر اساس جریان خواستهٔ کاربر:
+ *  ۱) ترجمهٔ جملهٔ خود کاربر  ۲) برداشت یک آلمانی‌زبان  ۳) سبز: چیزهایی که درست نوشته
+ *  ۴) قرمز: ایرادها یکی‌یکی با ضربدر  + شکل درست نهایی */
 interface FreeReport {
+  user_fa: string;
   understood_fa: string;
   score: number;
   corrected_de: string;
+  good: FreeGood[];
   issues: { type: string; wrong: string; correct: string; why_fa: string }[];
   tip_fa: string;
 }
@@ -53,15 +61,19 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
     const s = text.trim();
     if (!s || busy) return;
     setBusy(true); setErrMsg(''); setReport(null);
-    const prompt = `You are an expert German teacher who checks BOTH grammar AND meaning/logic ("deutsches Denken") for Persian-speaking learners. Evaluate the sentence.\n\nINPUT: "${s}"\n\nCHECK:\n1) Meaning & logic FIRST: does the sentence make sense? Is the connector logically correct for the intended meaning? obwohl = concession AGAINST the expectation, trotzdem = nevertheless, weil = reason. If the logic contradicts the connector (e.g. "wenig Geld, obwohl große Reise" — the money is a REASON against the trip), that is a serious error: fix the connector or the logic and explain.\n2) Grammar and verb conjugation.\n3) Connectors and clause order (Hauptsatz/Nebensatz, verb position).\n4) Prepositions and required cases.\n5) Articles, gender, adjective endings.\n6) Word order.\n7) Spelling and capitalization.\n8) Naturalness and register.\n\nRULES:\n- Correct genuine errors only; preserve meaning as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".\n- Score 0-100 (integer): meaning/logic errors cost the most.\n- Explanations and the tip: concise Persian, no repetition.\n- A greeting, a single word or a fragment without a verb is NOT a sentence: score ≤ 20, add an issue of type "معنا و منطق جمله", and understood_fa must say there is no real message.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"understood_fa":"...","score":0,"corrected_de":"...","issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
+    const prompt = `You are an expert German teacher who checks BOTH grammar AND meaning/logic ("deutsches Denken") for Persian-speaking learners. Evaluate the sentence.\n\nINPUT: "${s}"\n\nCHECK:\n1) Meaning & logic FIRST: does the sentence make sense? Is the connector logically correct for the intended meaning? obwohl = concession AGAINST the expectation, trotzdem = nevertheless, weil = reason. If the logic contradicts the connector (e.g. "wenig Geld, obwohl große Reise" — the money is a REASON against the trip), that is a serious error: fix the connector or the logic and explain.\n2) Grammar and verb conjugation.\n3) Connectors and clause order (Hauptsatz/Nebensatz, verb position).\n4) Prepositions and required cases.\n5) Articles, gender, adjective endings.\n6) Word order.\n7) Spelling and capitalization.\n8) Naturalness and register.\n\nRULES:\n- Correct genuine errors only; preserve meaning as much as possible.\n- If correct and natural: corrected_de = the exact input, score = 100, issues = [].\n- Every "wrong" must be an exact substring of the input. Never invent or paraphrase.\n- Report each distinct error once. Issue types exactly one of: "گرامر" | "املا" | "حرف اضافه و حالت دستوری" | "واژه‌گزینی" | "حروف ربط و ترتیب جمله" | "آرتیکل و صرف صفت" | "معنا و منطق جمله".\n- FAIR feedback: if something is correct (e.g. verb position after the comma, correct connector choice, correct conjugation), it belongs in "good" — NEVER list correct word order as an error. Each error card must be about ONE real mistake.\n- "user_fa": translate the LEARNER'S OWN sentence exactly as written into Persian — not the corrected sentence.\n- "understood_fa": what a German native speaker would actually understand/feel when reading the learner's sentence (1–2 short Persian sentences).\n- "good": ALWAYS list 1–3 things the learner did CORRECTLY (e.g. "gehe ich nach dem Komma — جایگاه فعل درست", connector choice, tense, vocabulary) — "text" short (German snippet or short label), "why_fa" short Persian reason. Find at least one, even in weak sentences.\n- Score 0-100 (integer): meaning/logic errors cost the most.\n- Explanations and the tip: concise Persian, no repetition.\n- A greeting, a single word or a fragment without a verb is NOT a sentence: score ≤ 20, add an issue of type "معنا و منطق جمله", and understood_fa must say there is no real message.\n- Return ONLY a valid JSON array with exactly one object, no Markdown, no extra text:\n[{"user_fa":"...","understood_fa":"...","score":0,"corrected_de":"...","good":[{"text":"...","why_fa":"..."}],"issues":[{"type":"...","wrong":"...","correct":"...","why_fa":"..."}],"tip_fa":"..."}]`;
     try {
       const out = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
       const r: any = parseAI(out)[0] || {};
       if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
       setReport({
+        user_fa: String(r.user_fa || ''),
         understood_fa: String(r.understood_fa || ''),
         score: Math.min(Math.max(0, Math.min(100, Math.round(Number(r.score)))), germanTokens(s).length < 3 ? 20 : 100),
         corrected_de: String(r.corrected_de || ''),
+        good: Array.isArray(r.good)
+          ? (r.good as any[]).map((g) => ({ text: String(g?.text ?? '').trim(), why_fa: String(g?.why_fa ?? '').trim() })).filter((g) => g.text || g.why_fa)
+          : [],
         issues: Array.isArray(r.issues) ? r.issues : [],
         tip_fa: String(r.tip_fa || '')
       });
@@ -129,17 +141,39 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
             {report.issues.length === 0 && report.score >= 80 && <span className="text-emerald-700 dark:text-emerald-300 text-sm font-bold">✅ جمله بدون خطا!</span>}
           </div>
           <div className="text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">📝 تصحیح و نکات</div>
+          {/* ۱) ترجمهٔ جملهٔ خود کاربر (درخواست کاربر: ترجمهٔ نمونهٔ AI نه، جملهٔ من) */}
+          {report.user_fa && (
+            <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900 text-sm leading-7">
+              <b className="text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ جملهٔ تو: </b>{report.user_fa}
+            </div>
+          )}
+          {/* ۲) برداشت یک آلمانی‌زبان از این جمله */}
           {report.understood_fa && (
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] text-sm leading-7">
               <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت آلمانی‌زبان: </b>{report.understood_fa}
             </div>
           )}
-
+          {/* ۳) باکس سبز: چیزهایی که درست نوشتی (همیشه حداقل یکی) */}
+          {report.good.length > 0 && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 space-y-1.5">
+              <div className="text-sm font-bold text-emerald-800 dark:text-emerald-200">✅ چیزهایی که درست نوشتی</div>
+              {report.good.map((g, i) => (
+                <div key={i} className="text-xs leading-6 text-emerald-900 dark:text-emerald-100">
+                  <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans">{g.text}</b>}{g.text && g.why_fa ? ' — ' : ''}{g.why_fa}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* ۴) باکس قرمز: ایرادها یکی‌یکی با ضربدر */}
           {report.issues.length > 0 && (
-            <div className="space-y-2">
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 space-y-2.5">
+              <div className="text-sm font-bold text-red-800 dark:text-red-200">❌ ایرادها ({toFa(report.issues.length)})</div>
               {report.issues.map((it, i) => (
-                <div key={i} className="p-3 rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold ${FREE_ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
+                <div key={i} className="rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <b className="text-red-600 dark:text-red-300 text-sm">✗</b>
+                    <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold ${FREE_ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
+                  </div>
                   {(it.wrong || it.correct) && (
                     <div className="flex flex-wrap items-baseline gap-2 text-base" dir="ltr">
                       {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
@@ -147,7 +181,7 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
                       {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
                     </div>
                   )}
-                  {it.why_fa && <div className="text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
+                  {it.why_fa && <div className="text-xs leading-6 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
                 </div>
               ))}
             </div>
