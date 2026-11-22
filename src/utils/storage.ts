@@ -67,6 +67,7 @@ export function norm(w: any): Word | null {
     rOk: Math.max(0, +w.rOk || 0),
     rBad: Math.max(0, +w.rBad || 0),
     rStreak: Math.max(0, +w.rStreak || 0),
+    pStreak: Math.max(0, +w.pStreak || 0), // فاز ۳: زنجیرهٔ تولید پیاپی — پایهٔ ارتقای کاندید → فعال
     img: IMGOK.test(s('img')) && s('img').length < 1600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,

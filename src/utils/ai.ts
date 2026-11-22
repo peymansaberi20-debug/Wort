@@ -355,8 +355,11 @@ After the first two lines, include useful practical notes (تفاوت معنای
 Mandatory Multiline Formatting:
 Add one final section "مقایسه با مترادف" inside notes: compare the headword with its German synonym (the one in "syn"; if empty, pick the closest common synonym and name it) — semantic nuances, tone/register (formal, informal, polite, rude) and typical usage contexts of each. Separate sections using newline characters in the decoded notes string. In raw JSON, encode each newline as \\n.
 
+Final Line — Memory Trick (mandatory):
+Add ONE final line starting with "🎯 تریک:" — a short, playful Persian memory hook that links the SOUND of the German headword to its Persian meaning: first the Persian phonetic rendering of the German word, then the association (imagery, pun or rhyme). Example: die Geduld → «🎯 تریک: «گِدولد؛ دی صبر کن تا گُل بده!»» Keep it to one line, at the very end of notes.
+
 Required formatting example:
-"notes": "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)\\nساختار: der Sieg über + AKK (پیروزی بر کسی/چیزی)؛ siegen über + AKK\\nتفاوت معنایی: Sieg بر پیروزی در رقابت تأکید دارد؛ Erfolg مفهوم گسترده‌تری از موفقیت دارد."
+"notes": "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)\\nساختار: der Sieg über + AKK (پیروزی بر کسی/چیزی)؛ siegen über + AKK\\nتفاوت معنایی: Sieg بر پیروزی در رقابت تأکید دارد؛ Erfolg مفهوم گسترده‌تری از موفقیت دارد.\\n🎯 تریک: «زیگ؛ هرکی زیگ بگیره پیروز شده!»"
 
 ⸻
 
@@ -426,6 +429,7 @@ Output MUST be a JSON array containing exactly one object with these exact field
 ساختار: حرف اضافه یا حالت دستوری...
 توضیحات کاربردی / کاربرد / تفاوت معنایی...
 مقایسه با مترادف: این واژه را با مترادف آلمانیِ فیلد "syn" مقایسه کن — تفاوت معنایی، لحن/ثبت (رسمی، خودمانی، مؤدبانه، خشن) و محل/بافتار کاربرد هرکدام؛ اگر syn خالی بود، نزدیک‌ترین مترادف رایج را خودت انتخاب و ذکر کن.
+🎯 تریک: خط پایانی الزامی — یک تریک کوتاه و بازیگوش برای یاد ماندن واژه: اول تلفظ فارسیِ واژهٔ آلمانی، بعد پیوند صوتی/تصویری‌اش با معنی فارسی. مثال: die Geduld → «🎯 تریک: «گِدولد؛ دی صبر کن تا گُل بده!»»
 
 Return ONLY valid JSON array with 1 object.`;
 }
@@ -492,12 +496,13 @@ The object(s) must contain exactly these fields in this exact order:
 25. imperativSie: For verbs, the standard formal imperative. Otherwise, "".
 26. sep: For separable verbs, provide the separable prefix only. Otherwise, "".
 28. "en": the closest English equivalent of the German word — translate FROM THE GERMAN sense directly (not via Persian). One natural English word or short expression, lowercase. If none exists, use "".
-27. notes: A Persian-language multiline string containing exactly the following four sections, in this order. Separate the sections using the JSON escape sequence \\n within the string. Do not insert literal, unescaped line breaks inside the JSON string.
+27. notes: A Persian-language multiline string containing exactly the following five sections, in this order. Separate the sections using the JSON escape sequence \\n within the string. Do not insert literal, unescaped line breaks inside the JSON string.
 
 خانواده واژگانی: اسم: … | فعل مرتبط: … | صفت مرتبط: …
 ساختار: …
 توضیحات کاربردی / کاربرد / تفاوت معنایی: …
 مقایسه با مترادف: …
+🎯 تریک: …
 
 Replace all ellipses with useful content. Do not leave instructional placeholders in the final result.
 
@@ -512,7 +517,7 @@ Adverb/Präposition/Redewendung: explain the fixed pattern, word order, or case 
 
 4. Rules for word families and usage notes
 
-Write notes in Persian and preserve the exact four-section format specified above. اسم must contain a genuine noun from the same word family when one is commonly used. فعل مرتبط must contain a genuine related verb when available; distinguish a derived verb from a synonym or a verb that is merely related in meaning. صفت مرتبط must contain a genuine related adjective when available. Include German words and concise Persian meanings where useful. Do not repeat the target word as its own related form unless this is necessary and explicitly informative. Prefer common, pedagogically useful words; do not invent forms or add rare, awkward, or marginally useful derivatives merely to fill a section — use — when no suitable related form is available. In ساختار, explain relevant grammar accurately: gender and plural for nouns, case government and complements for verbs, adjective inflection and comparison for adjectives, or other relevant patterns for the target. In توضیحات کاربردی / کاربرد / تفاوت معنایی, explain common usage, typical collocations, register, and important meaning distinctions. In مقایسه با مترادف, provide an actual comparison based on the selected synonym. Never copy these instructions into the field. Do not include irrelevant information simply to make the notes longer.
+Write notes in Persian and preserve the exact four-section format specified above. اسم must contain a genuine noun from the same word family when one is commonly used. فعل مرتبط must contain a genuine related verb when available; distinguish a derived verb from a synonym or a verb that is merely related in meaning. صفت مرتبط must contain a genuine related adjective when available. Include German words and concise Persian meanings where useful. Do not repeat the target word as its own related form unless this is necessary and explicitly informative. Prefer common, pedagogically useful words; do not invent forms or add rare, awkward, or marginally useful derivatives merely to fill a section — use — when no suitable related form is available. In ساختار, explain relevant grammar accurately: gender and plural for nouns, case government and complements for verbs, adjective inflection and comparison for adjectives, or other relevant patterns for the target. In توضیحات کاربردی / کاربرد / تفاوت معنایی, explain common usage, typical collocations, register, and important meaning distinctions. In مقایسه با مترادف, provide an actual comparison based on the selected synonym. Never copy these instructions into the field. Do not include irrelevant information simply to make the notes longer. Finally, add the fifth section "🎯 تریک:" as the VERY LAST line of notes: a short, playful Persian memory hook that links the SOUND of the German headword to its Persian meaning — first the Persian phonetic rendering of the German word, then the association (imagery, pun or rhyme). Example: die Geduld → «🎯 تریک: «گِدولد؛ دی صبر کن تا گُل بده!»» Keep it to one line.
 
 5. Translation and naturalness requirements
 

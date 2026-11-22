@@ -170,7 +170,7 @@ export function clusterGuide(word: Word, members: ClusterMember[]): string | nul
 
 /** تمرین‌های «تولیدی»: بازیابی فرم آلمانی (معنی → واژه/جمله) — فقط برای واژگان فعال/کاندید منطقی است */
 const PROD_KINDS: Set<string> = new Set([
-  'prod', 'sent', 'freesent', 'schreiben', 'schreiben_exam', 'vmix_prod',
+  'prod', 'sent', 'freesent', 'schreiben', 'schreiben_exam', 'vmix_prod', 'act',
 ]);
 
 /** تمرین‌های «شناختی»: بازیابی معنی (واژه/صدا → معنی) — مسیر اصلی واژگان دریافتی */
@@ -191,21 +191,25 @@ export function kindOf(exerciseMode: string): MasteryKind {
 /** آستانهٔ ارتقای دریافتی → کاندید: ۳ موفقیت پیاپی در تمرین شناختی */
 export const PROMO_STREAK = 3;
 
+/** فاز ۳ — آستانهٔ ارتقای کاندید → فعال: ۳ تولید پیاپی درست */
+export const AKT_STREAK = 3;
+
 /**
  * آمار دوگانهٔ واژه را با نتیجهٔ یک تمرین به‌روز می‌کند.
  * با ورد شیوهٔ عملیاتی ندارد (زمان‌بندی لایتنر جداگانه در sched می‌ماند).
  */
 export function applyModeResult(
-  word: Pick<Word, 'pOk' | 'pBad' | 'rOk' | 'rBad' | 'rStreak'>,
+  word: Pick<Word, 'pOk' | 'pBad' | 'pStreak' | 'rOk' | 'rBad' | 'rStreak'>,
   exerciseMode: string,
   ok: boolean
-): Pick<Word, 'pOk' | 'pBad' | 'rOk' | 'rBad' | 'rStreak'> {
+): Pick<Word, 'pOk' | 'pBad' | 'pStreak' | 'rOk' | 'rBad' | 'rStreak'> {
   const kind = kindOf(exerciseMode);
   if (kind === 'neutral') return {};
   if (kind === 'prod') {
     return {
       pOk: (word.pOk || 0) + (ok ? 1 : 0),
       pBad: (word.pBad || 0) + (ok ? 0 : 1),
+      pStreak: ok ? (word.pStreak || 0) + 1 : 0,
     };
   }
   return {
@@ -218,4 +222,9 @@ export function applyModeResult(
 /** آیا واژهٔ دریافتی آمادهٔ ارتقاست؟ (زنجیرهٔ ۳ موفقیت شناختی + حداقل ۴ موفقیت کل) */
 export function promotionReady(word: Pick<Word, 'status' | 'rStreak' | 'rOk'>): boolean {
   return word.status === 'passiv' && (word.rStreak || 0) >= PROMO_STREAK && (word.rOk || 0) >= 4;
+}
+
+/** فاز ۳: آیا واژهٔ کاندید آمادهٔ ارتقا به فعال است؟ (زنجیرهٔ ۳ تولید پیاپی + حداقل ۴ موفقیت تولیدی کل) */
+export function activationReady(word: Pick<Word, 'status' | 'pStreak' | 'pOk'>): boolean {
+  return word.status === 'kandidat' && (word.pStreak || 0) >= AKT_STREAK && (word.pOk || 0) >= 4;
 }

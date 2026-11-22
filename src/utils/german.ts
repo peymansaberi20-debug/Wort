@@ -118,3 +118,15 @@ export function applyGermanQuality<T extends { art?: string; pos?: string; syn?:
   if (out.conj) out.conj = normalizeConj(out.conj);
   return out;
 }
+
+/* ============================================================
+ * درخواست فاز ۴ — تریک حفظ‌سازی (خط «🎯 تریک:» در notes)
+ * ============================================================ */
+
+/** خط تریک را از notes واژه بیرون می‌کشد (خطی که با 🎯 یا «تریک:» شروع می‌شود)؛ بدون پیشوند */
+export const trickOf = (w: { notes?: string }): string => {
+  if (!w.notes) return '';
+  const line = w.notes.split(/\r?\n/).map(l => l.trim()).find(l => l.startsWith('🎯') || l.startsWith('تریک:'));
+  if (!line) return '';
+  return line.replace(/^🎯\s*(تریک:\s*)?/, '').replace(/^تریک:\s*/, '').trim();
+};
