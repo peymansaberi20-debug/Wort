@@ -38,6 +38,12 @@ export interface Word {
   status?: WordStatus; // aktiv = تولید/استفاده؛ passiv = فقط فهم هنگام دیدن/شنیدن؛ kandidat = بین این دو
   register?: string; // رجیستر واژه: '' | neutral | umgangssprachlich | schriftsprachlich | gehoben | veraltet | fachsprachlich
   synCluster?: string; // نام خوشهٔ مترادف (لِمّای مرجع، مثلاً geschehen برای passieren/sich ereignen)
+  // فاز ۲: آمار دوگانهٔ تسلط — جدا برای تمرین تولیدی (فعال‌سازی) و شناختی (تشخیص)
+  pOk?: number; // تعداد پاسخ درست در تمرین‌های تولیدی
+  pBad?: number; // تعداد پاسخ غلط در تمرین‌های تولیدی
+  rOk?: number; // تعداد پاسخ درست در تمرین‌های شناختی
+  rBad?: number; // تعداد پاسخ غلط در تمرین‌های شناختی
+  rStreak?: number; // زنجیرهٔ موفقیت پیاپی فعلی در تمرین‌های شناختی (پایهٔ ارتقای دریافتی → کاندید)
   img: string;
   added: number;
   last: number;
