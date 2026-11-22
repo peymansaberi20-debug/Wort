@@ -411,6 +411,18 @@ export default function App() {
     showToast(newImg ? 'تصویر واژه به‌روز شد.' : 'تصویر واژه حذف شد.');
   };
 
+  // فاز ۱: تغییر وضعیت/رجیستر/خوشهٔ مترادف از کارت وضعیت در پروفایل واژه
+  const handlePatchWord = (word: Word, patch: Partial<Word>) => {
+    setState(prev => ({
+      ...prev,
+      words: prev.words.map(w => (w.id === word.id ? { ...w, ...patch } : w))
+    }));
+    if (selectedWord?.id === word.id) {
+      setSelectedWord(prev => (prev ? { ...prev, ...patch } : null));
+    }
+    if ('status' in patch) showToast(`سطح تسلط واژه روی «${patch.status === 'aktiv' ? 'فعال' : patch.status === 'passiv' ? 'دریافتی' : 'کاندید فعال‌سازی'}» تنظیم شد.`);
+  };
+
   // Category Operations
   const handleRenameCategory = (oldCat: string, newCat: string) => {
     setState(prev => ({
@@ -942,6 +954,8 @@ export default function App() {
       {/* Modals */}
       <WordDetailModal
         word={selectedWord}
+        words={state.words}
+        onPatchWord={handlePatchWord}
         onClose={() => setSelectedWord(null)}
         onEdit={handleEditWord}
         onDelete={handleDeleteWord}
