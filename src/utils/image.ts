@@ -1,12 +1,12 @@
 /**
- * فشرده‌سازی تصویر پیش از ذخیره — ریشهٔ باگ «عکس ذخیره نمیشه»:
- *  ۱) norm() در storage.ts هر تصویری با dataURL بزرگ‌تر از ~۱٫۶ میلیون نویسه را بی‌صدا حذف می‌کند؛
- *  ۲) عکس‌های بزرگ localStorage (سهمیه ~۵MB) را پر می‌کنند و کل ذخیرهٔ خودکار شکست می‌خورد.
- * این کمک‌تابع بزرگ‌ترین ضلع را به maxDim محدود و کیفیت JPEG پله‌پله پایین می‌آورد
- * تا رشتهٔ base64 حتماً زیر MAX_IMG_CHARS نویسه (~۴۴۰KB باینری) بماند.
+ * فشرده‌سازی تصویر پیش از ذخیره — همراه با لایهٔ imageStore.ts (ذخیرهٔ عکس‌ها در IndexedDB):
+ *  ۱) عکس‌ها دیگر داخل JSON اصلی localStorage نمی‌مانند، ولی سقف نویسه داده‌URL همچنان
+ *     آپلود ابری (سند ~۱MB در Firestore) و مصرف حافظه را ایمن نگه می‌دارد؛
+ *  ۲) این کمک‌تابع بزرگ‌ترین ضلع را به maxDim محدود و کیفیت JPEG پله‌پله پایین می‌آورد
+ *     تا رشتهٔ base64 حتماً زیر MAX_IMG_CHARS نویسه (~۲۵۰KB باینری) بماند.
  */
 
-export const MAX_IMG_CHARS = 600_000;
+export const MAX_IMG_CHARS = 350_000;
 
 export function shrinkImageForStorage(dataUrl: string, maxDim = 800, maxChars = MAX_IMG_CHARS): Promise<string> {
   return new Promise(resolve => {
