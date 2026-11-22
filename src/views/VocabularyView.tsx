@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Word } from '../types';
+import { Word, WordStatus } from '../types';
 import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, fullWord } from '../utils/storage';
+import { statusOf, statusCounts, STATUS_SHORT, STATUS_BADGE, WORD_STATUSES } from '../utils/wordStatus';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { generateImage, describeAiError } from "../utils/aiProvider";
 import { speak } from '../utils/audio';
@@ -124,6 +125,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterArt, setFilterArt] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterWStatus, setFilterWStatus] = useState<'all' | WordStatus>('all'); // فاز ۱: فیلتر فعال/دریافتی/کاندید
   const [filterLvl, setFilterLvl] = useState('');
   const [sortBy, setSortBy] = useState<'de' | 'lvl' | 'added' | 'hard' | 'due'>('de');
 
@@ -265,7 +267,9 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
           filterStatus === 'due' ? w.last && w.due <= n :
           filterStatus === 'hard' ? isLeech(w) :
           w.last);
-        return matchesQuery && matchesArt && matchesLvl && matchesStatus;
+        const matchesWStatus =
+          filterWStatus === 'all' || statusOf(w) === filterWStatus;
+        return matchesQuery && matchesArt && matchesLvl && matchesStatus && matchesWStatus;
       })
       .sort((a, b) => {
         if (sortBy === 'de') return a.de.localeCompare(b.de, 'de');
@@ -281,7 +285,9 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (sortBy === 'hard') return b.bad - a.bad;
         return a.due - b.due;
       });
-  }, [words, searchQuery, filterArt, filterStatus, filterLvl, sortBy]);
+  }, [words, searchQuery, filterArt, filterStatus, filterWStatus, filterLvl, sortBy]);
+  // فاز ۱: شمارندهٔ واژگان به تفکیک وضعیت (روی کل کتابخانه، مستقل از فیلترها)
+  const wStatusCounts = useMemo(() => statusCounts(words), [words]);
   // Typo-tolerant suggestions from the user's own library
 const lev = (a: string, b: string): number => {
 const m = a.length, n = b.length;
@@ -1464,8 +1470,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           />
         </div>
 
-        {/* Line 2: 4 search filters — 2×2 on mobile, one row on md+ */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {/* Line 2: 5 search filters — 2×2 on mobile, one row on md+ */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           {/* 1. Article Filter */}
           <select
             value={filterArt}
@@ -1489,6 +1495,19 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             <option value="due">سررسید مرور</option>
             <option value="learn">در حال یادگیری</option>
             <option value="hard">سخت 🩸</option>
+          </select>
+
+          {/* 2b. Wortschatz-Status Filter (فاز ۱: فعال/دریافتی/کاندید) */}
+          <select
+            value={filterWStatus}
+            onChange={e => setFilterWStatus(e.target.value as 'all' | WordStatus)}
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+            title="وضعیت واژگانی: فعال یعنی تولید در گفتار/نوشتن، دریافتی یعنی فقط فهم هنگام دیدن/شنیدن"
+          >
+            <option value="all">تسلط: همه</option>
+            {WORD_STATUSES.map(s => (
+              <option key={s} value={s}>تسلط: {STATUS_SHORT[s]}</option>
+            ))}
           </select>
 
           {/* 3. Sort Order */}
@@ -1727,6 +1746,17 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           <span>
             دسته‌بندی واژگان ({filteredWords.length} واژه در {categoryNames.length} دسته)
           </span>
+          <span className="flex items-center gap-1.5" dir="rtl">
+            <span className="px-2 py-0.5 rounded-lg font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              فعال: {wStatusCounts.aktiv}
+            </span>
+            <span className="px-2 py-0.5 rounded-lg font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              کاندید: {wStatusCounts.kandidat}
+            </span>
+            <span className="px-2 py-0.5 rounded-lg font-bold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+              دریافتی: {wStatusCounts.passiv}
+            </span>
+          </span>
           {searchQuery && (
             <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-normal">
               (دسته‌های حاوی نتیجه باز شدند)
@@ -1844,6 +1874,13 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                               )}
                               <span className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 font-sans">
                                 {w.de}
+                              </span>
+                              {/* فاز ۱: نشان وضعیت واژگانی (فعال/دریافتی/کاندید) */}
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${STATUS_BADGE[statusOf(w)]}`}
+                                title={`تسلط: ${STATUS_SHORT[statusOf(w)]}`}
+                              >
+                                {STATUS_SHORT[statusOf(w)]}
                               </span>
                             </div>
 
