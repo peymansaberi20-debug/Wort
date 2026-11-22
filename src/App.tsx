@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { onCloudUserChanged, uploadStateToCloud } from './utils/cloud';
+import { shrinkImageForStorage } from './utils/image';
 import { type User } from 'firebase/auth';
 import { CloudAccountModal } from './components/CloudAccountModal';
 import { GroupImportView } from './views/GroupImportView';
@@ -401,16 +402,32 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Word Image Change
+  // Word Image Change — قبل از ذخیره فشرده می‌شود تا هم زیر سقف norm() بماند هم localStorage را پر نکند (باگ «عکس ذخیره نمیشه»)
   const handleImageChange = (word: Word, newImg: string) => {
-    setState(prev => ({
-      ...prev,
-      words: prev.words.map(w => (w.id === word.id ? { ...w, img: newImg } : w))
-    }));
-    if (selectedWord?.id === word.id) {
-      setSelectedWord(prev => (prev ? { ...prev, img: newImg } : null));
+    if (!newImg) {
+      setState(prev => ({
+        ...prev,
+        words: prev.words.map(w => (w.id === word.id ? { ...w, img: '' } : w))
+      }));
+      if (selectedWord?.id === word.id) {
+        setSelectedWord(prev => (prev ? { ...prev, img: '' } : null));
+      }
+      showToast('تصویر واژه حذف شد.');
+      return;
     }
-    showToast(newImg ? 'تصویر واژه به‌روز شد.' : 'تصویر واژه حذف شد.');
+    showToast('در حال آماده‌سازی تصویر…');
+    void shrinkImageForStorage(newImg).then(finalImg => {
+      setState(prev => ({
+        ...prev,
+        words: prev.words.map(w => (w.id === word.id ? { ...w, img: finalImg } : w))
+      }));
+      if (selectedWord?.id === word.id) {
+        setSelectedWord(prev => (prev ? { ...prev, img: finalImg } : null));
+      }
+      showToast(finalImg.length !== newImg.length
+        ? 'تصویر واژه فشرده و ذخیره شد.'
+        : 'تصویر واژه به‌روز شد.');
+    });
   };
 
   // فاز ۱: تغییر وضعیت/رجیستر/خوشهٔ مترادف از کارت وضعیت در پروفایل واژه
