@@ -152,6 +152,45 @@ export const parseVP = (raw: string, custom = false): VP[] =>
   }).filter((x): x is VP => !!x);
 
 export const VERB_PREPS: VP[] = parseVP(RAW);
+
+/* ============================================================
+ * درخواست فاز ۴: حرف اضافهٔ خودکار فعل در نمایش اصلی واژه
+ * واژهٔ فعل با هر منبعی اضافه/ویرایش شود، اگر در این دیتاست
+ * (یا فهرست سفارشی کاربر در VerbPrep) باشد، حرف اضافه و حالت
+ * دستوری‌اش کنار خودش نمایش داده می‌شود: warten auf (A)
+ * ============================================================ */
+
+const CUSTOM_KEY = 'wb_vprep_custom';
+const loadCustom = (): VP[] => {
+  try {
+    const v = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]');
+    return Array.isArray(v) ? v.filter(x => x && x.verb && x.prep) : [];
+  } catch { return []; }
+};
+
+/** همهٔ فعل+حرف اضافه‌ها: دیتاست پایه + فهرست سفارشی کاربر */
+export const allVerbPreps = (): VP[] => [...VERB_PREPS, ...loadCustom()];
+
+/** جداکردن «sich » از ابتدای فعل برای تطبیق */
+export const baseVerb = (v: string): string => (v || '').trim().replace(/^sich\s+/i, '').toLowerCase();
+
+const INDEX = () => {
+  const m = new Map<string, VP>();
+  for (const vp of allVerbPreps()) {
+    m.set(vp.verb.trim().toLowerCase(), vp);          // با sich
+    m.set(baseVerb(vp.verb), vp);                      // بدون sich
+  }
+  return m;
+};
+
+/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم یا بدون sich)؛ بی‌نتیجه = null */
+export const verbPrepOf = (de: string): VP | null => {
+  const t = (de || '').trim().toLowerCase();
+  if (!t) return null;
+  const idx = INDEX();
+  return idx.get(t) || idx.get(baseVerb(t)) || null;
+};
+
 const vowel = (p: string) => /^[aeiouäöü]/i.test(p);
 export const woForm = (p: string) => 'wo' + (vowel(p) ? 'r' : '') + p;   // woran, worauf, wofür …
 export const daForm = (p: string) => 'da' + (vowel(p) ? 'r' : '') + p;   // daran, darauf, dafür …
