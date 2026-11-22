@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Word } from '../types';
 import { AIP, generateWithGemini, parseAI, aiToIMP } from '../utils/ai';
 import { findDuplicateWord } from '../utils/duplicates';
+import { statusOf, STATUS_SHORT } from '../utils/wordStatus';
 import { IconBtn } from './IconBtn';
 import { X } from 'lucide-react';
 
@@ -25,6 +26,7 @@ interface CompareRow {
   example_de: string;
   example_fa: string;
   diff_fa: string;
+  bottomline_fa: string;
 }
 
 const FENCE = '```';
@@ -37,6 +39,30 @@ export const WordCompareModal: React.FC<WordCompareModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState('');
   const [addingIdx, setAddingIdx] = useState<number | null>(null);
+  const [clusterPick, setClusterPick] = useState(0);
+
+  /* فاز ۴: خوشه‌های مترادف کتابخانه — پر کردن سریع جاهای مقایسه */
+  const clusters = useMemo(() => {
+    const m = new Map<string, Word[]>();
+    for (const w of words) {
+      const c = (w.synCluster || '').trim();
+      if (!c) continue;
+      const arr = m.get(c) || [];
+      arr.push(w);
+      m.set(c, arr);
+    }
+    return [...m.values()].filter(a => a.length >= 2);
+  }, [words]);
+
+  const fillFromCluster = () => {
+    if (clusters.length === 0) {
+      onShowToast('هنوز خوشهٔ مترادف در کتابخانه داری؟ در پروفایل واژه‌ها «خوشهٔ مترادف» را ست کن تا اینجا یک‌کلیک مقایسه شوند.', true);
+      return;
+    }
+    const cl = clusters[clusterPick % clusters.length];
+    setClusterPick(clusterPick + 1);
+    setFields(prev => cl.slice(0, 4).map((w, i) => w.de || prev[i] || ''));
+  };
 
   // kept mounted (hidden) so results survive closing/reopening and profile visits
   const shown = embedded
@@ -69,6 +95,7 @@ For EACH target produce exactly one object with exactly these fields, in this or
 - "example_de": ONE natural everyday German example sentence (A1–B1)
 - "example_fa": Persian translation of that example
 - "diff_fa": in Persian, the KEY differences between this word and the OTHER target words of this set — meaning nuances, register, which is more common, when to prefer which. Concrete and brief.
+- "bottomline_fa": ONE short memorable Persian sentence — the bottom-line rule of this set: when a native speaker chooses THIS word over the others (e.g. «در گفتار روزمره …؛ در متن رسمی …»).
 
 RULES
 - Exactly one object per target, in the same order as TARGETS. No extra objects.
@@ -150,24 +177,41 @@ RULES
                   type="text"
                   dir="ltr"
                   value={f}
+                  list="wc-library-words"
                   onChange={e => setField(i, e.target.value)}
                   placeholder={`واژه ${i + 1}`}
                   className="min-w-0 bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3 py-2.5 font-sans font-bold text-sm md:text-base outline-none"
                 />
               ))}
+              {/* فاز ۴: انتخاب سریع از کتابخانه با پیشنهاد حین تایپ */}
+              <datalist id="wc-library-words">
+                {words.slice(0, 400).map(w => <option key={w.id} value={w.de} />)}
+              </datalist>
             </div>
-            <button
-              type="button"
-              onClick={() => void runCompare()}
-              disabled={loading || targets.length < 2}
-              className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-2"
-            >
-              {loading ? (
-                <><span className="inline-block animate-spin">⏳</span><span>در حال مقایسه با هوش مصنوعی…</span></>
-              ) : (
-                <span>⚖️ مقایسه کن</span>
-              )}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void runCompare()}
+                disabled={loading || targets.length < 2}
+                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-40 transition flex items-center gap-2"
+              >
+                {loading ? (
+                  <><span className="inline-block animate-spin">⏳</span><span>در حال مقایسه با هوش مصنوعی…</span></>
+                ) : (
+                  <span>⚖️ مقایسه کن</span>
+                )}
+              </button>
+              {/* فاز ۴: پر کردن جاها از یک خوشهٔ مترادف کتابخانه */}
+              <button
+                type="button"
+                onClick={fillFromCluster}
+                disabled={loading}
+                className="bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-950/70 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-2.5 rounded-xl text-sm font-bold transition disabled:opacity-40"
+                title="واژه‌های یک خوشهٔ مترادف از کتابخانه‌ات را یک‌کلیک وارد می‌کند"
+              >
+                🧩 از خوشهٔ مترادف
+              </button>
+            </div>
           </div>
 
           {errMsg && (
@@ -189,6 +233,8 @@ RULES
                   {r.example_fa && <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">{r.example_fa}</div>}
                 </div>
               ))}
+              {/* فاز ۴: جمع‌بندی یک‌خطی — قانون انتخاب بین واژه‌ها */}
+              {section('🏆 جمع‌بندی: کِی کدام را بگویم؟', r => (r.bottomline_fa || '—'))}
 
               {/* Library status + actions */}
               <div className="space-y-1.5">
@@ -205,7 +251,7 @@ RULES
                             onClick={() => onSelectWord(found)}
                             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition"
                           >
-                            ✅ موجود در کتابخانه — مشاهده پروفایل
+                            ✅ موجود — {STATUS_SHORT[statusOf(found)]} — مشاهده پروفایل
                           </button>
                         ) : (
                           <button

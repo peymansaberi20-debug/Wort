@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Word, WordStatus } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
 import { P6 } from '../data/seed';
-import { isLeech } from '../utils/storage';
+import { isLeech, isVerbPos } from '../utils/storage';
 import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
 import { ShadowingModal } from './ShadowingModal';
 import { ImageCropper } from './ImageCropper';
 import { PratText } from './PratText';
+import { VerbPhrase, verbPrepFor } from './VerbPhrase';
 import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
 import {
-  statusOf, clusterOf, clusterGuide, promotionReady, PROMO_STREAK,
+  statusOf, clusterOf, clusterGuide, promotionReady, activationReady, PROMO_STREAK, AKT_STREAK,
   STATUS_LABELS, STATUS_SHORT, STATUS_BADGE, STATUS_BADGE_HERO, STATUS_HINTS,
   WORD_STATUSES, REGISTER_OPTIONS, REGISTER_LABELS,
 } from '../utils/wordStatus';
@@ -41,6 +42,38 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
 }) => {
   const [showFa, setShowFa] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
+
+  /* درخواست فاز ۴ #۲: عنوان طولانی هیرو خودکار کوچک می‌شود تا در یک خط جا شود */
+  const heroWordRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const sp = heroWordRef.current;
+    if (!sp || !word) return;
+    const md = window.innerWidth >= 768;
+    const len = word.de.length + (word.art ? word.art.length + 1 : 0);
+    let base = md ? 36 : 30; // text-4xl / text-3xl
+    if (len > 32) base = md ? 19 : 16;
+    else if (len > 24) base = md ? 24 : 20;
+    else if (len > 15) base = md ? 30 : 25;
+    const fit = () => {
+      let s = base;
+      sp.style.fontSize = s + 'px';
+      sp.style.whiteSpace = 'nowrap';
+      const parent = sp.parentElement;
+      const max = parent ? parent.clientWidth - 100 : sp.clientWidth; // جای آیکن‌ها + آرتیکل
+      let guard = 0;
+      while (s > 13 && sp.scrollWidth > max && guard++ < 40) {
+        s -= 1;
+        sp.style.fontSize = s + 'px';
+      }
+      if (s <= 13) sp.style.whiteSpace = ''; // واژهٔ فوق‌طولانی: شکستن خط بهتر از بریده‌شدن است
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [word?.de, word?.art]);
+
+  /* درخواست فاز ۴ #۱: حرف اضافهٔ خودکار فعل — warten auf (A) / sich entscheiden für (A) */
+  const heroVP = word && isVerbPos(word.pos) ? verbPrepFor(word.de) : null;
   // پاپ‌اپ تنظیمات واژه (سطح تسلط، رجیستر، خوشهٔ مترادف) — با ستارهٔ نوار آیکون باز می‌شود؛
   // بستنش فقط همین پاپ‌اپ را می‌بندد و پروفایل واژه زیر آن باز می‌ماند
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -255,7 +288,8 @@ const seg = pluralSegments2();
               </div>
               <div className="text-xs space-y-1" dir="ltr">
                 <div className="text-slate-500 text-[11px]">3. Person (er/sie/es):</div>
-                <div className="font-bold text-sm text-amber-700 dark:text-amber-300"><PratText inf={word.de} prat={word.prat} /></div>
+                {/* فاز ۴ #۵: فونت خنثی تا قرمزیِ بخش تغییرکرده دیده شود */}
+                <div className="font-bold text-sm text-slate-800 dark:text-slate-200"><PratText inf={word.de} prat={word.prat} /></div>
               </div>
             </div>
           )}
@@ -301,7 +335,13 @@ const seg = pluralSegments2();
           {lines.map((line, idx) => {
             const isWordFamily = line.startsWith('خانواده واژگانی:');
             const isStructure = line.startsWith('ساختار:');
-            return (
+            const isTrick = line.startsWith('🎯');
+            return isTrick ? (
+              /* فاز ۴ #۶: تریک حفظ‌سازی — آخرین خط notes، برجسته */
+              <p key={idx} className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl px-3 py-2.5 font-bold text-amber-800 dark:text-amber-300 text-[15px] leading-7">
+                {line}
+              </p>
+            ) : (
               <p key={idx} className="text-[#1d2330] dark:text-[#eef1f6]">
                 {isWordFamily && <span className="font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">خانواده واژگانی: </span>}
                 {isStructure && <span className="font-bold text-emerald-600 dark:text-emerald-400">ساختار: </span>}
@@ -369,6 +409,10 @@ const seg = pluralSegments2();
                   {statusOf(word) === 'passiv' && (word.rStreak || 0) > 0 && (
                     <span>🔥 زنجیره: {word.rStreak}/{PROMO_STREAK}</span>
                   )}
+                  {/* فاز ۳: زنجیرهٔ تولیدی کاندید — پایهٔ ارتقا به فعال */}
+                  {statusOf(word) === 'kandidat' && (word.pStreak || 0) > 0 && (
+                    <span>🔥 زنجیرهٔ تولید: {word.pStreak}/{AKT_STREAK}</span>
+                  )}
                 </div>
                 {promotionReady(word) && (
                   <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800">
@@ -381,6 +425,21 @@ const seg = pluralSegments2();
                       className="px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs disabled:opacity-40 transition"
                     >
                       ⬆ ارتقا به کاندید فعال‌سازی
+                    </button>
+                  </div>
+                )}
+                {/* فاز ۳: بنر فعال‌سازی — کاندید آمادهٔ ارتقا به فعال */}
+                {activationReady(word) && (
+                  <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                      🎉 این واژه {AKT_STREAK} بار پیاپی در تولید درست بود — آمادهٔ فعال‌سازی است!
+                    </span>
+                    <button
+                      disabled={!onPatchWord}
+                      onClick={() => onPatchWord?.(word, { status: 'aktiv' as WordStatus })}
+                      className="px-3 py-1 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs disabled:opacity-40 transition"
+                    >
+                      ⬆ ارتقا به فعال
                     </button>
                   </div>
                 )}
@@ -482,25 +541,26 @@ const seg = pluralSegments2();
             </div>
           </div>
           {/* Frozen word bar: word + Persian translation (when enabled) always stays at the top of the page */}
-          <div dir="ltr" className="bg-gradient-to-l from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white px-3 py-2 flex items-center justify-between gap-2 shadow-md">
+          {/* فاز ۴ #۴: هدر چسبان دیگر زمینهٔ آبیِ کارت واژه را ندارد — سطح روشن با فونت serif */}
+          <div dir="ltr" className="bg-white/95 dark:bg-[#141923]/95 backdrop-blur-md text-slate-900 dark:text-slate-100 px-3 py-2 flex items-center justify-between gap-2 border-b border-[#dde1ea] dark:border-[#333b4a] shadow-md">
             <div className="flex items-center gap-2 min-w-0">
               {articleBadge()}
-              <span className="font-extrabold font-sans text-lg md:text-xl truncate">{word.de}</span>
+              <span className="font-extrabold font-serif text-lg md:text-xl truncate">{word.de}</span>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {showFa && word.fa && (
-                <span dir="rtl" className="text-sm md:text-base font-bold text-amber-300 truncate max-w-[46vw] sm:max-w-[240px]">{word.fa}</span>
+                <span dir="rtl" className="text-sm md:text-base font-bold text-amber-600 dark:text-amber-300 truncate max-w-[46vw] sm:max-w-[240px]">{word.fa}</span>
               )}
               <button
                 onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
-                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-base transition"
+                className="w-9 h-9 rounded-full bg-[#1f5fbf]/10 hover:bg-[#1f5fbf]/20 dark:bg-[#7fb0ff]/15 dark:hover:bg-[#7fb0ff]/25 flex items-center justify-center text-base transition"
                 title="پخش تلفظ صوتی" aria-label="پخش تلفظ صوتی"
               >
                 🔊
               </button>
               <button
                 onClick={() => setShowFa(value => !value)}
-                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center text-base transition"
+                className="w-9 h-9 rounded-full bg-amber-400/20 hover:bg-amber-400/30 flex items-center justify-center text-base transition"
                 title={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
                 aria-label={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
                 aria-expanded={showFa}
@@ -511,8 +571,8 @@ const seg = pluralSegments2();
           </div>
         </div>
 
-        {/* Modal Hero / Word Header */}
-        <div className="bg-gradient-to-br from-[#1f5fbf] via-[#4a5ac9] to-[#6b4fd8] text-white px-4 pt-3 pb-5 text-center">
+        {/* Modal Hero / Word Header — فاز ۴ #۴: پالت جدید هدر (دیگر آبیِ کارت واژه نیست) */}
+        <div className="bg-gradient-to-br from-[#16384f] via-[#1e5163] to-[#493a72] text-white px-4 pt-3 pb-5 text-center">
           {/* 1. status line (small) */}
           <div className="text-[10px] md:text-[11px] text-white/70 font-medium leading-5">
             {dueText(word)} · فاصله: {word.ivl} روز · درست: {word.ok} · غلط: {word.bad}
@@ -547,7 +607,13 @@ const seg = pluralSegments2();
           <div dir="ltr" className="mt-3 mx-auto max-w-md rounded-2xl bg-white dark:bg-[#10151f] text-slate-900 dark:text-white shadow-lg ring-1 ring-white/40 px-4 py-3.5">
             <div className="flex items-center justify-center gap-2.5 flex-wrap">
               {articleBadge()}
-              <span className="text-3xl md:text-4xl font-extrabold tracking-wide font-sans">{word.de}</span>
+              {heroVP ? (
+                /* فاز ۴ #۱: فعل با حرف اضافه و حالت دستوری — sich entscheiden für (A) */
+                <VerbPhrase vp={heroVP} className="text-3xl md:text-4xl tracking-wide text-slate-900 dark:text-slate-100" />
+              ) : (
+                /* فاز ۴ #۲: عنوان با فونت serif و کوچک‌شدن خودکار برای جا شدن در یک خط */
+                <span ref={heroWordRef} className="font-extrabold tracking-wide font-serif text-slate-900 dark:text-slate-100" style={{ fontSize: 30 }}>{word.de}</span>
+              )}
               <button
                 onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
                 className="w-10 h-10 rounded-full bg-[#1f5fbf]/10 hover:bg-[#1f5fbf]/20 text-[#1f5fbf] dark:text-[#7fb0ff] flex items-center justify-center text-lg transition"
