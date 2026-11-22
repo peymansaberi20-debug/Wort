@@ -40,7 +40,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   onDelete,
   onImageChange
 }) => {
-  const [showFa, setShowFa] = useState(false);
+  const [showFa, setShowFa] = useState(true);
   const [shadowOpen, setShadowOpen] = useState(false);
 
   /* درخواست فاز ۴ #۲: عنوان طولانی هیرو خودکار کوچک می‌شود تا در یک خط جا شود */
@@ -545,29 +545,13 @@ const seg = pluralSegments2();
           <div dir="ltr" className="bg-white/95 dark:bg-[#141923]/95 backdrop-blur-md text-slate-900 dark:text-slate-100 px-3 py-2 flex items-center justify-between gap-2 border-b border-[#dde1ea] dark:border-[#333b4a] shadow-md">
             <div className="flex items-center gap-2 min-w-0">
               {articleBadge()}
-              <span className="font-extrabold font-serif text-lg md:text-xl truncate">{word.de}</span>
+              <span className="font-extrabold font-serif text-base md:text-lg truncate">{word.de}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {showFa && word.fa && (
-                <span dir="rtl" className="text-sm md:text-base font-bold text-amber-600 dark:text-amber-300 truncate max-w-[46vw] sm:max-w-[240px]">{word.fa}</span>
-              )}
-              <button
-                onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
-                className="w-9 h-9 rounded-full bg-[#1f5fbf]/10 hover:bg-[#1f5fbf]/20 dark:bg-[#7fb0ff]/15 dark:hover:bg-[#7fb0ff]/25 flex items-center justify-center text-base transition"
-                title="پخش تلفظ صوتی" aria-label="پخش تلفظ صوتی"
-              >
-                🔊
-              </button>
-              <button
-                onClick={() => setShowFa(value => !value)}
-                className="w-9 h-9 rounded-full bg-amber-400/20 hover:bg-amber-400/30 flex items-center justify-center text-base transition"
-                title={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
-                aria-label={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
-                aria-expanded={showFa}
-              >
-                {showFa ? '🙈' : '👁'}
-              </button>
-            </div>
+            {word.fa && (
+              <div className="flex items-center min-w-0">
+                <span dir="rtl" className="text-sm md:text-base font-bold text-amber-600 dark:text-amber-300 truncate max-w-[52vw] sm:max-w-[280px]">{word.fa}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -614,22 +598,6 @@ const seg = pluralSegments2();
                 /* فاز ۴ #۲: عنوان با فونت serif و کوچک‌شدن خودکار برای جا شدن در یک خط */
                 <span ref={heroWordRef} className="font-extrabold tracking-wide font-serif text-slate-900 dark:text-slate-100" style={{ fontSize: 30 }}>{word.de}</span>
               )}
-              <button
-                onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)}
-                className="w-10 h-10 rounded-full bg-[#1f5fbf]/10 hover:bg-[#1f5fbf]/20 text-[#1f5fbf] dark:text-[#7fb0ff] flex items-center justify-center text-lg transition"
-                title="پخش تلفظ صوتی" aria-label="پخش تلفظ صوتی"
-              >
-                🔊
-              </button>
-              <button
-                onClick={() => setShowFa(value => !value)}
-                className="w-10 h-10 rounded-full bg-amber-400/20 hover:bg-amber-400/30 flex items-center justify-center text-lg transition"
-                title={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
-                aria-label={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'}
-                aria-expanded={showFa}
-              >
-                {showFa ? '🙈' : '👁'}
-              </button>
             </div>
             {renderPluralBlock()}
           </div>
