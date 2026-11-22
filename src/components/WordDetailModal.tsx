@@ -41,12 +41,15 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
 }) => {
   const [showFa, setShowFa] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
+  // جزئیات کامل (سطح تسلط، مترادف‌ها، تعریف، مثال‌ها، جدول صرف، یادداشت‌ها و…) — با ستارهٔ نوار آیکون باز/بسته می‌شود
+  const [showDetails, setShowDetails] = useState(false);
   const [pendingImg, setPendingImg] = useState<string | null>(null); // picked photo waiting for crop
   const [clusterDraft, setClusterDraft] = useState(''); // فاز ۱: پیش‌نویس فیلد خوشهٔ مترادف
 
   // Hide every Persian translation whenever the active word changes or the modal closes.
   useEffect(() => {
     setShowFa(false);
+    setShowDetails(false);
     setClusterDraft(word?.synCluster || '');
   }, [word?.id]);
 
@@ -331,14 +334,22 @@ const seg = pluralSegments2();
         {/* Sticky block: icon strip + frozen word bar — while scrolling, word and Persian meaning remain visible (request #7) */}
         <div className="sticky top-0 z-20">
           <div dir="ltr" className="bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-start gap-2">
-            {/* Phase 2 Sec.1: icon strip — close leftmost, then image, edit, delete */}
+            {/* Phase 2 Sec.1: icon strip — close leftmost, then image, details-star, mic, edit, delete */}
             <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
             <div className="flex items-center gap-1.5">
               <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
                 {word.img ? '🖼️' : '📷'}
               </IconBtn>
+              <IconBtn
+                onClick={() => setShowDetails(v => !v)}
+                active={showDetails}
+                title={showDetails
+                  ? 'مخفی کردن جزئیات کامل (سطح تسلط، مترادف‌ها، تعریف، مثال‌ها، جدول صرف و…)'
+                  : 'نمایش جزئیات کامل واژه (سطح تسلط، مترادف‌ها، تعریف، مثال‌ها، جدول صرف، یادداشت‌ها و…)'}
+              >
+                <Sparkles size={18} className={showDetails ? 'text-[#1f5fbf]' : 'text-amber-500'} />
+              </IconBtn>
               <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
-              <IconBtn onClick={() => onEdit(word)} title="تکمیل کامل پروفایل (در فرم ویرایش، دکمهٔ 💎)"><Sparkles size={18} className="text-amber-500" /></IconBtn>
               <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
               <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
             </div>
@@ -439,8 +450,9 @@ const seg = pluralSegments2();
           )}
         </div>
 
-        {/* Modal Body */}
+        {/* Modal Body — فشرده به‌صورت پیش‌فرض؛ همهٔ جزئیات با دکمهٔ ستاره (✨) نوار بالا باز می‌شود */}
         <div className="p-4 md:p-6 space-y-4">
+          {showDetails ? (<>
           {/* فاز ۱: کارت وضعیت واژگانی — سطح تسلط + رجیستر + خوشهٔ مترادف */}
           <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-3">
             {/* ۱) سطح تسلط */}
@@ -662,6 +674,19 @@ const seg = pluralSegments2();
                 </span>
               ))}
             </div>
+          )}
+          </>) : (
+            /* نمای جمع‌وجور: فقط کارت واژه بالا دیده می‌شود؛ جزئیات با ستاره باز می‌شوند */
+            <button
+              type="button"
+              onClick={() => setShowDetails(true)}
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-dashed border-[#c9d6f2] dark:border-[#2c3a55] rounded-2xl p-4 text-center transition hover:border-[#1f5fbf]"
+            >
+              <span className="block text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">✨ جزئیات کامل واژه</span>
+              <span className="block mt-1 text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
+                سطح تسلط، رجیستر، خوشهٔ مترادف، معادل انگلیسی، تعریف آلمانی، مثال‌ها، جدول صرف فعل، یادداشت‌ها و برچسب‌ها — با زدن دکمهٔ ستاره (✨) بالای صفحه یا همین‌جا باز می‌شوند.
+              </span>
+            </button>
           )}
         </div>
       </div>
