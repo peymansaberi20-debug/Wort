@@ -23,6 +23,7 @@ import {
   clearAllVocabulary,
   auditWord
 } from './utils/storage';
+import { applyModeResult, promotionReady, PROMO_STREAK } from './utils/wordStatus';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
 import { PageOverlay } from './components/PageOverlay';
@@ -559,12 +560,26 @@ export default function App() {
         if (targetIdx >= 0) {
           const clone = { ...nextWords[targetIdx] };
           const isFirstTime = sched(clone, grade, prev.set.ivlMod || 1.0, prev.set.leechN || 4);
+          // فاز ۲: آمار دوگانهٔ تسلط (تولیدی/شناختی) — از نتیجهٔ تمرین؛ ارتقای دریافتی → کاندید
+          const ok = grade > 0;
+          const modePatch = applyModeResult(clone, mode, ok);
+          Object.assign(clone, modePatch);
+          const promoNow =
+            clone.status === 'passiv' &&
+            (modePatch.rStreak || 0) === PROMO_STREAK &&
+            promotionReady(clone);
           nextWords = [...nextWords];
           nextWords[targetIdx] = clone;
 
           if (!isRetry) {
             if (isFirstTime) nextDaily.n = (nextDaily.n || 0) + 1;
             else nextDaily.r = (nextDaily.r || 0) + 1;
+          }
+
+          if (promoNow) {
+            setTimeout(() => {
+              showToast(`🎉 «${fullWord(clone)}» ۳ بار پیاپی در تشخیص درست بود — در پروفایلش می‌توانی به «کاندید فعال‌سازی» ارتقایش بدهی.`);
+            }, 50);
           }
         }
       }
