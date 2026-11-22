@@ -13,7 +13,7 @@ import { ImageCropper } from './ImageCropper';
 import { PratText } from './PratText';
 import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
 import {
-  statusOf, clusterOf, clusterGuide,
+  statusOf, clusterOf, clusterGuide, promotionReady, PROMO_STREAK,
   STATUS_LABELS, STATUS_SHORT, STATUS_BADGE, STATUS_BADGE_HERO, STATUS_HINTS,
   WORD_STATUSES, REGISTER_OPTIONS, REGISTER_LABELS,
 } from '../utils/wordStatus';
@@ -361,6 +361,29 @@ const seg = pluralSegments2();
                 <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
                   {STATUS_HINTS[statusOf(word)]}
                 </p>
+
+                {/* ۱٫۵) فاز ۲: آمار دوگانهٔ تسلط + پیشنهاد ارتقای دریافتی → کاندید */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#5d6676] dark:text-[#a3adbd]">
+                  <span>📈 <b className="text-emerald-700 dark:text-emerald-400">تولیدی</b>: ✅{word.pOk || 0} ❌{word.pBad || 0}</span>
+                  <span>👁 <b className="text-sky-700 dark:text-sky-400">شناختی</b>: ✅{word.rOk || 0} ❌{word.rBad || 0}</span>
+                  {statusOf(word) === 'passiv' && (word.rStreak || 0) > 0 && (
+                    <span>🔥 زنجیره: {word.rStreak}/{PROMO_STREAK}</span>
+                  )}
+                </div>
+                {promotionReady(word) && (
+                  <div className="flex flex-wrap items-center gap-2 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800">
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                      🎉 این واژه {PROMO_STREAK} بار پیاپی در تشخیص درست بود — آمادهٔ ارتقاست!
+                    </span>
+                    <button
+                      disabled={!onPatchWord}
+                      onClick={() => onPatchWord?.(word, { status: 'kandidat' as WordStatus })}
+                      className="px-3 py-1 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-2xs disabled:opacity-40 transition"
+                    >
+                      ⬆ ارتقا به کاندید فعال‌سازی
+                    </button>
+                  </div>
+                )}
 
                 {/* ۲) رجیستر — خنثی، محاوره‌ای، کتابی و… */}
                 <div className="flex flex-wrap items-center gap-1.5">
