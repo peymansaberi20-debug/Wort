@@ -33,10 +33,9 @@ import { HoerenTrainer } from '../components/HoerenTrainer';
 import { SprechenTrainer } from '../components/SprechenTrainer';
 import { LesenTrainer } from '../components/LesenTrainer';
 
-// تعریف مستقیم PratText برای نمایش شکل Präteritum بدون خطای مسیر
-const PratText: React.FC<{ inf: string; prat: string }> = ({ prat }) => (
-  <span className="font-sans font-bold">{prat}</span>
-);
+// فاز ۴ #۵: PratText مشترک با هایلایت قرمزِ بخش تغییرکرده (بدون تعریف محلی)
+import { PratText } from '../components/PratText';
+import { trickOf } from '../utils/german';
 
 export type ExerciseMode =
   | 'flash'
@@ -46,6 +45,7 @@ export type ExerciseMode =
   | 'cloze'
   | 'vmix'
   | 'vmc'
+  | 'act'
   | 'art'
   | 'dict'
   | 'plural'
@@ -83,6 +83,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   cloze: { title: 'جای‌خالی', icon: '✍️', desc: 'تکمیل جمله با واژه یا عبارت درست' },
   vmix: { title: 'تمرین دوگانه (فعال/دریافتی)', icon: '🧠', desc: 'فعال‌ها معادل آلمانی را تایپ می‌کنند؛ دریافتی‌ها معنی را انتخاب می‌کنند — آمار جداگانه و ارتقای خودکار' },
   vmc: { title: 'انتخاب معنی (زیرمد)', icon: '👁', desc: 'زیرمد شناختی تمرین دوگانه — مستقیم انتخاب نمی‌شود' },
+  act: { title: 'فعال‌سازی (کاندید → فعال)', icon: '🚀', desc: 'فقط واژه‌های کاندید — معنی را می‌بینی، معادل آلمانی را می‌نویسی؛ ۳ برداشت پیاپی = آمادهٔ ارتقا به فعال' },
   art: { title: 'آرتیکل', icon: '🎨', desc: 'تشخیص der / die / das برای اسامی' },
   dict: { title: 'دیکته واژه', icon: '🔊', desc: 'تمرین شنیدار و تشخیص واژگان از روی صدا' },
   plural: { title: 'جمع اسم‌ها', icon: '🔢', desc: 'نوشتن شکل جمع اسامی آلمانی' },
@@ -113,7 +114,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
 };
 
-const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'vmix', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural'];
+const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'vmix', 'act', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural'];
 /** ساختار دو سطحی تب گرامر: ۴ دستهٔ اصلی؛ هر تمرین یک تب مستقل (بدون زیربخش داخلی) */
 interface GramTab { id: string; label: string; mode: ExerciseMode; vTab?: 'learn' | 'practice' | 'add' }
 interface GramCat { icon: string; label: string; desc: string; tabs: GramTab[] }
@@ -831,7 +832,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     ? null
     : activeMode === 'hard'
       ? (currentSub === 'flashDe' || currentSub === 'flashFa' ? 'flash' : ((currentSub as ExerciseMode) || 'flash'))
-      : activeMode === 'vmix'
+      : activeMode === 'vmix' || activeMode === 'act'
         ? (currentSub === 'vmc' ? 'vmc' : 'prod')
         : activeMode;
   const hardFlashDir: 'de' | 'fa' | null = activeMode === 'hard'
@@ -994,6 +995,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         if (pas[i]) mixed.push(`${pas[i].id}::vmc::`);
       }
       qIds = mixed.sort(() => Math.random() - 0.5);
+    } else if (activeMode === 'act') {
+      // فاز ۳: صف فعال‌سازی — فقط واژه‌های کاندید؛ تمرین تولیدی (معنی → تایپ معادل آلمانی)؛ کهنه‌ترین اول
+      const kands = pool.filter(w => statusOf(w) === 'kandidat').sort((a, b) => (a.last || 0) - (b.last || 0));
+      qIds = kands.map(w => `${w.id}::prod::`);
     } else if (activeMode === 'art') {
       qIds = pool.filter(w => !!w.art).sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'cloze') {
@@ -1646,9 +1651,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {(w.prat || w.perf) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" dir="ltr">
             {w.prat && (
-              <div className="rounded-2xl p-3 border bg-amber-50/50 border-amber-200 text-amber-900 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-100">
-                <div className="text-xs font-bold opacity-75 mb-0.5">Präteritum (گذشته ساده)</div>
-                <div className="text-base font-bold"><PratText inf={w.de} prat={w.prat} /></div>
+              <div className="rounded-2xl p-3 border bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+                <div className="text-xs font-bold opacity-75 mb-0.5 text-amber-900 dark:text-amber-200">Präteritum (گذشته ساده)</div>
+                {/* فاز ۴ #۵: فونت خنثی تا هایلایت قرمز پایانه‌ها دیده شود */}
+                <div className="text-base font-bold text-slate-800 dark:text-slate-100"><PratText inf={w.de} prat={w.prat} /></div>
               </div>
             )}
             {w.perf && (
@@ -2148,7 +2154,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           تبریک! تمرین به پایان رسید.
         </h3>
         <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">
-          {queue.length === 0 && (activeMode === 'synant' || activeMode === 'n2v' || activeMode === 'v2n')
+          {queue.length === 0 && activeMode === 'act'
+            ? 'فعلاً واژهٔ «کاندید فعال‌سازی» نداری. واژه‌های دریافتی را با تمرین دوگانه بالا بیاور تا اینجا بیایند — یا در واژه‌نامه وضعیت چند واژه را دستی به «کاندید» تغییر بده.'
+            : queue.length === 0 && (activeMode === 'synant' || activeMode === 'n2v' || activeMode === 'v2n')
             ? activeMode === 'synant'
               ? 'هنوز هیچ واژه‌ای در کتابخانه، مترادف یا متضاد ثبت‌شده ندارد (یا در دسته‌های فعال فعلی نیست). این تمرین از فیلدهای «مترادف» و «متضاد» واژه‌ها استفاده می‌کند.'
               : 'هنوز واژه‌ای با «خانواده واژگانی» مناسب پیدا نشد. این تمرین از خط «خانواده واژگانی: اسم: ... | فعل مرتبط: ...» در یادداشت واژه‌ها استفاده می‌کند.'
@@ -2316,6 +2324,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                           <button onClick={(e) => { e.stopPropagation(); speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); }} className="text-sm">🔊</button>
                         </div>
                         {w.ex2Fa && <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium">{w.ex2Fa}</p>}
+                      </div>
+                    )}
+                    {/* فاز ۴ #۷: خط تریک حفظ‌سازی زیر ترجمه و مثال دوم */}
+                    {trickOf(w) && (
+                      <div className="w-full max-w-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2.5 rounded-2xl text-sm font-bold text-amber-800 dark:text-amber-300 leading-6" dir="rtl">
+                        🎯 {trickOf(w)}
                       </div>
                     )}
                     <span className="absolute bottom-3 text-xs font-semibold text-slate-400">برای بازگشت به روی کارت کلیک کنید</span>

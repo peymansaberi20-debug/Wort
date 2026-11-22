@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Word, WordStatus } from '../types';
-import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, fullWord } from '../utils/storage';
+import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, isVerbPos } from '../utils/storage';
 import { statusOf, statusCounts, STATUS_SHORT, STATUS_BADGE, WORD_STATUSES } from '../utils/wordStatus';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
-import { speak } from '../utils/audio';
+import { VerbPhrase, verbPrepFor } from '../components/VerbPhrase';
 import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
@@ -112,7 +112,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [collapsedInSearch, setCollapsedInSearch] = useState<Set<string>>(new Set());
 
   // Translation visibility map for compact word previews
-  const [visFa, setVisFa] = useState<Record<string, boolean>>({});
 
   // Add / Edit form state
   const isEditing = !!editingWordId;
@@ -310,11 +309,6 @@ return words
       return a.localeCompare(b, 'fa');
     });
   }, [wordsByCategory]);
-
-  const toggleFaVisibility = (wordId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setVisFa(prev => ({ ...prev, [wordId]: !prev[wordId] }));
-  };
 
   // تغییر نام دسته درون‌خطی: Enter = ذخیره، Escape = انصراف
   const commitRename = (oldName: string) => {
@@ -1877,27 +1871,14 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 {isOpen && (
                   <div className="p-3 divide-y divide-slate-100 dark:divide-slate-800 space-y-1">
                     {catWords.map(w => {
-                      const isShowFa = !!visFa[w.id];
                       return (
                         <div
                           key={w.id}
-                          onClick={() => { setVisFa({}); onSelectWord(w); }}
+                          onClick={() => onSelectWord(w)}
                           className="py-2.5 px-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition flex items-center justify-between gap-3 text-xs md:text-sm"
                         >
-                          {/* Word + Article + Hidden Translation + Audio */}
+                          {/* Word + Article — فاز ۴: آیکن‌های بلندگو/چشم از ردیف حذف شدند (در هدر پروفایل موجودند) + حرف اضافهٔ خودکار فعل */}
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                speak(fullWord(w));
-                              }}
-                              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-xs flex-shrink-0"
-                              title="پخش تلفظ"
-                              aria-label="پخش تلفظ"
-                            >
-                              🔊
-                            </button>
-
                             <div className="flex items-center gap-1.5" dir="ltr">
                               {w.art && (
                                 <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${
@@ -1908,9 +1889,16 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                                   {w.art}
                                 </span>
                               )}
-                              <span className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 font-sans">
-                                {w.de}
-                              </span>
+                              {(() => {
+                                const vp = isVerbPos(w.pos) ? verbPrepFor(w.de) : null;
+                                return vp ? (
+                                  <VerbPhrase vp={vp} className="text-lg md:text-xl text-slate-900 dark:text-slate-100" />
+                                ) : (
+                                  <span className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 font-sans">
+                                    {w.de}
+                                  </span>
+                                );
+                              })()}
                               {/* فاز ۱: نشان وضعیت واژگانی (فعال/دریافتی/کاندید) */}
                               <span
                                 className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${STATUS_BADGE[statusOf(w)]}`}
@@ -1918,23 +1906,6 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                               >
                                 {STATUS_SHORT[statusOf(w)]}
                               </span>
-                            </div>
-
-                            {/* Translation toggle button or revealed text */}
-                            <div className="mr-2">
-                              {isShowFa ? (
-                                <span className="font-semibold text-slate-700 dark:text-slate-300 text-sm">
-                                  {w.fa}
-                                </span>
-                              ) : (
-                                <button
-                                  onClick={e => toggleFaVisibility(w.id, e)}
-                                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 px-1.5 py-0.5 rounded text-xs flex items-center gap-1 transition"
-                                  title="نمایش ترجمه"
-                                >
-                                  👁 <span className="hidden sm:inline text-[11px]">ترجمه</span>
-                                </button>
-                              )}
                             </div>
                           </div>
 
