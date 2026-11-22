@@ -2,6 +2,7 @@ import { AppSettings, AppState, CaseQuestion, DailyGoal, ExtData, ExerciseTimerC
 import { INITIAL_SEED, P6 } from '../data/seed';
 import { dayStart, today, dstr } from './dates';
 import { parseStatus, suggestStatus } from './wordStatus';
+import { imgDbBroken, imgPutMany } from './imageStore';
 
 export const KEY = 'deutschlab_pro_fa_v1';
 export const EXT_KEY = 'wb_ext';
@@ -145,7 +146,18 @@ export function loadState(): AppState {
 
 export function saveState(st: AppState): boolean {
   try {
-    localStorage.setItem(KEY, JSON.stringify(st));
+    // عکس‌ها به IndexedDB منتقل می‌شوند تا JSON اصلی سبک بماند — روی iOS سهمیهٔ ~۵MB
+    // localStorage با چند dataURL عکس پر می‌شد و کل ذخیرهٔ خودکار شکست می‌خورد (باگ «عکس ذخیره نمیشه»)
+    const imgs: Record<string, string> = {};
+    st.words.forEach(w => { if (w.img) imgs[w.id] = w.img; });
+    if (imgDbBroken() || Object.keys(imgs).length === 0) {
+      // مسیر قدیمی: بدون IndexedDB عکس‌ها داخل همان JSON می‌مانند
+      localStorage.setItem(KEY, JSON.stringify(st));
+      return true;
+    }
+    const words = st.words.map(w => (imgs[w.id] ? { ...w, img: '' } : w));
+    localStorage.setItem(KEY, JSON.stringify({ ...st, words }));
+    void imgPutMany(imgs);
     return true;
   } catch (e) {
     console.error('Failed to save state:', e);
