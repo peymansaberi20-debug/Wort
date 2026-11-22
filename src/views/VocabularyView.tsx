@@ -5,6 +5,7 @@ import { statusOf, statusCounts, STATUS_SHORT, STATUS_BADGE, WORD_STATUSES } fro
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { generateImage, describeAiError } from "../utils/aiProvider";
 import { speak } from '../utils/audio';
+import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
 import { X, Save, HelpCircle } from 'lucide-react';
@@ -807,6 +808,49 @@ IMPORTANT: do NOT put any text, letters, numbers, labels, logos or watermarks in
     }
   };
 
+  // پرامت ساخت «کارت واژه» با هوش مصنوعی بیرونی — واژه (با آرتیکل/پیش‌واژه) + مثال دوم در قالب ثابت
+  const buildImageCardPrompt = (de: string, art: string, ex2: string): string => {
+    const head = art ? `${art} ${de}` : de;
+    return `Create a beautiful, whimsical, and memorable horizontal landscape vocabulary-learning card with a decorative border of winding vines and forest flowers. 
+
+Here is the input German headword and example sentence:
+- German Headword: "${head}"
+- German Example: "${ex2}"
+
+Task for AI:
+Based on the input German headword and example, automatically generate and include the following elements in compact, highly legible text areas below the illustration:
+1. The English translation and Persian meaning of the headword.
+2. The exact German example sentence provided above.
+3. The natural Persian translation of the example sentence.
+4. A creative Persian sound-based mnemonic (یادومونی) starting with the German word to connect its sound and meaning.
+
+Illustration Style:
+A vivid, whimsical fantasy-inspired open-air meadow scene featuring a curious young woman and an extremely cute, fluffy kitten sitting on the grass, looking up in pleasant surprise and wonder at colorful butterflies dancing in the clear sky. 
+
+Typography and Layout Rules:
+- Put the complete German headword at the very top, above the illustration.
+- Color only the article or preposition (like "die", "sich", "über") in soft pink. Keep the core noun/verb entirely black and in one color (never split a word into multiple colors).
+- Keep every word in the German example sentence in its normal text color.
+- Ensure all Persian text is right-to-left, natural, and uses a clear font.`;
+  };
+
+  const handleCopyImageCardPrompt = async () => {
+    const de = formDe.trim();
+    const ex2 = formEx2.trim();
+    if (!de) {
+      onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
+      return;
+    }
+    if (!ex2) {
+      onShowToast('واژه نیمه‌کمیل است و مثال دوم ندارد؛ با دکمهٔ 💎 تکمیل خودکار کن یا مثال دوم را دستی وارد کن تا پرامت صحیح ساخته شود.', true);
+      return;
+    }
+    const ok = await copyText(buildImageCardPrompt(de, (formArt || '').trim(), ex2));
+    onShowToast(ok
+      ? 'پرامت کارت عکس کپی شد؛ در هوش مصنوعی بیرونی بچسبان، تصویر را بگیر و بعد با 📷 در پروفایل واژه اضافه کن.'
+      : 'کپی در کلیپ‌بورد ممکن نشد.', !ok);
+  };
+
   const handleSave = () => {
     if (!formDe.trim() || !formFa.trim()) {
       onShowToast('کلمهٔ آلمانی و ترجمهٔ فارسی الزامی هستند.', true);
@@ -1124,6 +1168,15 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 className="bg-rose-600 hover:bg-rose-700 text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1"
               >
                 {imgLoading ? <span className="inline-block animate-spin">⏳</span> : <span>🖼 افزودن عکس</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopyImageCardPrompt()}
+                disabled={!formDe.trim()}
+                className="col-span-2 bg-rose-700 hover:bg-rose-800 text-white px-3 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5"
+                title="پرامت ساخت کارت واژه را کپی می‌کند تا در هوش مصنوعی بیرونی (ChatGPT و…) استفاده کنی"
+              >
+                🎨 پرامت کارت عکس (کپی)
               </button>
             </div>
 
