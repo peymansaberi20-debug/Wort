@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Word } from '../types';
+import { Word, WordStatus } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
 import { P6 } from '../data/seed';
@@ -12,9 +12,18 @@ import { ShadowingModal } from './ShadowingModal';
 import { ImageCropper } from './ImageCropper';
 import { PratText } from './PratText';
 import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
+import {
+  statusOf, clusterOf, clusterGuide,
+  STATUS_LABELS, STATUS_SHORT, STATUS_BADGE, STATUS_BADGE_HERO, STATUS_HINTS,
+  WORD_STATUSES, REGISTER_OPTIONS, REGISTER_LABELS,
+} from '../utils/wordStatus';
 
 interface WordDetailModalProps {
   word: Word | null;
+  /** همهٔ واژگان کتابخانه — برای یافتن اعضای خوشهٔ مترادف */
+  words?: Word[];
+  /** اعمال تغییرات وضعیت/رجیستر/خوشه بدون باز کردن فرم ویرایش */
+  onPatchWord?: (word: Word, patch: Partial<Word>) => void;
   onClose: () => void;
   onEdit: (word: Word) => void;
   onDelete: (word: Word) => void;
@@ -23,6 +32,8 @@ interface WordDetailModalProps {
 
 export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   word,
+  words = [],
+  onPatchWord,
   onClose,
   onEdit,
   onDelete,
@@ -31,10 +42,12 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   const [showFa, setShowFa] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
   const [pendingImg, setPendingImg] = useState<string | null>(null); // picked photo waiting for crop
+  const [clusterDraft, setClusterDraft] = useState(''); // فاز ۱: پیش‌نویس فیلد خوشهٔ مترادف
 
   // Hide every Persian translation whenever the active word changes or the modal closes.
   useEffect(() => {
     setShowFa(false);
+    setClusterDraft(word?.synCluster || '');
   }, [word?.id]);
 
   if (!word) return null;
@@ -378,6 +391,15 @@ const seg = pluralSegments2();
             {word.lvl && (
               <span className="bg-amber-400 text-slate-900 text-xs px-2.5 py-0.5 rounded-full font-bold">{word.lvl}</span>
             )}
+            {/* فاز ۱: نشان وضعیت واژگانی در هیرو */}
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${STATUS_BADGE_HERO[statusOf(word)]}`}>
+              {STATUS_SHORT[statusOf(word)]}
+            </span>
+            {word.register && (
+              <span className="bg-white/20 text-white text-xs px-2.5 py-0.5 rounded-full font-medium">
+                {REGISTER_LABELS[word.register] || word.register}
+              </span>
+            )}
             {isLeech(word) && (
               <span className="bg-red-500 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">🩸 واژه سخت</span>
             )}
@@ -419,6 +441,96 @@ const seg = pluralSegments2();
 
         {/* Modal Body */}
         <div className="p-4 md:p-6 space-y-4">
+          {/* فاز ۱: کارت وضعیت واژگانی — سطح تسلط + رجیستر + خوشهٔ مترادف */}
+          <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-3">
+            {/* ۱) سطح تسلط */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-bold text-[#1f5fbf] dark:text-[#7fb0ff] text-sm">🎯 سطح تسلط:</span>
+              {WORD_STATUSES.map(s => (
+                <button
+                  key={s}
+                  disabled={!onPatchWord}
+                  onClick={() => onPatchWord?.(word, { status: s as WordStatus })}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition border ${
+                    statusOf(word) === s
+                      ? `${STATUS_BADGE[s]} border-transparent shadow-2xs`
+                      : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd] hover:border-[#1f5fbf]'
+                  }`}
+                  title={STATUS_HINTS[s]}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
+              {STATUS_HINTS[statusOf(word)]}
+            </p>
+
+            {/* ۲) رجیستر — خنثی، محاوره‌ای، کتابی و… */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-bold text-amber-600 dark:text-amber-400 text-sm mr-1">🏷 رجیستر:</span>
+              {REGISTER_OPTIONS.map(o => (
+                <button
+                  key={o.value || 'none'}
+                  disabled={!onPatchWord}
+                  onClick={() => onPatchWord?.(word, { register: o.value })}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition border ${
+                    (word.register || '') === o.value
+                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-transparent shadow-2xs'
+                      : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd] hover:border-amber-400'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ۳) خوشهٔ مترادف — قاعدهٔ «یک بلیط فعال، بقیه دریافتی» */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">🔗 خوشهٔ مترادف:</span>
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={clusterDraft}
+                  onChange={e => setClusterDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && onPatchWord) onPatchWord(word, { synCluster: clusterDraft.trim() }); }}
+                  placeholder="z.B. geschehen"
+                  className="flex-1 min-w-0 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#1f5fbf] font-sans"
+                />
+                <button
+                  disabled={!onPatchWord}
+                  onClick={() => onPatchWord?.(word, { synCluster: clusterDraft.trim() })}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex-shrink-0"
+                >
+                  ذخیره
+                </button>
+              </div>
+              {clusterGuide(word, clusterOf(word, words)) && (
+                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
+                  💡 {clusterGuide(word, clusterOf(word, words))}
+                </p>
+              )}
+              {clusterOf(word, words).length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {clusterOf(word, words).map(m => (
+                    <span
+                      key={m.word.id}
+                      dir="ltr"
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold font-sans ${
+                        m.word.id === word.id
+                          ? 'bg-[#1f5fbf] text-white'
+                          : STATUS_BADGE[statusOf(m.word)]
+                      }`}
+                    >
+                      {m.word.de}{m.isCore ? ' ★' : ''}
+                    </span>
+                  ))}
+                  <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">★ = بلیط فعال خوشه</span>
+                </div>
+              )}
+            </div>
+          </div>
           {/* English equivalent — revealed with the translations toggle */}
           {word.en && showFa && (
             <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 rounded-2xl p-3.5 text-sm flex items-center justify-between gap-2">
