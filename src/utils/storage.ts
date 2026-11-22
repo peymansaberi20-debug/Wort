@@ -60,7 +60,7 @@ export function norm(w: any): Word | null {
     status: parseStatus(w.status) || suggestStatus(w.de),
     register: s('register'),
     synCluster: s('synCluster'),
-    img: IMGOK.test(s('img')) && s('img').length < 600000 ? s('img') : '',
+    img: IMGOK.test(s('img')) && s('img').length < 1600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,
     due: +w.due || 0,
