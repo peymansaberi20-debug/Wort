@@ -1,6 +1,7 @@
 import { AppSettings, AppState, CaseQuestion, DailyGoal, ExtData, ExerciseTimerCfg, Word } from '../types';
 import { INITIAL_SEED, P6 } from '../data/seed';
 import { dayStart, today, dstr } from './dates';
+import { parseStatus, suggestStatus } from './wordStatus';
 
 export const KEY = 'deutschlab_pro_fa_v1';
 export const EXT_KEY = 'wb_ext';
@@ -55,6 +56,10 @@ export function norm(w: any): Word | null {
     def: s('def'),
     en: s('en'),
     needsFull: !!w.needsFull,
+    // فاز ۱: وضعیت واژگانی — وضعیت دستی کاربر حفظ می‌شود؛ واژهٔ بی‌وضعیت پیشنهاد خودکار می‌گیرد (مهاجرت idempotent)
+    status: parseStatus(w.status) || suggestStatus(w.de),
+    register: s('register'),
+    synCluster: s('synCluster'),
     img: IMGOK.test(s('img')) && s('img').length < 600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,
