@@ -23,6 +23,7 @@ import { ErrorNotebook } from '../components/ErrorNotebook';
 import { FreeSentencePractice, FREE_SENT_WORD } from '../components/FreeSentencePractice';
 import { PageOverlay } from '../components/PageOverlay';
 import { today } from '../utils/dates';
+import { statusOf, STATUS_BADGE } from '../utils/wordStatus';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
 import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic, Sparkles } from 'lucide-react';
@@ -43,6 +44,8 @@ export type ExerciseMode =
   | 'daily'
   | 'review'
   | 'cloze'
+  | 'vmix'
+  | 'vmc'
   | 'art'
   | 'dict'
   | 'plural'
@@ -78,6 +81,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   daily: { title: 'جلسهٔ روزانه', icon: '🌟', desc: 'سررسیدها + واژه‌های جدید متناسب با سهمیه روزانه' },
   review: { title: 'مرور سررسیدها', icon: '🔁', desc: 'فقط واژه‌هایی که تاریخ مرور آن‌ها فرا رسیده' },
   cloze: { title: 'جای‌خالی', icon: '✍️', desc: 'تکمیل جمله با واژه یا عبارت درست' },
+  vmix: { title: 'تمرین دوگانه (فعال/دریافتی)', icon: '🧠', desc: 'فعال‌ها معادل آلمانی را تایپ می‌کنند؛ دریافتی‌ها معنی را انتخاب می‌کنند — آمار جداگانه و ارتقای خودکار' },
+  vmc: { title: 'انتخاب معنی (زیرمد)', icon: '👁', desc: 'زیرمد شناختی تمرین دوگانه — مستقیم انتخاب نمی‌شود' },
   art: { title: 'آرتیکل', icon: '🎨', desc: 'تشخیص der / die / das برای اسامی' },
   dict: { title: 'دیکته واژه', icon: '🔊', desc: 'تمرین شنیدار و تشخیص واژگان از روی صدا' },
   plural: { title: 'جمع اسم‌ها', icon: '🔢', desc: 'نوشتن شکل جمع اسامی آلمانی' },
@@ -108,7 +113,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   hoeren_archive: { title: 'تمرینات قبلی (آرشیو)', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
 };
 
-const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural']; 
+const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'vmix', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural'];
 /** ساختار دو سطحی تب گرامر: ۴ دستهٔ اصلی؛ هر تمرین یک تب مستقل (بدون زیربخش داخلی) */
 interface GramTab { id: string; label: string; mode: ExerciseMode; vTab?: 'learn' | 'practice' | 'add' }
 interface GramCat { icon: string; label: string; desc: string; tabs: GramTab[] }
@@ -529,6 +534,77 @@ const splitList = (s: string): string[] =>
 
 const ALL_CASEQ: CaseQuestion[] = [...CASEQ, ...EXTRA_CASEQ];
 
+/** فاز ۲: سؤال شناختی واژهٔ دریافتی — انتخاب معنی از میان گزینه‌ها (زیرمد تمرین دوگانه) */
+const VmcQuestion: React.FC<{
+  w: Word;
+  poolWords: Word[];
+  onRecord: (w: Word, mode: string, grade: number) => void;
+  advance: () => void;
+  speakCfg?: { rate?: number; vreg?: string; voice?: string };
+}> = ({ w, poolWords, onRecord, advance, speakCfg }) => {
+  const [chosen, setChosen] = useState<string | null>(null);
+  const options = useMemo(() => {
+    const others = poolWords.filter(o => o.id !== w.id && o.fa && o.fa !== w.fa);
+    const sameCat = others.filter(o => o.cat === w.cat);
+    const pickFrom = sameCat.length >= 3 ? sameCat : others;
+    const picked: string[] = [];
+    for (const o of pickFrom.slice().sort(() => Math.random() - 0.5)) {
+      if (picked.length >= 3) break;
+      if (!picked.includes(o.fa)) picked.push(o.fa);
+    }
+    return [w.fa, ...picked].sort(() => Math.random() - 0.5);
+  }, [w.id, w.fa, w.cat, poolWords]);
+  const answered = chosen !== null;
+  const ok = chosen === w.fa;
+  const st = statusOf(w);
+
+  return (
+    <div className="space-y-4 text-center">
+      <div className="flex items-center justify-center gap-2 flex-wrap">
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${STATUS_BADGE[st]}`}>
+          {st === 'passiv' ? 'دریافتی' : st === 'aktiv' ? 'فعال' : 'کاندید'}
+        </span>
+        <span className="text-xs text-[#5d6676]">معنی درست را انتخاب کن:</span>
+      </div>
+      <div className="flex items-center justify-center gap-3">
+        <div className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans" dir="ltr">{fullWord(w)}</div>
+        <button
+          onClick={() => speak(fullWord(w), { rate: speakCfg?.rate, vreg: speakCfg?.vreg, voiceName: speakCfg?.voice })}
+          className="w-10 h-10 rounded-full bg-[#1f5fbf] text-white text-lg flex items-center justify-center shadow-md hover:opacity-95"
+        >🔊</button>
+      </div>
+
+      {!answered ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md mx-auto pt-1">
+          {options.map(op => (
+            <button
+              key={op}
+              onClick={() => { setChosen(op); onRecord(w, 'vmc', op === w.fa ? 2 : 0); }}
+              className="p-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] hover:border-[#1f5fbf] text-sm font-bold text-slate-800 dark:text-slate-200 transition"
+            >{op}</button>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3 pt-1 max-w-md mx-auto">
+          <div className={`p-3 rounded-xl text-base font-bold ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+            {ok ? '✔ درست است! آفرین.' : `✘ پاسخ درست: ${w.fa}`}
+          </div>
+          {w.ex && (
+            <div className="p-2.5 bg-slate-50 dark:bg-[#141923] rounded-xl text-sm space-y-1">
+              <p dir="ltr" className="font-sans font-semibold text-slate-800 dark:text-slate-200">{w.ex}</p>
+              {w.exFa && <p className="text-[#5d6676]">{w.exFa}</p>}
+            </div>
+          )}
+          <button
+            onClick={advance}
+            className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs"
+          >سؤال بعدی ⬅</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const pickCaseQueue = (): string[] => {
   const byLevel = new Map<number, CaseQuestion[]>();
   ALL_CASEQ.forEach(q => byLevel.set(q.cs || 1, [...(byLevel.get(q.cs || 1) || []), q]));
@@ -755,7 +831,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     ? null
     : activeMode === 'hard'
       ? (currentSub === 'flashDe' || currentSub === 'flashFa' ? 'flash' : ((currentSub as ExerciseMode) || 'flash'))
-      : activeMode;
+      : activeMode === 'vmix'
+        ? (currentSub === 'vmc' ? 'vmc' : 'prod')
+        : activeMode;
   const hardFlashDir: 'de' | 'fa' | null = activeMode === 'hard'
     ? (currentSub === 'flashFa' ? 'fa' : currentSub === 'flashDe' ? 'de' : null)
     : null;
@@ -906,6 +984,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       const dailyNewLimit = settings?.nw ?? 10;
       const dailyRevLimit = settings?.rv ?? 20;
       qIds = [...due.slice(0, dailyRevLimit), ...nw.slice(0, dailyNewLimit)].map(w => w.id);
+    } else if (activeMode === 'vmix') {
+      // فاز ۲: صف دوگانه — فعال/کاندید: تولید (تایپ معادل)؛ دریافتی: انتخاب معنی (vmc)؛ درهم‌بافته
+      const akt = pool.filter(w => statusOf(w) !== 'passiv').sort(() => Math.random() - 0.5).slice(0, 10);
+      const pas = pool.filter(w => statusOf(w) === 'passiv').sort(() => Math.random() - 0.5).slice(0, 10);
+      const mixed: string[] = [];
+      for (let i = 0; i < Math.max(akt.length, pas.length); i++) {
+        if (akt[i]) mixed.push(`${akt[i].id}::prod::`);
+        if (pas[i]) mixed.push(`${pas[i].id}::vmc::`);
+      }
+      qIds = mixed.sort(() => Math.random() - 0.5);
     } else if (activeMode === 'art') {
       qIds = pool.filter(w => !!w.art).sort(() => Math.random() - 0.5).slice(0, 15).map(w => w.id);
     } else if (activeMode === 'cloze') {
@@ -2453,6 +2541,17 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </div>
           );
         })()}
+
+        {qMode === 'vmc' && currentItem && (
+          <VmcQuestion
+            key={currentKey}
+            w={currentItem as Word}
+            poolWords={words}
+            onRecord={(word, mode, grade) => record(word, mode, grade)}
+            advance={advanceQuestion}
+            speakCfg={{ rate: settings?.rate, vreg: settings?.vreg, voice: settings?.voice }}
+          />
+        )}
 
         {(qMode === 'conj' || qMode === 'tense' || qMode === 'cloze' || qMode === 'plural' || qMode === 'dict' || qMode === 'prod' || qMode === 'synant' || qMode === 'n2v' || qMode === 'v2n' || qMode === 'adjdecl' || qMode === 'sent' || isSelfContainedMode(qMode)) && (() => {
           const w = currentItem as Word;
