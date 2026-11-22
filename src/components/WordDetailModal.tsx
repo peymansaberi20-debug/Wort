@@ -41,15 +41,16 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
 }) => {
   const [showFa, setShowFa] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
-  // جزئیات کامل (سطح تسلط، مترادف‌ها، تعریف، مثال‌ها، جدول صرف، یادداشت‌ها و…) — با ستارهٔ نوار آیکون باز/بسته می‌شود
-  const [showDetails, setShowDetails] = useState(false);
+  // پاپ‌اپ تنظیمات واژه (سطح تسلط، رجیستر، خوشهٔ مترادف) — با ستارهٔ نوار آیکون باز می‌شود؛
+  // بستنش فقط همین پاپ‌اپ را می‌بندد و پروفایل واژه زیر آن باز می‌ماند
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [pendingImg, setPendingImg] = useState<string | null>(null); // picked photo waiting for crop
   const [clusterDraft, setClusterDraft] = useState(''); // فاز ۱: پیش‌نویس فیلد خوشهٔ مترادف
 
   // Hide every Persian translation whenever the active word changes or the modal closes.
   useEffect(() => {
     setShowFa(false);
-    setShowDetails(false);
+    setSettingsOpen(false);
     setClusterDraft(word?.synCluster || '');
   }, [word?.id]);
 
@@ -325,6 +326,111 @@ const seg = pluralSegments2();
       {pendingImg && (
         <ImageCropper src={pendingImg} title="برش تصویر واژه" onCancel={() => setPendingImg(null)} onConfirm={saveCropped} />
       )}
+      {/* پاپ‌اپ تنظیمات واژه — لایهٔ روی پروفایل؛ بستنش پروفایل واژه را زیر خودش باز نگه می‌دارد */}
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-[1100] bg-black/50 flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+          onClick={e => { if (e.target === e.currentTarget) setSettingsOpen(false); }}
+        >
+          <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-xl max-h-[85vh] overflow-y-auto shadow-2xl">
+            <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2">
+              <span dir="rtl" className="font-bold text-sm text-[#1f5fbf] dark:text-[#7fb0ff]">⚙️ تنظیمات واژه — سطح تسلط، رجیستر، خوشهٔ مترادف</span>
+              <IconBtn onClick={() => setSettingsOpen(false)} title="بستن و بازگشت به پروفایل واژه"><X size={18} className="text-red-500" /></IconBtn>
+            </div>
+            <div className="p-4">
+              <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-3">
+                {/* ۱) سطح تسلط */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-bold text-[#1f5fbf] dark:text-[#7fb0ff] text-sm">🎯 سطح تسلط:</span>
+                  {WORD_STATUSES.map(s => (
+                    <button
+                      key={s}
+                      disabled={!onPatchWord}
+                      onClick={() => onPatchWord?.(word, { status: s as WordStatus })}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition border ${
+                        statusOf(word) === s
+                          ? `${STATUS_BADGE[s]} border-transparent shadow-2xs`
+                          : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd] hover:border-[#1f5fbf]'
+                      }`}
+                      title={STATUS_HINTS[s]}
+                    >
+                      {STATUS_LABELS[s]}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
+                  {STATUS_HINTS[statusOf(word)]}
+                </p>
+
+                {/* ۲) رجیستر — خنثی، محاوره‌ای، کتابی و… */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-bold text-amber-600 dark:text-amber-400 text-sm mr-1">🏷 رجیستر:</span>
+                  {REGISTER_OPTIONS.map(o => (
+                    <button
+                      key={o.value || 'none'}
+                      disabled={!onPatchWord}
+                      onClick={() => onPatchWord?.(word, { register: o.value })}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition border ${
+                        (word.register || '') === o.value
+                          ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-transparent shadow-2xs'
+                          : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd] hover:border-amber-400'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ۳) خوشهٔ مترادف — قاعدهٔ «یک بلیط فعال، بقیه دریافتی» */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">🔗 خوشهٔ مترادف:</span>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={clusterDraft}
+                      onChange={e => setClusterDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && onPatchWord) onPatchWord(word, { synCluster: clusterDraft.trim() }); }}
+                      placeholder="z.B. geschehen"
+                      className="flex-1 min-w-0 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#1f5fbf] font-sans"
+                    />
+                    <button
+                      disabled={!onPatchWord}
+                      onClick={() => onPatchWord?.(word, { synCluster: clusterDraft.trim() })}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex-shrink-0"
+                    >
+                      ذخیره
+                    </button>
+                  </div>
+                  {clusterGuide(word, clusterOf(word, words)) && (
+                    <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
+                      💡 {clusterGuide(word, clusterOf(word, words))}
+                    </p>
+                  )}
+                  {clusterOf(word, words).length > 1 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {clusterOf(word, words).map(m => (
+                        <span
+                          key={m.word.id}
+                          dir="ltr"
+                          className={`px-2 py-0.5 rounded-lg text-[11px] font-bold font-sans ${
+                            m.word.id === word.id
+                              ? 'bg-[#1f5fbf] text-white'
+                              : STATUS_BADGE[statusOf(m.word)]
+                          }`}
+                        >
+                          {m.word.de}{m.isCore ? ' ★' : ''}
+                        </span>
+                      ))}
+                      <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">★ = بلیط فعال خوشه</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
         {/*
           Fulfills User Request #9:
@@ -341,13 +447,11 @@ const seg = pluralSegments2();
                 {word.img ? '🖼️' : '📷'}
               </IconBtn>
               <IconBtn
-                onClick={() => setShowDetails(v => !v)}
-                active={showDetails}
-                title={showDetails
-                  ? 'مخفی کردن جزئیات کامل (سطح تسلط، مترادف‌ها، تعریف، مثال‌ها، جدول صرف و…)'
-                  : 'نمایش جزئیات کامل واژه (سطح تسلط، مترادف‌ها، تعریف، مثال‌ها، جدول صرف، یادداشت‌ها و…)'}
+                onClick={() => setSettingsOpen(true)}
+                active={settingsOpen}
+                title="تنظیمات واژه (سطح تسلط، رجیستر، خوشهٔ مترادف)"
               >
-                <Sparkles size={18} className={showDetails ? 'text-[#1f5fbf]' : 'text-amber-500'} />
+                <Sparkles size={18} className="text-amber-500" />
               </IconBtn>
               <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
               <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
@@ -450,99 +554,8 @@ const seg = pluralSegments2();
           )}
         </div>
 
-        {/* Modal Body — فشرده به‌صورت پیش‌فرض؛ همهٔ جزئیات با دکمهٔ ستاره (✨) نوار بالا باز می‌شود */}
+        {/* Modal Body — پروفایل واژه: بدون کارت‌های تنظیماتی؛ سطح تسلط/رجیستر/خوشه فقط در پاپ‌اپ ستاره */}
         <div className="p-4 md:p-6 space-y-4">
-          {showDetails ? (<>
-          {/* فاز ۱: کارت وضعیت واژگانی — سطح تسلط + رجیستر + خوشهٔ مترادف */}
-          <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 space-y-3">
-            {/* ۱) سطح تسلط */}
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold text-[#1f5fbf] dark:text-[#7fb0ff] text-sm">🎯 سطح تسلط:</span>
-              {WORD_STATUSES.map(s => (
-                <button
-                  key={s}
-                  disabled={!onPatchWord}
-                  onClick={() => onPatchWord?.(word, { status: s as WordStatus })}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition border ${
-                    statusOf(word) === s
-                      ? `${STATUS_BADGE[s]} border-transparent shadow-2xs`
-                      : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd] hover:border-[#1f5fbf]'
-                  }`}
-                  title={STATUS_HINTS[s]}
-                >
-                  {STATUS_LABELS[s]}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
-              {STATUS_HINTS[statusOf(word)]}
-            </p>
-
-            {/* ۲) رجیستر — خنثی، محاوره‌ای، کتابی و… */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-bold text-amber-600 dark:text-amber-400 text-sm mr-1">🏷 رجیستر:</span>
-              {REGISTER_OPTIONS.map(o => (
-                <button
-                  key={o.value || 'none'}
-                  disabled={!onPatchWord}
-                  onClick={() => onPatchWord?.(word, { register: o.value })}
-                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition border ${
-                    (word.register || '') === o.value
-                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 border-transparent shadow-2xs'
-                      : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd] hover:border-amber-400'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-
-            {/* ۳) خوشهٔ مترادف — قاعدهٔ «یک بلیط فعال، بقیه دریافتی» */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">🔗 خوشهٔ مترادف:</span>
-                <input
-                  type="text"
-                  dir="ltr"
-                  value={clusterDraft}
-                  onChange={e => setClusterDraft(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && onPatchWord) onPatchWord(word, { synCluster: clusterDraft.trim() }); }}
-                  placeholder="z.B. geschehen"
-                  className="flex-1 min-w-0 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#1f5fbf] font-sans"
-                />
-                <button
-                  disabled={!onPatchWord}
-                  onClick={() => onPatchWord?.(word, { synCluster: clusterDraft.trim() })}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex-shrink-0"
-                >
-                  ذخیره
-                </button>
-              </div>
-              {clusterGuide(word, clusterOf(word, words)) && (
-                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
-                  💡 {clusterGuide(word, clusterOf(word, words))}
-                </p>
-              )}
-              {clusterOf(word, words).length > 1 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {clusterOf(word, words).map(m => (
-                    <span
-                      key={m.word.id}
-                      dir="ltr"
-                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold font-sans ${
-                        m.word.id === word.id
-                          ? 'bg-[#1f5fbf] text-white'
-                          : STATUS_BADGE[statusOf(m.word)]
-                      }`}
-                    >
-                      {m.word.de}{m.isCore ? ' ★' : ''}
-                    </span>
-                  ))}
-                  <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">★ = بلیط فعال خوشه</span>
-                </div>
-              )}
-            </div>
-          </div>
           {/* English equivalent — revealed with the translations toggle */}
           {word.en && showFa && (
             <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 rounded-2xl p-3.5 text-sm flex items-center justify-between gap-2">
@@ -674,19 +687,6 @@ const seg = pluralSegments2();
                 </span>
               ))}
             </div>
-          )}
-          </>) : (
-            /* نمای جمع‌وجور: فقط کارت واژه بالا دیده می‌شود؛ جزئیات با ستاره باز می‌شوند */
-            <button
-              type="button"
-              onClick={() => setShowDetails(true)}
-              className="w-full bg-slate-50 dark:bg-[#141923] border border-dashed border-[#c9d6f2] dark:border-[#2c3a55] rounded-2xl p-4 text-center transition hover:border-[#1f5fbf]"
-            >
-              <span className="block text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">✨ جزئیات کامل واژه</span>
-              <span className="block mt-1 text-xs text-[#5d6676] dark:text-[#a3adbd] leading-5">
-                سطح تسلط، رجیستر، خوشهٔ مترادف، معادل انگلیسی، تعریف آلمانی، مثال‌ها، جدول صرف فعل، یادداشت‌ها و برچسب‌ها — با زدن دکمهٔ ستاره (✨) بالای صفحه یا همین‌جا باز می‌شوند.
-              </span>
-            </button>
           )}
         </div>
       </div>
