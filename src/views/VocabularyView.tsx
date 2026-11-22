@@ -3,45 +3,11 @@ import { Word, WordStatus } from '../types';
 import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat, isLeech, fullWord } from '../utils/storage';
 import { statusOf, statusCounts, STATUS_SHORT, STATUS_BADGE, WORD_STATUSES } from '../utils/wordStatus';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
-import { generateImage, describeAiError } from "../utils/aiProvider";
 import { speak } from '../utils/audio';
 import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
 import { X, Save, HelpCircle } from 'lucide-react';
-
-/** تصویر خام AI + زیرنویس آلمانی/فارسی → یک JPEG (متن را خودمان روی بوم می‌نویسیم تا املا و فارسی خراب نشود) */
-const composeCaptionedImage = (img: { mimeType: string; data: string }, de: string, fa: string): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const im = new Image();
-    im.onload = () => {
-      const W = 560;
-      const H = Math.round(im.height * (W / im.width));
-      const capH = fa ? 96 : 60;
-      const canvas = document.createElement('canvas');
-      canvas.width = W; canvas.height = H + capH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('بوم تصویر در دسترس نیست.')); return; }
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H + capH);
-      ctx.drawImage(im, 0, 0, W, H);
-      const fit = (text: string, weight: string, size: number, family: string) => {
-        let s = size;
-        do { ctx.font = `${weight} ${s}px ${family}`; s -= 2; } while (ctx.measureText(text).width > W - 24 && s > 12);
-      };
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#1d2330';
-      ctx.direction = 'ltr';
-      fit(de, '800', 30, 'Segoe UI, Arial, sans-serif');
-      ctx.fillText(de, W / 2, H + (fa ? 28 : capH / 2));
-      if (fa) {
-        ctx.direction = 'rtl'; ctx.fillStyle = '#1f5fbf';
-        fit(fa, '700', 26, 'Vazirmatn, Tahoma, Arial, sans-serif');
-        ctx.fillText(fa, W / 2, H + 68);
-      }
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
-    };
-    im.onerror = () => reject(new Error('تصویر ساخته‌شده قابل خواندن نبود.'));
-    im.src = `data:${img.mimeType};base64,${img.data}`;
-  });
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -188,7 +154,6 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [formTags, setFormTags] = useState(editingWord?.tags || '');
   const [formNotes, setFormNotes] = useState(editingWord?.notes || '');
   const [formImg, setFormImg] = useState(editingWord?.img || '');
-  const [imgLoading, setImgLoading] = useState(false);
 
   // AI loading in form
   const [aiLoading, setAiLoading] = useState(false);
@@ -772,28 +737,7 @@ Answer ONLY a JSON array, no code fence, no commentary:
     onShowToast(`«${c.de}» انتخاب شد؛ حالا تکمیل خودکار یا دستی ادامه بده.`, false);
   };
 
-  // Gemini draws a memorable picture for the word; the German + Persian caption is added on a canvas
-  const handleGenerateImage = async () => {
-    const de = formDe.trim();
-    if (!de || imgLoading) return;
-    const fa = formFa.trim();
-    const art = (formArt || '').trim();
-    setImgLoading(true);
-    try {
-      const prompt = `Create ONE clear, memorable illustration that helps a language learner remember the German word "${art ? art + ' ' : ''}${de}"${fa ? ` (Persian meaning: ${fa})` : ''}.
-Show the meaning of the word directly with one central, easily recognizable subject or a very simple scene (for verbs/adjectives/abstract words show a concrete everyday situation that makes the meaning obvious).
-Style: bright, friendly, clean, uncluttered background, square composition.
-IMPORTANT: do NOT put any text, letters, numbers, labels, logos or watermarks in the image.`;
-      const raw = await generateImage(prompt);
-      const finalImg = await composeCaptionedImage(raw, `${art ? art + ' ' : ''}${de}`, fa);
-      setFormImg(finalImg);
-      onShowToast('تصویر واژه ساخته شد و به واژه اضافه شد.');
-    } catch (e: any) {
-      onShowToast(e?.message ? (e.code ? describeAiError(e) : e.message) : 'ساخت تصویر ناموفق بود.', true);
-    } finally {
-      setImgLoading(false);
-    }
-  };
+  // ساخت خودکار تصویر با Gemini حذف شد — سرویس کار نمی‌کرد؛ به‌جای آن پرامت «کارت عکس» کپی و در هوش مصنوعی بیرونی استفاده می‌شود.
 
   const handleCopyPrompt = async () => {
     if (!formDe.trim()) {
@@ -808,44 +752,89 @@ IMPORTANT: do NOT put any text, letters, numbers, labels, logos or watermarks in
     }
   };
 
-  // پرامت ساخت «کارت واژه» با هوش مصنوعی بیرونی — واژه (با آرتیکل/پیش‌واژه) + مثال دوم در قالب ثابت
-  const buildImageCardPrompt = (de: string, art: string, ex2: string): string => {
-    const head = art ? `${art} ${de}` : de;
-    return `Create a beautiful, whimsical, and memorable horizontal landscape vocabulary-learning card with a decorative border of winding vines and forest flowers. 
+  // پرامت ساخت «کارت واژه» با هوش مصنوعی بیرونی — متن جدید کاربر؛ HEADWORD و EXAMPLE از فرم فعلی پر می‌شوند
+  // و معنی فارسی/انگلیسی + ترجمهٔ فارسی مثال (اگر در فرم باشند) به بلوک «For this card, use» اضافه می‌شود.
+  const buildImageCardPrompt = (de: string, art: string, ex: string, fa: string, en: string, exFa: string): string => {
+    const raw = art ? `${art} ${de}` : de;
+    const head = raw.charAt(0).toLocaleUpperCase('de') + raw.slice(1); // «Das Zeugnis» مثل قالب اصلی
+    const line = (label: string, value: string) => (value ? `${label}: ${value}\n` : '');
+    return `Create a modern, visually memorable German vocabulary-learning card. The design should be colorful, polished, contemporary, and easy to study from, with a subtle playful touch rather than a heavily fantasy-inspired look.
 
-Here is the input German headword and example sentence:
-- German Headword: "${head}"
-- German Example: "${ex2}"
+INPUT — CHANGE THESE FOR EACH NEW CARD
 
-Task for AI:
-Based on the input German headword and example, automatically generate and include the following elements in compact, highly legible text areas below the illustration:
-1. The English translation and Persian meaning of the headword.
-2. The exact German example sentence provided above.
-3. The natural Persian translation of the example sentence.
-4. A creative Persian sound-based mnemonic (یادومونی) starting with the German word to connect its sound and meaning.
+HEADWORD: ${head}
+EXAMPLE: ${ex}
+${line('PERSIAN MEANING', fa)}${line('ENGLISH MEANING', en)}${line('PERSIAN TRANSLATION OF EXAMPLE', exFa)}
+These two inputs may change for every future card. Always use the current HEADWORD and EXAMPLE exactly as provided, and automatically adapt the illustration, translations, and mnemonic to the current target word.
 
-Illustration Style:
-A vivid, whimsical fantasy-inspired open-air meadow scene featuring a curious young woman and an extremely cute, fluffy kitten sitting on the grass, looking up in pleasant surprise and wonder at colorful butterflies dancing in the clear sky. 
+LAYOUT
 
-Typography and Layout Rules:
-- Put the complete German headword at the very top, above the illustration.
-- Color only the article or preposition (like "die", "sich", "über") in soft pink. Keep the core noun/verb entirely black and in one color (never split a word into multiple colors).
-- Keep every word in the German example sentence in its normal text color.
-- Ensure all Persian text is right-to-left, natural, and uses a clear font.`;
+* Use a horizontal landscape canvas, slightly narrower than a 16:9 aspect ratio.
+* Place the complete German headword prominently at the very top.
+* Make the illustration large and dominant, occupying most of the central area.
+* Put compact, clearly separated text sections below the illustration.
+* Use a clean editorial layout, balanced spacing, subtle paper texture, and modern typography.
+* Ensure every line is readable and correctly spelled.
+
+ILLUSTRATION STYLE
+
+Create a contemporary, charming editorial illustration with rich colors, soft lighting, expressive characters, and a memorable visual metaphor.
+
+Avoid excessive fantasy elements, medieval settings, wizard hats, castles, magical creatures, and ornate scrolls.
+
+Instead, use a modern everyday setting with imaginative visual storytelling. The scene should immediately communicate the meaning of the target word.
+
+For future vocabulary words, automatically create a new illustration that directly represents the specific word and its most relevant meaning. Do not reuse the same scene for every card.
+
+TEXT CONTENT AND ORDER
+
+1. The exact German headword, including its article.
+2. The Persian meaning of the headword (if not provided above, create it automatically).
+3. The English meaning of the headword (if not provided above, create it automatically).
+4. The exact German example sentence provided in the EXAMPLE input.
+5. A natural Persian translation of that exact example sentence (if not provided above, create it automatically).
+6. A short, memorable Persian sound-based mnemonic for the German headword.
+
+Mnemonic: Create a short, playful Persian phonetic association that begins with the exact German headword and helps a Persian speaker remember its meaning. Keep it natural, memorable, and relevant to the word.
+
+COLOR RULES
+
+* Color only the German article in the headword soft pink (for example "Das").
+* Keep the rest of the headword entirely black and in one uniform color.
+* Never split a word into multiple colors.
+* Keep the entire German example sentence in one normal text color.
+* Do not highlight the target word inside the example sentence.
+* Use a harmonious, contemporary color palette throughout the illustration.
+
+LANGUAGE AND TYPOGRAPHY
+
+* German must be grammatically correct.
+* Persian must be natural, correctly translated, and rendered with proper right-to-left typography.
+* Keep German and English left-to-right.
+* Make Persian letters connected correctly, with proper punctuation and spacing.
+* Preserve the exact supplied German example sentence without rewriting it.
+* Do not invent extra vocabulary examples.
+* Do not add labels such as "Headword," "Example," "Translation," or "Mnemonic."
+* Do not add any text beyond the specified content.
+* Ensure the final card feels like a premium, modern language-learning flashcard rather than a fantasy book cover.
+
+FILE SIZE
+
+* The final exported image file must stay under 1 MB: export it as a compressed JPEG (quality about 85) with the long edge of about 1500 pixels, while keeping every line of text sharp and readable.`;
   };
 
   const handleCopyImageCardPrompt = async () => {
     const de = formDe.trim();
-    const ex2 = formEx2.trim();
+    const ex2 = formEx2.trim() || formEx.trim(); // مثال دوم، وگرنه مثال اول
     if (!de) {
       onShowToast('ابتدا کلمهٔ آلمانی را بنویسید.', true);
       return;
     }
     if (!ex2) {
-      onShowToast('واژه نیمه‌کمیل است و مثال دوم ندارد؛ با دکمهٔ 💎 تکمیل خودکار کن یا مثال دوم را دستی وارد کن تا پرامت صحیح ساخته شود.', true);
+      onShowToast('این واژه مثال ندارد؛ با دکمهٔ 💎 تکمیل خودکار کن یا دست‌کم یک مثال وارد کن تا پرامت صحیح ساخته شود.', true);
       return;
     }
-    const ok = await copyText(buildImageCardPrompt(de, (formArt || '').trim(), ex2));
+    const ok = await copyText(buildImageCardPrompt(de, (formArt || '').trim(), ex2, formFa.trim(), formEn.trim(), formExFa.trim()));
     onShowToast(ok
       ? 'پرامت کارت عکس کپی شد؛ در هوش مصنوعی بیرونی بچسبان، تصویر را بگیر و بعد با 📷 در پروفایل واژه اضافه کن.'
       : 'کپی در کلیپ‌بورد ممکن نشد.', !ok);
@@ -1152,28 +1141,22 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               >
                 {aiLoading && aiDepthRef.current === 'mid' ? <span className="inline-block animate-spin">⏳</span> : <span>⚙️ تکمیل نیمه</span>}
               </button>
-
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {/* دو دکمهٔ کپی — هم‌اندازه، کنار هم، در یک خط (درخواست کاربر) */}
               <button
                 type="button"
                 onClick={handleCopyPrompt}
                 disabled={!formDe.trim()}
-                className="col-span-2 bg-[#0f766e] hover:bg-[#115e59] text-white px-3 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5"
+                className="bg-[#0f766e] hover:bg-[#115e59] text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1 whitespace-nowrap"
               >
                 📋 کپی دستور هوش مصنوعی
               </button>
               <button
                 type="button"
-                onClick={() => void handleGenerateImage()}
-                disabled={imgLoading || aiLoading || !formDe.trim()}
-                className="bg-rose-600 hover:bg-rose-700 text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1"
-              >
-                {imgLoading ? <span className="inline-block animate-spin">⏳</span> : <span>🖼 افزودن عکس</span>}
-              </button>
-              <button
-                type="button"
                 onClick={() => void handleCopyImageCardPrompt()}
                 disabled={!formDe.trim()}
-                className="col-span-2 bg-rose-700 hover:bg-rose-800 text-white px-3 h-11 rounded-xl text-xs md:text-sm font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1.5"
+                className="bg-rose-700 hover:bg-rose-800 text-white px-2 h-11 rounded-xl text-xs font-bold shadow-xs disabled:opacity-40 transition flex items-center justify-center gap-1 whitespace-nowrap"
                 title="پرامت ساخت کارت واژه را کپی می‌کند تا در هوش مصنوعی بیرونی (ChatGPT و…) استفاده کنی"
               >
                 🎨 پرامت کارت عکس (کپی)
@@ -1523,13 +1506,13 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           />
         </div>
 
-        {/* Line 2: 5 search filters — 2×2 on mobile, one row on md+ */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        {/* Line 2: 5 search filters — همیشه در یک خط زیر جستجو (درخواست کاربر)؛ در موبایل فشرده می‌شوند */}
+        <div className="grid grid-cols-5 gap-1.5">
           {/* 1. Article Filter */}
           <select
             value={filterArt}
             onChange={e => setFilterArt(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-1 sm:px-2.5 py-2 text-[10px] sm:text-xs outline-none"
           >
             <option value="">آرتیکل: همه</option>
             <option value="der">der</option>
@@ -1541,7 +1524,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-1 sm:px-2.5 py-2 text-[10px] sm:text-xs outline-none"
           >
             <option value="all">وضعیت: همه</option>
             <option value="new">جدید</option>
@@ -1554,7 +1537,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           <select
             value={filterWStatus}
             onChange={e => setFilterWStatus(e.target.value as 'all' | WordStatus)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-1 sm:px-2.5 py-2 text-[10px] sm:text-xs outline-none"
             title="وضعیت واژگانی: فعال یعنی تولید در گفتار/نوشتن، دریافتی یعنی فقط فهم هنگام دیدن/شنیدن"
           >
             <option value="all">تسلط: همه</option>
@@ -1567,7 +1550,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as any)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-1 sm:px-2.5 py-2 text-[10px] sm:text-xs outline-none"
           >
             <option value="de">مرتب‌سازی: الفبا</option>
             <option value="lvl">سطح (A1 تا C2)</option>
@@ -1580,7 +1563,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           <select
             value={filterLvl}
             onChange={e => setFilterLvl(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-2.5 py-2 text-xs outline-none"
+            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-1 sm:px-2.5 py-2 text-[10px] sm:text-xs outline-none"
           >
             <option value="">سطح: همه</option>
             {LVL_ORDER.map(l => (
