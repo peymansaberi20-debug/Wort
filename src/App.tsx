@@ -23,7 +23,7 @@ import {
   clearAllVocabulary,
   auditWord
 } from './utils/storage';
-import { applyModeResult, promotionReady, PROMO_STREAK } from './utils/wordStatus';
+import { applyModeResult, promotionReady, activationReady } from './utils/wordStatus';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
 import { PageOverlay } from './components/PageOverlay';
@@ -562,13 +562,14 @@ export default function App() {
           const isFirstTime = sched(clone, grade, prev.set.ivlMod || 1.0, prev.set.leechN || 4);
           // فاز ۲: آمار دوگانهٔ تسلط (تولیدی/شناختی) — از نتیجهٔ تمرین؛ ارتقای دریافتی → کاندید
           const ok = grade > 0;
+          // وضعیت آمادگی «قبل از» اعمال نتیجه — برای تشخیص لحظهٔ گذار (toast فقط یک‌بار می‌آید)
+          const prePatch = { status: clone.status, rOk: clone.rOk, rStreak: clone.rStreak, pOk: clone.pOk, pStreak: clone.pStreak };
           const modePatch = applyModeResult(clone, mode, ok);
           Object.assign(clone, modePatch);
-          const promoNow =
-            clone.status === 'passiv' &&
-            (modePatch.rStreak || 0) === PROMO_STREAK &&
-            promotionReady(clone);
-          nextWords = [...nextWords];
+          // فاز ۲: دریافتی که تازه واجد شرایط ارتقا به کاندید شد
+          const promoNow = ok && !promotionReady(prePatch) && promotionReady(clone);
+          // فاز ۳: کاندید که تازه واجد شرایط فعال‌سازی شد (۳ تولید پیاپی درست)
+          const actNow = ok && !activationReady(prePatch) && activationReady(clone);
           nextWords[targetIdx] = clone;
 
           if (!isRetry) {
@@ -579,6 +580,12 @@ export default function App() {
           if (promoNow) {
             setTimeout(() => {
               showToast(`🎉 «${fullWord(clone)}» ۳ بار پیاپی در تشخیص درست بود — در پروفایلش می‌توانی به «کاندید فعال‌سازی» ارتقایش بدهی.`);
+            }, 50);
+          }
+
+          if (actNow) {
+            setTimeout(() => {
+              showToast(`🎉 «${fullWord(clone)}» ۳ بار پیاپی در تولید درست بود — در پروفایلش می‌توانی به «فعال» ارتقایش بدهی.`);
             }, 50);
           }
         }
