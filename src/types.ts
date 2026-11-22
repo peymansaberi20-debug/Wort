@@ -1,3 +1,6 @@
+/** واژگانی/دریافتی: سطح تسلط مورد نظر روی یک واژه (فاز ۱ طرح واژگان فعال-دریافتی) */
+export type WordStatus = 'aktiv' | 'passiv' | 'kandidat';
+
 export interface Word {
   id: string;
   de: string;
@@ -32,6 +35,9 @@ export interface Word {
   def?: string; // German definition (B1–B2 wording), shown above examples
   needsFull?: boolean; // fast-completion word — full 28-field profile not yet generated
   en?: string; // closest English equivalent (translated FROM the German), optional
+  status?: WordStatus; // aktiv = تولید/استفاده؛ passiv = فقط فهم هنگام دیدن/شنیدن؛ kandidat = بین این دو
+  register?: string; // رجیستر واژه: '' | neutral | umgangssprachlich | schriftsprachlich | gehoben | veraltet | fachsprachlich
+  synCluster?: string; // نام خوشهٔ مترادف (لِمّای مرجع، مثلاً geschehen برای passieren/sich ereignen)
   img: string;
   added: number;
   last: number;
