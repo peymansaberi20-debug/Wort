@@ -66,12 +66,12 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
     fileInput.click();
   };
 
-  // cropped dataURL -> max 640 px long edge, JPEG 0.8, then store on the word
+  // cropped dataURL -> max 800 px long edge, JPEG 0.8, then store on the word
   const saveCropped = (dataUrl: string) => {
     setPendingImg(null);
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, 640 / Math.max(img.width, img.height));
+      const scale = Math.min(1, 800 / Math.max(img.width, img.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
