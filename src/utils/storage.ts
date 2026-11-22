@@ -61,6 +61,12 @@ export function norm(w: any): Word | null {
     status: parseStatus(w.status) || suggestStatus(w.de),
     register: s('register'),
     synCluster: s('synCluster'),
+    // فاز ۲: آمار دوگانهٔ تولیدی/شناختی + زنجیرهٔ ارتقا
+    pOk: Math.max(0, +w.pOk || 0),
+    pBad: Math.max(0, +w.pBad || 0),
+    rOk: Math.max(0, +w.rOk || 0),
+    rBad: Math.max(0, +w.rBad || 0),
+    rStreak: Math.max(0, +w.rStreak || 0),
     img: IMGOK.test(s('img')) && s('img').length < 1600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,
