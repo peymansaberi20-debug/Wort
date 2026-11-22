@@ -124,7 +124,9 @@ export default function App() {
 
   // Sync state to localStorage on state changes
   useEffect(() => {
-    saveState(state);
+    if (!saveState(state)) {
+      showToast('ذخیرهٔ خودکار ناموفق بود — فضای مرورگر پر است. چند تصویر را حذف کن یا از تنظیمات خروجی بگیر.', true);
+    }
   }, [state]);
 
   // Sync and directly enforce theme independent of mobile OS
@@ -420,7 +422,13 @@ export default function App() {
     if (selectedWord?.id === word.id) {
       setSelectedWord(prev => (prev ? { ...prev, ...patch } : null));
     }
-    if ('status' in patch) showToast(`سطح تسلط واژه روی «${patch.status === 'aktiv' ? 'فعال' : patch.status === 'passiv' ? 'دریافتی' : 'کاندید فعال‌سازی'}» تنظیم شد.`);
+    if ('status' in patch) {
+      showToast(`سطح تسلط واژه روی «${patch.status === 'aktiv' ? 'فعال' : patch.status === 'passiv' ? 'دریافتی' : 'کاندید فعال‌سازی'}» تنظیم شد.`);
+    } else if ('register' in patch) {
+      showToast('رجیستر واژه ذخیره شد.');
+    } else if ('synCluster' in patch) {
+      showToast('خوشهٔ مترادف ذخیره شد.');
+    }
   };
 
   // Category Operations
