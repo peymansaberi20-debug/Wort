@@ -163,3 +163,59 @@ export function clusterGuide(word: Word, members: ClusterMember[]): string | nul
   const all = members.map(m => m.word.de).join('، ');
   return `از خوشهٔ (${all}) یکی را به‌عنوان بلیط فعال انتخاب کن؛ بقیه دریافتی می‌مانند.`;
 }
+
+/* ============================================================
+ * فاز ۲: موتور تمرین دوگانه — آمار جداگانهٔ تولیدی/شناختی + ارتقای دریافتی → کاندید
+ * ============================================================ */
+
+/** تمرین‌های «تولیدی»: بازیابی فرم آلمانی (معنی → واژه/جمله) — فقط برای واژگان فعال/کاندید منطقی است */
+const PROD_KINDS: Set<string> = new Set([
+  'prod', 'sent', 'freesent', 'schreiben', 'schreiben_exam', 'vmix_prod',
+]);
+
+/** تمرین‌های «شناختی»: بازیابی معنی (واژه/صدا → معنی) — مسیر اصلی واژگان دریافتی */
+const RECOG_KINDS: Set<string> = new Set([
+  'flash', 'review', 'daily', 'free', 'hard', 'cloze', 'art', 'dict', 'dikt',
+  'plural', 'n2v', 'v2n', 'synant', 'adjdecl', 'errnb', 'vmc',
+]);
+
+export type MasteryKind = 'prod' | 'recog' | 'neutral';
+
+/** هر تمرین به کدام دستهٔ تسلط می‌خورد؟ */
+export function kindOf(exerciseMode: string): MasteryKind {
+  if (PROD_KINDS.has(exerciseMode)) return 'prod';
+  if (RECOG_KINDS.has(exerciseMode)) return 'recog';
+  return 'neutral';
+}
+
+/** آستانهٔ ارتقای دریافتی → کاندید: ۳ موفقیت پیاپی در تمرین شناختی */
+export const PROMO_STREAK = 3;
+
+/**
+ * آمار دوگانهٔ واژه را با نتیجهٔ یک تمرین به‌روز می‌کند.
+ * با ورد شیوهٔ عملیاتی ندارد (زمان‌بندی لایتنر جداگانه در sched می‌ماند).
+ */
+export function applyModeResult(
+  word: Pick<Word, 'pOk' | 'pBad' | 'rOk' | 'rBad' | 'rStreak'>,
+  exerciseMode: string,
+  ok: boolean
+): Pick<Word, 'pOk' | 'pBad' | 'rOk' | 'rBad' | 'rStreak'> {
+  const kind = kindOf(exerciseMode);
+  if (kind === 'neutral') return {};
+  if (kind === 'prod') {
+    return {
+      pOk: (word.pOk || 0) + (ok ? 1 : 0),
+      pBad: (word.pBad || 0) + (ok ? 0 : 1),
+    };
+  }
+  return {
+    rOk: (word.rOk || 0) + (ok ? 1 : 0),
+    rBad: (word.rBad || 0) + (ok ? 0 : 1),
+    rStreak: ok ? (word.rStreak || 0) + 1 : 0,
+  };
+}
+
+/** آیا واژهٔ دریافتی آمادهٔ ارتقاست؟ (زنجیرهٔ ۳ موفقیت شناختی + حداقل ۴ موفقیت کل) */
+export function promotionReady(word: Pick<Word, 'status' | 'rStreak' | 'rOk'>): boolean {
+  return word.status === 'passiv' && (word.rStreak || 0) >= PROMO_STREAK && (word.rOk || 0) >= 4;
+}
