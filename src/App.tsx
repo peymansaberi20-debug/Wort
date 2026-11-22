@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { onCloudUserChanged, uploadStateToCloud } from './utils/cloud';
 import { shrinkImageForStorage } from './utils/image';
+import { imgGetAll, imgDel, imgDelNotIn } from './utils/imageStore';
 import { type User } from 'firebase/auth';
 import { CloudAccountModal } from './components/CloudAccountModal';
 import { GroupImportView } from './views/GroupImportView';
@@ -63,6 +64,29 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<NavTab>('dash');
   const [overlay, setOverlay] = useState<null | { kind: 'backup' | 'restore' | 'io' | 'settings'; section?: string }>(null);
   const [historyStack, setHistoryStack] = useState<NavTab[]>([]);
+
+  // عکس‌های واژه‌ها در IndexedDB ذخیره می‌شوند (باگ «عکس بعد از بستن برنامه پاک می‌شد») — بارگذاری در شروع
+  const imgWordsRef = useRef<Word[]>(state.words);
+  imgWordsRef.current = state.words;
+  useEffect(() => {
+    void imgGetAll().then(map => {
+      const keys = Object.keys(map);
+      if (keys.length === 0) return;
+      setState(prev => {
+        let changed = false;
+        const words = prev.words.map(w => {
+          const img = map[w.id];
+          if (img && w.img !== img) { changed = true; return { ...w, img }; }
+          return w;
+        });
+        return changed ? { ...prev, words } : prev;
+      });
+      // کلیدهای عکسِ واژه‌های حذف‌شده پاک می‌شوند
+      const known = new Set(imgWordsRef.current.map(w => w.id));
+      void imgDelNotIn(known);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Active exercise mode if inside practice
   const [activeExercise, setActiveExercise] = useState<ExerciseMode | null>(null);
@@ -412,6 +436,7 @@ export default function App() {
       if (selectedWord?.id === word.id) {
         setSelectedWord(prev => (prev ? { ...prev, img: '' } : null));
       }
+      void imgDel(word.id); // کلید عکس از IndexedDB هم پاک می‌شود
       showToast('تصویر واژه حذف شد.');
       return;
     }
