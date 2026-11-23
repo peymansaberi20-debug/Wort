@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Word } from '../types';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { IconBtn } from './IconBtn';
@@ -130,7 +131,10 @@ JSON REQUIREMENTS
         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
         : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300';
 
-  return (
+  // Portal به body — اگر داخل درخت صفحه mount شود در stacking context والد (relative z-0)
+  // گیر می‌کند و زیر هدر چسبان برنامه (z-20) نقاشی می‌شود (باگ «مودال زیر هدر»).
+  // همان الگوی ShadowingModal و WordDetailModal.
+  return createPortal(
     <div
       className="fixed inset-0 z-[95] bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 md:p-6 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -289,6 +293,7 @@ JSON REQUIREMENTS
           <ShadowingModal freeText={report.corrected_de} word={word} onClose={() => setShadowOpen(false)} />
         </ErrorBoundary>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
