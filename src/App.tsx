@@ -778,12 +778,15 @@ export default function App() {
                 <DashboardView
                   state={state}
                   ignoredQualityIds={extData.ok || {}}
+                  onOpenQualityModal={() => setIsQualityModalOpen(true)}
                   onNavigate={tab => {
                     if (tab === 'daily') {
                       setExerciseHidden(false);
                       setActiveExercise('daily');
                     } else if (tab === 'prac') {
                       navigateToTab('prac');
+                    } else if (tab === 'lib') {
+                      navigateToTab('lib');
                     }
                   }}
                   onPracticeWords={(ids, intent = 'targeted') => {
@@ -821,7 +824,9 @@ export default function App() {
                     }
 
                     const selectedWords = state.words.filter(w => selectedIds.has(w.id));
-                    const candidates: { mode: ExerciseMode; ids: string[] }[] = [
+                    // NOTE: the annotation must sit on the array literal itself — applying it to
+                    // the result of .filter() widens the mode literals to `string` (TS2322).
+                    const allCandidates: { mode: ExerciseMode; ids: string[] }[] = [
                       { mode: 'art', ids: selectedWords.filter(w => !!w.art).map(w => w.id) },
                       { mode: 'cloze', ids: selectedWords.filter(w => !!w.cloze || !!w.ans).map(w => w.id) },
                       { mode: 'plural', ids: selectedWords.filter(w => !!w.pl).map(w => w.id) },
@@ -830,7 +835,8 @@ export default function App() {
                       { mode: 'dict', ids: selectedWords.map(w => w.id) },
                       { mode: 'prod', ids: selectedWords.map(w => w.id) },
                       { mode: 'synant', ids: selectedWords.filter(w => !!w.syn || !!w.ant).map(w => w.id) }
-                    ].filter(candidate => candidate.ids.length > 0 && candidate.ids.length === selectedWords.length);
+                    ];
+                    const candidates = allCandidates.filter(candidate => candidate.ids.length > 0 && candidate.ids.length === selectedWords.length);
 
                     if (candidates.length === 0 || selectedWords.length === 0) {
                       showToast('واژهٔ مناسبی برای تمرین اختصاصی پیدا نشد.', true);
@@ -1067,7 +1073,6 @@ export default function App() {
           onClose={() => setIsDuplicateModalOpen(false)}
           onDeleteWord={handleDeleteWord}
           onDeleteWords={ws => handleBatchDeleteWords(ws.map(x => x.id), 'تکراری‌ها')}
-          onBatchDelete={(ids: string[]) => handleBatchDeleteWords(ids, 'تشخیص واژه‌های تکراری')}
           onMergeWords={handleMergeWords}
           onEditWord={handleEditWord}
           onImageChange={handleImageChange}
