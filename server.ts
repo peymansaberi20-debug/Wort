@@ -306,9 +306,20 @@ wss.on('connection', async (clientWs: WebSocket) => {
 const isProd = process.env.NODE_ENV === 'production';
 
 if (isProd) {
-  app.use(express.static(path.resolve(__dirname, 'dist')));
+  const distDir = path.resolve(__dirname, 'dist');
+  // The Vite build uses base '/Wort/' (GitHub Pages repo path). Assets must be served
+  // under that same prefix — otherwise /Wort/assets/*.js falls through to the SPA
+  // fallback, returns HTML instead of JavaScript, and the page renders blank.
+  app.use('/Wort', express.static(distDir));
+  app.get('/Wort/*', (_req: Request, res: Response) => {
+    res.sendFile(path.resolve(distDir, 'index.html'));
+  });
+  app.get('/', (_req: Request, res: Response) => {
+    res.redirect('/Wort/');
+  });
+  app.use(express.static(distDir));
   app.get('*', (_req: Request, res: Response) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    res.sendFile(path.resolve(distDir, 'index.html'));
   });
 } else {
   const { createServer: createViteServer } = await import('vite');
