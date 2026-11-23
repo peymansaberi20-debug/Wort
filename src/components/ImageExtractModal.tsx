@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Word } from '../types';
 import { getCategories, norm, uid } from '../utils/storage';
-import { processBatchWordsWithGemini } from '../utils/ai';
+import { parseAI, processBatchWordsWithGemini } from '../utils/ai';
 import { describeAiError, generateWithImages, getActiveProvider } from '../utils/aiProvider';
 import { PROVIDERS } from '../utils/aiProvider';
 import { Conflict, ImportDecision, classifyImport } from '../utils/vocabMerge';
@@ -9,7 +9,7 @@ import { ImportConflictDialog } from './ImportConflictDialog';
 import { copyText } from '../utils/clipboard';
 import { recognizeImage, releaseOcr } from '../utils/ocr';
 import { ImageCropper } from './ImageCropper';
-import { BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, loadSession, makeCandidates, markCompleted, newSession, buildSinglePromptDepth, type PromptDepth,
+import { BATCH_SIZES, BatchSession, BatchSize, buildExternalPrompt, gotoBatch, loadSession, makeCandidates, markCompleted, newSession,
   nextOpenBatch, saveSession, sessionProgress, setBatchSize, splitCandidates, validateBatchResponse, validationToWords
 } from '../utils/extractSession';
 
