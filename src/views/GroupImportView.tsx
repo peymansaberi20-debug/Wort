@@ -107,10 +107,8 @@ export const GroupImportView: React.FC<GroupImportViewProps> = ({ words, onAddEn
         throw new Error('این فایل پشتیبان کامل برنامه است — برای بازیابی به بخش «ورود/خروج» برو.');
       }
       if (!Array.isArray(parsed)) throw new Error('فایل JSON نامعتبر است.');
-      const { ws, errs } = (() => { const r = { ws: [] as Word[], errs: [] as string[] }; try { const imp = norm ? null : null; } catch { /* noop */ } return r; })();
       const mapped = (parsed as any[]).map(o => norm(o)).filter(Boolean) as Word[];
       pushCands(mapped.map(w => ({ de: `${w.art ? w.art + ' ' : ''}${w.de}`, art: w.art, fa: w.fa, full: w })));
-      if (errs.length) onShowToast(errs[0], true);
       return true;
     }
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
