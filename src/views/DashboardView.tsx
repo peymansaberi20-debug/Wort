@@ -25,6 +25,26 @@ interface DashboardViewProps {
   onSelectWord: (word: Word) => void;
 }
 
+const LVL_ORDER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
+const LVL_CLS: Record<string, string> = {
+  A1: 'bg-emerald-500',
+  A2: 'bg-sky-500',
+  B1: 'bg-blue-600',
+  B2: 'bg-violet-500',
+  C1: 'bg-purple-600',
+  C2: 'bg-fuchsia-600'
+};
+
+/** دقیقه‌ای یک‌بار به‌روز می‌شود — تا شمارش «سررسید» بدون رندر بی‌پایان تازه بماند */
+const useMinuteTick = (): number => {
+  const [minute, setMinute] = React.useState(() => Math.floor(Date.now() / 60000));
+  React.useEffect(() => {
+    const t = setInterval(() => setMinute(Math.floor(Date.now() / 60000)), 60000);
+    return () => clearInterval(t);
+  }, []);
+  return minute * 60000;
+};
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   state,
   ignoredQualityIds,
@@ -34,164 +54,313 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onUpdateDailyNewTarget,
   onSelectWord
 }) => {
-  const n = Date.now();
+  const n = useMinuteTick();
   const [stageView, setStageView] = React.useState<string | null>(null);
-  const words = state.words;
-  const hist = state.hist;
-  const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 };
-  const dailyNewDone = Math.max(0, dailyToday.n || 0);
-  const dailyReviewDone = Math.max(0, dailyToday.r || 0);
-  const activeCategorySet = new Set(state.set.activeCats || []);
-  const dailyPool = words.filter(w =>
-    (!activeCategorySet.size || activeCategorySet.has(w.cat)) &&
-    (state.set.leechAct !== 'suspend' || !isLeech(w, state.set.leechN || 4))
-  );
-  const dailyDueAvailable = dailyPool.filter(w => w.last && w.due <= n).length;
-  const dailyNewAvailable = dailyPool.filter(w => !w.last).length;
-  const dailyReviewRemaining = state.set.rv > 0 ? Math.max(0, state.set.rv - dailyReviewDone) : 0;
-  const dailyNewRemaining = state.set.nw > 0 ? Math.max(0, state.set.nw - dailyNewDone) : 0;
-  const dailyReviewTasksLeft = Math.min(dailyReviewRemaining, dailyDueAvailable);
-  const dailyNewTasksLeft = Math.min(dailyNewRemaining, dailyNewAvailable);
-  const dailyTasksLeft = dailyReviewTasksLeft + dailyNewTasksLeft;
-  const dailyComplete = dailyTasksLeft === 0;
-  const okTotal = hist.filter(x => x.ok).length;
-  const clozeHist = hist.filter(x => x.type === 'cloze');
-  const clozeOk = clozeHist.filter(x => x.ok).length;
+  const [stageQuery, setStageQuery] = React.useState('');
+  const [dueQuery, setDueQuery] = React.useState('');
 
-  const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}٪` : '—');
+  /* ───────────── آمار — یک پاس روی داده‌ها، کش‌شده تا تیک دقیقه ───────────── */
+  const s = React.useMemo(() => {
+    const words = state.words;
+    const hist = state.hist;
+    const t0 = dayStart(0);
 
-  //
-  // Fulfills User Request #6:
-  // "در صفحه داشبورد ، قسمت فعالیت ۷ روز اخیر ، زیر روزهای هفته تاریخ رو و ماه عددی شمسی، زیرش هم میلادی ، نشون بده"
-  //
-  const last7Days = [6, 5, 4, 3, 2, 1, 0].map(offset => {
-    const timestamp = dayStart(-offset);
-    const dateObj = new Date(timestamp);
-    const dateStr = ymd(-offset);
-    const count = hist.filter(x => dstr(x.t) === dateStr).length;
+    const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 };
+    const dailyNewDone = Math.max(0, dailyToday.n || 0);
+    const dailyReviewDone = Math.max(0, dailyToday.r || 0);
 
-    const weekdayFa = dateObj.toLocaleDateString('fa-IR', { weekday: 'short' });
-    const shamsiNumeric = formatShamsiDayMonthNumeric(dateObj); // e.g. 08/09
-    const gregNumeric = formatGregorianMonthDayNumeric(dateObj); // e.g. 10/31 (purely numeric!)
+    const activeCategorySet = new Set(state.set.activeCats || []);
+    const dailyPool = words.filter(w =>
+      (!activeCategorySet.size || activeCategorySet.has(w.cat)) &&
+      (state.set.leechAct !== 'suspend' || !isLeech(w, state.set.leechN || 4))
+    );
+
+    // پاس واحد: مرحلهٔ تسلط، سطح CEFR، سررسید، عقب‌افتاده‌ها
+    const stageOf = (w: Word): 'mastered' | 'familiar' | 'learning' | 'newWords' | 'weak' =>
+      !w.last ? 'newWords' : isWeak(w) ? 'weak' : w.ivl >= 21 ? 'mastered' : w.ivl >= 3 ? 'familiar' : 'learning';
+    const stageLists: Record<string, Word[]> = { mastered: [], familiar: [], learning: [], newWords: [], weak: [] };
+    const lvlCounts: Record<string, number> = {};
+    const byDay = new Map<string, number>();
+    let okTotal = 0;
+    let clozeTotal = 0;
+    let clozeOk = 0;
+    let okLast7 = 0;
+    let totalLast7 = 0;
+    let matureOk = 0;
+    let matureAll = 0;
+
+    for (const w of words) {
+      stageLists[stageOf(w)].push(w);
+      if (w.lvl) {
+        const k = w.lvl.trim().toUpperCase();
+        if (LVL_ORDER.includes(k as any)) lvlCounts[k] = (lvlCounts[k] || 0) + 1;
+      }
+      if (w.ivl >= 7) { matureOk += w.ok; matureAll += w.ok + w.bad; }
+    }
+    for (const x of hist) {
+      if (x.ok) okTotal++;
+      if (x.type === 'cloze') { clozeTotal++; if (x.ok) clozeOk++; }
+      if (x.t > n - 7 * DAY) { totalLast7++; if (x.ok) okLast7++; }
+      const k = dstr(x.t);
+      byDay.set(k, (byDay.get(k) || 0) + 1);
+    }
+
+    const dueWords = dailyPool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due);
+    const reviewedTodayOk = new Set(hist.filter(x => x.ok && dstr(x.t) === today()).map(x => x.id));
+    const dueReviewWords = dueWords.filter(w => !reviewedTodayOk.has(w.id));
+    const overdueWords = dueReviewWords.filter(w => w.due < t0);
+
+    const dailyDueAvailable = dueWords.length;
+    const dailyNewAvailable = dailyPool.filter(w => !w.last).length;
+    const dailyReviewRemaining = state.set.rv > 0 ? Math.max(0, state.set.rv - dailyReviewDone) : 0;
+    const dailyNewRemaining = state.set.nw > 0 ? Math.max(0, state.set.nw - dailyNewDone) : 0;
+    const dailyReviewTasksLeft = Math.min(dailyReviewRemaining, dueReviewWords.length);
+    const dailyNewTasksLeft = Math.min(dailyNewRemaining, dailyNewAvailable);
+    const dailyTasksLeft = dailyReviewTasksLeft + dailyNewTasksLeft;
+    const estimatedMins = Math.ceil((dailyReviewTasksLeft * 20 + dailyNewTasksLeft * 30) / 60);
+
+    const last7Days = [6, 5, 4, 3, 2, 1, 0].map(offset => {
+      const timestamp = dayStart(-offset);
+      const dateObj = new Date(timestamp);
+      return {
+        offset,
+        count: byDay.get(ymd(-offset)) || 0,
+        weekdayFa: dateObj.toLocaleDateString('fa-IR', { weekday: 'short' }),
+        shamsiNumeric: formatShamsiDayMonthNumeric(dateObj),
+        gregNumeric: formatGregorianMonthDayNumeric(dateObj),
+        isToday: offset === 0
+      };
+    });
+
+    const weakList = stageLists.weak;
+    const hardMistakenWords = words
+      .filter(w => (w.bad || 0) > 3)
+      .sort((a, b) => (b.bad || 0) - (a.bad || 0) || (a.ok || 0) - (b.ok || 0));
+
+    const totalAuditedIssues = words
+      .filter(w => !ignoredQualityIds[w.id])
+      .filter(w => auditWord(w).length > 0).length;
 
     return {
-      offset,
-      count,
-      weekdayFa,
-      shamsiNumeric,
-      gregNumeric
+      words,
+      dailyNewDone,
+      dailyReviewDone,
+      dailyPool,
+      dueWords,
+      dueReviewWords,
+      overdueWords,
+      dailyDueAvailable,
+      dailyNewAvailable,
+      dailyTasksLeft,
+      dailyComplete: dailyTasksLeft === 0,
+      estimatedMins,
+      last7Days,
+      okTotal,
+      clozeTotal,
+      clozeOk,
+      acc7: totalLast7 ? okLast7 / totalLast7 : null,
+      retentionRate: matureAll ? Math.round((matureOk / matureAll) * 100) : null,
+      stageLists,
+      lvlCounts,
+      weakList,
+      hardMistakenWords,
+      totalAuditedIssues,
+      overdueBacklog: dailyPool.filter(w => w.last && w.due < t0).length
     };
-  });
+  }, [state.words, state.hist, state.daily, state.set, ignoredQualityIds, n]);
 
-  const maxActivity = Math.max(1, ...last7Days.map(d => d.count));
+  const nextReviewWord = s.words.filter(w => w.last && w.due > n).sort((a, b) => a.due - b.due)[0];
+  const weekTotal = s.last7Days.reduce((a, d) => a + d.count, 0);
+  const maxActivity = Math.max(1, ...s.last7Days.map(d => d.count));
+  const avgPerDay = Math.round(weekTotal / 7);
+  const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}٪` : '—');
 
-  //
-  // Fulfills User Request #7:
-  // "قسمت تحلیل هوشمند یادگیری رو جذابتر و قابل فهم تر گزارش بده"
-  //
-  const t0 = dayStart(0);
-  const histLast7 = hist.filter(x => x.t > n - 7 * DAY);
-  const overdueBacklog = dailyPool.filter(w => w.last && w.due < t0).length;
-  const newWordsLeftToday = dailyNewTasksLeft;
-  const estimatedMins = Math.ceil((dailyReviewTasksLeft * 20 + newWordsLeftToday * 30) / 60);
+  // هدف ترکیبی امروز برای حلقهٔ پیشرفت
+  const totalTarget = state.set.nw + state.set.rv;
+  const totalDone = s.dailyNewDone + s.dailyReviewDone;
+  const ringProgress = totalTarget > 0 ? Math.min(1, totalDone / totalTarget) : 0;
+  const RING_R = 30;
+  const RING_C = 2 * Math.PI * RING_R;
 
-  const acc7 = histLast7.length ? histLast7.filter(y => y.ok).length / histLast7.length : null;
-  const matureWords = words.filter(w => w.ivl >= 7 && w.ok + w.bad > 0);
-  const retentionRate = matureWords.length
-    ? Math.round(
-        (matureWords.reduce((acc, w) => acc + w.ok, 0) /
-          matureWords.reduce((acc, w) => acc + w.ok + w.bad, 0)) *
-          100
-      )
-    : null;
-
-  // Mastery breakdown
-  // Every word belongs to exactly ONE group (previously 'familiar'/'learning'/'mastered' overlapped with 'weak').
-  const stageOf = (w: Word) => !w.last ? 'newWords' : isWeak(w) ? 'weak' : w.ivl >= 21 ? 'mastered' : w.ivl >= 3 ? 'familiar' : 'learning';
-  const stages = {
-    mastered: words.filter(w => stageOf(w) === 'mastered').length,
-    familiar: words.filter(w => stageOf(w) === 'familiar').length,
-    learning: words.filter(w => stageOf(w) === 'learning').length,
-    newWords: words.filter(w => stageOf(w) === 'newWords').length,
-    weakWords: words.filter(w => stageOf(w) === 'weak').length
-  };
-
+  // پیشنهاد هوشمند سهمیه
   let suggestedNew = state.set.nw;
-  if (acc7 !== null && (acc7 < 0.7 || dailyDueAvailable > 40)) {
+  if (s.acc7 !== null && (s.acc7 < 0.7 || s.dailyDueAvailable > 40)) {
     suggestedNew = Math.max(3, state.set.nw - 3);
-  } else if (acc7 !== null && acc7 > 0.9 && dailyDueAvailable < 10) {
-    suggestedNew = state.set.nw + 2;
+  } else if (s.acc7 !== null && s.acc7 > 0.9 && s.dailyDueAvailable < 10) {
+    suggestedNew = Math.min(500, state.set.nw + 2);
   }
 
-  const weakList = words.filter(isWeak);
   const stageDefs: { key: string; icon: string; label: string; cls: string; list: Word[] }[] = [
-    { key: 'mastered', icon: '🏆', label: 'مسلط', cls: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-200', list: words.filter(w => stageOf(w) === 'mastered') },
-    { key: 'familiar', icon: '✨', label: 'آشنا', cls: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-900 dark:text-blue-200', list: words.filter(w => stageOf(w) === 'familiar') },
-    { key: 'learning', icon: '🌱', label: 'در حال یادگیری', cls: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200', list: words.filter(w => stageOf(w) === 'learning') },
-    { key: 'newWords', icon: '🆕', label: 'کلمات جدید', cls: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-950/30 dark:border-purple-900 dark:text-purple-200', list: words.filter(w => stageOf(w) === 'newWords') },
-    { key: 'weak', icon: '🩸', label: 'ضعیف / سخت', cls: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-200', list: words.filter(w => stageOf(w) === 'weak') }
+    { key: 'mastered', icon: '🏆', label: 'مسلط', cls: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-200', list: s.stageLists.mastered },
+    { key: 'familiar', icon: '✨', label: 'آشنا', cls: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-900 dark:text-blue-200', list: s.stageLists.familiar },
+    { key: 'learning', icon: '🌱', label: 'در حال یادگیری', cls: 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-200', list: s.stageLists.learning },
+    { key: 'newWords', icon: '🆕', label: 'کلمات جدید', cls: 'bg-purple-50 border-purple-200 text-purple-800 dark:bg-purple-950/30 dark:border-purple-900 dark:text-purple-200', list: s.stageLists.newWords },
+    { key: 'weak', icon: '🩸', label: 'ضعیف / سخت', cls: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-900 dark:text-red-200', list: s.stageLists.weak }
   ];
-  const totalAuditedIssues = words
-    .filter(w => !ignoredQualityIds[w.id])
-    .filter(w => auditWord(w).length > 0).length;
 
-  // Next review
-  const nextReviewWord = words.filter(w => w.last && w.due > n).sort((a, b) => a.due - b.due)[0];
+  // خوش‌آمدگویی بر اساس ساعت روز + تاریخ امروز (شمسی و میلادی)
+  const nowDate = new Date(n);
+  const hour = nowDate.getHours();
+  const greeting = hour < 5 ? 'شب‌بخیر' : hour < 12 ? 'صبح‌بخیر' : hour < 17 ? 'ظهر بخیر' : hour < 21 ? 'عصر بخیر' : 'شب‌بخیر';
+  const todayShamsi = formatShamsiFullNumeric(n);
+  const todayGreg = formatGregorianNumeric(n);
+  const todayWeekday = nowDate.toLocaleDateString('fa-IR', { weekday: 'long' });
 
-  // Words due for review today — same source of truth as the "مرور کن" action:
-  // words answered correctly today are excluded so list, count and button never disagree.
-  const reviewedTodayIds = new Set(
-    state.hist.filter(x => x.ok && dstr(x.t) === today()).map(x => x.id)
-  );
-  const dueAllCount = dailyPool.filter(w => w.last && w.due <= n).length;
-  const dueReviewWords = dailyPool
-    .filter(w => w.last && w.due <= n && !reviewedTodayIds.has(w.id))
-    .sort((a, b) => a.due - b.due);
+  // جست‌وجوی داخل فهرست مرور و فهرست مرحلهٔ تسلط
+  const dueFiltered = dueQuery.trim()
+    ? s.dueReviewWords.filter(w => {
+        const q = dueQuery.trim().toLowerCase();
+        return w.de.toLowerCase().includes(q) || (w.fa || '').includes(dueQuery.trim()) || (w.cat || '').includes(dueQuery.trim());
+      })
+    : s.dueReviewWords;
 
-  // Frequently mistaken hard words with > 3 errors sorted descending (Fulfills Request #5)
-  const hardMistakenWords = words
-    .filter(w => (w.bad || 0) > 3)
-    .sort((a, b) => (b.bad || 0) - (a.bad || 0));
+  const lvls = LVL_ORDER.filter(l => (s.lvlCounts[l] || 0) > 0);
+  const maxLvl = Math.max(1, ...lvls.map(l => s.lvlCounts[l] || 0));
+
+  const activeStage = stageView ? stageDefs.find(x => x.key === stageView) : null;
+  const stageFiltered = activeStage && stageQuery.trim()
+    ? activeStage.list.filter(w => {
+        const q = stageQuery.trim().toLowerCase();
+        return w.de.toLowerCase().includes(q) || (w.fa || '').includes(stageQuery.trim()) || (w.cat || '').toLowerCase().includes(q);
+      })
+    : activeStage?.list;
 
   return (
     <div className="space-y-4 text-right">
-      {/* 7 Days Activity Chart */}
+      {/* ─────────── سربرگ خوش‌آمد: سلام، تاریخ، رشتهٔ استمرار و حلقهٔ پیشرفت امروز ─────────── */}
+      <div className="bg-gradient-to-l from-[#6b4fd8] via-[#4a5ac9] to-[#1f5fbf] rounded-2xl p-5 text-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
+            <p className="text-xs text-white/80 mt-0.5" dir="ltr">
+              {todayWeekday} • {todayShamsi} • {todayGreg}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className="bg-white/15 backdrop-blur-sm border border-white/25 px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5"
+              title="روزهای پیاپی تمرین"
+              aria-label="رشتهٔ استمرار مطالعه"
+            >
+              🔥 {streakCount(state.hist)} روز استمرار
+            </span>
+            <span
+              className="bg-white/15 backdrop-blur-sm border border-white/25 px-3.5 py-2 rounded-xl text-sm font-bold"
+              title="کل واژگان کتابخانه"
+            >
+              📚 {s.words.length} واژه
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 mt-4">
+          <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`پیشرفت امروز: ${Math.round(ringProgress * 100)}٪`}>
+            <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
+              <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-white/25" />
+              <circle
+                cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" strokeLinecap="round"
+                className="stroke-emerald-300 transition-all duration-700"
+                strokeDasharray={RING_C}
+                strokeDashoffset={RING_C * (1 - ringProgress)}
+              />
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold">
+              {totalTarget > 0 ? `${Math.round(ringProgress * 100)}٪` : '—'}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <b className="text-sm font-bold block">هدف امروز: {totalDone} از {totalTarget > 0 ? totalTarget : '—'} تمرین</b>
+            <p className="text-xs text-white/80 mt-1">
+              {totalTarget > 0
+                ? `کلمهٔ جدید ${s.dailyNewDone}/${state.set.nw} • مرور ${s.dailyReviewDone}/${state.set.rv}`
+                : 'برای شروع، سهمیهٔ روزانه را در تنظیمات تعیین کن.'}
+            </p>
+            <p className="text-xs text-white/70 mt-0.5">
+              {s.dailyComplete && totalTarget > 0
+                ? '✅ تمرین‌های امروز کامل شده — آفرین!'
+                : `⏳ حدود ${s.estimatedMins} دقیقه زمان می‌برد.`}
+            </p>
+          </div>
+        </div>
+
+        {/* دکمه‌های دسترسی سریع */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+          <button
+            onClick={() => onNavigate('daily')}
+            className="bg-white text-[#1f5fbf] hover:bg-white/90 px-3 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5"
+          >
+            {s.dailyComplete && totalTarget > 0 ? '✅ جلسهٔ امروز کامل' : `🌟 شروع روزانه (${s.dailyTasksLeft})`}
+          </button>
+          {s.dueReviewWords.length > 0 && (
+            <button
+              onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
+              className="bg-white/15 backdrop-blur-sm border border-white/30 hover:bg-white/25 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              ⚡ مرور سررسید ({s.dueReviewWords.length})
+            </button>
+          )}
+          {s.weakList.length > 0 && (
+            <button
+              onClick={() => onPracticeWords(s.weakList.map(w => w.id), 'targeted')}
+              className="bg-white/15 backdrop-blur-sm border border-white/30 hover:bg-white/25 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              🎯 نقاط ضعف ({s.weakList.length})
+            </button>
+          )}
+          <button
+            onClick={() => onNavigate('lib')}
+            className="bg-white/15 backdrop-blur-sm border border-white/30 hover:bg-white/25 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+          >
+            📚 کتابخانهٔ واژگان
+          </button>
+        </div>
+      </div>
+
+      {/* ─────────── فعالیت ۷ روز اخیر ─────────── */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <span className="text-xl">🔥</span>
             <b className="text-base text-slate-900 dark:text-slate-100">فعالیت ۷ روز اخیر</b>
           </div>
-          <span className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-            رشتهٔ استمرار مطالعه: <b className="text-amber-500 font-bold">{streakCount(hist)} روز</b>
-          </span>
+          <div className="flex items-center gap-2 text-xs text-[#5d6676] dark:text-[#a3adbd]">
+            <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-[#141923]" title="مجموع تمرین‌های هفته">
+              مجموع هفته: <b className="text-slate-800 dark:text-slate-200">{weekTotal}</b>
+            </span>
+            <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-[#141923]" title="میانگین روزانه">
+              میانگین: <b className="text-slate-800 dark:text-slate-200">{avgPerDay}</b>
+            </span>
+          </div>
         </div>
 
-        {/*
-          Fulfills User Request #6:
-          "زیر روزهای هفته تاریخ رو و ماه عددی شمسی، زیرش هم میلادی ، نشون بده"
-        */}
         <div className="flex items-end gap-1.5 sm:gap-3 h-44 pt-4 px-1">
-          {last7Days.map(item => {
+          {s.last7Days.map(item => {
             const barHeight = Math.max(6, Math.round((item.count / maxActivity) * 85));
+            const isZero = item.count === 0;
             return (
               <div key={item.offset} className="flex-1 flex flex-col items-center justify-end h-full">
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                <span className={`text-[11px] font-bold mb-1 ${isZero ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
                   {item.count}
                 </span>
                 <div
-                  className="w-full max-w-[42px] bg-gradient-to-t from-[#1f5fbf] to-[#6b4fd8] rounded-t-lg transition-all duration-300"
+                  title={`${item.weekdayFa} ${item.shamsiNumeric} (${item.gregNumeric}) — ${item.count} تمرین`}
+                  aria-label={`${item.weekdayFa}: ${item.count} تمرین`}
+                  className={`w-full max-w-[42px] rounded-t-lg transition-all duration-300 ${item.isToday ? 'ring-2 ring-[#6b4fd8] ring-offset-1 ring-offset-white dark:ring-offset-[#1b2029]' : ''} ${
+                    isZero
+                      ? 'bg-slate-200 dark:bg-slate-700'
+                      : 'bg-gradient-to-t from-[#1f5fbf] to-[#6b4fd8] hover:opacity-85'
+                  }`}
                   style={{ height: `${barHeight}px` }}
                 />
                 <div className="mt-2 text-center flex flex-col items-center gap-0.5 leading-tight">
-                  <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
-                    {item.weekdayFa}
+                  <span className={`text-[11px] font-bold ${item.isToday ? 'text-[#1f5fbf] dark:text-[#7fb0ff]' : 'text-slate-800 dark:text-slate-200'}`}>
+                    {item.isToday ? 'امروز' : item.weekdayFa}
                   </span>
-                  {/* Shamsi Day/Month numeric e.g. 08/09 */}
+                  {/* تاریخ عددی شمسی، مثل 08/09 */}
                   <span className="text-[10px] text-[#1f5fbf] dark:text-[#7fb0ff] font-medium" dir="ltr">
                     {item.shamsiNumeric}
                   </span>
-                  {/* Gregorian Day/Month numeric e.g. 10/31 */}
+                  {/* تاریخ عددی میلادی، مثل 10/31 */}
                   <span className="text-[9px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">
                     {item.gregNumeric}
                   </span>
@@ -202,64 +371,75 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-        {/* Today's Target Card */}
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-          <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-            <span>🎯</span> هدف و پیشرفت امروز
-          </b>
+      {/* ─────────── هدف و پیشرفت امروز ─────────── */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+        <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+          <span>🎯</span> هدف و پیشرفت امروز
+        </b>
 
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>کلمات جدید:</span>
-              <span>
-                {dailyNewDone} از {state.set.nw}
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] h-full transition-all"
-                style={{ width: `${state.set.nw <= 0 ? 100 : Math.min(100, (dailyNewDone / state.set.nw) * 100)}%` }}
-              />
-            </div>
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span>کلمات جدید:</span>
+            <span>
+              {s.dailyNewDone} از {state.set.nw}
+              {remainingOf(state.set.nw, s.dailyNewDone) > 0 && (
+                <span className="text-[#5d6676] dark:text-[#a3adbd]"> • {remainingOf(state.set.nw, s.dailyNewDone)} باقی‌مانده</span>
+              )}
+            </span>
           </div>
-
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>مرور:</span>
-              <span>
-                {dailyReviewDone} از {state.set.rv}
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-              <div
-                className="bg-emerald-500 h-full transition-all"
-                style={{ width: `${state.set.rv <= 0 ? 100 : Math.min(100, (dailyReviewDone / state.set.rv) * 100)}%` }}
-              />
-            </div>
-          </div>
-
-          <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-            کل واژگان: {words.length} • سررسید مرور: {dailyDueAvailable}
-            {dailyDueAvailable === 0 && nextReviewWord && (
-              <span> • نزدیک‌ترین مرور: {dueText(nextReviewWord)}</span>
-            )}
-          </p>
-
-          <div className="pt-1">
-            {dailyComplete ? (
-              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                ✅ تمرین‌های امروز تمام شده‌اند. برای تمرین بیشتر، از بخش تمرین‌ها استفاده کنید.
-              </div>
-            ) : (
-              <button
-                onClick={() => onNavigate('daily')}
-                className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
-              >
-                🌟 شروع جلسهٔ روزانه ({dailyTasksLeft} تمرین باقی‌مانده)
-              </button>
-            )}
+          <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] h-full transition-all"
+              style={{ width: `${state.set.nw <= 0 ? 100 : Math.min(100, (s.dailyNewDone / state.set.nw) * 100)}%` }}
+            />
           </div>
         </div>
+
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span>مرور:</span>
+            <span>
+              {s.dailyReviewDone} از {state.set.rv}
+              {remainingOf(state.set.rv, s.dailyReviewDone) > 0 && (
+                <span className="text-[#5d6676] dark:text-[#a3adbd]"> • {remainingOf(state.set.rv, s.dailyReviewDone)} باقی‌مانده</span>
+              )}
+            </span>
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+            <div
+              className="bg-emerald-500 h-full transition-all"
+              style={{ width: `${state.set.rv <= 0 ? 100 : Math.min(100, (s.dailyReviewDone / state.set.rv) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+          کل واژگان: {s.words.length} • آمادهٔ مرور: {s.dueReviewWords.length}
+          {!s.dueReviewWords.length && s.dailyDueAvailable > 0 && (
+            <span> • هر {s.dailyDueAvailable} سررسید امروز مرور شده ✅</span>
+          )}
+          {s.dueReviewWords.length === 0 && nextReviewWord && (
+            <span> • نزدیک‌ترین مرور: {dueText(nextReviewWord)}</span>
+          )}
+        </p>
+
+        <div className="pt-1">
+          {s.dailyComplete ? (
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+              ✅ تمرین‌های امروز تمام شده‌اند. برای تمرین بیشتر، از بخش تمرین‌ها استفاده کنید.
+            </div>
+          ) : (
+            <button
+              onClick={() => onNavigate('daily')}
+              className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
+            >
+              🌟 شروع جلسهٔ روزانه ({s.dailyTasksLeft} تمرین باقی‌مانده)
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ─────────── تحلیل هوشمند یادگیری و حافظه ─────────── */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -271,37 +451,64 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </div>
           </div>
-          {retentionRate !== null && (
+          {s.retentionRate !== null && (
             <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
               <span>نرخ ماندگاری:</span>
-              <span className="text-sm font-extrabold">{retentionRate}٪</span>
+              <span className="text-sm font-extrabold">{s.retentionRate}٪</span>
             </div>
           )}
         </div>
 
-        {/* Word mastery boxes: one line, tap to open the word list */}
-        <div className="grid grid-cols-5 gap-1.5 text-center">
+        {/* باکس‌های مرحلهٔ تسلط — واکنش‌گرا (۲ ستون در موبایل، ۵ ستون در دسکتاپ) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 text-center">
           {stageDefs.map(b => (
-            <button key={b.key} type="button" onClick={() => setStageView(b.key)}
-              className={`${b.cls} border rounded-xl py-2 px-0.5 flex flex-col items-center gap-0.5 active:scale-95 transition`}>
+            <button key={b.key} type="button" onClick={() => { setStageView(b.key); setStageQuery(''); }}
+              className={`${b.cls} border rounded-xl py-2 px-0.5 flex flex-col items-center gap-0.5 active:scale-95 transition`}
+              aria-label={`${b.label}: ${b.list.length} واژه`}>
               <span className="text-xl leading-none" aria-hidden="true">{b.icon}</span>
               <b className="text-base leading-tight">{b.list.length}</b>
               <span className="text-[10px] font-bold leading-tight">{b.label}</span>
+              {s.words.length > 0 && (
+                <span className="text-[9px] opacity-70 leading-tight">{Math.round((b.list.length / s.words.length) * 100)}٪ از کل</span>
+              )}
             </button>
           ))}
         </div>
         <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] -mt-1">روی هر باکس بزن تا فهرست واژه‌هایش را ببینی.</p>
 
-        {weakList.length > 0 && (
+        {/* توزیع سطح CEFR */}
+        {lvls.length > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <b className="text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5 pt-2">
+              <span>📶</span> توزیع سطح واژگان (CEFR)
+            </b>
+            {lvls.map(l => (
+              <div key={l} className="flex items-center gap-2 text-[11px]">
+                <span className="w-6 font-extrabold text-slate-600 dark:text-slate-300" dir="ltr">{l}</span>
+                <div className="flex-1 h-2.5 bg-slate-100 dark:bg-[#141923] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${LVL_CLS[l]}`}
+                    style={{ width: `${Math.max(4, Math.round(((s.lvlCounts[l] || 0) / maxLvl) * 100))}%` }}
+                  />
+                </div>
+                <b className="w-10 text-left text-slate-600 dark:text-slate-300" title={`${s.lvlCounts[l] || 0} واژه در سطح ${l}`}>
+                  {s.lvlCounts[l] || 0}
+                </b>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {s.weakList.length > 0 && (
           <button
-            onClick={() => onPracticeWords(weakList.map(w => w.id), 'targeted')}
+            onClick={() => onPracticeWords(s.weakList.map(w => w.id), 'targeted')}
             className="w-full bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
           >
-            🎯 تمرین نقاط ضعف ({weakList.length})
+            🎯 تمرین نقاط ضعف ({s.weakList.length})
           </button>
         )}
 
-        {/* Suggested Target & Actions */}
+        {/* پیشنهاد هوشمند سهمیه + کیفیت داده */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           {suggestedNew !== state.set.nw ? (
             <div className="flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2 rounded-xl">
@@ -319,145 +526,177 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
           )}
 
+          {s.totalAuditedIssues > 0 && onOpenQualityModal && (
+            <button
+              onClick={onOpenQualityModal}
+              className="flex items-center gap-1.5 text-xs bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 text-orange-700 dark:text-orange-300 px-2.5 py-2 rounded-xl font-bold hover:bg-orange-100 dark:hover:bg-orange-950/60 transition"
+            >
+              🩺 {s.totalAuditedIssues} واژه نیازمند بازبینی کیفیت
+            </button>
+          )}
         </div>
       </div>
 
-        {/* Global Statistics Card */}
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-          <b className="text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-            <span>📊</span> آمار کلی تمرین‌ها
-          </b>
+      {/* ─────────── آمار کلی تمرین‌ها ─────────── */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+        <b className="text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+          <span>📊</span> آمار کلی تمرین‌ها
+        </b>
 
-          <div className="grid grid-cols-5 gap-1.5 pt-1">
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
-              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">پاسخ‌های درست</span>
-              <b className="text-sm text-emerald-600">{okTotal}</b>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 pt-1">
+          {[
+            { label: 'کل واژگان', value: s.words.length, cls: 'text-slate-800 dark:text-slate-200' },
+            { label: 'واژه‌های مسلط', value: s.stageLists.mastered.length, cls: 'text-emerald-600' },
+            { label: 'پاسخ‌های درست', value: s.okTotal, cls: 'text-emerald-600' },
+            { label: 'پاسخ‌های نادرست', value: state.hist.length - s.okTotal, cls: 'text-red-500' },
+            { label: 'دقت کلی', value: pct(s.okTotal, state.hist.length), cls: 'text-[#1f5fbf] dark:text-[#7fb0ff]' },
+            { label: 'دقت جای‌خالی', value: pct(s.clozeOk, s.clozeTotal), cls: 'text-purple-600' }
+          ].map(tile => (
+            <div key={tile.label} className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center flex flex-col justify-center gap-0.5">
+              <span className="text-[10px] leading-tight text-[#5d6676] dark:text-[#a3adbd]">{tile.label}</span>
+              <b className={`text-sm ${tile.cls}`}>{tile.value}</b>
             </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
-              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">پاسخ‌های نادرست</span>
-              <b className="text-sm text-red-500">{hist.length - okTotal}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
-              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">دقت کلی</span>
-              <b className="text-sm text-[#1f5fbf] dark:text-[#7fb0ff]">{pct(okTotal, hist.length)}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
-              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">دقت جای‌خالی</span>
-              <b className="text-sm text-purple-600">{pct(clozeOk, clozeHist.length)}</b>
-            </div>
-            <div className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 rounded-xl text-center flex flex-col justify-center">
-              <span className="text-[10px] leading-tight text-[#5d6676] block mb-0.5">امروز (جدید / مرور)</span>
-              <b className="text-sm text-slate-800 dark:text-slate-200">
-                {dailyNewDone} / {dailyReviewDone}
-              </b>
-            </div>
-          </div>
+          ))}
         </div>
+      </div>
 
-        {/* Key Coaching Insights in compact banner */}
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* ─────────── نکات مربی‌گری ─────────── */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            مرورهای عقب‌افتاده: <b className="text-red-500">{s.overdueBacklog}</b> • سررسید همین حالا:{' '}
+            <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">{s.dueReviewWords.length}</b> • زمان تقریبی جلسه:{' '}
+            <b>{s.estimatedMins} دقیقه</b>
+          </span>
+          {s.acc7 !== null && (
             <span>
-              مرورهای عقب‌افتاده: <b className="text-red-500">{overdueBacklog}</b> • سررسید همین حالا:{' '}
-              <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">{dailyDueAvailable}</b> • زمان تقریبی جلسه:{' '}
-              <b>{estimatedMins} دقیقه</b>
+              دقت ۷ روز اخیر: <b>{Math.round(s.acc7 * 100)}٪</b>
             </span>
-            {acc7 !== null && (
-              <span>
-                دقت ۷ روز اخیر: <b>{Math.round(acc7 * 100)}٪</b>
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
-            💡 طبق الگوریتم فاصله، واژه‌های جدید بعد از اتمام مرورهای سررسیدشده ارائه می‌شوند تا حافظه اشباع نشود.
-          </p>
+          )}
         </div>
+        <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+          💡 طبق الگوریتم فاصله، واژه‌های جدید بعد از اتمام مرورهای سررسیدشده ارائه می‌شوند تا حافظه اشباع نشود.
+        </p>
+      </div>
 
-        {/*
-          Fulfills User Request #4:
-          "در صفحه داشبورد در قسمت تحلیل هوشمند که میگه چندتا لغت باید مطالعه بشوند ، لیست لغات (بدون ترجمه ) و تاریخی که باید مرور بشن توی باکس قابل اسکرول نشون داده بشن و یک دکمه هم تعبیه بشه که همین حالا انجامش بده و با زدن رو اون لغاتی که وقتشون هست شروع بشه به مرور شدن طبق دستورالعملی که باید باشه"
-        */}
-        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-base">📋</span>
-              <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100">
-                فهرست واژه‌های آماده برای مرور و مطالعه ({dueReviewWords.length} واژه)
-              </b>
-            </div>
-            {dueReviewWords.length > 0 && (
-              <button
-                onClick={() => onPracticeWords(dueReviewWords.map(w => w.id), 'review')}
-                className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5"
-              >
-                <span>⚡ همین حالا مرور کن ({dueReviewWords.length} واژه)</span>
-              </button>
-            )}
+      {/* ─────────── فهرست واژه‌های آمادهٔ مرور ─────────── */}
+      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📋</span>
+            <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100">
+              فهرست واژه‌های آماده برای مرور و مطالعه ({s.dueReviewWords.length} واژه)
+            </b>
           </div>
-
-          {dueReviewWords.length === 0 ? (
-            <div className="text-xs text-emerald-600 dark:text-emerald-400 py-3 text-center bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl">
-              {dueAllCount > 0
-                ? `✅ همهٔ ${dueAllCount} سررسید امروز مرور شده‌اند — جلسهٔ امروز کامل است!`
-                : '✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.'}
-            </div>
-          ) : (
-            <div className="max-h-52 overflow-y-auto bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
-              <table className="w-full table-fixed text-xs border-collapse">
-                <colgroup>
-                  <col style={{ width: '36%' }} />
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '24%' }} />
-                  <col style={{ width: '29%' }} />
-                </colgroup>
-                <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left font-bold">واژه</th>
-                    <th className="px-1 py-1.5 text-center font-bold">سطح</th>
-                    <th className="px-2 py-1.5 text-right font-bold">دسته</th>
-                    <th className="px-2 py-1.5 text-right font-bold">سررسید</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {dueReviewWords.map((w, idx) => {
-                    const shamsi = w.due ? formatShamsiFullNumeric(w.due) : 'امروز';
-                    return (
-                      <tr key={w.id || idx} className="align-middle">
-                        <td className="px-2 py-2 text-left font-bold text-slate-900 dark:text-slate-100 text-sm truncate" dir="ltr">
-                          {fullWord(w)}
-                        </td>
-                        <td className="px-1 py-2 text-center">
-                          {w.lvl ? (
-                            <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
-                              {w.lvl}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2 text-right text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">
-                          {w.cat || '—'}
-                        </td>
-                        <td className="px-2 py-2 text-right text-[11px] whitespace-nowrap">
-                          {!w.last ? (
-                            <span className="text-purple-600 dark:text-purple-400 font-semibold">واژهٔ جدید</span>
-                          ) : (
-                            <b className="text-slate-700 dark:text-slate-300">{shamsi}</b>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {s.dueReviewWords.length > 0 && (
+            <button
+              onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
+              className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+            >
+              <span>⚡ همین حالا مرور کن ({s.dueReviewWords.length} واژه)</span>
+            </button>
           )}
         </div>
 
-      {/*
-        Fulfills User Request #5:
-        "در پایین صفحه داشبورد ، یک بخش جدید اضافه بشه واژه های پر اشتباه و سخت و زیرش لیست واژه هایی ک بیشترین تکرار اشتباه رو داشتن از بیشترین به کمترین لیست بشه و گزینه تمرین این واژه ها زیرش باشه . شرط اومدن تو این قسمت بیش از ۳ بار اشتباه"
-      */}
+        {/* تفکیک سررسید امروز و عقب‌افتاده‌ها */}
+        {s.dueReviewWords.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold border border-blue-100 dark:border-blue-900">
+              سررسید امروز: {s.dueReviewWords.length - s.overdueWords.length}
+            </span>
+            {s.overdueWords.length > 0 && (
+              <span className="px-2 py-1 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 font-bold border border-red-100 dark:border-red-900">
+                عقب‌افتاده: {s.overdueWords.length}
+              </span>
+            )}
+            {s.dueReviewWords.length > 8 && (
+              <input
+                type="text"
+                value={dueQuery}
+                onChange={e => setDueQuery(e.target.value)}
+                placeholder="جست‌وجو در فهرست مرور…"
+                aria-label="جست‌وجو در فهرست واژه‌های آمادهٔ مرور"
+                className="flex-1 min-w-[140px] px-3 py-1.5 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#4385e8]"
+              />
+            )}
+          </div>
+        )}
+
+        {s.dueReviewWords.length === 0 ? (
+          <div className="text-xs text-emerald-600 dark:text-emerald-400 py-3 text-center bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl">
+            {s.dailyDueAvailable > 0
+              ? `✅ همهٔ ${s.dailyDueAvailable} سررسید امروز مرور شده‌اند — جلسهٔ امروز کامل است!`
+              : '✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.'}
+          </div>
+        ) : (
+          <div className="max-h-52 overflow-y-auto bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
+            <table className="w-full table-fixed text-xs border-collapse">
+              <colgroup>
+                <col style={{ width: '36%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '24%' }} />
+                <col style={{ width: '29%' }} />
+              </colgroup>
+              <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+                <tr>
+                  <th scope="col" className="px-2 py-1.5 text-left font-bold">واژه</th>
+                  <th scope="col" className="px-1 py-1.5 text-center font-bold">سطح</th>
+                  <th scope="col" className="px-2 py-1.5 text-right font-bold">دسته</th>
+                  <th scope="col" className="px-2 py-1.5 text-right font-bold">سررسید</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {dueFiltered.map((w, idx) => {
+                  const isOverdue = w.due < dayStart(0);
+                  const overdueDays = Math.max(1, Math.ceil((dayStart(0) - w.due) / DAY));
+                  return (
+                    <tr
+                      key={w.id || idx}
+                      onClick={() => onSelectWord(w)}
+                      className="align-middle cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+                      title={`مشاهدهٔ پروفایل واژهٔ ${fullWord(w)}`}
+                    >
+                      <td className="px-2 py-2 text-left font-bold text-slate-900 dark:text-slate-100 text-sm truncate" dir="ltr">
+                        {fullWord(w)}
+                      </td>
+                      <td className="px-1 py-2 text-center">
+                        {w.lvl ? (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                            {w.lvl}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-right text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">
+                        {w.cat || '—'}
+                      </td>
+                      <td className="px-2 py-2 text-right text-[11px] whitespace-nowrap">
+                        {isOverdue ? (
+                          <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-300 font-bold">
+                            {overdueDays} روز عقب‌افتاده
+                          </span>
+                        ) : (
+                          <b className="text-slate-700 dark:text-slate-300">امروز</b>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {dueFiltered.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-2 py-3 text-center text-slate-500 dark:text-slate-400">
+                      واژه‌ای با این جست‌وجو پیدا نشد.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ─────────── واژه‌های پر اشتباه و سخت ─────────── */}
       <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-950/60 rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
@@ -469,27 +708,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </div>
           </div>
-          {hardMistakenWords.length > 0 && (
+          {s.hardMistakenWords.length > 0 && (
             <span className="px-3 py-1 rounded-xl bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 text-xs font-bold">
-              {hardMistakenWords.length} واژه دشوار
+              {s.hardMistakenWords.length} واژه دشوار
             </span>
           )}
         </div>
 
-        {hardMistakenWords.length === 0 ? (
+        {s.hardMistakenWords.length === 0 ? (
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#141923] text-center text-xs text-slate-600 dark:text-slate-400">
             👏 عالی است! در حال حاضر هیچ واژه‌ای با بیش از ۳ بار اشتباه در کتابخانه شما وجود ندارد.
           </div>
         ) : (
           <>
             <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 bg-slate-50 dark:bg-[#141923] rounded-xl border border-[#dde1ea] dark:border-[#333b4a] px-3 py-1">
-              {hardMistakenWords.map(w => (
-                <div key={w.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
+              {s.hardMistakenWords.map(w => (
+                <button
+                  key={w.id}
+                  onClick={() => onSelectWord(w)}
+                  className="w-full py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-right hover:bg-slate-100/70 dark:hover:bg-slate-800/40 rounded-lg px-1 transition"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="font-bold text-slate-900 dark:text-slate-100 text-sm" dir="ltr">
                       {fullWord(w)}
                     </span>
-                    <span className="text-slate-600 dark:text-slate-300">
+                    <span className="text-slate-600 dark:text-slate-300 truncate">
                       : {w.fa}
                     </span>
                     {w.cat && (
@@ -498,7 +741,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-300 font-bold text-[11px]">
                       ❌ {w.bad} بار اشتباه
                     </span>
@@ -506,31 +749,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       ✅ {w.ok} بار درست
                     </span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
 
             <div className="pt-1">
               <button
-                onClick={() => onPracticeWords(hardMistakenWords.map(w => w.id), 'hard')}
+                onClick={() => onPracticeWords(s.hardMistakenWords.map(w => w.id), 'hard')}
                 className="w-full bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-700 hover:to-rose-800 text-white py-3 px-4 rounded-xl text-xs md:text-sm font-bold shadow-xs transition flex items-center justify-center gap-2"
               >
-                <span>🎯 تمرین اختصاصی این واژه‌های سخت ({hardMistakenWords.length} واژه)</span>
+                <span>🎯 تمرین اختصاصی این واژه‌های سخت ({s.hardMistakenWords.length} واژه)</span>
               </button>
             </div>
           </>
         )}
       </div>
 
-      {stageView && (() => {
-        const d = stageDefs.find(x => x.key === stageView);
-        if (!d) return null;
+      {/* ─────────── لایهٔ فهرست واژه‌های هر مرحلهٔ تسلط (با جست‌وجو) ─────────── */}
+      {activeStage && (() => {
         const artCls = (a: string) => a === 'der' ? 'bg-blue-100 text-blue-800' : a === 'die' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
-        const sorted = [...d.list].sort((a, b) => a.de.localeCompare(b.de, 'de'));
+        const sorted = [...(stageFiltered || [])].sort((a, b) => a.de.localeCompare(b.de, 'de'));
         return (
-          <PageOverlay icon={d.icon} title={`${d.label} (${d.list.length})`} onClose={() => setStageView(null)}>
+          <PageOverlay icon={activeStage.icon} title={`${activeStage.label} (${activeStage.list.length})`} onClose={() => { setStageView(null); setStageQuery(''); }}>
+            {activeStage.list.length > 8 && (
+              <input
+                type="text"
+                value={stageQuery}
+                onChange={e => setStageQuery(e.target.value)}
+                placeholder="جست‌وجو در این فهرست…"
+                aria-label={`جست‌وجو در فهرست ${activeStage.label}`}
+                className="w-full mb-2 px-3.5 py-2.5 rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#4385e8]"
+              />
+            )}
             {sorted.length === 0 ? (
-              <div className="p-4 rounded-xl bg-white dark:bg-[#1b2029] text-center text-sm text-[#5d6676]">واژه‌ای در این گروه نیست.</div>
+              <div className="p-4 rounded-xl bg-white dark:bg-[#1b2029] text-center text-sm text-[#5d6676]">
+                {activeStage.list.length === 0 ? 'واژه‌ای در این گروه نیست.' : 'واژه‌ای با این جست‌وجو پیدا نشد.'}
+              </div>
             ) : (
               <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden">
                 {sorted.map(w => (
@@ -551,3 +805,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
+
+/** باقی‌ماندهٔ هدف روزانه (هرگز منفی نمی‌شود) */
+const remainingOf = (target: number, done: number): number =>
+  target > 0 ? Math.max(0, target - done) : 0;
