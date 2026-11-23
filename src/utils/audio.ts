@@ -1,4 +1,6 @@
 
+import { stripHeadAnnotation } from '../data/verbPrep';
+
 export interface SpeakOptions {
   rate?: number;
   vreg?: string;
@@ -130,9 +132,11 @@ function speakCloud(text: string, opts: SpeakOptions): boolean {
 }
 
 export async function speak(
-  text: string,
+  rawText: string,
   options?: SpeakOptions | ((msg: string) => void)
 ): Promise<void> {
+  // پسوند «حرف اضافه + حالت» سرِ واژه (warten auf +A) تلفظ نمی‌شود — فقط واژهٔ خودش خوانده می‌شود
+  const text = stripHeadAnnotation(String(rawText || ''));
   const synth = getSpeechSynthesis();
   const forceBrowser =
     typeof options === 'object' && options !== null && options.forceBrowser === true;
