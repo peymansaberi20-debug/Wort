@@ -1,0 +1,175 @@
+diff --git a/src/components/SchreibenCorrector.tsx b/src/components/SchreibenCorrector.tsx
+index b3b8ef0..547f5c4 100644
+--- a/src/components/SchreibenCorrector.tsx
++++ b/src/components/SchreibenCorrector.tsx
+@@ -62,6 +62,32 @@ const EXAM_TOPICS: Record<string, string[]> = {
+   B2: ['opinion', 'work', 'zus'], C1: ['opinion', 'zus']
+ };
+ 
++/** زاویه‌های موضوعی برای تنوع — هر بار ۲تای تصادفی به پرامت می‌رود تا سناریو تکراری نشود (باگ «همش تکراری») */
++const TASK_ANGLES = [
++  'Mobilität und Verkehr', 'digitale Medien und Social Media', 'Umwelt und Müll im Alltag', 'Arbeitswelt und Karriere',
++  'Wohnen und Nachbarschaft', 'Gesundheit und Stress', 'Geld, Sparen und Konsum', 'Bildung und Sprachenlernen',
++  'Freundschaft und Familie', 'Reisen und Urlaub', 'Essen und Ernährung', 'Sport und Bewegung',
++  'Klima und Energie', 'Künstliche Intelligenz im Alltag', 'Einkaufen und Online-Handel', 'Tiere und Haustiere',
++  'Feste und Traditionen', 'Nachrichten und Presse', 'Ehrensache und Freiwilligenarbeit', 'Kultur und Vereine'
++];
++
++/** حافظهٔ آخرین صورتِسوال‌های هر موضوع — به پرامت می‌رود تا مدل همان سناریو را تکرار نکند */
++const TASK_HIST_KEY = 'wb_schreiben_task_hist_v1';
++const loadTaskHist = (topicId: string): string[] => {
++  try {
++    const o = JSON.parse(localStorage.getItem(TASK_HIST_KEY) || '{}') as Record<string, unknown>;
++    return Array.isArray(o[topicId]) ? (o[topicId] as string[]) : [];
++  } catch { return []; }
++};
++const saveTaskHist = (topicId: string, taskDe: string): void => {
++  try {
++    const o = JSON.parse(localStorage.getItem(TASK_HIST_KEY) || '{}') as Record<string, unknown>;
++    const arr = Array.isArray(o[topicId]) ? (o[topicId] as string[]) : [];
++    o[topicId] = [...arr, taskDe].slice(-8);
++    localStorage.setItem(TASK_HIST_KEY, JSON.stringify(o));
++  } catch { /* ignore */ }
++};
++
+ const ISSUE_BADGE: Record<string, string> = {
+   'گرامر': 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
+   'املا': 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+@@ -166,14 +192,20 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
+     if (!topObj) return;
+     setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg('');
+     const zus = topicId === 'zus';
++    // تنوع تضمینی: زاویهٔ تصادفی + فهرست صورتِسوال‌های قبلی که مدل نباید تکرار کند
++    const banned = loadTaskHist(topicId).slice(-5);
++    const angles = [...TASK_ANGLES].sort(() => Math.random() - 0.5).slice(0, 2);
+     try {
+-      const p = `You are a strict German exam designer (like ÖSD/Goethe/EPD for level ${lvl}). Create an exam Aufgabe card for: "${topObj.title} (${topObj.desc})".
++      const p = `You are a strict German exam designer (like ÖSD/Goethe/EPD for level ${lvl}). Create a NEW, original exam Aufgabe card for: "${topObj.title} (${topObj.desc})".
++Build this task around the fresh, concrete scenario themes "${angles[0]}" and "${angles[1]}" — a situation the learner has not seen before.
++${banned.length ? `Do NOT repeat or merely paraphrase these Aufgaben the learner already had:\n${banned.map((b, i) => `${i + 1}. ${b}`).join('\n')}\n` : ''}
+ ${zus
+-  ? `The task is a ZUSAMMENFASSUNG: put an authentic short scientific/academic source text (about ${lvl === 'C1' ? 280 : 220} words, a real-sounding topic from social science, technology, environment or economics) into "sourceText". "taskDe" is the German instruction: summarise the text in about 100 words, name topic and source, reproduce the key statements and the result in your own words, no personal opinion.`
+-  : `The output must mirror official exam formats (Blog-Eintrag Stellungnahme or formelle E-Mail with a realistic scenario, required word count, points to cover). "sourceText" must be an empty string.`}
++  ? `The task is a ZUSAMMENFASSUNG: put an authentic short scientific/academic source text (about ${lvl === 'C1' ? 280 : 220} words, a real-sounding topic from social science, technology, environment or economics — related to the scenario themes above) into "sourceText". "taskDe" is the German instruction: summarise the text in about 100 words, name topic and source, reproduce the key statements and the result in your own words, no personal opinion.`
++  : `The output must mirror official exam formats (Blog-Eintrag Stellungnahme or formelle E-Mail with a realistic scenario tied to the scenario themes above, required word count, points to cover). "sourceText" must be an empty string.`}
+ Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای فارسی خواسته آزمون","sourceText":"...","point1":"نکته اول","point2":"نکته دوم","point3":"نکته سوم"}`;
+       const r = await askJson<any>(p, taskCheck, { timeoutMs: 40000 });
+       setPromptData({ taskDe: r.taskDe, taskFa: r.taskFa || topObj.desc, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) });
++      if (r.taskDe) saveTaskHist(topicId, r.taskDe);   // برای تکرارنشدن دفعات بعد
+     } catch (e: any) {
+       onShowToast(describeAiError(e), true);
+     } finally { setGeneratingPrompt(false); }
+diff --git a/src/components/SentenceBuilderModal.tsx b/src/components/SentenceBuilderModal.tsx
+index 6f02ffd..5b8dbf8 100644
+--- a/src/components/SentenceBuilderModal.tsx
++++ b/src/components/SentenceBuilderModal.tsx
+@@ -1,4 +1,5 @@
+ import React, { useEffect, useState } from 'react';
++import { createPortal } from 'react-dom';
+ import { Word } from '../types';
+ import { generateWithGemini, parseAI } from '../utils/ai';
+ import { IconBtn } from './IconBtn';
+@@ -130,7 +131,10 @@ JSON REQUIREMENTS
+         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+         : 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300';
+ 
+-  return (
++  // Portal به body — اگر داخل درخت صفحه mount شود در stacking context والد (relative z-0)
++  // گیر می‌کند و زیر هدر چسبان برنامه (z-20) نقاشی می‌شود (باگ «مودال زیر هدر»).
++  // همان الگوی ShadowingModal و WordDetailModal.
++  return createPortal(
+     <div
+       className="fixed inset-0 z-[95] bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center p-3 md:p-6 overflow-y-auto"
+       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+@@ -289,6 +293,7 @@ JSON REQUIREMENTS
+           <ShadowingModal freeText={report.corrected_de} word={word} onClose={() => setShadowOpen(false)} />
+         </ErrorBoundary>
+       )}
+-    </div>
++    </div>,
++    document.body
+   );
+ };
+\ No newline at end of file
+diff --git a/src/components/WorksheetTrainer.tsx b/src/components/WorksheetTrainer.tsx
+index 2e9e4ec..f69e24f 100644
+--- a/src/components/WorksheetTrainer.tsx
++++ b/src/components/WorksheetTrainer.tsx
+@@ -215,6 +215,8 @@ Regeln:
+ - 1 oder 2 Lücken pro Satz. "seg" ist ein Array mit 2 (bei einer Lücke) oder 3 (bei zwei Lücken) Textteilen; die Lücken stehen genau zwischen den Teilen.
+ - Steht die Lücke am Satzanfang, großgeschrieben (z. B. "Mit wem hast du dich unterhalten?").
+ - DAS VERB der Wendung MUSS konjugiert und sichtbar im Satztext stehen — niemals in der Lücke und niemals weggelassen. Die Lücke enthält NUR die Präposition. Beispiel für "gehören zu + Dat": "Dieses Buch gehört ___ unserer Pflichtlektüre im Seminar."
++- FALSCH wäre z. B.: "Viele Studierende ___ ihre finanzielle Zukunft." — hier fehlt das Verb "sorgen sich" im Satztext! Ein Satz ohne sichtbares konjugiertes Verb ist UNGÜLTIG.
++- Bei reflexiven Wendungen (sich …) MUSS das passende Reflexivpronomen (mich/dir/sich/uns/euch …) mit dem konjugierten Verb im Satztext stehen.
+ - "answers": NUR die Präposition(en) in der Reihenfolge der Lücken (z. B. "auf" — ohne Kasus-Angabe).
+ - "note": ۱–۲ جملهٔ فارسی — فعل/ساختار + حرف اضافه + حالت (+ معنی فعل در صورت لزوم)، مثل نمونه.
+ - "fa": ترجمهٔ فارسی روانِ جملهٔ کامل (با پاسخ‌های درست). این ترجمه تا زمان بررسیِ پاسخ دانش‌آموز پنهان می‌ماند.
+@@ -269,18 +271,36 @@ const cleanPrep = (raw: string): WshItem[] => {
+     .slice(0, 20);
+ };
+ 
+-/* ── اعتبارسنجی ضدباگ «جملهٔ بی‌فعل» (تصویر ۸): باگ گزارش‌شده — AI فعل را حذف کرده بود و
+-   فقط «zu» را درست حساب کرد. این بررسی تضمین می‌کند فعلِ ساختار در جمله دیده می‌شود. ── */
+-const comboHeads = (combo: string): string[] =>
+-  combo.split('+')[0].split(/\s+/)
+-    .map(w => w.toLowerCase().replace(/[^a-zäöüß]/g, ''))
+-    .filter(w => w && w !== 'sich' && w.length >= 3);
+-
+-const itemHasVerb = (it: WshItem, combo: string): boolean => {
+-  const full = itemFull(it).toLowerCase();
+-  const heads = comboHeads(combo);
+-  if (!heads.length) return true;
+-  return heads.some(w => full.includes(w.slice(0, 4)));
++/* ── اعتبارسنجی ضدباگ «جملهٔ بی‌فعل» (تصویر ۸): باگ گزارش‌شده — AI فعل را حذف کرده بود
++   («Viele Studierende ___ ihre finanzielle Zukunft.») و کاربر فقط حرف اضافهٔ «um» را
++   می‌نوشت ولی پاسخِ نمایش‌داده‌شده «فعل + حرف اضافه» بود. این بررسی باید همیشه اجرا شود
++   (قبلاً فقط وقتی تعداد جمله‌ها = تعداد ساختارها بود اجرا می‌شد و با هر اختلاف تعداد
++   کلاً رد می‌شد) و فعل باید در متنِ دیده‌شدهٔ جمله باشد، نه داخل پاسخ‌های جای خالی. ── */
++
++/** استخراج واژه‌های آلمانی یک تکه متن — بدون sich و پرانتزها، فقط ساقه‌های با معنا (≥۴ حرف) */
++const germanHeads = (chunk: string): string[] =>
++  chunk.toLowerCase().replace(/\([^)]*\)/g, ' ')
++    .split(/[\s+/\\]+/)
++    .map(w => w.replace(/[^a-zäöüß]/g, ''))
++    .filter(w => w && w !== 'sich' && w.length >= 4);
++
++const comboHeads = (combo: string): string[] => [
++  ...germanHeads(combo.split('+')[0] || ''),
++  ...germanHeads((combo.match(/\(([^)]*)\)/g) || []).join(' ').replace(/[()]/g, ' '))   // مثلاً «(es kommt darauf an)»
++];
++
++/** ساختار آلمانی اول نوت فارسی: «sich sorgen um + Akk — نگران … بودن» → sich sorgen um */
++const noteHeads = (note: string): string[] => germanHeads(note.split(/[+—–]/)[0] || '');
++
++/** متن دیده‌شدهٔ جمله — بدون پاسخ‌های جای خالی؛ فعل باید همین‌جا دیده شود */
++const visibleText = (it: WshItem): string => it.seg.join(' ').toLowerCase();
++
++const itemHasVerb = (it: WshItem, combo?: string): boolean => {
++  const vis = visibleText(it);
++  const heads = [...(combo ? comboHeads(combo) : []), ...noteHeads(it.note)];
++  if (!heads.length) return true;   // سراغانه‌ای نداریم — پاس را بده (پرامت خودش قید کرده)
++  // پسوند ۳حرفی هم چک می‌شود تا فعل‌های مرتبِ تغییرواژلی (bewerben → bewirbt، befehlen → befiehlt) حذف نشوند
++  return heads.some(w => vis.includes(w.slice(0, 4)) || vis.includes(w.slice(0, 3)));
+ };
+ 
+ const cleanKlasse = (raw: string): WshOpenItem[] => {
+@@ -477,13 +497,15 @@ export const WorksheetTrainer: React.FC<{
+         : buildCompletePrompt(theLvl, theCnt, topic);
+       const raw = await askJson(prompt);
+       let items: WshEntry[] = kind === 'prep' ? cleanPrep(raw) : cleanKlasse(raw);
+-      // ضدباگ «جملهٔ بی‌فعل»: اگر ساختارها ۱:۱ آمدند، جمله‌هایی که فعلِ ساختار در آن‌ها نیست حذف می‌شوند
+-      if (kind === 'prep' && items.length === combos.length) {
++      // ضدباگ «جملهٔ بی‌فعل»: همیشه اجرا می‌شود (قبلاً فقط وقتی تعداد جمله‌ها = ساختارها بود
++      // اجرا می‌شد و با هر اختلاف تعداد کلاً رد می‌شد). اگر تعداد ۱:۱ آمد، هر جمله با
++      // ساختار خودش سنجیده می‌شود؛ وگرنه با ساختارِ داخل نوتِ همان جمله.
++      if (kind === 'prep' && items.length) {
+         const before = items.length;
++        const oneToOne = items.length === combos.length;
+         items = items.filter((entry, i) => {
+           if (isOpen(entry)) return true;
+-          if (!itemHasVerb(entry, combos[i])) return false;
+-          return true;
++          return itemHasVerb(entry, oneToOne ? combos[i] : undefined);
+         });
+         if (items.length < before) onShowToast?.(`${toFa(before - items.length)} جملهٔ نامعتبر (بدون فعل) حذف شد.`);
+       }
