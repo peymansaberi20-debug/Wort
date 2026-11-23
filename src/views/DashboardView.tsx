@@ -49,7 +49,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   state,
   ignoredQualityIds,
   onNavigate,
-  onOpenQualityModal,
   onPracticeWords,
   onUpdateDailyNewTarget,
   onSelectWord
@@ -58,6 +57,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [stageView, setStageView] = React.useState<string | null>(null);
   const [stageQuery, setStageQuery] = React.useState('');
   const [dueQuery, setDueQuery] = React.useState('');
+  /* معنی واژه‌ها در فهرست مراحل تسلط — پیش‌فرض مخفی، با آیکن چشم نمایش داده می‌شود */
+  const [revealedFa, setRevealedFa] = React.useState<Set<string>>(new Set());
+  const toggleFa = (id: string) => {
+    setRevealedFa(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   /* ───────────── آمار — یک پاس روی داده‌ها، کش‌شده تا تیک دقیقه ───────────── */
   const s = React.useMemo(() => {
@@ -228,7 +236,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-4 text-right">
       {/* ─────────── سربرگ خوش‌آمد: سلام، تاریخ، رشتهٔ استمرار و حلقهٔ پیشرفت امروز ─────────── */}
-      <div className="bg-gradient-to-l from-[#6b4fd8] via-[#4a5ac9] to-[#1f5fbf] rounded-2xl p-5 text-white shadow-sm">
+      <div className="bg-gradient-to-l from-[#5a5248] via-[#4c453c] to-[#332e27] rounded-2xl p-5 text-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
@@ -287,7 +295,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
           <button
             onClick={() => onNavigate('daily')}
-            className="bg-white text-[#1f5fbf] hover:bg-white/90 px-3 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5"
+            className="bg-white text-[#4c453c] hover:bg-white/90 px-3 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5"
           >
             {s.dailyComplete && totalTarget > 0 ? '✅ جلسهٔ امروز کامل' : `🌟 شروع روزانه (${s.dailyTasksLeft})`}
           </button>
@@ -339,7 +347,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             const isZero = item.count === 0;
             return (
               <div key={item.offset} className="flex-1 flex flex-col items-center justify-end h-full">
-                <span className={`text-[11px] font-bold mb-1 ${isZero ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
+                <span className={`text-xs font-bold mb-1 ${isZero ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
                   {item.count}
                 </span>
                 <div
@@ -353,15 +361,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   style={{ height: `${barHeight}px` }}
                 />
                 <div className="mt-2 text-center flex flex-col items-center gap-0.5 leading-tight">
-                  <span className={`text-[11px] font-bold ${item.isToday ? 'text-[#1f5fbf] dark:text-[#7fb0ff]' : 'text-slate-800 dark:text-slate-200'}`}>
+                  <span className={`text-xs font-bold ${item.isToday ? 'text-[#1f5fbf] dark:text-[#7fb0ff]' : 'text-slate-800 dark:text-slate-200'}`}>
                     {item.isToday ? 'امروز' : item.weekdayFa}
                   </span>
                   {/* تاریخ عددی شمسی، مثل 08/09 */}
-                  <span className="text-[10px] text-[#1f5fbf] dark:text-[#7fb0ff] font-medium" dir="ltr">
+                  <span className="text-[11px] text-[#1f5fbf] dark:text-[#7fb0ff] font-medium" dir="ltr">
                     {item.shamsiNumeric}
                   </span>
                   {/* تاریخ عددی میلادی، مثل 10/31 */}
-                  <span className="text-[9px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">
+                  <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">
                     {item.gregNumeric}
                   </span>
                 </div>
@@ -459,22 +467,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
 
-        {/* باکس‌های مرحلهٔ تسلط — واکنش‌گرا (۲ ستون در موبایل، ۵ ستون در دسکتاپ) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5 text-center">
+        {/* باکس‌های مرحلهٔ تسلط — همیشه ۵ باکس در یک خط */}
+        <div className="grid grid-cols-5 gap-1 sm:gap-1.5 text-center">
           {stageDefs.map(b => (
             <button key={b.key} type="button" onClick={() => { setStageView(b.key); setStageQuery(''); }}
               className={`${b.cls} border rounded-xl py-2 px-0.5 flex flex-col items-center gap-0.5 active:scale-95 transition`}
               aria-label={`${b.label}: ${b.list.length} واژه`}>
               <span className="text-xl leading-none" aria-hidden="true">{b.icon}</span>
               <b className="text-base leading-tight">{b.list.length}</b>
-              <span className="text-[10px] font-bold leading-tight">{b.label}</span>
+              <span className="text-xs font-bold leading-tight">{b.label}</span>
               {s.words.length > 0 && (
-                <span className="text-[9px] opacity-70 leading-tight">{Math.round((b.list.length / s.words.length) * 100)}٪ از کل</span>
+                <span className="text-xs opacity-70 leading-tight">{Math.round((b.list.length / s.words.length) * 100)}٪ از کل</span>
               )}
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] -mt-1">روی هر باکس بزن تا فهرست واژه‌هایش را ببینی.</p>
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] -mt-1">روی هر باکس بزن تا فهرست واژه‌هایش را ببینی.</p>
 
         {/* توزیع سطح CEFR */}
         {lvls.length > 0 && (
@@ -483,7 +491,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span>📶</span> توزیع سطح واژگان (CEFR)
             </b>
             {lvls.map(l => (
-              <div key={l} className="flex items-center gap-2 text-[11px]">
+              <div key={l} className="flex items-center gap-2 text-xs">
                 <span className="w-6 font-extrabold text-slate-600 dark:text-slate-300" dir="ltr">{l}</span>
                 <div className="flex-1 h-2.5 bg-slate-100 dark:bg-[#141923] rounded-full overflow-hidden">
                   <div
@@ -525,15 +533,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           ) : (
             <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
           )}
-
-          {s.totalAuditedIssues > 0 && onOpenQualityModal && (
-            <button
-              onClick={onOpenQualityModal}
-              className="flex items-center gap-1.5 text-xs bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 text-orange-700 dark:text-orange-300 px-2.5 py-2 rounded-xl font-bold hover:bg-orange-100 dark:hover:bg-orange-950/60 transition"
-            >
-              🩺 {s.totalAuditedIssues} واژه نیازمند بازبینی کیفیت
-            </button>
-          )}
         </div>
       </div>
 
@@ -543,18 +542,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span>📊</span> آمار کلی تمرین‌ها
         </b>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 pt-1">
+        <div className="grid grid-cols-5 gap-1 sm:gap-2 pt-1">
           {[
             { label: 'کل واژگان', value: s.words.length, cls: 'text-slate-800 dark:text-slate-200' },
             { label: 'واژه‌های مسلط', value: s.stageLists.mastered.length, cls: 'text-emerald-600' },
             { label: 'پاسخ‌های درست', value: s.okTotal, cls: 'text-emerald-600' },
             { label: 'پاسخ‌های نادرست', value: state.hist.length - s.okTotal, cls: 'text-red-500' },
-            { label: 'دقت کلی', value: pct(s.okTotal, state.hist.length), cls: 'text-[#1f5fbf] dark:text-[#7fb0ff]' },
-            { label: 'دقت جای‌خالی', value: pct(s.clozeOk, s.clozeTotal), cls: 'text-purple-600' }
+            { label: 'دقت کلی', value: pct(s.okTotal, state.hist.length), cls: 'text-[#1f5fbf] dark:text-[#7fb0ff]' }
           ].map(tile => (
-            <div key={tile.label} className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 rounded-xl text-center flex flex-col justify-center gap-0.5">
-              <span className="text-[10px] leading-tight text-[#5d6676] dark:text-[#a3adbd]">{tile.label}</span>
-              <b className={`text-sm ${tile.cls}`}>{tile.value}</b>
+            <div key={tile.label} className="bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-1.5 sm:p-2.5 rounded-xl text-center flex flex-col justify-center gap-0.5">
+              <span className="text-xs sm:text-xs leading-tight text-[#5d6676] dark:text-[#a3adbd]">{tile.label}</span>
+              <b className={`text-sm sm:text-base ${tile.cls}`}>{tile.value}</b>
             </div>
           ))}
         </div>
@@ -574,7 +572,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           )}
         </div>
-        <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
           💡 طبق الگوریتم فاصله، واژه‌های جدید بعد از اتمام مرورهای سررسیدشده ارائه می‌شوند تا حافظه اشباع نشود.
         </p>
       </div>
@@ -600,7 +598,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* تفکیک سررسید امروز و عقب‌افتاده‌ها */}
         {s.dueReviewWords.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold border border-blue-100 dark:border-blue-900">
               سررسید امروز: {s.dueReviewWords.length - s.overdueWords.length}
             </span>
@@ -637,7 +635,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <col style={{ width: '24%' }} />
                 <col style={{ width: '29%' }} />
               </colgroup>
-              <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+              <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">
                 <tr>
                   <th scope="col" className="px-2 py-1.5 text-left font-bold">واژه</th>
                   <th scope="col" className="px-1 py-1.5 text-center font-bold">سطح</th>
@@ -661,17 +659,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </td>
                       <td className="px-1 py-2 text-center">
                         {w.lvl ? (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                          <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 text-[11px] font-bold">
                             {w.lvl}
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-right text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">
+                      <td className="px-2 py-2 text-right text-xs text-[#5d6676] dark:text-[#a3adbd] truncate">
                         {w.cat || '—'}
                       </td>
-                      <td className="px-2 py-2 text-right text-[11px] whitespace-nowrap">
+                      <td className="px-2 py-2 text-right text-xs whitespace-nowrap">
                         {isOverdue ? (
                           <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-300 font-bold">
                             {overdueDays} روز عقب‌افتاده
@@ -736,16 +734,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       : {w.fa}
                     </span>
                     {w.cat && (
-                      <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">
+                      <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
                         ({w.cat})
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-300 font-bold text-[11px]">
+                    <span className="px-2 py-0.5 rounded-lg bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-300 font-bold text-xs">
                       ❌ {w.bad} بار اشتباه
                     </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 text-[11px]">
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 text-xs">
                       ✅ {w.ok} بار درست
                     </span>
                   </div>
@@ -787,16 +785,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ) : (
               <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden">
-                {sorted.map(w => (
-                  <button key={w.id} onClick={() => onSelectWord(w)} className="w-full flex items-center justify-between gap-3 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0 text-right hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                    <span dir="ltr" className="flex items-center gap-2 min-w-0">
-                      {w.art && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${artCls(w.art)}`}>{w.art}</span>}
-                      <b className="text-lg font-sans truncate">{w.de}</b>
-                      {w.lvl && <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full">{w.lvl}</span>}
-                    </span>
-                    <span className="text-sm text-[#5d6676] dark:text-[#a3adbd] truncate">{w.fa}</span>
-                  </button>
-                ))}
+                {sorted.map(w => {
+                  const shown = revealedFa.has(w.id);
+                  return (
+                    <button key={w.id} onClick={() => onSelectWord(w)} className="w-full flex items-center justify-between gap-2 sm:gap-3 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0 text-right hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                      <span dir="ltr" className="flex items-center gap-2 min-w-0">
+                        {w.art && <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${artCls(w.art)}`}>{w.art}</span>}
+                        <b className="text-base sm:text-lg font-sans truncate" dir="ltr">{w.de}</b>
+                        {w.lvl && <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 rounded-full flex-shrink-0" dir="ltr">{w.lvl}</span>}
+                      </span>
+                      <span className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                        {shown && (
+                          <span className="text-xs sm:text-sm text-[#5d6676] dark:text-[#a3adbd] max-w-[38vw] sm:max-w-[220px] truncate" title={w.fa}>
+                            {w.fa}
+                          </span>
+                        )}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={e => { e.stopPropagation(); toggleFa(w.id); }}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleFa(w.id); } }}
+                          aria-label={shown ? 'پنهان کردن معنی' : 'نمایش معنی'}
+                          aria-pressed={shown}
+                          title={shown ? 'پنهان کردن معنی' : 'نمایش معنی'}
+                          className="text-lg sm:text-xl leading-none px-1 py-0.5 rounded-lg opacity-75 hover:opacity-100 active:scale-90 transition cursor-pointer select-none flex-shrink-0"
+                        >
+                          {shown ? '🙈' : '👁️'}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </PageOverlay>
