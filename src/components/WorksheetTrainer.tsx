@@ -215,6 +215,8 @@ Regeln:
 - 1 oder 2 Lücken pro Satz. "seg" ist ein Array mit 2 (bei einer Lücke) oder 3 (bei zwei Lücken) Textteilen; die Lücken stehen genau zwischen den Teilen.
 - Steht die Lücke am Satzanfang, großgeschrieben (z. B. "Mit wem hast du dich unterhalten?").
 - DAS VERB der Wendung MUSS konjugiert und sichtbar im Satztext stehen — niemals in der Lücke und niemals weggelassen. Die Lücke enthält NUR die Präposition. Beispiel für "gehören zu + Dat": "Dieses Buch gehört ___ unserer Pflichtlektüre im Seminar."
+- FALSCH wäre z. B.: "Viele Studierende ___ ihre finanzielle Zukunft." — hier fehlt das Verb "sorgen sich" im Satztext! Ein Satz ohne sichtbares konjugiertes Verb ist UNGÜLTIG.
+- Bei reflexiven Wendungen (sich …) MUSS das passende Reflexivpronomen (mich/dir/sich/uns/euch …) mit dem konjugierten Verb im Satztext stehen.
 - "answers": NUR die Präposition(en) in der Reihenfolge der Lücken (z. B. "auf" — ohne Kasus-Angabe).
 - "note": ۱–۲ جملهٔ فارسی — فعل/ساختار + حرف اضافه + حالت (+ معنی فعل در صورت لزوم)، مثل نمونه.
 - "fa": ترجمهٔ فارسی روانِ جملهٔ کامل (با پاسخ‌های درست). این ترجمه تا زمان بررسیِ پاسخ دانش‌آموز پنهان می‌ماند.
@@ -269,18 +271,36 @@ const cleanPrep = (raw: string): WshItem[] => {
     .slice(0, 20);
 };
 
-/* ── اعتبارسنجی ضدباگ «جملهٔ بی‌فعل» (تصویر ۸): باگ گزارش‌شده — AI فعل را حذف کرده بود و
-   فقط «zu» را درست حساب کرد. این بررسی تضمین می‌کند فعلِ ساختار در جمله دیده می‌شود. ── */
-const comboHeads = (combo: string): string[] =>
-  combo.split('+')[0].split(/\s+/)
-    .map(w => w.toLowerCase().replace(/[^a-zäöüß]/g, ''))
-    .filter(w => w && w !== 'sich' && w.length >= 3);
+/* ── اعتبارسنجی ضدباگ «جملهٔ بی‌فعل» (تصویر ۸): باگ گزارش‌شده — AI فعل را حذف کرده بود
+   («Viele Studierende ___ ihre finanzielle Zukunft.») و کاربر فقط حرف اضافهٔ «um» را
+   می‌نوشت ولی پاسخِ نمایش‌داده‌شده «فعل + حرف اضافه» بود. این بررسی باید همیشه اجرا شود
+   (قبلاً فقط وقتی تعداد جمله‌ها = تعداد ساختارها بود اجرا می‌شد و با هر اختلاف تعداد
+   کلاً رد می‌شد) و فعل باید در متنِ دیده‌شدهٔ جمله باشد، نه داخل پاسخ‌های جای خالی. ── */
 
-const itemHasVerb = (it: WshItem, combo: string): boolean => {
-  const full = itemFull(it).toLowerCase();
-  const heads = comboHeads(combo);
-  if (!heads.length) return true;
-  return heads.some(w => full.includes(w.slice(0, 4)));
+/** استخراج واژه‌های آلمانی یک تکه متن — بدون sich و پرانتزها، فقط ساقه‌های با معنا (≥۴ حرف) */
+const germanHeads = (chunk: string): string[] =>
+  chunk.toLowerCase().replace(/\([^)]*\)/g, ' ')
+    .split(/[\s+/\\]+/)
+    .map(w => w.replace(/[^a-zäöüß]/g, ''))
+    .filter(w => w && w !== 'sich' && w.length >= 4);
+
+const comboHeads = (combo: string): string[] => [
+  ...germanHeads(combo.split('+')[0] || ''),
+  ...germanHeads((combo.match(/\(([^)]*)\)/g) || []).join(' ').replace(/[()]/g, ' '))   // مثلاً «(es kommt darauf an)»
+];
+
+/** ساختار آلمانی اول نوت فارسی: «sich sorgen um + Akk — نگران … بودن» → sich sorgen um */
+const noteHeads = (note: string): string[] => germanHeads(note.split(/[+—–]/)[0] || '');
+
+/** متن دیده‌شدهٔ جمله — بدون پاسخ‌های جای خالی؛ فعل باید همین‌جا دیده شود */
+const visibleText = (it: WshItem): string => it.seg.join(' ').toLowerCase();
+
+const itemHasVerb = (it: WshItem, combo?: string): boolean => {
+  const vis = visibleText(it);
+  const heads = [...(combo ? comboHeads(combo) : []), ...noteHeads(it.note)];
+  if (!heads.length) return true;   // سراغانه‌ای نداریم — پاس را بده (پرامت خودش قید کرده)
+  // پسوند ۳حرفی هم چک می‌شود تا فعل‌های مرتبِ تغییرواژلی (bewerben → bewirbt، befehlen → befiehlt) حذف نشوند
+  return heads.some(w => vis.includes(w.slice(0, 4)) || vis.includes(w.slice(0, 3)));
 };
 
 const cleanKlasse = (raw: string): WshOpenItem[] => {
@@ -477,13 +497,15 @@ export const WorksheetTrainer: React.FC<{
         : buildCompletePrompt(theLvl, theCnt, topic);
       const raw = await askJson(prompt);
       let items: WshEntry[] = kind === 'prep' ? cleanPrep(raw) : cleanKlasse(raw);
-      // ضدباگ «جملهٔ بی‌فعل»: اگر ساختارها ۱:۱ آمدند، جمله‌هایی که فعلِ ساختار در آن‌ها نیست حذف می‌شوند
-      if (kind === 'prep' && items.length === combos.length) {
+      // ضدباگ «جملهٔ بی‌فعل»: همیشه اجرا می‌شود (قبلاً فقط وقتی تعداد جمله‌ها = ساختارها بود
+      // اجرا می‌شد و با هر اختلاف تعداد کلاً رد می‌شد). اگر تعداد ۱:۱ آمد، هر جمله با
+      // ساختار خودش سنجیده می‌شود؛ وگرنه با ساختارِ داخل نوتِ همان جمله.
+      if (kind === 'prep' && items.length) {
         const before = items.length;
+        const oneToOne = items.length === combos.length;
         items = items.filter((entry, i) => {
           if (isOpen(entry)) return true;
-          if (!itemHasVerb(entry, combos[i])) return false;
-          return true;
+          return itemHasVerb(entry, oneToOne ? combos[i] : undefined);
         });
         if (items.length < before) onShowToast?.(`${toFa(before - items.length)} جملهٔ نامعتبر (بدون فعل) حذف شد.`);
       }
