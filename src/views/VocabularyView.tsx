@@ -1027,7 +1027,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); setVisFa({}); onSelectWord(existing); }}
+                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); onSelectWord(existing); }}
                   className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 text-xs font-bold transition"
                 >
                   مشاهدهٔ پروفایل واژهٔ موجود

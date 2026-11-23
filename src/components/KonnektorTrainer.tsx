@@ -24,7 +24,8 @@ import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
 
 interface KonnektorTrainerProps {
-  onClose: () => void;
+  /** optional — the hub may be shown without a close button (e.g. embedded tab) */
+  onClose?: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
 }
 

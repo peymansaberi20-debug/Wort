@@ -358,7 +358,6 @@ export const DICT: Record<string, DictEntry> = {
   mittag: { fa: 'ظهر', de: 'der Mittag', art: 'der', pos: 'noun' },
   einkauf: { fa: 'خرید', de: 'der Einkauf', art: 'der', pos: 'noun' }, einkäufe: { fa: 'خریدها' },
   hausaufgabe: { fa: 'تکلیف مدرسه', de: 'die Hausaufgabe', art: 'die', pos: 'noun' }, hausaufgaben: { fa: 'تکالیف' },
-  'früh': { fa: 'زود / صبح' },
   freitagabend: { fa: 'شب جمعه', de: 'der Freitagabend', art: 'der', pos: 'noun' },
   aufsatz: { fa: 'انشا / مقاله', de: 'der Aufsatz', art: 'der', pos: 'noun' },
   quelle: { fa: 'منبع', de: 'die Quelle', art: 'die', pos: 'noun' }, quellen: { fa: 'منبع‌ها' },

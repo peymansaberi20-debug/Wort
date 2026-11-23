@@ -3,7 +3,7 @@ import { classifyImport } from '../utils/vocabMerge';
 import { copyText } from '../utils/clipboard';
 import React, { useState, useMemo } from 'react';
 import { AppState, Word } from '../types';
-import { getCategories, norm, matchCat, resolveCat } from '../utils/storage';
+import { fullWord, getCategories, norm, matchCat, resolveCat } from '../utils/storage';
 import { AIPM, buildMasterPrompt, generateWithGemini, parseAI, aiToIMP, processBatchWordsWithGemini, checkGermanSpelling } from '../utils/ai';
 import * as XLSX from 'xlsx';
 import { ImportHelpModal } from '../components/ImportHelpModal';

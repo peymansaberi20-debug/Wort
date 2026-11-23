@@ -197,7 +197,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
     stopSpeakingSafe();
     if (base) {
       const a = new Audio(`${base}/?lang=de&text=${encodeURIComponent(text)}`);
-      void a.play().catch(() => speak(text));
+      void a.play().catch(() => speakSafe(text));
     } else {
       speakSafe(text);
     }
@@ -244,7 +244,7 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
     if (aiBusy || !text) return;
     setAiBusy(true); setAiErr(''); setReport(null);
     try {
-      const out = await generateWithGemini(`You are a German pronunciation coach for Persian-speaking learners.\nTarget text: "${text}"\nReturn ONLY a JSON array with exactly one object, no markdown:\n[{"ipa":"IPA transcription of the text","syllables":[{"syl":"German syllable in order","stress":true}],"tips_fa":["2-4 short Persian tips: sounds, stress and rhythm Persian speakers typically get wrong in THIS text"],"trap_fa":"one short Persian line: the single most important thing to get right"}]\nRules: syllables in German order; exactly one stress=true (main stressed syllable); Persian explanations concise; German stays German.`, { json: true, timeoutMs: 30000, retries: 1 });
+      const out = await generateWithGemini(`You are a German pronunciation coach for Persian-speaking learners.\nTarget text: "${text}"\nReturn ONLY a JSON array with exactly one object, no markdown:\n[{"ipa":"IPA transcription of the text","syllables":[{"syl":"German syllable in order","stress":true}],"tips_fa":["2-4 short Persian tips: sounds, stress and rhythm Persian speakers typically get wrong in THIS text"],"trap_fa":"one short Persian line: the single most important thing to get right"}]\nRules: syllables in German order; exactly one stress=true (main stressed syllable); Persian explanations concise; German stays German.`, { timeoutMs: 30000, retries: 1 });
       const r: any = parseAI(out)[0];
       if (!r || !r.ipa) throw new Error('پاسخ نامعتبر بود.');
       setReport({
