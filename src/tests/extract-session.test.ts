@@ -71,7 +71,7 @@ test('external prompt: only the batch words, ids, strict JSON rules; no network 
     assert.doesNotMatch(prompt, /Wort6/);
     assert.match(prompt, /BATCH 1 OF 3/);
     assert.match(prompt, /"cid"/);
-    assert.match(prompt, /without Markdown code fences/);
+    assert.match(prompt, /json Markdown code block/); // current master prompt requires exactly one block
     assert.doesNotMatch(prompt, /AIza|sk-|gsk_|Bearer/);
   } finally {
     (globalThis as any).fetch = realFetch;
