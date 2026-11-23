@@ -416,7 +416,7 @@ return words
         acht: [option('عدد: acht (هشت)', 'acht', 'منظور عدد acht به معنی هشت است.'), option('فعل: achten (توجه/رعایت کردن)', 'achten', 'منظور فعل achten به معنی توجه یا رعایت کردن است.')],
         schuld: [option('اسم: die Schuld (تقصیر / بدهی)', 'Schuld', 'منظور اسم die Schuld به معنی تقصیر یا بدهی است.'), option('صفت/جزء ترکیب: schuld', 'schuld', 'منظور کاربرد وصفی یا ترکیبی schuld است؛ محدودیت کاربرد را توضیح بده.')],
         recht: [option('اسم: das Recht (حق / قانون)', 'Recht', 'منظور اسم das Recht به معنی حق یا قانون است.'), option('قید/صفت: recht (نسبتاً / درست)', 'recht', 'منظور کاربرد قیدی یا وصفی recht است، نه اسم das Recht.')],
-        lachen: [option('فعل: lachen (خندیدن)', 'lachen', 'منظور مصدر فعل lachen است.'), option('اسم: das Lachen (خنده)', 'Lachen', 'منظور اسم‌مصدر das Lachen به معنی خنده است.')],
+        lachen: [option('فعل: lachen (خندیدن)', 'lachen', 'منظور مصدر فعل lachen است.'), option('اسم‌مصدر: das Lachen (خنده)', 'Lachen', 'منظور اسم‌مصدر das Lachen به معنی خنده است.')],
         lesen: [option('فعل: lesen (خواندن)', 'lesen', 'منظور مصدر فعل lesen است.'), option('اسم‌مصدر: das Lesen (مطالعه)', 'Lesen', 'منظور اسم‌مصدر das Lesen است.')],
         schreiben: [option('فعل: schreiben (نوشتن)', 'schreiben', 'منظور مصدر فعل schreiben است.'), option('اسم‌مصدر: das Schreiben (نوشتن / نامه)', 'Schreiben', 'منظور اسم‌مصدر das Schreiben یا در بافت اداری نامه است.')],
         trinken: [option('فعل: trinken (نوشیدن)', 'trinken', 'منظور مصدر فعل trinken است.'), option('اسم‌مصدر: das Trinken (نوشیدن)', 'Trinken', 'منظور اسم‌مصدر das Trinken است.')],
@@ -1027,7 +1027,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); setVisFa({}); onSelectWord(existing); }}
+                  onClick={() => { const existing = duplicateWord; setDuplicateWord(null); onSelectWord(existing); }}
                   className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 text-xs font-bold transition"
                 >
                   مشاهدهٔ پروفایل واژهٔ موجود
@@ -1605,7 +1605,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           "در قسمت مدیریت دسته ها ، جلوی هر دسته نوشته شده «تغییر نام / ادغام» ،
           این نوشته رو بردار همون ایکون مداد ک گذاشتی باشه کافیه .
           ایکون حذف هم که سطل اشغاله همون باشه خوبه .
-          هر دو ایکون به سمت چپ ردیف خودشون فیکس بشن ."
+          هر دو ایکون به سمت چپ ردیف خودشون فیکس بشه ."
         */}
         <div className="mt-3 flex items-center gap-2">
           <input value={catMgrNew} onChange={e => setCatMgrNew(e.target.value)} placeholder="نام دستهٔ جدید…"
