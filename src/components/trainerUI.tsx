@@ -70,7 +70,8 @@ export const PrintPreview: React.FC<{
   questions: React.ReactNode;
   solutions?: React.ReactNode;
   solutionsMeta?: React.ReactNode;
-}> = ({ open, onClose, title, meta, questions, solutions, solutionsMeta }) => {
+  hint?: string;   // متن راهنمای نوار بالای پیش‌نمایش (اختیاری — برای تمرین‌های بدون پاسخنامه)
+}> = ({ open, onClose, title, meta, questions, solutions, solutionsMeta, hint }) => {
   if (!open) return null;
   return createPortal(
     <div className="wpr-screen" role="dialog" aria-modal="true" dir="rtl">
@@ -78,7 +79,7 @@ export const PrintPreview: React.FC<{
       <div className="wpr-bar">
         <button onClick={onClose} className="wpr-btn">✕ بستن</button>
         <button onClick={() => window.print()} className="wpr-btn wpr-btn-primary">🖨 چاپ / PDF</button>
-        <span className="wpr-hint">پیش‌نمایش چاپ — صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه</span>
+        <span className="wpr-hint">{hint || 'پیش‌نمایش چاپ — صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه'}</span>
       </div>
       <div className="wpr-pages">
         <div className="wpr-page">
