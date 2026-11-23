@@ -12,7 +12,7 @@ import { ShadowingModal } from './ShadowingModal';
 import { ImageCropper } from './ImageCropper';
 import { PratText } from './PratText';
 import { VerbPhrase, verbPrepFor } from './VerbPhrase';
-import { X, Pencil, Trash2, Mic, Sparkles } from 'lucide-react';
+import { X, Pencil, Trash2, Mic, Sparkles, Volume2, Eye, EyeOff, Camera } from 'lucide-react';
 import {
   statusOf, clusterOf, clusterGuide, promotionReady, activationReady, PROMO_STREAK, AKT_STREAK,
   STATUS_LABELS, STATUS_SHORT, STATUS_BADGE, STATUS_BADGE_HERO, STATUS_HINTS,
@@ -40,7 +40,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   onDelete,
   onImageChange
 }) => {
-  const [showFa, setShowFa] = useState(true);
+  const [showFa, setShowFa] = useState(false);
   const [shadowOpen, setShadowOpen] = useState(false);
 
   /* درخواست فاز ۴ #۲: عنوان طولانی هیرو خودکار کوچک می‌شود تا در یک خط جا شود */
@@ -522,12 +522,21 @@ const seg = pluralSegments2();
         {/* Sticky block: icon strip + frozen word bar — while scrolling, word and Persian meaning remain visible (request #7) */}
         <div className="sticky top-0 z-20">
           <div dir="ltr" className="bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-start gap-2">
-            {/* Phase 2 Sec.1: icon strip — close leftmost, then image, details-star, mic, edit, delete */}
+            {/* نوار آیکن‌ها — چینش حرفه‌ای: بستن/شنیدن/ترجمه ← ویرایش/تصویر/تمرین ← تنظیمات ← حذف (جدا) */}
             <IconBtn onClick={() => { setShowFa(false); onClose(); }} title="بستن"><X size={18} className="text-red-500" /></IconBtn>
             <div className="flex items-center gap-1.5">
-              <IconBtn onClick={handlePickImage} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
-                {word.img ? '🖼️' : '📷'}
+              <IconBtn onClick={() => speak(word.art ? `${word.art} ${word.de}` : word.de)} title="پخش تلفظ">
+                <Volume2 size={18} className="text-[#1f5fbf] dark:text-[#7fb0ff]" />
               </IconBtn>
+              <IconBtn onClick={() => setShowFa(v => !v)} active={showFa} title={showFa ? 'مخفی کردن ترجمه‌ها' : 'نمایش همه ترجمه‌ها'} aria-expanded={showFa}>
+                {showFa ? <EyeOff size={18} className="text-amber-500" /> : <Eye size={18} className="text-amber-500" />}
+              </IconBtn>
+              <div className="w-px h-5 bg-[#dde1ea] dark:bg-[#333b4a]" aria-hidden="true" />
+              <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
+              <IconBtn onClick={handlePickImage} active={!!word.img} title={word.img ? 'تغییر تصویر' : 'افزودن تصویر'}>
+                <Camera size={18} className="text-slate-500 dark:text-slate-300" />
+              </IconBtn>
+              <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
               <IconBtn
                 onClick={() => setSettingsOpen(true)}
                 active={settingsOpen}
@@ -535,8 +544,7 @@ const seg = pluralSegments2();
               >
                 <Sparkles size={18} className="text-amber-500" />
               </IconBtn>
-              <IconBtn onClick={() => setShadowOpen(true)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
-              <IconBtn onClick={() => onEdit(word)} title="ویرایش واژه"><Pencil size={18} className="text-[#1f5fbf]" /></IconBtn>
+              <div className="w-px h-5 bg-[#dde1ea] dark:bg-[#333b4a]" aria-hidden="true" />
               <IconBtn onClick={() => onDelete(word)} title="حذف واژه" danger><Trash2 size={18} className="text-red-500" /></IconBtn>
             </div>
           </div>
@@ -547,7 +555,7 @@ const seg = pluralSegments2();
               {articleBadge()}
               <span className="font-extrabold font-serif text-base md:text-lg truncate">{word.de}</span>
             </div>
-            {word.fa && (
+            {showFa && word.fa && (
               <div className="flex items-center min-w-0">
                 <span dir="rtl" className="text-sm md:text-base font-bold text-amber-600 dark:text-amber-300 truncate max-w-[52vw] sm:max-w-[280px]">{word.fa}</span>
               </div>
