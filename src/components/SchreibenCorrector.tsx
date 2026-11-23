@@ -124,6 +124,18 @@ const RUBRIC: Record<'task' | 'zus' | 'free', { labels: [string, string, string,
 };
 
 const taskCheck = S.obj({ taskDe: S.req, taskFa: S.str(), sourceText: S.str(), point1: S.str(), point2: S.str(), point3: S.str() });
+const quoteCheck = S.obj({ theme: S.req, quote: S.req, themeFa: S.str() });
+const ideasCheck = S.obj({ ideas: S.arr(S.obj({ de: S.req, fa: S.str() })) });
+
+/** صورت‌سوال ساخت‌یافتهٔ «نظر و استدلال» برای رندر مرتب: عنوان، دستور، مقدمه، نقل‌قول و خطوط ثابت دستورِ کار */
+interface StructuredTask {
+  title: string;       // Thema: „..."
+  aufgabe: string;     // Aufgabe 1: Stellungnahme zu einem Blog-Eintrag schreiben.
+  intro: string;       // In einem Blog ... finden Sie folgende Meinung:
+  quote: string;       // نقل‌قول اصلی (ایتالیک در کادر جدا)
+  instrBold: string;   // خط پررنگ دستور (تعداد واژه)
+  instrRest: string[]; // خطوط معمولی بعد از آن
+}
 const reportCheck = S.obj({
   transcribed_de: S.str(), understood_fa: S.str(),
   criteria: S.obj({ content: S.num(0, 25), structure: S.num(0, 25), vocab: S.num(0, 25), grammar: S.num(0, 25) }),
@@ -145,9 +157,12 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
 
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [targetLevel, setTargetLevel] = useState<string>(exam ? exam.level : 'B1');
-  const [promptData, setPromptData] = useState<{ taskDe: string; taskFa: string; sourceText: string; points: string[] } | null>(null);
+  const [promptData, setPromptData] = useState<{ taskDe: string; taskFa: string; sourceText: string; points: string[]; structured?: StructuredTask } | null>(null);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [showFa, setShowFa] = useState(false);
+  // ایده‌های نوشتن: اگر کاربر ایده‌ای برای متن نداشت (درخواست جدید کاربر)
+  const [ideas, setIdeas] = useState<{ de: string; fa: string }[] | null>(null);
+  const [ideasBusy, setIdeasBusy] = useState(false);
 
   const [images, setImages] = useState<{ dataUrl: string; mimeType: string; base64: string }[]>([]);
   // صف کراپ: هر عکس تازه قبل از ورود به فهرست از کراپ می‌گذرد (درخواست #۶)
@@ -199,8 +214,6 @@ const OPINION_THEMES = [
   'Fastfood am Arbeitsplatz', 'Wocheneinkauf online oder im Markt'
 ];
 
-const quoteCheck = S.obj({ theme: S.req, quote: S.req, themeFa: S.str() });
-
 /** متن استاندارد فارسی برای توضیح فارسی کارِ opinion */
 const opinionFa = (themeFa: string, wr: string) =>
   `نظر یک نفر دربارهٔ «${themeFa || 'یک موضوع روزمره'}» آمده است؛ شما باید نظر خودتان را در ${wr} واژه بنویسید، با دلیل و مثال، و از جملات وابستهٔ متنوع (dass، weil، wenn، obwohl، als، ob و…) استفاده کنید.`;
@@ -228,7 +241,7 @@ const isRepeat = (theme: string, quote: string, hist: string[]): boolean => {
   const fetchTaskPrompt = async (topicId: string, lvl = targetLevel) => {
     const topObj = SCHREIBEN_TOPICS.find(t => t.id === topicId);
     if (!topObj) return;
-    setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg('');
+    setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg(''); setIdeas(null);
     const zus = topicId === 'zus';
     // تنوع تضمینی: زاویهٔ تصادفی + فهرست صورتِسوال‌های قبلی که مدل نباید تکرار کند
     const banned = loadTaskHist(topicId).slice(-5);
@@ -255,10 +268,16 @@ Return ONLY valid JSON: {"theme":"kurzes Blog-/Artikelthema in 2–5 Wörtern","
         if (r) {
           const blog = Math.random() < 0.5;
           const neb = 'Für eine gute Bewertung begründen Sie Ihre Meinung und verwenden Sie verschiedene Nebensätze (dass, weil, wenn, obwohl, als, ob etc.).';
-          const taskDe = blog
-            ? `Aufgabe 1: Stellungnahme zu einem Blog-Eintrag schreiben\n\nIn einem Blog zum Thema „${r.theme}" finden Sie folgende Meinung:\n\n„${r.quote}"\n\nErläutern Sie Ihre Position (${wr} Wörter) zu diesem Zitat und nennen Sie Beispiele.\n${neb}`
-            : `Aufgabe: Stellungnahme schreiben\n\nLesen Sie die folgende Meinung:\n\n„${r.quote}"\n\nSchreiben Sie Ihre Stellungnahme (${wr} Wörter).\nErläutern Sie Ihre Position zu diesem Zitat und nennen Sie Beispiele.\n${neb}`;
-          setPromptData({ taskDe, taskFa: opinionFa(r.themeFa || '', wrFa), sourceText: '', points: [] });
+          // اجزای ساخت‌یافته برای رندر مرتب (مثل نمونهٔ رسمی آزمون): عنوان → دستور → مقدمه → Zitat → خطوط دستور
+          const aufgabe = blog ? 'Aufgabe 1: Stellungnahme zu einem Blog-Eintrag schreiben.' : 'Aufgabe: Stellungnahme schreiben.';
+          const intro = blog ? `In einem Blog zum Thema „${r.theme}" finden Sie folgende Meinung:` : 'Lesen Sie die folgende Meinung:';
+          const instrBold = blog
+            ? `Erläutern Sie Ihre Position (${wr} Wörter) zu diesem Zitat und nennen Sie Beispiele.`
+            : `Schreiben Sie Ihre Stellungnahme (${wr} Wörter).`;
+          const instrRest = blog ? [neb] : [`Erläutern Sie Ihre Position zu diesem Zitat und nennen Sie Beispiele.`, neb];
+          const taskDe = `${aufgabe}\n\n${intro}\n\n„${r.quote}"\n\n${instrBold}\n${instrRest.join('\n')}`;
+          const structured: StructuredTask = { title: `Thema: „${r.theme}"`, aufgabe, intro, quote: r.quote, instrBold, instrRest };
+          setPromptData({ taskDe, taskFa: opinionFa(r.themeFa || '', wrFa), sourceText: '', points: [], structured });
           saveTaskHist(topicId, taskDe);
         }
         return;
@@ -282,6 +301,24 @@ Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای �
     } catch (e: any) {
       onShowToast(describeAiError(e), true);
     } finally { setGeneratingPrompt(false); }
+  };
+
+  // درخواست کاربر: اگر ایده‌ای برای نوشتن ندارد، با یک دکمه چند ایدهٔ قابل‌استفاده بگیرد
+  const fetchIdeas = async () => {
+    if (!promptData || ideasBusy) return;
+    setIdeasBusy(true);
+    try {
+      const p = `The learner must write a German exam text (level ${targetLevel}) for this Aufgabe and has no idea what to say.
+AUFGABE:
+${promptData.taskDe}
+${promptData.sourceText ? `SOURCE TEXT (first part):\n${promptData.sourceText.slice(0, 900)}\n` : ''}
+Give exactly 4 concrete, usable ideas for what the LEARNER could write — real content, not meta-advice: a position sentence, arguments, a concrete personal-style example, and a closing sentence. Each idea = one short, natural German sentence at ${targetLevel} level (a fitting Nebensatz like weil/dass/wenn/obwohl where natural), easy to adapt directly into their text.
+Return ONLY valid JSON: {"ideas":[{"de":"...","fa":"ترجمهٔ فارسی کوتاه"}]}`;
+      const r = await askJson<any>(p, ideasCheck, { timeoutMs: 35000 });
+      setIdeas((r.ideas || []).filter((it: any) => it && it.de));
+    } catch (e: any) {
+      onShowToast(describeAiError(e), true);
+    } finally { setIdeasBusy(false); }
   };
 
   // full-exam mode: pick a task for the level and start the real timer
@@ -402,9 +439,24 @@ Return ONLY a valid JSON array with one object:
           {generatingPrompt && <div className="text-sm text-indigo-600 dark:text-indigo-400 font-bold animate-pulse text-center py-2">⏳ در حال بارگذاری سناریو و نکات آزمون...</div>}
 
           {promptData && (
-            <div className="p-3.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 space-y-2 text-sm leading-7">
-              <div className="font-bold text-indigo-900 dark:text-indigo-200">📋 صورت سوال (Aufgabenstellung):</div>
-              <div dir="ltr" className="font-sans font-bold text-base text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50">{promptData.taskDe}</div>
+            <div className="p-4 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 space-y-3 text-sm leading-7">
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-indigo-900 dark:text-indigo-200">📋 صورت سوال (Aufgabenstellung)</div>
+                <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-indigo-200 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300">{targetLevel}</span>
+              </div>
+              {/* رندر مرتب مثل نمونهٔ رسمی: عنوان درشت → دستور پررنگ → مقدمه → Zitat ایتالیک در کادر جدا → خطوط دستور */}
+              {promptData.structured ? (
+                <div className="space-y-2.5">
+                  <div dir="ltr" className="text-left font-sans text-lg font-extrabold text-slate-900 dark:text-white leading-8">{promptData.structured.title}</div>
+                  <div dir="ltr" className="text-left font-sans font-bold text-slate-800 dark:text-slate-100">{promptData.structured.aufgabe}</div>
+                  <div dir="ltr" className="text-left font-sans text-slate-700 dark:text-slate-300">{promptData.structured.intro}</div>
+                  <div dir="ltr" className="text-left font-serif italic text-[15px] leading-8 text-slate-800 dark:text-slate-100 bg-white dark:bg-[#141923] p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">{promptData.structured.quote}</div>
+                  <div dir="ltr" className="text-left font-sans font-bold text-slate-800 dark:text-slate-100">{promptData.structured.instrBold}</div>
+                  {promptData.structured.instrRest.map((line, i) => <div key={i} dir="ltr" className="text-left font-sans text-slate-700 dark:text-slate-300">{line}</div>)}
+                </div>
+              ) : (
+                <div dir="ltr" className="font-sans font-bold text-base text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap">{promptData.taskDe}</div>
+              )}
               {promptData.sourceText && (
                 <div className="space-y-1">
                   <div className="font-bold text-indigo-900 dark:text-indigo-200">📄 متن مبدأ (Ausgangstext):</div>
@@ -421,6 +473,29 @@ Return ONLY a valid JSON array with one object:
                   )}
                 </>
               ) : <button onClick={() => setShowFa(true)} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش توضیح فارسی</button>)}
+              {/* درخواست کاربر: ته کارت، دکمهٔ ایده برای وقتی چیزی برای گفتن ندارد */}
+              {!exam && (
+                <div className="pt-1 space-y-3">
+                  <button onClick={() => void fetchIdeas()} disabled={ideasBusy}
+                    className="w-full py-2.5 rounded-xl bg-white dark:bg-[#141923] hover:bg-amber-50 dark:hover:bg-amber-950/30 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 font-bold text-sm transition disabled:opacity-40">
+                    {ideasBusy ? '⏳ در حال گرفتن ایده‌ها...' : '💡 ایده نداری؟ چند ایده بده'}
+                  </button>
+                  {ideas && ideas.length > 0 && (
+                    <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-2">
+                      <div className="font-bold text-amber-900 dark:text-amber-200">💡 این ایده‌ها را می‌توانی بنویسی:</div>
+                      <ol className="list-decimal list-inside space-y-2.5">
+                        {ideas.map((it, i) => (
+                          <li key={i}>
+                            <div dir="ltr" className="text-left font-serif italic text-slate-800 dark:text-slate-100 leading-7">{it.de}</div>
+                            {!limited && it.fa && <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{it.fa}</div>}
+                          </li>
+                        ))}
+                      </ol>
+                      <button onClick={() => void fetchIdeas()} disabled={ideasBusy} className="text-xs font-bold text-amber-800 dark:text-amber-300 disabled:opacity-40">🔄 ایده‌های تازه</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
