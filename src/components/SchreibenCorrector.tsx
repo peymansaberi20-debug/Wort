@@ -72,9 +72,128 @@ const TASK_ANGLES = [
   'Feste und Traditionen', 'Nachrichten und Presse', 'Ehrensache und Freiwilligenarbeit', 'Kultur und Vereine'
 ];
 
+/* ── پروفایل آزمون‌های واقعی Schreiben (درخواست کاربر) ──
+ * فرمت‌ها از نمونه‌سازهای رسمی: گوته (3 Aufgabe در B1، 2 Teil در B2/C1، SMS+E-Mail در A2)،
+ * ÖSD B1 (همان ساختار ۳تایی گوته) و ÖSD B2 (توصیف‌نامه + 30/20 امتیاز)، telc (Brief با Leitpunkte)
+ * و EPD (خلاصه‌نویسی متن علمی — مطابق توصیف درون‌برنامه‌ای). تمرین آزاد = رفتار قبلی. */
+type ExamKind = 'mail' | 'forum' | 'summary';
+interface ExamTeil {
+  id: string;
+  titleDe: string;   // عنوان رسمی Teil
+  fa: string;        // توضیح فارسی کوتاه
+  kind: ExamKind;    // forum → رندر ساخت‌یافته با Zitat کوتاه؛ summary → متن مبدأ؛ mail → قالب عمومی
+  wr: string;        // بازهٔ واژهٔ رسمی، مثل 'ca. 80'
+  wrFa: string;      // معادل فارسی برای توضیح
+  minutes: number;   // زمان پیشنهادی همان Teil
+  quoteStyle?: 'opinion' | 'survey';   // فقط برای forum: نظره یا نتیجهٔ نظرسنجی (گوته C1)
+}
+interface ExamProfile {
+  id: string;
+  nameDe: string; nameFa: string;
+  teils: Partial<Record<'A2' | 'B1' | 'B2' | 'C1', ExamTeil[]>>;
+}
+const EXAM_PROFILES: ExamProfile[] = [
+  {
+    id: 'goethe', nameDe: 'Goethe-Zertifikat', nameFa: 'گوته (Goethe)',
+    teils: {
+      A2: [
+        { id: 't1', titleDe: 'Teil 1: Nachricht schreiben (SMS)', fa: 'پیام کوتاه غیررسمی', kind: 'mail', wr: '20–30', wrFa: '۲۰ تا ۳۰', minutes: 15 },
+        { id: 't2', titleDe: 'Teil 2: E-Mail schreiben', fa: 'ایمیل ساده به سه نکته', kind: 'mail', wr: 'ca. 60', wrFa: 'حدود ۶۰', minutes: 25 },
+      ],
+      B1: [
+        { id: 't1', titleDe: 'Aufgabe 1: E-Mail schreiben (halboffiziell)', fa: 'ایمیل نیمه‌رسمی', kind: 'mail', wr: 'ca. 80', wrFa: 'حدود ۸۰', minutes: 20 },
+        { id: 't2', titleDe: 'Aufgabe 2: Diskussionsbeitrag schreiben', fa: 'نظر و استدلال در فروم', kind: 'forum', wr: 'ca. 80', wrFa: 'حدود ۸۰', minutes: 20, quoteStyle: 'opinion' },
+        { id: 't3', titleDe: 'Aufgabe 3: E-Mail schreiben (formell)', fa: 'ایمیل رسمی کوتاه', kind: 'mail', wr: 'ca. 40', wrFa: 'حدود ۴۰', minutes: 15 },
+      ],
+      B2: [
+        { id: 't1', titleDe: 'Teil 1: Forumsbeitrag verfassen', fa: 'متن نظری کامل برای فروم', kind: 'forum', wr: 'ca. 150', wrFa: 'حدود ۱۵۰', minutes: 50, quoteStyle: 'opinion' },
+        { id: 't2', titleDe: 'Teil 2: Formelle Nachricht schreiben', fa: 'نامهٔ رسمی (Sie-Form)', kind: 'mail', wr: 'ca. 100', wrFa: 'حدود ۱۰۰', minutes: 25 },
+      ],
+      C1: [
+        { id: 't1', titleDe: 'Teil 1: Erörterung zu einer Umfrage', fa: 'مقاله بر پایهٔ نتایج نظرسنجی', kind: 'forum', wr: 'ca. 230', wrFa: 'حدود ۲۳۰', minutes: 50, quoteStyle: 'survey' },
+        { id: 't2', titleDe: 'Teil 2: Formelle Nachricht schreiben', fa: 'نامهٔ رسمی کوتاه', kind: 'mail', wr: 'ca. 100', wrFa: 'حدود ۱۰۰', minutes: 25 },
+      ],
+    },
+  },
+  {
+    id: 'osd', nameDe: 'ÖSD-Zertifikat', nameFa: 'ÖSD (اتریش)',
+    teils: {
+      B1: [
+        { id: 't1', titleDe: 'Aufgabe 1: E-Mail schreiben (halboffiziell)', fa: 'ایمیل نیمه‌رسمی', kind: 'mail', wr: 'ca. 80', wrFa: 'حدود ۸۰', minutes: 20 },
+        { id: 't2', titleDe: 'Aufgabe 2: Diskussionsbeitrag schreiben', fa: 'نظر و استدلال در فروم', kind: 'forum', wr: 'ca. 80', wrFa: 'حدود ۸۰', minutes: 20, quoteStyle: 'opinion' },
+        { id: 't3', titleDe: 'Aufgabe 3: E-Mail schreiben (formell)', fa: 'ایمیل رسمی کوتاه', kind: 'mail', wr: 'ca. 40', wrFa: 'حدود ۴۰', minutes: 15 },
+      ],
+      B2: [
+        { id: 't1', titleDe: 'Aufgabe 1: Formelle E-Mail / Beschwerde', fa: 'ایمیل رسمی یا شکایت', kind: 'mail', wr: 'ca. 250', wrFa: 'حدود ۲۵۰', minutes: 55 },
+        { id: 't2', titleDe: 'Aufgabe 2: Meinungsbeitrag verfassen', fa: 'متن نظر و استدلال', kind: 'forum', wr: 'ca. 100–120', wrFa: 'حدود ۱۰۰ تا ۱۲۰', minutes: 35, quoteStyle: 'opinion' },
+      ],
+    },
+  },
+  {
+    id: 'telc', nameDe: 'telc Deutsch', nameFa: 'telc',
+    teils: {
+      B1: [
+        { id: 't1', titleDe: 'Schreiben: Brief schreiben (halboffiziell)', fa: 'نامهٔ نیمه‌رسمی با ۳ نکته + ۱ سؤال', kind: 'mail', wr: 'ca. 80–100', wrFa: 'حدود ۸۰ تا ۱۰۰', minutes: 30 },
+      ],
+      B2: [
+        { id: 't1', titleDe: 'Schreiben: Brief / Text schreiben (formell)', fa: 'نامهٔ رسمی با نکات مشخص', kind: 'mail', wr: 'mindestens 150', wrFa: 'حداقل ۱۵۰', minutes: 30 },
+      ],
+    },
+  },
+  {
+    id: 'epd', nameDe: 'EPD — Zusammenfassung', nameFa: 'EPD (آزمون دانشگاه)',
+    teils: {
+      B2: [
+        { id: 't1', titleDe: 'Schreiben: Zusammenfassung eines Fachtextes', fa: 'خلاصه‌نویسی متن علمی', kind: 'summary', wr: 'ca. 100', wrFa: 'حدود ۱۰۰', minutes: 60 },
+      ],
+      C1: [
+        { id: 't1', titleDe: 'Schreiben: Zusammenfassung eines Fachtextes', fa: 'خلاصه‌نویسی متن علمی', kind: 'summary', wr: 'ca. 120', wrFa: 'حدود ۱۲۰', minutes: 60 },
+      ],
+    },
+  },
+];
+
+/** همهٔ Teilهای یک آزمون (برای جست‌وجوی عنوان) */
+const allTeils = (p?: ExamProfile): ExamTeil[] => (p ? Object.values(p.teils).flatMap(v => v || []) : []);
+const teilOf = (examId: string, tid: string): ExamTeil | undefined => allTeils(EXAM_PROFILES.find(p => p.id === examId)).find(t => t.id === tid);
+
+/** چارچوب ثابتِ تمرین‌های فروم هر آزمون — مثل کارت رسمی: دستور → مقدمه → Zitat → خطوط دستور */
+const forumFrame = (examId: string, t: ExamTeil, theme: string): { aufgabe: string; intro: string; instrBold: string; instrRest: string[] } => {
+  const intro = `In einem Internetforum zum Thema „${theme}" finden Sie folgende Meinung:`;
+  if (examId === 'goethe') {
+    if (t.quoteStyle === 'survey') {
+      return {
+        aufgabe: `${t.titleDe}.`,
+        intro: `In einer Umfrage zu „${theme}" wurden unter anderem folgende Ergebnisse veröffentlicht:`,
+        instrBold: `Beschreiben und interpretieren Sie die Ergebnisse (${t.wr} Wörter).`,
+        instrRest: ['Gehen Sie auf die Umfrage ein, vergleichen Sie die Ergebnisse mit Ihren eigenen Erfahrungen und begründen Sie Ihre Meinung.'],
+      };
+    }
+    return {
+      aufgabe: `${t.titleDe}.`,
+      intro,
+      instrBold: `Verfassen Sie Ihren eigenen Diskussionsbeitrag (${t.wr} Wörter).`,
+      instrRest: ['Äußern Sie Ihre Meinung dazu, begründen Sie sie und nennen Sie Beispiele.'],
+    };
+  }
+  if (examId === 'osd') {
+    return {
+      aufgabe: `${t.titleDe}.`,
+      intro,
+      instrBold: `Schreiben Sie Ihren Diskussionsbeitrag (${t.wr} Wörter).`,
+      instrRest: ['Gehen Sie auf die Meinung ein und begründen Sie Ihre eigene Position.'],
+    };
+  }
+  return {
+    aufgabe: `${t.titleDe}.`,
+    intro,
+    instrBold: `Schreiben Sie einen Forumsbeitrag (${t.wr} Wörter).`,
+    instrRest: ['Äußern Sie Ihre Meinung, begründen Sie sie und nennen Sie Beispiele.'],
+  };
+};
+
 /** حافظهٔ آخرین صورتِسوال‌های هر موضوع — به پرامت می‌رود تا مدل همان سناریو را تکرار نکند */
-const TASK_HIST_KEY = 'wb_schreiben_task_hist_v1';
-const loadTaskHist = (topicId: string): string[] => {
+const TASK_HIST_KEY = 'wb_schreiben_task_hist_v1';const loadTaskHist = (topicId: string): string[] => {
   try {
     const o = JSON.parse(localStorage.getItem(TASK_HIST_KEY) || '{}') as Record<string, unknown>;
     return Array.isArray(o[topicId]) ? (o[topicId] as string[]) : [];
@@ -89,16 +208,22 @@ const saveTaskHist = (topicId: string, taskDe: string): void => {
   } catch { /* ignore */ }
 };
 
-/** بایگانی تمرین‌های ساخته‌شده بر حسب سطح و موضوع — لیست «تمرین‌های قبلی» زیر انتخاب موضوع (درخواست کاربر) */
+/** بایگانی تمرین‌های ساخته‌شده بر حسب سطح، نوع آزمون و موضوع — لیست «تمرین‌های قبلی» (درخواست کاربر) */
 interface SavedExercise {
   id: string; ts: number; topicId: string; level: string;
+  examId?: string;   // 'goethe' | 'osd' | 'telc' | 'epd' | 'free' — ورودی‌های قدیمی = آزاد
   taskDe: string; taskFa: string; sourceText: string; points: string[]; structured?: StructuredTask;
 }
-const SAVED_KEY = 'wb_schreiben_saved_v1';
+const SAVED_KEY = 'wb_schreiben_saved_v2';
 const loadSaved = (): SavedExercise[] => {
   try {
-    const a = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]') as unknown;
-    return Array.isArray(a) ? (a as SavedExercise[]) : [];
+    let a: unknown = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null');
+    if (!Array.isArray(a)) {
+      // مهاجرت از v1: همهٔ تمرین‌های قدیمی «تمرین آزاد» بودند
+      const old = JSON.parse(localStorage.getItem('wb_schreiben_saved_v1') || '[]') as unknown;
+      a = Array.isArray(old) ? (old as Record<string, unknown>[]).map(x => ({ ...x, examId: 'free' })) : [];
+    }
+    return (a as SavedExercise[]).filter(x => x && x.taskDe);
   } catch { return []; }
 };
 const saveSavedExercise = (e: SavedExercise): void => {
@@ -177,6 +302,9 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
 
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [targetLevel, setTargetLevel] = useState<string>(exam ? exam.level : 'B1');
+  // نوع آزمون Schreiben: گوته/ÖSD/telc/EPD یا «تمرین آزاد» با رفتار قبلی (درخواست کاربر)
+  const [examType, setExamType] = useState<string>('free');
+  const [selectedTeil, setSelectedTeil] = useState<string>('');
   const [promptData, setPromptData] = useState<{ taskDe: string; taskFa: string; sourceText: string; points: string[]; structured?: StructuredTask } | null>(null);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [showFa, setShowFa] = useState(false);
@@ -283,11 +411,12 @@ const isRepeat = (theme: string, quote: string, hist: string[]): boolean => {
           const p = `You design German ${lvl} writing-exam tasks (ÖSD/Goethe style). Invent ONE completely new, concrete everyday-life opinion situation for a Stellungnahme task.
 Theme ideas to build around (you may adapt them): "${sug[0]}", "${sug[1]}", "${sug[2]}".
 ${bannedBlock}
-Write the opinion ("quote") as a natural first-person German text of 5–8 sentences with ${lvl} vocabulary: a clear personal stance (mostly for, mostly against, or torn with a leaning) plus at least one concrete personal example/anecdote and one counter-argument. Vary situations: one time a personal experience, one time a complaint, one time a suggestion.
-Return ONLY valid JSON: {"theme":"kurzes Blog-/Artikelthema in 2–5 Wörtern","quote":"das Zitat, 5–8 Sätze, Ich-Form","themeFa":"ترجمهٔ فارسی کوتاه موضوع"}`;
+Write the opinion ("quote") as a natural first-person German text of 4–6 short sentences with ONLY about 50–60 words in total (${lvl} vocabulary): a clear personal stance (mostly for, mostly against, or torn with a leaning) plus one concrete personal example and one short counter-argument. Keep it compact — it must fit about 6 lines on an A4 sheet. Vary situations: one time a personal experience, one time a complaint, one time a suggestion.
+Return ONLY valid JSON: {"theme":"kurzes Blog-/Artikelthema in 2–5 Wörtern","quote":"das Zitat, 4–6 kurze Sätze, ca. 50–60 Wörter, Ich-Form","themeFa":"ترجمهٔ فارسی کوتاه موضوع"}`;
           const cur = await askJson<any>(p, quoteCheck, { timeoutMs: 35000 });
-          if (!isRepeat(cur.theme || '', cur.quote || '', banned)) { r = cur; break; }
-          if (!r) r = cur;   // همه تکراری بودند — آخرین نسخه را نگه دار
+          const tooLong = wc(cur.quote || '') > 70;   // درخواست کاربر: Zitat حداکثر ~۶۰ واژه
+          if (!isRepeat(cur.theme || '', cur.quote || '', banned) && !tooLong) { r = cur; break; }
+          if (!r) r = cur;   // همه تکراری/بلند بودند — آخرین نسخه را نگه دار
         }
         if (r) {
           const blog = Math.random() < 0.5;
@@ -333,6 +462,81 @@ Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای �
     } finally { setGeneratingPrompt(false); }
   };
 
+  // ساخت تمرین برای یک Teil واقعی از آزمون‌های گوته/ÖSD/telc/EPD — دقیقاً با قالب همان آزمون (درخواست کاربر)
+  const fetchExamPrompt = async (examId: string, lvl: string, t: ExamTeil) => {
+    const prof = EXAM_PROFILES.find(p => p.id === examId);
+    if (!prof) return;
+    setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg(''); setIdeas(null);
+    setText(''); setReport(null); setImages([]); setPrintOpen(false);   // تمرین تازه = پاسخ خالی
+    const histKey = `${examId}:${lvl}:${t.id}`;
+    const banned = loadTaskHist(histKey).slice(-5);
+    const angles = [...TASK_ANGLES].sort(() => Math.random() - 0.5).slice(0, 2);
+    const bannedBlock = banned.length ? `Do NOT repeat or merely paraphrase these Aufgaben the learner already had:\n${banned.map((b, i) => `${i + 1}. ${b}`).join('\n')}\n` : '';
+    try {
+      // ── Teilهای فروم/مقاله: همان رندر ساخت‌یافته با Zitat کوتاه (~۵۰-۶۰ واژه، خواستهٔ کاربر) ──
+      if (t.kind === 'forum') {
+        let r: { theme: string; quote: string; themeFa?: string } | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const sug = [...OPINION_THEMES].sort(() => Math.random() - 0.5).slice(0, 3);
+          const quoteSpec = t.quoteStyle === 'survey'
+            ? `Write the "quote" as a short, neutral German survey report of 3–4 sentences with ONLY about 50–60 words in total: the survey question, key percentages/numbers and one surprising result.`
+            : `Write the opinion ("quote") as a natural first-person German text of 4–6 short sentences with ONLY about 50–60 words in total: a clear personal stance plus one concrete example and one short counter-argument. Keep it compact — it must fit about 6 lines on an A4 sheet.`;
+          const p = `You design the official German ${lvl} exam "${prof.nameDe}" module Schreiben — ${t.titleDe} (${t.wr} Wörter, ca. ${t.minutes} Minuten).
+Invent ONE completely new, concrete everyday-life situation for this ${t.quoteStyle === 'survey' ? 'survey-discussion' : 'discussion'} task.
+Theme ideas to build around (you may adapt them): "${sug[0]}", "${sug[1]}", "${sug[2]}".
+${bannedBlock}
+${quoteSpec}
+Vary situations: one time a personal experience, one time a complaint, one time a suggestion.
+Return ONLY valid JSON: {"theme":"kurzes Thema in 2–5 Wörtern","quote":"...","themeFa":"ترجمهٔ فارسی کوتاه موضوع"}`;
+          const cur = await askJson<any>(p, quoteCheck, { timeoutMs: 35000 });
+          const tooLong = wc(cur.quote || '') > 70;   // درخواست کاربر: متن وسط تمرین کوتاه بماند
+          if (!isRepeat(cur.theme || '', cur.quote || '', banned) && !tooLong) { r = cur; break; }
+          if (!r) r = cur;
+        }
+        if (r) {
+          const f = forumFrame(examId, t, r.theme);
+          const taskDe = `${f.aufgabe}\n\n${f.intro}\n\n„${r.quote}"\n\n${f.instrBold}\n${f.instrRest.join('\n')}`;
+          const structured: StructuredTask = { title: `Thema: „${r.theme}"`, ...f, quote: r.quote };
+          const pd = { taskDe, taskFa: opinionFa(r.themeFa || '', t.wrFa), sourceText: '', points: [], structured };
+          setPromptData(pd);
+          rememberExercise(t.id, lvl, pd, examId);
+          saveTaskHist(histKey, taskDe);
+        }
+        return;
+      }
+      // ── Zusammenfassung (EPD): متن مبدأ + دستور خلاصه‌نویسی ──
+      if (t.kind === 'summary') {
+        const p = `You design the German ${lvl} exam "${prof.nameDe}" module Schreiben — ${t.titleDe}.
+Put an authentic short scientific/academic German source text (about ${lvl === 'C1' ? 280 : 220} words, a real-sounding topic from social science, technology, environment or economics, related to the scenario themes "${angles[0]}" and "${angles[1]}") into "sourceText".
+"taskDe" = the German instruction: "Lesen Sie den folgenden Text. Fassen Sie den Inhalt in eigenen Worten zusammen (${t.wr} Wörter). Nennen Sie Thema und Ergebnis des Textes. Verwenden Sie keine eigene Meinung." plus 2–3 short German content hints.
+${bannedBlock}
+Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای فارسی خواسته آزمون","sourceText":"...","point1":"نکته اول","point2":"نکته دوم","point3":"نکته سوم"}`;
+        const r = await askJson<any>(p, taskCheck, { timeoutMs: 45000 });
+        const pd = { taskDe: r.taskDe, taskFa: r.taskFa || t.fa, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) };
+        setPromptData(pd);
+        if (r.taskDe) { rememberExercise(t.id, lvl, pd, examId); saveTaskHist(histKey, r.taskDe); }
+        return;
+      }
+      // ── E-Mail/Brief: قالب رسمی همان Teil با Leitpunkte و register درست ──
+      const p = `You are the official task designer of the German ${lvl} exam "${prof.nameDe}", module Schreiben — ${t.titleDe} (ca. ${t.minutes} Minuten, ${t.wr} Wörter).
+Create ONE new, original exam task in the exact official format for this Teil: a realistic, concrete everyday/work situation built around the scenario themes "${angles[0]}" and "${angles[1]}".
+The German "taskDe" must state: the situation, the recipient and register (informal "du" OR formal "Sie" — whichever fits this official Teil), 3–4 clear Leitpunkte written as a) b) c) (optional d) question) that the answer must cover, and the required length "${t.wr} Wörter". Keep the official concise exam wording.
+${bannedBlock}
+Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای فارسی خواسته آزمون","sourceText":"","point1":"نکته اول","point2":"نکته دوم","point3":"نکته سوم"}`;
+      let r: any = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const cur = await askJson<any>(p + (attempt ? '\n\nIMPORTANT: Your previous idea was too similar to an earlier task. Choose a clearly different concrete scenario now.' : ''), taskCheck, { timeoutMs: 40000 });
+        r = cur;
+        if (attempt === 1 || !isRepeat('', cur.taskDe || '', banned)) break;
+      }
+      const pd = { taskDe: r.taskDe, taskFa: r.taskFa || t.fa, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) };
+      setPromptData(pd);
+      if (r.taskDe) { rememberExercise(t.id, lvl, pd, examId); saveTaskHist(histKey, r.taskDe); }
+    } catch (e: any) {
+      onShowToast(describeAiError(e), true);
+    } finally { setGeneratingPrompt(false); }
+  };
+
   // درخواست کاربر: اگر ایده‌ای برای نوشتن ندارد، با یک دکمه چند ایدهٔ قابل‌استفاده بگیرد
   const fetchIdeas = async () => {
     if (!promptData || ideasBusy) return;
@@ -351,15 +555,18 @@ Return ONLY valid JSON: {"ideas":[{"de":"...","fa":"ترجمهٔ فارسی کو
     } finally { setIdeasBusy(false); }
   };
 
-  // ذخیرهٔ تمرین تازه در بایگانی «سطح + موضوع» (درخواست کاربر)
-  const rememberExercise = (topicId: string, lvl: string, pd: NonNullable<typeof promptData>) => {
-    const e: SavedExercise = { id: `${Date.now()}`, ts: Date.now(), topicId, level: lvl, taskDe: pd.taskDe, taskFa: pd.taskFa, sourceText: pd.sourceText, points: pd.points, structured: pd.structured };
+  // ذخیرهٔ تمرین تازه در بایگانی «نوع آزمون + سطح + موضوع/Teil» (درخواست کاربر)
+  const rememberExercise = (topicId: string, lvl: string, pd: NonNullable<typeof promptData>, examId = 'free') => {
+    const e: SavedExercise = { id: `${Date.now()}`, ts: Date.now(), topicId, level: lvl, examId, taskDe: pd.taskDe, taskFa: pd.taskFa, sourceText: pd.sourceText, points: pd.points, structured: pd.structured };
     saveSavedExercise(e);
     setSavedList(loadSaved());
   };
   // باز کردن یک تمرین قبلی از لیست — همان صفحهٔ تمرین، با پاسخ خالی
   const openSaved = (e: SavedExercise) => {
-    setSelectedTopic(e.topicId); setTargetLevel(e.level);
+    const ex = e.examId || 'free';
+    setExamType(ex); setTargetLevel(e.level);
+    if (ex === 'free') { setSelectedTopic(e.topicId); setSelectedTeil(''); }
+    else { setSelectedTeil(e.topicId); setSelectedTopic(''); }
     setText(''); setReport(null); setImages([]); setErrMsg(''); setShowFa(false); setIdeas(null); setPrintOpen(false);
     setPromptData({ taskDe: e.taskDe, taskFa: e.taskFa, sourceText: e.sourceText, points: e.points, structured: e.structured });
   };
@@ -389,7 +596,7 @@ Return ONLY valid JSON: {"ideas":[{"de":"...","fa":"ترجمهٔ فارسی کو
     if (!s && images.length === 0) { if (exam) exam.onFinish({ score: 0, max: 100, note: 'متنی نوشته نشد' }); return; }
     setBusy(true); setErrMsg(''); setReport(null);
 
-    const topicTitle = SCHREIBEN_TOPICS.find(t => t.id === selectedTopic)?.title || 'آزاد';
+    const topicTitle = activeExamLabel;
     const hasImages = images.length > 0;
     const rubric = RUBRIC[rubricKey];
 
@@ -452,8 +659,50 @@ Return ONLY a valid JSON array with one object:
     <LevelChips value={targetLevel} onChange={l => setTargetLevel(l)} levels={['A2', 'B1', 'B2', 'C1']} />
   );
 
-  // تمرین‌های قبلیِ همین درس + همین سطح + همین موضوع، تازه‌ترین اول
-  const savedForPick = savedList.filter(s => s.topicId === selectedTopic && s.level === targetLevel);
+  // برچسب آزمون فعال: نام موضوع (آزاد) یا نام آزمون + Teil
+  const activeExamLabel = examType === 'free'
+    ? SCHREIBEN_TOPICS.find(t => t.id === selectedTopic)?.title || 'تمرین آزاد'
+    : (() => {
+      const p = EXAM_PROFILES.find(x => x.id === examType);
+      const t = p ? teilOf(examType, selectedTeil) : undefined;
+      return `${p?.nameFa || ''}${t ? ` — ${t.titleDe}` : ''}` || 'تمرین';
+    })();
+
+  // Teilهای تعریف‌شدهٔ آزمون انتخاب‌شده برای سطح فعلی
+  const teilList = EXAM_PROFILES.find(p => p.id === examType)?.teils[targetLevel as 'A2' | 'B1' | 'B2' | 'C1'] || [];
+
+  // تمرین‌های قبلیِ بایگانی، تازه‌ترین اول — آزاد: همین موضوع؛ آزمون: همین آزمون (همهٔ Teilها)
+  const savedForPick = savedList.filter(s => (s.examId || 'free') === 'free' && s.topicId === selectedTopic && s.level === targetLevel);
+  const savedForExam = savedList.filter(s => (s.examId || 'free') === examType && examType !== 'free' && s.level === targetLevel);
+
+  // بلوک لیست تمرین‌های قبلی — برای هر دو حالت آزاد/آزمون
+  const savedListBlock = (arr: SavedExercise[], heading: string, hint: string, labelOf: (s: SavedExercise) => string) => (
+    <div className="space-y-2 pt-1">
+      <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">{heading}</div>
+      {arr.length === 0 ? (
+        <div className="text-xs text-slate-500 dark:text-slate-400 p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-dashed border-slate-300 dark:border-slate-700">{hint}</div>
+      ) : (
+        <div className="space-y-2">
+          {arr.slice(0, 12).map(s => (
+            <button key={s.id} onClick={() => openSaved(s)}
+              className="w-full block text-right p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-800 transition">
+              <div className="flex items-center justify-between gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300">{s.level}</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{faDate(s.ts)}</span>
+              </div>
+              <div dir="ltr" className="text-left text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1.5 truncate">{labelOf(s)}</div>
+            </button>
+          ))}
+          {arr.length > 12 && <div className="text-[11px] text-slate-400">{toFa(arr.length - 12)} تمرین قدیمی‌تر هم در بایگانی هست.</div>}
+        </div>
+      )}
+    </div>
+  );
+  const savedLabelFree = (s: SavedExercise) => s.structured ? `${s.structured.title} — ${s.structured.intro}` : s.taskDe.slice(0, 90);
+  const savedLabelExam = (s: SavedExercise) => {
+    const t = teilOf(s.examId || '', s.topicId);
+    return `${t ? t.titleDe : s.topicId} — ${s.structured ? s.structured.title : s.taskDe.slice(0, 60)}`;
+  };
 
   // برگهٔ چاپ A4: سؤال (ساخت‌یافته یا متنی) + خط‌کشی برای نوشتن با خودکار (درخواست کاربر)
   const printQuestions = promptData ? (
@@ -489,19 +738,64 @@ Return ONLY a valid JSON array with one object:
 
       {isExamMode && (
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] space-y-3">
-          {/* صفحهٔ انتخاب سطح/موضوع — تا وقتی تمرینی باز نشده (خروج از تمرین به همین‌جا برمی‌گردد) */}
+          {/* صفحهٔ انتخاب سطح/نوع آزمون — تا وقتی تمرینی باز نشده (خروج از تمرین به همین‌جا برمی‌گردد) */}
           {!exam && !promptData && (
             <>
-              <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 انتخاب سطح و موضوع آزمون Schreiben</div>
+              <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 انتخاب سطح و نوع آزمون Schreiben</div>
               {levelButtons}
-              <select value={selectedTopic} onChange={e => { const v = e.target.value; setSelectedTopic(v); if (v) void fetchTaskPrompt(v); else setPromptData(null); }}
+              {/* نوع آزمون: کشویی بازشونده — گزینهٔ آخر «تمرین آزاد» با رفتار قبلی (درخواست کاربر) */}
+              <div className="text-xs font-bold text-slate-600 dark:text-slate-300">🏫 نوع آزمون Schreiben:</div>
+              <select value={examType} onChange={e => { setExamType(e.target.value); setSelectedTeil(''); }}
                 className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none">
-                <option value="">-- موضوع آزمون را انتخاب کنید --</option>
-                {SCHREIBEN_TOPICS.map(t => <option key={t.id} value={t.id}>{t.title} ({t.level})</option>)}
+                {EXAM_PROFILES.map(p => <option key={p.id} value={p.id}>{p.nameFa} — {p.nameDe}</option>)}
+                <option value="free">تمرین آزاد — انتخاب موضوع دلخواه</option>
               </select>
-              {/* دکمه‌های هم‌اندازه و مرتب در یک ردیف (درخواست کاربر) */}
+              {examType === 'free' ? (
+                <>
+                  {/* تمرین آزاد: انتخاب موضوع — بدون ساخت خودکار (رفع ایراد ۲) */}
+                  <select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none">
+                    <option value="">-- موضوع آزمون را انتخاب کنید --</option>
+                    {SCHREIBEN_TOPICS.map(t => <option key={t.id} value={t.id}>{t.title} ({t.level})</option>)}
+                  </select>
+                  {savedListBlock(savedForPick, '📚 تمرین‌های قبلی — همین سطح و موضوع',
+                    !selectedTopic ? 'اول سطح و موضوع را انتخاب کن تا تمرین‌های قبلی‌اش اینجا لیست شود.' : 'هنوز برای این سطح و موضوع تمرینی ذخیره نشده — با «🔄 ساخت سناریوی تازه» اولین را بساز.',
+                    savedLabelFree)}
+                </>
+              ) : teilList.length ? (
+                <>
+                  {/* تمرین‌های همان آزمون مثل برگهٔ واقعی — یکی را انتخاب کن و بساز */}
+                  <div className="text-xs font-bold text-slate-600 dark:text-slate-300">📝 تمرین‌های Schreiben در سطح {targetLevel} — مثل آزمون واقعی، یکی را انتخاب کن:</div>
+                  <div className="space-y-2">
+                    {teilList.map(t => (
+                      <button key={t.id} onClick={() => setSelectedTeil(t.id)}
+                        className={`w-full text-right p-3 rounded-xl border transition ${selectedTeil === t.id ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700' : 'bg-slate-50 dark:bg-[#141923] border-slate-200 dark:border-slate-700 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30'}`}>
+                        <div dir="ltr" className="text-left text-sm font-bold text-slate-800 dark:text-slate-100">{t.titleDe}</div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span>{t.fa}</span>
+                          <span>⏱ {toFa(t.minutes)} دقیقه</span>
+                          <span dir="ltr">✍️ {t.wr} Wörter</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {savedListBlock(savedForExam, '📚 تمرین‌های قبلی — همین آزمون و همین سطح',
+                    'هنوز برای این آزمون و سطح تمرینی ذخیره نشده — یک Teil را انتخاب کن و با «🔄 ساخت سناریوی تازه» بساز.',
+                    savedLabelExam)}
+                </>
+              ) : (
+                <div className="text-xs text-slate-600 dark:text-slate-300 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                  برای این آزمون در سطح {targetLevel} تمرین Schreiben تعریف نشده — سطح دیگری انتخاب کن (پوشش فعلی: گوته A2 تا C1، ÖSD و telc در B1/B2، EPD در B2/C1).
+                </div>
+              )}
+              {/* دکمه‌های هم‌اندازه و مرتب در یک ردیف — فقط با انتخاب، دستی می‌سازد (رفع ایراد ۲) */}
               <div className="grid grid-cols-2 gap-2.5">
-                <button onClick={() => selectedTopic && void fetchTaskPrompt(selectedTopic)} disabled={!selectedTopic || generatingPrompt}
+                <button onClick={() => {
+                  if (examType === 'free') { if (selectedTopic) void fetchTaskPrompt(selectedTopic); return; }
+                  const t = teilList.find(x => x.id === selectedTeil);
+                  if (t) void fetchExamPrompt(examType, targetLevel, t);
+                }}
+                  disabled={generatingPrompt || (examType === 'free' ? !selectedTopic : !selectedTeil)}
                   className="py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold text-sm transition disabled:opacity-40">
                   🔄 ساخت سناریوی تازه
                 </button>
@@ -509,29 +803,6 @@ Return ONLY a valid JSON array with one object:
                   className={`py-2.5 rounded-xl border font-bold text-sm transition ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-slate-50 hover:bg-slate-100 dark:bg-[#141923] dark:hover:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200'}`}>
                   🚫 حالت بدون کمک {noHelp ? '(روشن)' : ''}
                 </button>
-              </div>
-              {/* لیست تمرین‌های قبلی همین درس/سطح/موضوع — کلیک = باز شدن در صفحهٔ تمرین (درخواست کاربر) */}
-              <div className="space-y-2 pt-1">
-                <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📚 تمرین‌های قبلی — همین سطح و موضوع</div>
-                {!selectedTopic ? (
-                  <div className="text-xs text-slate-500 dark:text-slate-400">اول سطح و موضوع را انتخاب کن تا تمرین‌های قبلی‌اش اینجا لیست شود.</div>
-                ) : savedForPick.length === 0 ? (
-                  <div className="text-xs text-slate-500 dark:text-slate-400 p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-dashed border-slate-300 dark:border-slate-700">هنوز برای این سطح و موضوع تمرینی ذخیره نشده — با «🔄 ساخت سناریوی تازه» اولین را بساز.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {savedForPick.slice(0, 12).map(s => (
-                      <button key={s.id} onClick={() => openSaved(s)}
-                        className="w-full block text-right p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-800 transition">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300">{s.level}</span>
-                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{faDate(s.ts)}</span>
-                        </div>
-                        <div dir="ltr" className="text-left text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1.5 truncate">{s.structured ? `${s.structured.title} — ${s.structured.intro}` : s.taskDe.slice(0, 90)}</div>
-                      </button>
-                    ))}
-                    {savedForPick.length > 12 && <div className="text-[11px] text-slate-400">{toFa(savedForPick.length - 12)} تمرین قدیمی‌تر هم در بایگانی هست.</div>}
-                  </div>
-                )}
               </div>
             </>
           )}
@@ -544,6 +815,7 @@ Return ONLY a valid JSON array with one object:
                 <div className="font-bold text-indigo-900 dark:text-indigo-200">📋 صورت سوال (Aufgabenstellung)</div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-indigo-200 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300">{targetLevel}</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 max-w-[180px] truncate">{activeExamLabel}</span>
                   {/* چاپ قبل از پاسخ‌دادن هم ممکن است (درخواست کاربر) + خروج به صفحهٔ انتخاب */}
                   {!exam && (
                     <>
@@ -645,14 +917,15 @@ Return ONLY a valid JSON array with one object:
         </div>
       )}
 
-      {(!exam || promptData) && (
+      {/* باکس پاسخ + دکمهٔ تصحیح فقط در صفحهٔ تمرین (رفع ایراد ۱ — در صفحهٔ انتخاب نیست) */}
+      {(!isExamMode || promptData) && (
         <textarea dir="ltr" rows={exam ? 12 : 6} value={text} onChange={e => setText(e.target.value)}
           placeholder={isExamMode ? 'Hier steht dein deutscher Text … (پاسخ آزمون را اینجا بنویسید)' : 'Hier steht dein deutscher Text … (در صورت تمایل متن را اینجا بنویسید یا فقط عکس بالا را بفرستید)'}
           className="w-full bg-slate-50 dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-2xl px-4 py-3 font-sans text-base outline-none leading-relaxed shadow-xs" />
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {(!exam || promptData) && (
+        {(!isExamMode || promptData) && (
           <button onClick={() => void runCheck()} disabled={busy || (!text.trim() && images.length === 0)}
             className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 shadow-md transition">
             {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال بررسی و تصحیح…</span></> : <span>{exam ? 'ثبت متن و ادامه ✓' : '🤖 تصحیح با هوش مصنوعی'}</span>}
@@ -758,7 +1031,7 @@ Return ONLY a valid JSON array with one object:
           open={printOpen}
           onClose={() => setPrintOpen(false)}
           title="Schreiben — Übungsblatt"
-          meta={`${targetLevel}${selectedTopic ? ` • ${SCHREIBEN_TOPICS.find(t => t.id === selectedTopic)?.title || ''}` : ''} • ${faDate(Date.now())} • نام: ...........................`}
+          meta={`${targetLevel} • ${activeExamLabel} • ${faDate(Date.now())} • نام: ...........................`}
           questions={printQuestions}
           hint="پیش‌نمایش چاپ — برگهٔ A4: سؤال بالای برگه و خط‌کشی برای نوشتن"
         />
