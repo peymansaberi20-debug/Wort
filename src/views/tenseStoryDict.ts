@@ -308,7 +308,7 @@ export const DICT: Record<string, DictEntry> = {
   kuchen: { fa: 'کیک', de: 'der Kuchen', art: 'der', pos: 'noun', ex: 'Der Kuchen \u0069\u0073\u0074 süß.', exFa: 'کیک شیرین است.' },
   feuerwehrbuch: { fa: 'کتاب آتش‌نشانی', de: 'das Feuerwehrbuch', art: 'das', pos: 'noun' },
   cousin: { fa: 'پسرخاله/پسرعمه', de: 'der Cousin', art: 'der', pos: 'noun' },
-  wetter: { fa: 'هوا (آب‌وهوا)', de: 'das Wetter', art: 'das', pos: 'noun', ex: 'Das Wetter \u0069\u0073\u0074 امروز schön.', exFa: 'امروز هوا زیباست.' },
+  wetter: { fa: 'هوا (آب‌وهوا)', de: 'das Wetter', art: 'das', pos: 'noun', ex: 'Das Wetter \u0069\u0073\u0074 heute schön.', exFa: 'امروز هوا زیباست.' },
   campingplatz: { fa: 'محل کمپ / چادرزنی', de: 'der Campingplatz', art: 'der', pos: 'noun' },
   'campingplätze': { fa: 'محل‌های کمپ' },
   wolke: { fa: 'ابر', de: 'die Wolke', art: 'die', pos: 'noun' }, wolken: { fa: 'ابرها' },
