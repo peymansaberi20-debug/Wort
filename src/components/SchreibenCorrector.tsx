@@ -11,6 +11,7 @@ import { Camera, ImagePlus, Trash2 } from 'lucide-react';
 import { generateWithImages, describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import { ExamRun, S, askJson, pick, sentenceFix, useNoHelp } from '../utils/trainerKit';
+import { faDate, LevelChips, PrintPreview, prFa, prG, toFa } from './trainerUI';
 
 /** Shrinks a photo to max 1800px JPEG so the upload stays small and reliable. */
 const shrinkImage = (file: File): Promise<{ dataUrl: string; mimeType: string; base64: string }> =>
@@ -85,6 +86,25 @@ const saveTaskHist = (topicId: string, taskDe: string): void => {
     const arr = Array.isArray(o[topicId]) ? (o[topicId] as string[]) : [];
     o[topicId] = [...arr, taskDe].slice(-8);
     localStorage.setItem(TASK_HIST_KEY, JSON.stringify(o));
+  } catch { /* ignore */ }
+};
+
+/** بایگانی تمرین‌های ساخته‌شده بر حسب سطح و موضوع — لیست «تمرین‌های قبلی» زیر انتخاب موضوع (درخواست کاربر) */
+interface SavedExercise {
+  id: string; ts: number; topicId: string; level: string;
+  taskDe: string; taskFa: string; sourceText: string; points: string[]; structured?: StructuredTask;
+}
+const SAVED_KEY = 'wb_schreiben_saved_v1';
+const loadSaved = (): SavedExercise[] => {
+  try {
+    const a = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]') as unknown;
+    return Array.isArray(a) ? (a as SavedExercise[]) : [];
+  } catch { return []; }
+};
+const saveSavedExercise = (e: SavedExercise): void => {
+  try {
+    const a = loadSaved().filter(x => x.id !== e.id);
+    localStorage.setItem(SAVED_KEY, JSON.stringify([e, ...a].slice(0, 60)));
   } catch { /* ignore */ }
 };
 
@@ -163,6 +183,9 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   // ایده‌های نوشتن: اگر کاربر ایده‌ای برای متن نداشت (درخواست جدید کاربر)
   const [ideas, setIdeas] = useState<{ de: string; fa: string }[] | null>(null);
   const [ideasBusy, setIdeasBusy] = useState(false);
+  // بایگانی تمرین‌ها + پیش‌نمایش چاپ (درخواست‌های جدید کاربر)
+  const [printOpen, setPrintOpen] = useState(false);
+  const [savedList, setSavedList] = useState<SavedExercise[]>(() => loadSaved());
 
   const [images, setImages] = useState<{ dataUrl: string; mimeType: string; base64: string }[]>([]);
   // صف کراپ: هر عکس تازه قبل از ورود به فهرست از کراپ می‌گذرد (درخواست #۶)
@@ -242,6 +265,7 @@ const isRepeat = (theme: string, quote: string, hist: string[]): boolean => {
     const topObj = SCHREIBEN_TOPICS.find(t => t.id === topicId);
     if (!topObj) return;
     setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg(''); setIdeas(null);
+    setText(''); setReport(null); setImages([]); setPrintOpen(false);   // تمرین تازه = پاسخ خالی
     const zus = topicId === 'zus';
     // تنوع تضمینی: زاویهٔ تصادفی + فهرست صورتِسوال‌های قبلی که مدل نباید تکرار کند
     const banned = loadTaskHist(topicId).slice(-5);
@@ -277,7 +301,9 @@ Return ONLY valid JSON: {"theme":"kurzes Blog-/Artikelthema in 2–5 Wörtern","
           const instrRest = blog ? [neb] : [`Erläutern Sie Ihre Position zu diesem Zitat und nennen Sie Beispiele.`, neb];
           const taskDe = `${aufgabe}\n\n${intro}\n\n„${r.quote}"\n\n${instrBold}\n${instrRest.join('\n')}`;
           const structured: StructuredTask = { title: `Thema: „${r.theme}"`, aufgabe, intro, quote: r.quote, instrBold, instrRest };
-          setPromptData({ taskDe, taskFa: opinionFa(r.themeFa || '', wrFa), sourceText: '', points: [], structured });
+          const pd = { taskDe, taskFa: opinionFa(r.themeFa || '', wrFa), sourceText: '', points: [], structured };
+          setPromptData(pd);
+          rememberExercise(topicId, lvl, pd);   // در بایگانی سطح/موضوع ذخیره شود
           saveTaskHist(topicId, taskDe);
         }
         return;
@@ -296,8 +322,12 @@ Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای �
         r = cur;
         if (attempt === 1 || !isRepeat('', cur.taskDe || '', banned)) break;
       }
-      setPromptData({ taskDe: r.taskDe, taskFa: r.taskFa || topObj.desc, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) });
-      if (r.taskDe) saveTaskHist(topicId, r.taskDe);   // برای تکرارنشدن دفعات بعد
+      const pd = { taskDe: r.taskDe, taskFa: r.taskFa || topObj.desc, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) };
+      setPromptData(pd);
+      if (r.taskDe) {
+        rememberExercise(topicId, lvl, pd);   // در بایگانی سطح/موضوع ذخیره شود
+        saveTaskHist(topicId, r.taskDe);   // برای تکرارنشدن دفعات بعد
+      }
     } catch (e: any) {
       onShowToast(describeAiError(e), true);
     } finally { setGeneratingPrompt(false); }
@@ -319,6 +349,24 @@ Return ONLY valid JSON: {"ideas":[{"de":"...","fa":"ترجمهٔ فارسی کو
     } catch (e: any) {
       onShowToast(describeAiError(e), true);
     } finally { setIdeasBusy(false); }
+  };
+
+  // ذخیرهٔ تمرین تازه در بایگانی «سطح + موضوع» (درخواست کاربر)
+  const rememberExercise = (topicId: string, lvl: string, pd: NonNullable<typeof promptData>) => {
+    const e: SavedExercise = { id: `${Date.now()}`, ts: Date.now(), topicId, level: lvl, taskDe: pd.taskDe, taskFa: pd.taskFa, sourceText: pd.sourceText, points: pd.points, structured: pd.structured };
+    saveSavedExercise(e);
+    setSavedList(loadSaved());
+  };
+  // باز کردن یک تمرین قبلی از لیست — همان صفحهٔ تمرین، با پاسخ خالی
+  const openSaved = (e: SavedExercise) => {
+    setSelectedTopic(e.topicId); setTargetLevel(e.level);
+    setText(''); setReport(null); setImages([]); setErrMsg(''); setShowFa(false); setIdeas(null); setPrintOpen(false);
+    setPromptData({ taskDe: e.taskDe, taskFa: e.taskFa, sourceText: e.sourceText, points: e.points, structured: e.structured });
+  };
+  // خروج از صفحهٔ تمرین → برگشت به صفحهٔ انتخاب سطح/موضوع
+  const exitExercise = () => {
+    setPromptData(null); setText(''); setReport(null); setImages([]); setErrMsg('');
+    setShowFa(false); setIdeas(null); setPrintOpen(false);
   };
 
   // full-exam mode: pick a task for the level and start the real timer
@@ -399,11 +447,36 @@ Return ONLY a valid JSON array with one object:
   };
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-  const levelSelect = (
-    <select value={targetLevel} onChange={e => { setTargetLevel(e.target.value); if (isExamMode && selectedTopic) void fetchTaskPrompt(selectedTopic, e.target.value); }} className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none">
-      <option value="A2">سطح A2</option><option value="B1">سطح B1</option><option value="B2">سطح B2</option><option value="C1">سطح C1</option>
-    </select>
+  // انتخاب سطح: دکمه‌های هم‌اندازه در یک خط، سبک تب گرامر (درخواست کاربر — بدون لیست کشویی)
+  const levelButtons = (
+    <LevelChips value={targetLevel} onChange={l => setTargetLevel(l)} levels={['A2', 'B1', 'B2', 'C1']} />
   );
+
+  // تمرین‌های قبلیِ همین درس + همین سطح + همین موضوع، تازه‌ترین اول
+  const savedForPick = savedList.filter(s => s.topicId === selectedTopic && s.level === targetLevel);
+
+  // برگهٔ چاپ A4: سؤال (ساخت‌یافته یا متنی) + خط‌کشی برای نوشتن با خودکار (درخواست کاربر)
+  const printQuestions = promptData ? (
+    <div>
+      {promptData.structured ? (
+        <>
+          <div style={prG({ fontSize: 15, fontWeight: 800, marginBottom: 10 })}>{promptData.structured.title}</div>
+          <div style={prG({ fontSize: 12.5, fontWeight: 700, marginBottom: 8 })}>{promptData.structured.aufgabe}</div>
+          <div style={prG({ fontSize: 12.5, marginBottom: 8 })}>{promptData.structured.intro}</div>
+          <div style={prG({ fontSize: 12.5, fontStyle: 'italic', lineHeight: 1.9, border: '1px solid #bbb', borderRadius: 8, padding: '10px 12px', background: '#f6f6f6', marginBottom: 12 })}>{promptData.structured.quote}</div>
+          <div style={prG({ fontSize: 12.5, fontWeight: 700, marginBottom: 6 })}>{promptData.structured.instrBold}</div>
+          {promptData.structured.instrRest.map((l, i) => <div key={i} style={prG({ fontSize: 12.5, marginBottom: 4 })}>{l}</div>)}
+        </>
+      ) : (
+        <div style={prG({ fontSize: 12.5, whiteSpace: 'pre-wrap', lineHeight: 1.8 })}>{promptData.taskDe}</div>
+      )}
+      {promptData.sourceText && (
+        <div style={prG({ fontSize: 11.5, whiteSpace: 'pre-wrap', lineHeight: 1.8, border: '1px solid #bbb', borderRadius: 8, padding: '8px 10px', background: '#fafafa', marginTop: 10 })}>{promptData.sourceText}</div>
+      )}
+      <div style={prFa({ fontSize: 10.5, color: '#555', margin: '18px 0 8px' })}>✍️ پاسخ خودت را خط‌به‌خط بنویس:</div>
+      {Array.from({ length: 20 }).map((_, i) => <div key={i} style={{ borderBottom: '1.2px solid #999', height: 30 }} />)}
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-4 text-right">
@@ -416,23 +489,50 @@ Return ONLY a valid JSON array with one object:
 
       {isExamMode && (
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] space-y-3">
-          {!exam && (
+          {/* صفحهٔ انتخاب سطح/موضوع — تا وقتی تمرینی باز نشده (خروج از تمرین به همین‌جا برمی‌گردد) */}
+          {!exam && !promptData && (
             <>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 انتخاب موضوع و سناریوی آزمون Schreiben</span>
-                {levelSelect}
-              </div>
+              <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 انتخاب سطح و موضوع آزمون Schreiben</div>
+              {levelButtons}
               <select value={selectedTopic} onChange={e => { const v = e.target.value; setSelectedTopic(v); if (v) void fetchTaskPrompt(v); else setPromptData(null); }}
                 className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none">
                 <option value="">-- موضوع آزمون را انتخاب کنید --</option>
                 {SCHREIBEN_TOPICS.map(t => <option key={t.id} value={t.id}>{t.title} ({t.level})</option>)}
               </select>
-              {/* ساخت دوباره: هر بار با یک کلیک، AI سناریوی کاملاً تازه می‌سازد (خواستهٔ کاربر) */}
-              <button onClick={() => selectedTopic && void fetchTaskPrompt(selectedTopic)} disabled={!selectedTopic || generatingPrompt}
-                className="w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold text-sm transition disabled:opacity-40">
-                🔄 ساخت سناریوی تازه با هوش مصنوعی
-              </button>
-              <button onClick={() => setNoHelp(!noHelp)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>🚫 حالت بدون کمک {noHelp ? '(روشن)' : ''}</button>
+              {/* دکمه‌های هم‌اندازه و مرتب در یک ردیف (درخواست کاربر) */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button onClick={() => selectedTopic && void fetchTaskPrompt(selectedTopic)} disabled={!selectedTopic || generatingPrompt}
+                  className="py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold text-sm transition disabled:opacity-40">
+                  🔄 ساخت سناریوی تازه
+                </button>
+                <button onClick={() => setNoHelp(!noHelp)}
+                  className={`py-2.5 rounded-xl border font-bold text-sm transition ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-slate-50 hover:bg-slate-100 dark:bg-[#141923] dark:hover:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200'}`}>
+                  🚫 حالت بدون کمک {noHelp ? '(روشن)' : ''}
+                </button>
+              </div>
+              {/* لیست تمرین‌های قبلی همین درس/سطح/موضوع — کلیک = باز شدن در صفحهٔ تمرین (درخواست کاربر) */}
+              <div className="space-y-2 pt-1">
+                <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📚 تمرین‌های قبلی — همین سطح و موضوع</div>
+                {!selectedTopic ? (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">اول سطح و موضوع را انتخاب کن تا تمرین‌های قبلی‌اش اینجا لیست شود.</div>
+                ) : savedForPick.length === 0 ? (
+                  <div className="text-xs text-slate-500 dark:text-slate-400 p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-dashed border-slate-300 dark:border-slate-700">هنوز برای این سطح و موضوع تمرینی ذخیره نشده — با «🔄 ساخت سناریوی تازه» اولین را بساز.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {savedForPick.slice(0, 12).map(s => (
+                      <button key={s.id} onClick={() => openSaved(s)}
+                        className="w-full block text-right p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-800 transition">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300">{s.level}</span>
+                          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{faDate(s.ts)}</span>
+                        </div>
+                        <div dir="ltr" className="text-left text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1.5 truncate">{s.structured ? `${s.structured.title} — ${s.structured.intro}` : s.taskDe.slice(0, 90)}</div>
+                      </button>
+                    ))}
+                    {savedForPick.length > 12 && <div className="text-[11px] text-slate-400">{toFa(savedForPick.length - 12)} تمرین قدیمی‌تر هم در بایگانی هست.</div>}
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -440,9 +540,20 @@ Return ONLY a valid JSON array with one object:
 
           {promptData && (
             <div className="p-4 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 space-y-3 text-sm leading-7">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-bold text-indigo-900 dark:text-indigo-200">📋 صورت سوال (Aufgabenstellung)</div>
-                <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-indigo-200 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300">{targetLevel}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-indigo-200 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300">{targetLevel}</span>
+                  {/* چاپ قبل از پاسخ‌دادن هم ممکن است (درخواست کاربر) + خروج به صفحهٔ انتخاب */}
+                  {!exam && (
+                    <>
+                      <button onClick={() => setPrintOpen(true)}
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#141923] border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition">🖨 چاپ</button>
+                      <button onClick={exitExercise}
+                        className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition">← خروج</button>
+                    </>
+                  )}
+                </div>
               </div>
               {/* رندر مرتب مثل نمونهٔ رسمی: عنوان درشت → دستور پررنگ → مقدمه → Zitat ایتالیک در کادر جدا → خطوط دستور */}
               {promptData.structured ? (
@@ -503,10 +614,8 @@ Return ONLY a valid JSON array with one object:
 
       {!exam && (!isExamMode || promptData) && (
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📸 ارسال عکس دست‌نویس یا فایل (چند صفحه)</span>
-            {levelSelect}
-          </div>
+          <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">📸 ارسال عکس دست‌نویس یا فایل (چند صفحه)</div>
+          {!isExamMode && levelButtons}
           <p className="text-sm text-[#5d6676] dark:text-[#a3adbd]">می‌توانی از متن دست‌نویس خودت عکس بگیری، تصویر از گالری/سیستم انتخاب کنی یا متن را پایین تایپ کنی.</p>
           <div className="grid grid-cols-2 gap-2.5">
             <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 font-bold text-sm transition"><Camera size={18} /><span>عکس با دوربین</span></button>
@@ -641,6 +750,18 @@ Return ONLY a valid JSON array with one object:
             </div>
           </div>
         </div>
+      )}
+
+      {/* پیش‌نمایش چاپ A4 — سؤال با خط‌کشی برای نوشتن، همان سبک تب گرامر (درخواست کاربر) */}
+      {promptData && (
+        <PrintPreview
+          open={printOpen}
+          onClose={() => setPrintOpen(false)}
+          title="Schreiben — Übungsblatt"
+          meta={`${targetLevel}${selectedTopic ? ` • ${SCHREIBEN_TOPICS.find(t => t.id === selectedTopic)?.title || ''}` : ''} • ${faDate(Date.now())} • نام: ...........................`}
+          questions={printQuestions}
+          hint="پیش‌نمایش چاپ — برگهٔ A4: سؤال بالای برگه و خط‌کشی برای نوشتن"
+        />
       )}
     </div>
   );
