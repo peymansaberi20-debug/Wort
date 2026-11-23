@@ -62,6 +62,32 @@ const EXAM_TOPICS: Record<string, string[]> = {
   B2: ['opinion', 'work', 'zus'], C1: ['opinion', 'zus']
 };
 
+/** زاویه‌های موضوعی برای تنوع — هر بار ۲تای تصادفی به پرامت می‌رود تا سناریو تکراری نشود (باگ «همش تکراری») */
+const TASK_ANGLES = [
+  'Mobilität und Verkehr', 'digitale Medien und Social Media', 'Umwelt und Müll im Alltag', 'Arbeitswelt und Karriere',
+  'Wohnen und Nachbarschaft', 'Gesundheit und Stress', 'Geld, Sparen und Konsum', 'Bildung und Sprachenlernen',
+  'Freundschaft und Familie', 'Reisen und Urlaub', 'Essen und Ernährung', 'Sport und Bewegung',
+  'Klima und Energie', 'Künstliche Intelligenz im Alltag', 'Einkaufen und Online-Handel', 'Tiere und Haustiere',
+  'Feste und Traditionen', 'Nachrichten und Presse', 'Ehrensache und Freiwilligenarbeit', 'Kultur und Vereine'
+];
+
+/** حافظهٔ آخرین صورتِسوال‌های هر موضوع — به پرامت می‌رود تا مدل همان سناریو را تکرار نکند */
+const TASK_HIST_KEY = 'wb_schreiben_task_hist_v1';
+const loadTaskHist = (topicId: string): string[] => {
+  try {
+    const o = JSON.parse(localStorage.getItem(TASK_HIST_KEY) || '{}') as Record<string, unknown>;
+    return Array.isArray(o[topicId]) ? (o[topicId] as string[]) : [];
+  } catch { return []; }
+};
+const saveTaskHist = (topicId: string, taskDe: string): void => {
+  try {
+    const o = JSON.parse(localStorage.getItem(TASK_HIST_KEY) || '{}') as Record<string, unknown>;
+    const arr = Array.isArray(o[topicId]) ? (o[topicId] as string[]) : [];
+    o[topicId] = [...arr, taskDe].slice(-8);
+    localStorage.setItem(TASK_HIST_KEY, JSON.stringify(o));
+  } catch { /* ignore */ }
+};
+
 const ISSUE_BADGE: Record<string, string> = {
   'گرامر': 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
   'املا': 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
@@ -161,19 +187,98 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
     return null;
   };
 
+/** موضوعات روزمرهٔ ملموس برای «نظر و استدلال» — هر بار چندتای تصادفی به AI پیشنهاد می‌شود تا Zitat تازه بسازد */
+const OPINION_THEMES = [
+  'Geschenke weiterverschenken', 'Dinge aufbewahren oder wegwerfen', 'Handynutzung beim Essen', 'Haustiere in der Wohnung',
+  'Homeoffice oder Büro', 'Lieferservice statt selbst kochen', 'Öffentlicher Verkehr statt eigenem Auto', 'Social Media in der Freizeit',
+  'Online-Shopping oder Geschäft', 'Frühaufsteher oder Nachtschwärmer', 'Sprachen mit App oder Kurs lernen', 'Urlaub in den Bergen oder am Meer',
+  'Alte Möbel restaurieren oder ersetzen', 'Mülltrennung im Alltag', 'Secondhand-Kleidung kaufen', 'Streaming statt Kino',
+  'Geld sparen oder genießen', 'Wohnen in der WG oder allein', 'Sport im Fitnessstudio oder draußen', 'Fotos von allem machen',
+  'Bücher auf Papier oder E-Reader', 'Videospiele als Hobby', 'Kaffee zu Hause oder im Café', 'Fahrrad statt Bus in der Stadt',
+  'Urlaub ganz ohne Handy', 'Nachbarschaftshilfe in der Stadt', 'Zoo oder Tierpark besuchen', 'Mit Freunden gemeinsam kochen',
+  'Fastfood am Arbeitsplatz', 'Wocheneinkauf online oder im Markt'
+];
+
+const quoteCheck = S.obj({ theme: S.req, quote: S.req, themeFa: S.str() });
+
+/** متن استاندارد فارسی برای توضیح فارسی کارِ opinion */
+const opinionFa = (themeFa: string, wr: string) =>
+  `نظر یک نفر دربارهٔ «${themeFa || 'یک موضوع روزمره'}» آمده است؛ شما باید نظر خودتان را در ${wr} واژه بنویسید، با دلیل و مثال، و از جملات وابستهٔ متنوع (dass، weil، wenn، obwohl، als، ob و…) استفاده کنید.`;
+
+const normDe = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** آیا این صورت‌سوال با قبلی‌ها یکی است؟ هرکدام: نقل‌قول تکراری، همان موضوع دقیق،
+ *  ≥۲ واژهٔ معنادار مشترک، یا یک واژهٔ کم‌یابِ (≥۷ حرف) مشترک → تکراری.
+ *  برای مسیر غیر-opinion، theme خالی بده تا فقط متنِ کل چک شود. */
+const isRepeat = (theme: string, quote: string, hist: string[]): boolean => {
+  const nq = normDe(quote).slice(0, 90);
+  const nt = normDe(theme);
+  const words = nt.split(' ').filter(w => w.length >= 5);
+  if (nq.length < 20 && words.length < 2) return false;
+  return hist.some(h => {
+    const nh = normDe(h);
+    if (nq.length >= 20 && nh.includes(nq)) return true;
+    if (nt.length >= 5 && nh.includes(nt)) return true;
+    const hits = words.filter(w => nh.includes(w));
+    if (hits.length >= 2) return true;
+    return hits.some(w => w.length >= 7);
+  });
+};
+
   const fetchTaskPrompt = async (topicId: string, lvl = targetLevel) => {
     const topObj = SCHREIBEN_TOPICS.find(t => t.id === topicId);
     if (!topObj) return;
     setGeneratingPrompt(true); setPromptData(null); setShowFa(false); setErrMsg('');
     const zus = topicId === 'zus';
+    // تنوع تضمینی: زاویهٔ تصادفی + فهرست صورتِسوال‌های قبلی که مدل نباید تکرار کند
+    const banned = loadTaskHist(topicId).slice(-5);
+    const angles = [...TASK_ANGLES].sort(() => Math.random() - 0.5).slice(0, 2);
+    const bannedBlock = banned.length ? `Do NOT repeat or merely paraphrase these Aufgaben the learner already had:\n${banned.map((b, i) => `${i + 1}. ${b}`).join('\n')}\n` : '';
     try {
-      const p = `You are a strict German exam designer (like ÖSD/Goethe/EPD for level ${lvl}). Create an exam Aufgabe card for: "${topObj.title} (${topObj.desc})".
+      // ── مسیر «نظر و استدلال»: قالب ثابت آزمون + Zitat تازه از AI در هر بار (خواستهٔ کاربر) ──
+      // متن ثابتِ دستورِ کار را کد می‌سازد؛ AI فقط موضوع و نقل‌قولِ نو تولید می‌کند، با تلاش مجدد روی تکراری‌بودن.
+      if (topicId === 'opinion') {
+        const wr = lvl === 'C1' ? '150–180' : '100–120';
+        const wrFa = lvl === 'C1' ? '۱۵۰ تا ۱۸۰' : '۱۰۰ تا ۱۲۰';
+        let r: { theme: string; quote: string; themeFa?: string } | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const sug = [...OPINION_THEMES].sort(() => Math.random() - 0.5).slice(0, 3);
+          const p = `You design German ${lvl} writing-exam tasks (ÖSD/Goethe style). Invent ONE completely new, concrete everyday-life opinion situation for a Stellungnahme task.
+Theme ideas to build around (you may adapt them): "${sug[0]}", "${sug[1]}", "${sug[2]}".
+${bannedBlock}
+Write the opinion ("quote") as a natural first-person German text of 5–8 sentences with ${lvl} vocabulary: a clear personal stance (mostly for, mostly against, or torn with a leaning) plus at least one concrete personal example/anecdote and one counter-argument. Vary situations: one time a personal experience, one time a complaint, one time a suggestion.
+Return ONLY valid JSON: {"theme":"kurzes Blog-/Artikelthema in 2–5 Wörtern","quote":"das Zitat, 5–8 Sätze, Ich-Form","themeFa":"ترجمهٔ فارسی کوتاه موضوع"}`;
+          const cur = await askJson<any>(p, quoteCheck, { timeoutMs: 35000 });
+          if (!isRepeat(cur.theme || '', cur.quote || '', banned)) { r = cur; break; }
+          if (!r) r = cur;   // همه تکراری بودند — آخرین نسخه را نگه دار
+        }
+        if (r) {
+          const blog = Math.random() < 0.5;
+          const neb = 'Für eine gute Bewertung begründen Sie Ihre Meinung und verwenden Sie verschiedene Nebensätze (dass, weil, wenn, obwohl, als, ob etc.).';
+          const taskDe = blog
+            ? `Aufgabe 1: Stellungnahme zu einem Blog-Eintrag schreiben\n\nIn einem Blog zum Thema „${r.theme}" finden Sie folgende Meinung:\n\n„${r.quote}"\n\nErläutern Sie Ihre Position (${wr} Wörter) zu diesem Zitat und nennen Sie Beispiele.\n${neb}`
+            : `Aufgabe: Stellungnahme schreiben\n\nLesen Sie die folgende Meinung:\n\n„${r.quote}"\n\nSchreiben Sie Ihre Stellungnahme (${wr} Wörter).\nErläutern Sie Ihre Position zu diesem Zitat und nennen Sie Beispiele.\n${neb}`;
+          setPromptData({ taskDe, taskFa: opinionFa(r.themeFa || '', wrFa), sourceText: '', points: [] });
+          saveTaskHist(topicId, taskDe);
+        }
+        return;
+      }
+      const p = `You are a strict German exam designer (like ÖSD/Goethe/EPD for level ${lvl}). Create a NEW, original exam Aufgabe card for: "${topObj.title} (${topObj.desc})".
+Build this task around the fresh, concrete scenario themes "${angles[0]}" and "${angles[1]}" — a situation the learner has not seen before.
+${bannedBlock}
 ${zus
-  ? `The task is a ZUSAMMENFASSUNG: put an authentic short scientific/academic source text (about ${lvl === 'C1' ? 280 : 220} words, a real-sounding topic from social science, technology, environment or economics) into "sourceText". "taskDe" is the German instruction: summarise the text in about 100 words, name topic and source, reproduce the key statements and the result in your own words, no personal opinion.`
-  : `The output must mirror official exam formats (Blog-Eintrag Stellungnahme or formelle E-Mail with a realistic scenario, required word count, points to cover). "sourceText" must be an empty string.`}
+  ? `The task is a ZUSAMMENFASSUNG: put an authentic short scientific/academic source text (about ${lvl === 'C1' ? 280 : 220} words, a real-sounding topic from social science, technology, environment or economics — related to the scenario themes above) into "sourceText". "taskDe" is the German instruction: summarise the text in about 100 words, name topic and source, reproduce the key statements and the result in your own words, no personal opinion.`
+  : `The output must mirror official exam formats (Blog-Eintrag Stellungnahme or formelle E-Mail with a realistic scenario tied to the scenario themes above, required word count, points to cover). "sourceText" must be an empty string.`}
 Return ONLY valid JSON: {"taskDe":"...","taskFa":"ترجمه و راهنمای فارسی خواسته آزمون","sourceText":"...","point1":"نکته اول","point2":"نکته دوم","point3":"نکته سوم"}`;
-      const r = await askJson<any>(p, taskCheck, { timeoutMs: 40000 });
+      // تلاش مجدد اگر متن خیلی شبیه صورت‌سوال قبلی بود
+      let r: any = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const cur = await askJson<any>(p + (attempt ? '\n\nIMPORTANT: Your previous idea was too similar to an earlier task. Choose a clearly different concrete scenario now.' : ''), taskCheck, { timeoutMs: 40000 });
+        r = cur;
+        if (attempt === 1 || !isRepeat('', cur.taskDe || '', banned)) break;
+      }
       setPromptData({ taskDe: r.taskDe, taskFa: r.taskFa || topObj.desc, sourceText: r.sourceText, points: [r.point1, r.point2, r.point3].filter(Boolean) });
+      if (r.taskDe) saveTaskHist(topicId, r.taskDe);   // برای تکرارنشدن دفعات بعد
     } catch (e: any) {
       onShowToast(describeAiError(e), true);
     } finally { setGeneratingPrompt(false); }
@@ -258,7 +363,7 @@ Return ONLY a valid JSON array with one object:
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   const levelSelect = (
-    <select value={targetLevel} onChange={e => setTargetLevel(e.target.value)} className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none">
+    <select value={targetLevel} onChange={e => { setTargetLevel(e.target.value); if (isExamMode && selectedTopic) void fetchTaskPrompt(selectedTopic, e.target.value); }} className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm font-bold outline-none">
       <option value="A2">سطح A2</option><option value="B1">سطح B1</option><option value="B2">سطح B2</option><option value="C1">سطح C1</option>
     </select>
   );
@@ -285,6 +390,11 @@ Return ONLY a valid JSON array with one object:
                 <option value="">-- موضوع آزمون را انتخاب کنید --</option>
                 {SCHREIBEN_TOPICS.map(t => <option key={t.id} value={t.id}>{t.title} ({t.level})</option>)}
               </select>
+              {/* ساخت دوباره: هر بار با یک کلیک، AI سناریوی کاملاً تازه می‌سازد (خواستهٔ کاربر) */}
+              <button onClick={() => selectedTopic && void fetchTaskPrompt(selectedTopic)} disabled={!selectedTopic || generatingPrompt}
+                className="w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold text-sm transition disabled:opacity-40">
+                🔄 ساخت سناریوی تازه با هوش مصنوعی
+              </button>
               <button onClick={() => setNoHelp(!noHelp)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>🚫 حالت بدون کمک {noHelp ? '(روشن)' : ''}</button>
             </>
           )}
