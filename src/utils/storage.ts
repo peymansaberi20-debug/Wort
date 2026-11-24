@@ -3,7 +3,7 @@ import { INITIAL_SEED, P6 } from '../data/seed';
 import { dayStart, today, dstr } from './dates';
 import { parseStatus, suggestStatus } from './wordStatus';
 import { imgDbBroken, imgPutMany } from './imageStore';
-import { stripHeadAnnotation, hasHeadAnnotation } from '../data/verbPrep';
+import { stripHeadAnnotation, hasHeadAnnotation, annotatedHeadword } from '../data/verbPrep';
 
 export const KEY = 'deutschlab_pro_fa_v1';
 export const EXT_KEY = 'wb_ext';
@@ -33,10 +33,17 @@ export function norm(w: any): Word | null {
       /^[a-zäöüß]{2,}(?:eln|ern|en)$/.test(bareForPos))
     ? 'فعل'
     : posRaw;
+  // درخواست کاربر: همهٔ فعل‌ها از A1 تا C2 سرِ پسونددار باشند (+A/+D/+A/D/+G) — واژه‌های قبلی هم هنگام
+  // بارگذاری از دیتاست فعل+حرف اضافه (شامل فهرست سفارشی) یا خط «ساختار:» در notes کامل می‌شوند؛
+  // فعلی که هیچ منبعی حالتش را نداند دست‌نخورده می‌ماند (چیزی از خود نمی‌سازیم)
+  const deAnn = isVerbPos(pos)
+    ? annotatedHeadword(deTrim, { pos: 'فعل', art: validArt, conj: s('conj'), notes: s('notes') })
+    : deTrim;
+  const deOut = deAnn || deTrim;
 
   return {
     id: s('id') || uid(),
-    de: deTrim,
+    de: deOut,
     syn: s('syn'),
     synFa: s('synFa'),
     ant: s('ant'),
