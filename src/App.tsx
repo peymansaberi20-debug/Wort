@@ -24,6 +24,7 @@ import {
   auditWord
 } from './utils/storage';
 import { applyModeResult, promotionReady, activationReady } from './utils/wordStatus';
+import { stripHeadAnnotation } from './data/verbPrep';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
 import { PageOverlay } from './components/PageOverlay';
@@ -339,7 +340,7 @@ export default function App() {
       setSelectedWord(newWord);
       // Pre-warm cloud TTS for the new word in the background (no user wait)
       if (getTtsWorkerBase()) {
-        const texts = [fullWord(newWord), newWord.ex, newWord.ex2].filter(Boolean) as string[];
+        const texts = [stripHeadAnnotation(fullWord(newWord)), newWord.ex, newWord.ex2].filter(Boolean) as string[];
         void Promise.all(texts.map(t => fetch(`https://${getTtsWorkerBase()!.replace(/^https?:\/\//, '')}/?lang=de&text=${encodeURIComponent(t)}`).catch(() => null)));
       }
     } else if (isEdit) {
@@ -349,7 +350,7 @@ export default function App() {
         setSelectedWord(merged);
         // Pre-warm cloud TTS for edited words too (only what is missing)
         if (getTtsWorkerBase()) {
-          const texts = [fullWord(merged), merged.ex, merged.ex2].filter(Boolean) as string[];
+          const texts = [stripHeadAnnotation(fullWord(merged)), merged.ex, merged.ex2].filter(Boolean) as string[];
           void Promise.all(texts.map(t => fetch(`https://${getTtsWorkerBase()!.replace(/^https?:\/\//, '')}/?lang=de&text=${encodeURIComponent(t)}`).catch(() => null)));
         }
       }
