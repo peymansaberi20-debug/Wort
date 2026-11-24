@@ -185,12 +185,35 @@ const INDEX = () => {
   return m;
 };
 
-/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم یا بدون sich)؛ بی‌نتیجه = null */
+/** VP از خودِ سرِ پسونددار فعل («sich sträuben gegen +A»، «gedeihen +D») — وقتی دیتاست جواب نمی‌دهد */
+const vpFromHead = (de: string): VP | null => {
+  const m = /^(.+?)\s*\+\s*([ad])\b\.?\s*$/i.exec((de || '').trim());
+  if (!m) return null;
+  const words = m[1].trim().split(/\s+/);
+  const last = (words[words.length - 1] || '').toLowerCase();
+  const hasPrep = words.length > 1 && isPrepToken(last);
+  const verb = hasPrep ? words.slice(0, -1).join(' ') : m[1].trim();
+  if (!verb) return null;
+  const prep = hasPrep ? last : '';
+  return { id: makeId(verb, prep), verb, prep, kase: m[2].toUpperCase() as 'A' | 'D', fa: '', ex: '' };
+};
+
+/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم، بدون sich، یا با سرِ پسونددار «warten auf +A»)؛ بی‌نتیجه = null */
 export const verbPrepOf = (de: string): VP | null => {
-  const t = (de || '').trim().toLowerCase();
+  const t = (de || '').trim();
   if (!t) return null;
+  const lower = t.toLowerCase();
   const idx = INDEX();
-  return idx.get(t) || idx.get(baseVerb(t)) || null;
+  const direct = idx.get(lower) || idx.get(baseVerb(lower));
+  if (direct) return direct;
+  // سرِ پسونددار (warten auf +A / sich entschließen zu +D): بعد از برهنه‌سازی دوباره تطبیق بده
+  const bare = stripHeadAnnotation(t).trim().toLowerCase();
+  if (bare && bare !== lower) {
+    const hit = idx.get(bare) || idx.get(baseVerb(bare));
+    if (hit) return hit;
+  }
+  // فعل خارج از دیتاست که سرِ پسونددار دارد — خود سر واژه را بخوان
+  return vpFromHead(t);
 };
 
 const vowel = (p: string) => /^[aeiouäöü]/i.test(p);
