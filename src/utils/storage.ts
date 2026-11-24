@@ -3,7 +3,7 @@ import { INITIAL_SEED, P6 } from '../data/seed';
 import { dayStart, today, dstr } from './dates';
 import { parseStatus, suggestStatus } from './wordStatus';
 import { imgDbBroken, imgPutMany } from './imageStore';
-import { stripHeadAnnotation } from '../data/verbPrep';
+import { stripHeadAnnotation, hasHeadAnnotation } from '../data/verbPrep';
 
 export const KEY = 'deutschlab_pro_fa_v1';
 export const EXT_KEY = 'wb_ext';
@@ -23,10 +23,20 @@ export function norm(w: any): Word | null {
   const s = (k: string) => (typeof w[k] === 'string' ? w[k] : '');
   const a = s('art').toLowerCase();
   const validArt = ['der', 'die', 'das'].includes(a) ? a : '';
+  // به‌سازی داده‌ها: سرِ پسونددار («warten auf +A») نشانهٔ فعل است؛ مصدرِ بی‌آرتیکل با برچسب اسم هم فعل است
+  // (هوش مصنوعی گاهی فعل را «اسم» برچسب می‌زند و نمایش/تمرین صرف فعل از کار می‌افتد) — برچسب اصلاح می‌شود
+  const deTrim = w.de.trim();
+  const bareForPos = stripHeadAnnotation(deTrim).replace(/^sich\s+/i, '').trim();
+  const posRaw = s('pos');
+  const pos = hasHeadAnnotation(deTrim) ||
+    (!validArt && ['اسم', 'nomen', 'substantiv', 'noun'].includes(posRaw.trim().toLowerCase()) &&
+      /^[a-zäöüß]{2,}(?:eln|ern|en)$/.test(bareForPos))
+    ? 'فعل'
+    : posRaw;
 
   return {
     id: s('id') || uid(),
-    de: w.de.trim(),
+    de: deTrim,
     syn: s('syn'),
     synFa: s('synFa'),
     ant: s('ant'),
@@ -34,7 +44,7 @@ export function norm(w: any): Word | null {
     art: validArt,
     fa: s('fa'),
     pl: s('pl'),
-    pos: s('pos'),
+    pos,
     lvl: s('lvl'),
     ex: s('ex'),
     exFa: s('exFa'),
