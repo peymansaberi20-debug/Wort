@@ -1,4 +1,4 @@
-import { fixLexList, fixPlural, isNounEntry, lcFirst, normalizeConj, validateConjTable } from './german';
+import { fixLexList, fixPlural, healReflexiveConj, isNounEntry, lcFirst, normalizeConj, validateConjTable } from './german';
 import { Word } from '../types';
 import { norm, matchCat } from './storage';
 import { AiError, describeAiError, generateText, getActiveProvider, getModel, hasApiKey } from './aiProvider';
@@ -416,7 +416,7 @@ Output MUST be a JSON array containing exactly one object with these exact field
 14. "ex2": ONE practical A1–A2 everyday example sentence or common spoken expression (Redemittel) that really contains the word (or a natural conjugated form), so the learner can use it in real life. Keep it short and natural.
 15. "ex2Fa": an accurate natural Persian translation of ex2.
 16. "cloze": the ex2 sentence where the target word/expression is replaced with _____17. "ans": the exact answer to fill cloze
-18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb)
+18. "conj": for verbs, six present-tense forms separated by |: "ich | du | er/sie/es | wir | ihr | sie/Sie" (or "" if not verb). For reflexive verbs include the reflexive pronoun inside each form, e.g. "fürchte mich | fürchtest dich | fürchtet sich | fürchten uns | fürchtet euch | fürchten sich"
 19. "prat": for verbs, 3rd person singular Präteritum (e.g. "ging") or ""
 20. "perf": for verbs, 3rd person singular Perfekt (e.g. "ist gegangen" / "hat gemacht") or ""
 21. "komparativ": comparative form for adjectives (e.g. "größer") or ""
@@ -723,6 +723,9 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
       // منبع: دیتاست فعل+حرف اضافهٔ برنامه (شامل فهرست سفارشی کاربر)، بعد خط «ساختار:» در notes
       const annotated = annotatedHeadword(w.de, { pos: w.pos, art: w.art, conj: w.conj, notes: w.notes });
       if (annotated && annotated !== w.de) w.de = annotated;
+      // فعل بازتابی که جدول صرفش بدون ضمیر بازتابی است (fürchte|…) — ضمیرها خودکار اضافه می‌شوند تا خطا ندهد
+      const healedConj = healReflexiveConj(w.conj, w.de, w.sep);
+      if (healedConj !== w.conj) w.conj = healedConj;
       // noun synonyms/antonyms keep article + capital letter as AI produced them; never lowercase them
       const cv = validateConjTable(w.conj, w.de, w.sep);
       if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
