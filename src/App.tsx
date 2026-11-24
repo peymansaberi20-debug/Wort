@@ -545,14 +545,15 @@ export default function App() {
     item: Word | CaseQuestion,
     mode: string,
     grade: number,
-    isRetry: boolean
+    isRetry: boolean,
+    source?: 'daily'
   ) => {
     const isWord = !('cs' in item);
     setState(prev => {
       let nextWords = prev.words;
       let nextDaily = prev.daily.d === today()
         ? { ...prev.daily }
-        : { d: today(), n: 0, r: 0 };
+        : { d: today(), n: 0, r: 0, sn: 0, sr: 0 };
 
       if (isWord) {
         const w = item as Word;
@@ -575,6 +576,12 @@ export default function App() {
           if (!isRetry) {
             if (isFirstTime) nextDaily.n = (nextDaily.n || 0) + 1;
             else nextDaily.r = (nextDaily.r || 0) + 1;
+            // هدف امروز داشبورد فقط پیشرفت «جلسهٔ روزانه» (sn/sr) را می‌شمارد؛
+            // تمرین‌های دیگر فقط شمارندهٔ سراسری n/r و نمودار فعالیت را پر می‌کنند.
+            if (source === 'daily') {
+              if (isFirstTime) nextDaily.sn = (nextDaily.sn || 0) + 1;
+              else nextDaily.sr = (nextDaily.sr || 0) + 1;
+            }
           }
 
           if (promoNow) {

@@ -105,6 +105,9 @@ export interface DailyGoal {
   d: string;
   n: number;
   r: number;
+  /** پیشرفت «فقط جلسهٔ روزانه» — مبنای هدف امروز در داشبورد؛ تمرین‌های دیگر این عددها را پر نمی‌کنند */
+  sn?: number;
+  sr?: number;
 }
 
 export interface AppState {
