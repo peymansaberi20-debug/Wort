@@ -6,16 +6,20 @@
  *   - بعد همهٔ فعل‌های بی‌قاعدهٔ آن سطح — چه Präteritum بی‌قاعده داشته باشد چه Partizip II چه هر دو —
  *     دونه‌دونه در قالب یک بازی دوتایی تمرین و تکرار می‌شوند
  *   - هر فعل دو قدم دارد: ۱) نوشتن شکل Präteritum (er/sie/es)  ۲) نوشتن Perfekt با فعل کمکی (ist/hat + Partizip II)
- *   - بعد از هر پاسخ، زنجیرهٔ سه زمان نمایش داده می‌شود و «بخشی که تغییر کرده» قرمز است
- *     (قسمت‌های ثابتِ مشترک با مصدر، عادی می‌مانند — منطق مقایسه در src/utils/irrDiff.ts)
+ *   - رنگ‌ها: قرمز = بخش تغییر یافته نسبت به مصدر • ist (sein) آبی • hat (haben) نارنجی
+ *   - در زنجیره، Perfekt فقط بعد از پاسخ به قدم دوم نشان داده می‌شود (جواب قدم بعدی لو نمی‌رود)
+ *   - پاسخ اشتباه: مقایسهٔ حرف‌به‌حرف «پاسخ تو» با «شکل درست» (answerDiff در src/utils/irrDiff.ts)
+ *   - جمع‌بندی هر فعل، نتیجهٔ هر دو قدم را می‌گوید (نه فقط قدم آخر)
+ *   - برگهٔ مرور با دکمهٔ چاپ روی A4 تمیز پرینت می‌شود (visibility تکنیک — سازگار با سافاری)
  *   - امتیاز، زنجیرهٔ برد (streak)، برگهٔ مرور کل سطح و تکرار فقط اشتباه‌ها
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AppSettings, Word } from '../types';
 import { speak } from '../utils/audio';
 import { IrrVerb, IrrLvl, IRR_LVL_ORDER, IRR_LVL_INFO, irrVerbsOf } from '../data/irregularVerbs';
-import { markForm, eqDe, normDe } from '../utils/irrDiff';
+import { markForm, eqDe, normDe, answerDiff, AnsSeg } from '../utils/irrDiff';
 import { libIrregularVerbs } from '../utils/irrLibrary';
 import { MiniChip, toFa } from '../components/trainerUI';
 
@@ -49,14 +53,43 @@ const MarkedForm: React.FC<{
   );
 };
 
-/** شکل کامل Perfekt: فعل کمکی (همیشه قرمز — باید همراه فعل حفظ شود) + Partizip II */
+/** رنگ فعل‌های کمکی: ist (sein) آبی، hat (haben) نارنجی — قرمز فقط برای تغییر ریشه است */
+const AUX_SEIN_CLS = 'text-sky-600 dark:text-sky-400 font-black underline decoration-sky-500/70 decoration-2 underline-offset-4';
+const AUX_HABEN_CLS = 'text-amber-600 dark:text-amber-400 font-black underline decoration-amber-500/70 decoration-2 underline-offset-4';
+
+/** شکل کامل Perfekt: فعل کمکی با رنگ اختصاصی (ist آبی، hat نارنجی) + Partizip II با قرمز تغییرها */
 const PerfektForm: React.FC<{ verb: IrrVerb; size?: 'sm' | 'lg' }> = ({ verb, size }) => (
   <span dir="ltr" className={`inline-flex items-baseline gap-x-1.5 font-sans font-bold ${size === 'lg' ? 'text-2xl md:text-3xl' : 'text-base'}`}>
-    <span className="text-red-600 dark:text-red-400 font-black underline decoration-red-500/60 decoration-2 underline-offset-4">
+    <span className={verb.aux === 'sein' ? AUX_SEIN_CLS : AUX_HABEN_CLS}>
       {verb.aux === 'sein' ? 'ist' : 'hat'}
     </span>
     <MarkedForm form={verb.pp} verb={verb} kind="pp" size={size} />
   </span>
+);
+
+/** ذکر رنگی فعل کمکی داخل متن‌های فارسی */
+const AuxWord: React.FC<{ aux: 'haben' | 'sein' }> = ({ aux }) => (
+  <span dir="ltr" className={`font-sans ${aux === 'sein' ? AUX_SEIN_CLS : AUX_HABEN_CLS}`}>
+    {aux === 'sein' ? 'ist' : 'hat'}
+  </span>
+);
+
+/** یک خط مقایسه («پاسخ تو» / «شکل درست») — bad قرمزِ موج‌دار، fix سبز */
+const AnsLine: React.FC<{ label: string; segs: AnsSeg[] }> = ({ label, segs }) => (
+  <div className="flex items-baseline gap-2 flex-wrap">
+    <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] w-[68px] flex-shrink-0">{label}</span>
+    <span dir="ltr" className="font-sans font-bold text-[15px] tracking-wide text-slate-900 dark:text-slate-100">
+      {segs.map((s, i) =>
+        s.state === 'same' ? (
+          <span key={i}>{s.text}</span>
+        ) : s.state === 'bad' ? (
+          <span key={i} className="text-red-600 dark:text-red-400 font-black underline decoration-wavy decoration-red-500/70 underline-offset-4">{s.text}</span>
+        ) : (
+          <span key={i} className="text-green-700 dark:text-green-400 font-black underline decoration-green-600/70 underline-offset-4">{s.text}</span>
+        )
+      )}
+    </span>
+  </div>
 );
 
 /* ───────────────────────── تشخیص اینکه کدام بخش بی‌قاعده است ───────────────────────── */
@@ -131,6 +164,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [mistakes, setMistakes] = useState<string[]>([]);
+  const [prtOk, setPrtOk] = useState<boolean | null>(null); // نتیجهٔ قدم Präteritum — برای جمع‌بندی درست قدم دوم
 
   // فعل‌های بی‌قاعدهٔ کتاب واژگان — از prop زنده؛ هر فعل جدید خودکار وارد می‌شود
   const libVerbs = useMemo(() => libIrregularVerbs(words), [words]);
@@ -154,6 +188,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     setStep('prt');
     setInput('');
     setVerdict(null);
+    setPrtOk(null);
     setScore(0);
     setStreak(0);
     setBestStreak(0);
@@ -164,6 +199,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
   /** رفتن به قدم بعد یا فعل بعد — بعد از نشان دادن نتیجه */
   const advance = useCallback((): void => {
     if (step === 'prt') {
+      setPrtOk(verdict ? verdict.ok : null); // نگه‌داری نتیجهٔ قدم اول برای جمع‌بندی قدم دوم
       setStep('pp');
       setInput('');
       setVerdict(null);
@@ -211,17 +247,85 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     settle(false, 'shown');
   }, [current, verdict, settle]);
 
+  /* ── برگهٔ چاپ A4 (در نمایش پنهان، فقط هنگام پرینت — تکنیک visibility سازگار با سافاری) ── */
+  const printDate = useMemo(() => {
+    try { return new Date().toLocaleDateString('fa-IR'); } catch { return ''; }
+  }, []);
+  const ptd: React.CSSProperties = { border: '0.5pt solid #94a3b8', padding: '3pt 7pt', fontSize: '10.5pt', whiteSpace: 'nowrap' };
+  const printSheet = createPortal((
+    <div className="irr-print" dir="rtl">
+      <style>{`
+        @page { size: A4; margin: 14mm 12mm; }
+        .irr-print { display: none; }
+        @media print {
+          html, body { background: #fff !important; }
+          /* همهٔ فرزندان body جز برگهٔ چاپ حذف می‌شوند (ارتفاع صفر — صفحهٔ خالی نمی‌سازد) */
+          body > *:not(.irr-print) { display: none !important; }
+          .irr-print { display: block !important; position: static; width: 100%; color: #111 !important; background: #fff !important; }
+          .irr-print * { background: transparent !important; color: inherit !important; box-shadow: none !important; text-shadow: none !important; }
+          .irr-print .p-chg { color: #dc2626 !important; font-weight: 800 !important; text-decoration: underline !important; }
+          .irr-print .p-aux-sein { color: #0284c7 !important; font-weight: 800 !important; }
+          .irr-print .p-aux-haben { color: #d97706 !important; font-weight: 800 !important; }
+          .irr-print .p-dim { color: #555 !important; }
+          .irr-print tr { page-break-inside: avoid; break-inside: avoid; }
+          .irr-print thead { display: table-header-group; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+      `}</style>
+      <div style={{ textAlign: 'center', marginBottom: '8pt' }}>
+        <div style={{ fontSize: '15pt', fontWeight: 800 }}>فعل‌های بی‌قاعده در سه زمان — سطح {lvl}</div>
+        <div className="p-dim" style={{ fontSize: '9.5pt', marginTop: '3pt' }}>
+          {toFa(levelVerbs.length)} فعل • {printDate} • <span className="p-chg">قرمز</span> = تغییر نسبت به مصدر •
+          <span className="p-aux-sein"> ist </span>= sein • <span className="p-aux-haben"> hat </span>= haben
+        </div>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'ltr' }}>
+        <thead>
+          <tr>
+            <th style={{ ...ptd, textAlign: 'left', fontWeight: 700 }}>Infinitiv</th>
+            <th style={{ ...ptd, textAlign: 'left', fontWeight: 700 }}>Präteritum</th>
+            <th style={{ ...ptd, textAlign: 'left', fontWeight: 700 }}>Perfekt</th>
+            <th style={{ ...ptd, textAlign: 'right', fontWeight: 700 }} dir="rtl">معنی</th>
+          </tr>
+        </thead>
+        <tbody>
+          {levelVerbs.map(v => {
+            const pSegs = markForm(v.prt, { inf: v.inf, kind: 'prt', sep: v.sep, override: v.hPrat });
+            const ppSegs = markForm(v.pp, { inf: v.inf, kind: 'pp', sep: v.sep, override: v.hPp });
+            return (
+              <tr key={v.inf}>
+                <td style={ptd} dir="ltr">{v.inf}{v.src === 'lib' ? ' *' : ''}</td>
+                <td style={ptd} dir="ltr">{pSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}</td>
+                <td style={ptd} dir="ltr">
+                  <span className={v.aux === 'sein' ? 'p-aux-sein' : 'p-aux-haben'}>{v.aux === 'sein' ? 'ist' : 'hat'}</span>
+                  {' '}
+                  {ppSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}
+                </td>
+                <td style={{ ...ptd, whiteSpace: 'normal', fontSize: '9.5pt' }} dir="rtl">{v.fa}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {levelVerbs.some(v => v.src === 'lib') && (
+        <div className="p-dim" style={{ fontSize: '9pt', marginTop: '5pt' }}>* از کتاب واژگان تو</div>
+      )}
+      </div>
+    ), document.body);
+
   /* ── صفحهٔ انتخاب سطح ── */
   if (phase === 'setup') {
     return (
-      <div className="space-y-4">
+      <>
+        {printSheet}
+        <div className="space-y-4">
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-2.5">
           <p className="text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-6">
             🎢 زنجیرهٔ سه زمان را کامل کن: مصدر ← Präteritum ← Perfekt
           </p>
           <p className="text-[12px] text-[#5d6676] dark:text-[#a3adbd] leading-6">
             هر فعل دو قدم دارد: اول شکل <b>Präteritum</b> (er/sie/es) را می‌نویسی، بعد <b>Perfekt</b> با فعل کمکی
-            (<span dir="ltr" className="font-sans font-bold">ist / hat</span> + Partizip II). بعد از هر پاسخ، کل زنجیره
+            (<AuxWord aux="sein" /> یا <AuxWord aux="haben" /> + Partizip II). بعد از هر پاسخ، زنجیره تا جای پاسخ‌داده‌شده
             نشان داده می‌شود و <span className="text-red-600 dark:text-red-400 font-bold">قسمت‌هایی که تغییر کرده‌اند قرمز</span> هستند.
           </p>
         </div>
@@ -252,12 +356,20 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
               </span>
             )}
           </span>
-          <button
-            onClick={() => setPhase('table')}
-            className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
-          >
-            🗂 جدول مرور
-          </button>
+          <div className="flex gap-1.5 flex-shrink-0">
+            <button
+              onClick={() => setPhase('table')}
+              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
+            >
+              🗂 جدول مرور
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
+            >
+              🖨 چاپ
+            </button>
+          </div>
         </div>
 
         {libVerbs.length > 0 && (
@@ -284,21 +396,28 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
         >
           🎮 شروع بازی ({toFa(levelVerbs.length * 2)} امتیاز)
         </button>
-      </div>
+        </div>
+      </>
     );
   }
 
   /* ── برگهٔ مرور کل سطح ── */
   if (phase === 'table') {
     return (
-      <div className="space-y-3">
+      <>
+        {printSheet}
+        <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <button onClick={() => setPhase('setup')} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">→ انتخاب سطح</button>
+          <div className="flex gap-1.5">
+            <button onClick={() => setPhase('setup')} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">→ انتخاب سطح</button>
+            <button onClick={() => window.print()} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">🖨 چاپ A4</button>
+          </div>
           <b className="text-xs text-[#5d6676] dark:text-[#a3adbd]">🗂 فعل‌های بی‌قاعدهٔ سطح {lvl} — {toFa(levelVerbs.length)} فعل</b>
         </div>
         <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] leading-5">
           <span className="text-red-600 dark:text-red-400 font-bold">قرمز</span> = بخشی که نسبت به مصدر تغییر می‌کند •
-          فعل کمکی <span dir="ltr" className="font-sans font-bold text-red-600 dark:text-red-400">ist / hat</span> هم باید همراه فعل حفظ شود •
+          فعل کمکی <span dir="ltr" className="font-sans font-bold text-sky-600 dark:text-sky-400">ist</span> (sein) و{' '}
+          <span dir="ltr" className="font-sans font-bold text-amber-600 dark:text-amber-400">hat</span> (haben) باید همراه فعل حفظ شود •
           <span className="text-[#1f5fbf] font-bold">📖</span> = از کتاب واژگان تو.
         </p>
         <div className="overflow-x-auto bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl">
@@ -336,7 +455,8 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
         >
           🎮 با همین سطح بازی کن
         </button>
-      </div>
+        </div>
+      </>
     );
   }
 
@@ -345,7 +465,9 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     const max = queue.length * 2;
     const pct = max ? Math.round((score / max) * 100) : 0;
     return (
-      <div className="space-y-4">
+      <>
+        {printSheet}
+        <div className="space-y-4">
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 text-center space-y-1.5">
           <div className="text-3xl">{pct >= 90 ? '🏆' : pct >= 60 ? '👏' : '💪'}</div>
           <p className="text-lg font-extrabold text-slate-900 dark:text-slate-100">
@@ -389,7 +511,8 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
             🎯 سطح دیگر
           </button>
         </div>
-      </div>
+        </div>
+      </>
     );
   }
 
@@ -399,7 +522,9 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
   const prtDone = step === 'pp' || !!verdict;
 
   return (
-    <div className="space-y-3.5">
+    <>
+      {printSheet}
+      <div className="space-y-3.5">
       {/* نوار وضعیت */}
       <div className="flex items-center gap-2 flex-wrap">
         <MiniChip tone="blue">{lvl}</MiniChip>
@@ -430,7 +555,8 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           <span className="px-4 py-1.5 rounded-xl border-2 border-dashed border-[#c6cbd8] dark:border-[#3a4354] text-[#8b95a7] font-bold">؟</span>
         )}
         <span className="text-[#8b95a7] font-bold">→</span>
-        {verdict ? (
+        {/* Perfekt فقط بعد از پاسخ به قدم دوم نشان داده می‌شود — وگرنه جواب قدم بعدی لو می‌رود */}
+        {verdict && step === 'pp' ? (
           <span className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/70 dark:border-red-900/40"><PerfektForm verb={current} size="lg" /></span>
         ) : (
           <span className="px-4 py-1.5 rounded-xl border-2 border-dashed border-[#c6cbd8] dark:border-[#3a4354] text-[#8b95a7] font-bold">؟</span>
@@ -451,7 +577,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
         {!verdict ? (
           <>
             <p className="text-[13px] font-bold text-slate-900 dark:text-slate-100">
-              {step === 'prt' ? 'شکل Präteritum (er/sie/es) را بنویس:' : `Perfekt را کامل بنویس (${aux} یا ${aux === 'ist' ? 'hat' : 'ist'} + Partizip II):`}
+              {step === 'prt' ? 'شکل Präteritum (er/sie/es) را بنویس:' : <>Perfekt را کامل بنویس (<AuxWord aux="sein" /> یا <AuxWord aux="haben" /> + Partizip II):</>}
             </p>
             <input
               key={`${qi}-${step}`}
@@ -472,44 +598,72 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
               </button>
             </div>
           </>
-        ) : (
-          <>
-            <div className={`rounded-xl px-3.5 py-2.5 text-[13px] font-bold leading-6 ${
-              verdict.ok
-                ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200/70 dark:border-green-900/40'
-                : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200/70 dark:border-red-900/40'
-            }`}>
-              {verdict.ok
-                ? (step === 'prt' ? '✅ درست! حالا Perfekt:' : '✅ درست! زنجیرهٔ این فعل کامل شد')
-                : verdict.note === 'aux'
-                  ? `⚠ Partizip II را درست نوشتی، ولی فعل کمکی این فعل «${aux}» است: ${aux} ${current.pp}`
-                  : verdict.note === 'shown'
-                    ? `👀 شکل درست: ${step === 'prt' ? current.prt : `${aux} ${current.pp}`}`
-                    : `❌ شکل درست: ${step === 'prt' ? current.prt : `${aux} ${current.pp}`}`}
-            </div>
-            {!verdict.ok && verdict.note !== 'aux' && (
-              <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] px-1 leading-5">
-                {step === 'prt'
-                  ? 'در Präteritum، ریشهٔ فعل (حروف صدادار) عوض می‌شود — قسمت قرمز را ببین.'
-                  : 'در Perfekt، فعل کمکی + Partizip II (معمولاً با ge- و پایان -en) می‌آید — قسمت‌های قرمز را ببین.'}
+        ) : verdict.ok ? (
+          <div className={`rounded-xl px-3.5 py-2.5 text-[13px] font-bold leading-6 border ${
+            step === 'pp' && prtOk === false
+              ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200/70 dark:border-amber-900/40'
+              : 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200/70 dark:border-green-900/40'
+          }`}>
+            {step === 'prt'
+              ? '✅ درست! حالا Perfekt:'
+              : prtOk === false
+                ? '⚠ Perfekt را درست گفتی، ولی Präteritum را اشتباه — این فعل را تکرار کن'
+                : '✅ عالی! هر دو قدم درست — زنجیرهٔ این فعل کامل شد 🎉'}
+          </div>
+        ) : !input.trim() ? (
+          <div className="rounded-xl px-3.5 py-2.5 text-[13px] font-bold leading-6 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200/70 dark:border-red-900/40">
+            👀 شکل درست: <span dir="ltr" className="font-sans">{step === 'prt' ? current.prt : `${aux} ${current.pp}`}</span>
+          </div>
+        ) : (() => {
+          const exp = step === 'prt' ? current.prt : `${aux} ${current.pp}`;
+          const cmp = answerDiff(input, exp);
+          return (
+            <div className="rounded-xl border border-red-200/70 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 px-3.5 py-3 space-y-2" dir="rtl">
+              <p className="text-[13px] font-extrabold text-red-700 dark:text-red-400 leading-6">
+                {verdict.note === 'shown'
+                  ? '👀 شکل درست — مقایسه با پاسخ تو:'
+                  : `❌ ${step === 'prt' ? 'Präteritum' : 'Perfekt'} اشتباه بود — مقایسهٔ حرف‌به‌حرف:`}
               </p>
-            )}
-            <button
-              onClick={advance}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-extrabold shadow"
-            >
-              {step === 'prt' ? 'قدم بعد: Perfekt ←' : qi + 1 >= queue.length ? 'دیدن نتیجه 🏁' : 'فعل بعدی ←'}
-            </button>
-          </>
+              {step === 'pp' && verdict.note !== 'shown' && (
+                <p className={`text-[11.5px] font-bold leading-5 ${prtOk === false ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                  {prtOk === false ? 'هر دو قدم این فعل اشتباه شد.' : 'Präteritum را درست گفتی، ولی Perfekt را اشتباه.'}
+                </p>
+              )}
+              <AnsLine label="پاسخ تو" segs={cmp.g} />
+              <AnsLine label="شکل درست" segs={cmp.e} />
+              {verdict.note === 'aux' && (
+                <p className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd] leading-5">
+                  Partizip II را درست نوشتی، ولی فعل کمکی غلط است — <AuxWord aux={current.aux} /> باید همراه فعل حفظ شود.
+                </p>
+              )}
+            </div>
+          );
+        })()}
+        {verdict && !verdict.ok && verdict.note !== 'aux' && (
+          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] px-1 leading-5">
+            {step === 'prt'
+              ? 'در Präteritum، ریشهٔ فعل (حروف صدادار) عوض می‌شود — قسمت قرمز را ببین.'
+              : 'در Perfekt، فعل کمکی (آبی ist / نارنجی hat) + Partizip II (معمولاً با ge- و پایان -en) می‌آید — قسمت‌های قرمز را ببین.'}
+          </p>
+        )}
+        {verdict && (
+          <button
+            onClick={advance}
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-extrabold shadow"
+          >
+            {step === 'prt' ? 'قدم بعد: Perfekt ←' : qi + 1 >= queue.length ? 'دیدن نتیجه 🏁' : 'فعل بعدی ←'}
+          </button>
         )}
       </div>
 
-      {/* راهنمای کوتاه قرمز */}
+      {/* راهنمای کوتاه رنگ‌ها */}
       <p className="text-[10.5px] text-[#8b95a7] px-1 leading-5">
-        قرمز = تغییر نسبت به مصدر • شکل ضعیفِ قاعده‌مند (مثل backte/gemacht) قرمز نمی‌شود •
-        جداشدنی‌ها: ذرهٔ جداشدنی ثابت می‌ماند.
+        قرمز = تغییر نسبت به مصدر • <span dir="ltr" className="font-bold text-sky-600 dark:text-sky-400">ist</span> آبی /{' '}
+        <span dir="ltr" className="font-bold text-amber-600 dark:text-amber-400">hat</span> نارنجی •
+        شکل ضعیفِ قاعده‌مند (مثل backte/gemacht) قرمز نمی‌شود • جداشدنی‌ها: ذرهٔ جداشدنی ثابت می‌ماند.
       </p>
-    </div>
+      </div>
+    </>
   );
 };
 
