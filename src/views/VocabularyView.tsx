@@ -4,7 +4,7 @@ import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat,
 import { statusOf, statusCounts, STATUS_SHORT, STATUS_BADGE, WORD_STATUSES } from '../utils/wordStatus';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { VerbPhrase, verbPrepFor } from '../components/VerbPhrase';
-import { bareHead } from '../data/verbPrep';
+import { bareHead, hasHeadAnnotation } from '../data/verbPrep';
 import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
@@ -1907,7 +1907,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                                 </span>
                               )}
                               {(() => {
-                                const vp = isVerbPos(w.pos) ? verbPrepFor(w.de) : null;
+                                const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
                                 return vp ? (
                                   <VerbPhrase vp={vp} className="text-lg md:text-xl text-slate-900 dark:text-slate-100" />
                                 ) : (
