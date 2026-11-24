@@ -36,7 +36,8 @@ import { LesenTrainer } from '../components/LesenTrainer';
 // فاز ۴ #۵: PratText مشترک با هایلایت قرمزِ بخش تغییرکرده (بدون تعریف محلی)
 import { PratText } from '../components/PratText';
 import { trickOf } from '../utils/german';
-import { stripHeadAnnotation } from '../data/verbPrep';
+import { stripHeadAnnotation, hasHeadAnnotation } from '../data/verbPrep';
+import { VerbPhrase, verbPrepFor } from '../components/VerbPhrase';
 
 export type ExerciseMode =
   | 'flash'
@@ -1988,7 +1989,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                         <div className="min-w-0">
                           <span dir="ltr" className="flex items-center gap-2">
                             {w.art && <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${artCls(w.art)}`}>{w.art}</span>}
-                            <b className="text-lg font-sans truncate">{w.de}</b>
+                            {(() => {
+                              const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                              return vp ? (
+                                <VerbPhrase vp={vp} className="text-lg" />
+                              ) : (
+                                <b className="text-lg font-sans truncate">{w.de}</b>
+                              );
+                            })()}
                           </span>
                           <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] truncate">{w.fa}</div>
                         </div>
@@ -2296,7 +2304,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                       <>
                         <div className="flex items-center justify-center gap-2 flex-wrap" dir="ltr">
                           {w.art && <span className={`px-3 py-1 rounded-xl font-bold text-xl ${artCls}`}>{w.art}</span>}
-                          <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
+                          {(() => {
+                            // درخواست کاربر: فعل با حرف اضافه/حالت دستوری (+A/+D رنگی) روی فلش‌کارت هم دیده شود
+                            const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                            return vp ? (
+                              <VerbPhrase vp={vp} className="text-3xl md:text-4xl text-slate-900 dark:text-slate-100 flex-wrap" />
+                            ) : (
+                              <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
+                            );
+                          })()}
                           <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
                         </div>
                         {w.pos && <span className="text-sm text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
@@ -2316,7 +2332,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     ) : (
                       <div className="flex items-center justify-center gap-2 flex-wrap mb-3" dir="ltr">
                         {w.art && <span className={`font-bold text-lg ${artCls}`}>{w.art}</span>}
-                        <span className="text-3xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
+                        {(() => {
+                          const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                          return vp ? (
+                            <VerbPhrase vp={vp} className="text-2xl md:text-3xl text-slate-900 dark:text-slate-100 flex-wrap" />
+                          ) : (
+                            <span className="text-3xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
+                          );
+                        })()}
                         <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
                       </div>
                     )}
@@ -2586,7 +2609,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   </div>
                   <div className="text-sm text-[#5d6676] flex flex-wrap items-center justify-center gap-2">
                     <span>
-                      مصدر: <span className="font-bold font-sans" dir="ltr">{w.de}</span>
+                      مصدر: {(() => {
+                        const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                        return vp ? (
+                          <VerbPhrase vp={vp} className="font-bold" />
+                        ) : (
+                          <span className="font-bold font-sans" dir="ltr">{w.de}</span>
+                        );
+                      })()}
                     </span>
                     {faVisible ? <span>({w.fa})</span> : faButton}
                   </div>
