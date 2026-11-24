@@ -698,7 +698,7 @@ interface ExercisesViewProps {
   activeMode: ExerciseMode | null;
   practiceWordIds?: string[] | null;
   onSelectMode: (mode: ExerciseMode | null) => void;
-  onRecordResult: (word: Word | CaseQuestion, mode: string, grade: number, isRetry: boolean) => void;
+  onRecordResult: (word: Word | CaseQuestion, mode: string, grade: number, isRetry: boolean, source?: 'daily') => void;
   onOpenHelp: (topic: string) => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
   onEditWord?: (word: Word) => void;
@@ -707,7 +707,7 @@ interface ExercisesViewProps {
   paused?: boolean;
   onUpdateSettings?: (patch: Partial<AppSettings>) => void;
   onStartHard?: (ids: string[]) => void;
-  dailyProgress?: { d: string; n: number; r: number };
+  dailyProgress?: { d: string; n: number; r: number; sn?: number; sr?: number };
   onQuickAddWord?: (w: Partial<Word>) => boolean;
   /** منو به‌جای تمرین نمایش داده شود (جابجایی بین تب‌های اصلی بدون بستن تمرین‌های گرامر) */
   menuMode?: boolean;
@@ -845,7 +845,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       retry = hardCountedRef.current.has(item.id);
       hardCountedRef.current.add(item.id);
     }
-    onRecordResult(item, mode, grade, retry);
+    onRecordResult(item, mode, grade, retry, activeMode === 'daily' ? 'daily' : undefined);
   };
 
   useEffect(() => {
@@ -928,14 +928,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         pool = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due);
       } else if (!flashCat) {
         const day = today();
-        const dp = dailyProgress && dailyProgress.d ? dailyProgress : { d: '', n: 0, r: 0 };
+        const dp = dailyProgress && dailyProgress.d ? dailyProgress : { d: '', n: 0, r: 0, sn: 0, sr: 0 };
         const dueSel = pool.filter(w => w.last && w.due <= n).sort((a, b) => a.due - b.due).slice(0, settings?.rv || 20);
         const unseen = pool.filter(w => !w.last);
         const ord = settings?.order || 'due';
         let allocIds = readAlloc(day);
         if (!allocIds) {
           const cand = ord === 'rand' || ord === 'randnew' ? unseen.slice().sort(() => Math.random() - 0.5) : unseen;
-          const take = Math.max(0, (settings?.nw ?? 10) - (dp.n || 0));
+          const take = Math.max(0, (settings?.nw ?? 10) - (dp.sn || 0));
           allocIds = cand.slice(0, take).map(w => w.id);
           writeAlloc(day, allocIds);
         }
@@ -1068,40 +1068,37 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return item ? { item, src } : null;
   }, [qMode, currentItem, currentKind]);
 
-  const speakCardAudio = (w: Word) => {
-    stopSpeaking();
-    const opts = { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice };
-    const readEx = () => { if (settings?.autoEx && w.ex2) speak(w.ex2, opts); };
-    if (settings?.auto) speak(fullWord(w), { ...opts, onEnd: readEx });
-    else readEx();
-  };
-
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     stopSpeaking();
 
     if (!currentItem) return;
 
+    const defaultDir = settings?.dir || 'de';
+    if (hardFlashDir) {
+      setCurrentCardDir(hardFlashDir);
+    } else if (activeMode === 'free') {
+      setCurrentCardDir(freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir);
+    } else if (defaultDir === 'rand') {
+      setCurrentCardDir(Math.random() > 0.5 ? 'de' : 'fa');
+    } else if (activeMode === 'flash') {
+      setCurrentCardDir(flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir);
+    } else {
+      setCurrentCardDir(defaultDir);
+    }
 
     setRevealedCardId(null);
 
     const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review';
 
-    // جهت واقعی این کارت (نه مقدار قدیمیِ state)
-    const defaultDir2 = settings?.dir || 'de';
-    let newDir: 'de' | 'fa';
-    if (hardFlashDir) newDir = hardFlashDir;
-    else if (activeMode === 'free') newDir = freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir;
-    else if (defaultDir2 === 'rand') newDir = Math.random() > 0.5 ? 'de' : 'fa';
-    else if (activeMode === 'flash') newDir = flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir;
-    else newDir = defaultDir2;
-    setCurrentCardDir(newDir);
-
-    // آلمانی ← فارسی: همین‌که کارت ظاهر شد، واژه و مثال دوم خوانده شود
-    if (isFlashType && newDir === 'de') {
-      speakCardAudio(currentItem as Word);
+    if (isFlashType && settings?.auto && currentCardDir === 'de' && revealedCardId !== currentItem.id) {
+      const w = currentItem as Word;
+      speak(fullWord(w), {
+        rate: settings.rate,
+        vreg: settings.vreg,
+        voiceName: settings.voice
+      });
     }
-
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -1197,10 +1194,25 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setRevealedCardId(currentItem.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // فارسی ← آلمانی: پشت کارت (آلمانی) که باز شد، واژه و مثال دوم خوانده شود
-    if (currentCardDir === 'fa') speakCardAudio(currentItem as Word);
+    const w = currentItem as Word;
+    if ((settings?.auto || settings?.autoEx) && currentCardDir === 'de') {
+      stopSpeaking();
+      speak(fullWord(w), {
+        rate: settings?.rate,
+        vreg: settings?.vreg,
+        voiceName: settings?.voice,
+        onEnd: () => {
+          if (settings?.autoEx && w.ex) {
+            speak(w.ex, {
+              rate: settings.rate,
+              vreg: settings.vreg,
+              voiceName: settings.voice
+            });
+          }
+        }
+      });
+    }
   };
-
 
   const runCaseCheck = (force: boolean) => {
     if (!currentItem || answerResult) return;

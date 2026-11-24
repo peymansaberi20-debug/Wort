@@ -73,9 +73,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const hist = state.hist;
     const t0 = dayStart(0);
 
-    const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 };
-    const dailyNewDone = Math.max(0, dailyToday.n || 0);
-    const dailyReviewDone = Math.max(0, dailyToday.r || 0);
+    const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0, sn: 0, sr: 0 };
+    // هدف امروز فقط پیشرفت «جلسهٔ روزانه» (sn/sr) است؛ شمارنده‌های سراسری n/r با تمرین‌های دیگر هم پر می‌شوند
+    const dailyNewDone = Math.max(0, dailyToday.sn || 0);
+    const dailyReviewDone = Math.max(0, dailyToday.sr || 0);
 
     const activeCategorySet = new Set(state.set.activeCats || []);
     const dailyPool = words.filter(w =>
@@ -333,10 +334,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="flex items-center gap-2 text-xs text-[#5d6676] dark:text-[#a3adbd]">
             <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-[#141923]" title="مجموع تمرین‌های هفته">
-              مجموع هفته: <b className="text-slate-800 dark:text-slate-200">{weekTotal}</b>
+              مجموع ۷ روز اخیر: <b className="text-slate-800 dark:text-slate-200">{weekTotal}</b> تمرین
             </span>
-            <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-[#141923]" title="میانگین روزانه">
-              میانگین: <b className="text-slate-800 dark:text-slate-200">{avgPerDay}</b>
+            <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-[#141923]" title="میانگین تمرین در روز">
+              میانگین روزانه: <b className="text-slate-800 dark:text-slate-200">{avgPerDay}</b> تمرین
             </span>
           </div>
         </div>
