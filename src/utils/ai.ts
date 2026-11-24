@@ -347,7 +347,7 @@ Always begin with:
 Explain important prepositions, complements, and cases (NOM, AKK, DAT, GEN).
 Examples:
 * warten: ساختار: warten auf + AKK (منتظر کسی/چیزی بودن)
-* helfen: ساختار: helpen + DAT (به کسی کمک کردن)
+* danken: ساختار: danken + DAT (به کسی تشکر کردن)
 If no special structure is relevant, write: ساختار: حرف اضافه یا حالت دستوری ویژه‌ای ندارد.
 
 Line 3 Onward — Additional Learning Notes
