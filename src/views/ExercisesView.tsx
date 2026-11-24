@@ -36,6 +36,7 @@ import { LesenTrainer } from '../components/LesenTrainer';
 // فاز ۴ #۵: PratText مشترک با هایلایت قرمزِ بخش تغییرکرده (بدون تعریف محلی)
 import { PratText } from '../components/PratText';
 import { trickOf } from '../utils/german';
+import { stripHeadAnnotation } from '../data/verbPrep';
 
 export type ExerciseMode =
   | 'flash'
@@ -352,7 +353,8 @@ const germanTokens = (t: string): string[] => t.split(/[^\p{L}]+/u).filter(Boole
 export function findWordInSentence(w: Word, sentence: string): string {
   const tokens = germanTokens(sentence);
   const low = tokens.map(t => t.toLowerCase());
-  const base = (w.de || '').replace(/^sich\s+/i, '').trim().toLowerCase();
+  // پسوند حرف اضافه/حالت سرِ واژه («warten auf +A») در تطبیق داخل جمله نقش ندارد
+  const base = stripHeadAnnotation(w.de || '').replace(/^sich\s+/i, '').trim().toLowerCase();
   if (!base) return '';
   const forms = new Set<string>([base]);
   const lastTok = (x: string) => germanTokens(x).pop()?.toLowerCase() || '';
@@ -1266,7 +1268,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       onShowToast('لطفاً پاسخ را وارد کنید.', true);
       return;
     }
-
     const w = currentItem as Word;
 
     if (qMode === 'conj') {
