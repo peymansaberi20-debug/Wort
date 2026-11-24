@@ -1,5 +1,5 @@
 /**
- * موتور وضعیت واژگانی (فاز ۱ طرح «واژگان فعال و دریافتی»).
+ * موتور وضعیت واژگانی (فاز ۱ طرح «واژگان فعال و دریافتی»). 
  *
  * سه وضعیت:
  *  - aktiv   : واژه باید در گفتار و نوشتن «تولید» شود (بازیابی فرم: معنی → واژهٔ آلمانی).
@@ -13,6 +13,7 @@
  */
 import { Word, WordStatus } from '../types';
 import { FREQ_CORE } from '../data/freqCore';
+import { stripHeadAnnotation } from '../data/verbPrep';
 
 export const WORD_STATUSES: WordStatus[] = ['aktiv', 'kandidat', 'passiv'];
 
@@ -63,9 +64,9 @@ export const REGISTER_LABELS: Record<string, string> = Object.fromEntries(
   REGISTER_OPTIONS.map(o => [o.value, o.label])
 );
 
-/** حذف آرتیکل و sich و zu و نقطه‌گذاری → لِمّای مقایسه‌پذیر */
+/** حذف آرتیکل و sich و zu و پسوند حرف اضافه/حالت (+A) و نقطه‌گذاری → لِمّای مقایسه‌پذیر */
 export function lemmaOf(de: string): string {
-  return (de || '')
+  return stripHeadAnnotation(de || '')
     .toLowerCase()
     .replace(/^\s*(der|die|das|ein|eine|einen|einem|einer|eines|to)\s+/, '')
     .replace(/^\s*sich\s+/, '')

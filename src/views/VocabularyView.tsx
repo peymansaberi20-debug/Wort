@@ -4,6 +4,7 @@ import { addExtraCat, removeExtraCat, renameExtraCat, getCategories, resolveCat,
 import { statusOf, statusCounts, STATUS_SHORT, STATUS_BADGE, WORD_STATUSES } from '../utils/wordStatus';
 import { AIP, generateWithGemini, parseAI, aiToIMP, quickTranslateWithGemini, buildSinglePromptDepth } from "../utils/ai";
 import { VerbPhrase, verbPrepFor } from '../components/VerbPhrase';
+import { bareHead } from '../data/verbPrep';
 import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
@@ -564,6 +565,22 @@ return words
           if (!nounLike && fd && /^[A-ZÄÖÜ]/.test(fd)) setFormDe(fd.charAt(0).toLocaleLowerCase('de') + fd.slice(1));
         }
         if (aiDepthRef.current === 'full') setNeedsFullFlag(false); // 💎 → the word is now fully profiled
+        // درخواست کاربر: باکس واژه پس از تکمیل، خودِ فعل با sich + حرف اضافه/حالت دستوری را نشان بدهد
+        // (warten → warten auf +A | sich freuen → sich freuen auf +A | gratulieren → gratulieren zu +D)
+        // فقط وقتی پایهٔ واژه همان چیزی است که کاربر نوشته/انتخاب کرده (تا املای درست‌شده هم داخل باکس بیاید)
+        if (item.de) {
+          const typedRaw = (choice?.target || formDe.trim()).trim();
+          const aiRaw = item.de.trim();
+          const annotatedNow = /\+\s*(?:a|d|g|akk|dat|gen)\b/i.test(aiRaw) || (/^sich\s/i.test(aiRaw) && !/^sich\s/i.test(typedRaw));
+          if (annotatedNow && typedRaw && duplicateKey(aiRaw) !== duplicateKey(typedRaw)) {
+            const bT = bareHead(typedRaw);
+            const bA = bareHead(aiRaw);
+            if (bT && bA && (bT === bA || lev(bT, bA) <= 2)) {
+              setFormDe(aiRaw);
+              onShowToast(`باکس واژه کامل شد: ${aiRaw}`);
+            }
+          }
+        }
         onShowToast(`واژه تکمیل شد (${aiDepthRef.current === 'full' ? 'کامل — ۲۸ فیلد' : aiDepthRef.current === 'mid' ? 'نیمه' : 'سبک'}).`);
       } else if (errs.length > 0) {
         onShowToast(errs[0], true);
