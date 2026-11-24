@@ -1,0 +1,89 @@
+From 85686240487c73f736c4e69cc029277420bd73c8 Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Tue, 24 Nov 2026 13:22:10 +0000
+Subject: [PATCH] =?UTF-8?q?=D8=B1=D9=81=D8=B9=20=D8=A8=D8=A7=DA=AF=20?=
+ =?UTF-8?q?=D9=86=D9=85=D8=A7=DB=8C=D8=B4:=20=D8=B3=D8=B1=D9=90=20=D9=BE?=
+ =?UTF-8?q?=D8=B3=D9=88=D9=86=D8=AF=D8=AF=D8=A7=D8=B1=20=D9=81=D8=B9=D9=84?=
+ =?UTF-8?q?=20=D8=AA=D8=A7=D8=B2=D9=87=E2=80=8C=D8=A7=D8=B6=D8=A7=D9=81?=
+ =?UTF-8?q?=D9=87=20=D9=85=D8=AB=D9=84=20=D9=88=D8=A7=DA=98=D9=87=D9=94=20?=
+ =?UTF-8?q?=D9=82=D8=AF=DB=8C=D9=85=DB=8C=20=D8=A7=D8=B3=D8=AA=D8=A7=DB=8C?=
+ =?UTF-8?q?=D9=84=20=D9=85=DB=8C=E2=80=8C=DA=AF=DB=8C=D8=B1=D8=AF=20(VerbP?=
+ =?UTF-8?q?hrase)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ IMPLEMENTATION_STATE.md       |  1 +
+ src/components/VerbPhrase.tsx |  2 +-
+ src/data/verbPrep.ts          | 29 ++++++++++++++++++++++++++---
+ 3 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/IMPLEMENTATION_STATE.md b/IMPLEMENTATION_STATE.md
+index faf3b10..f708c5e 100644
+--- a/IMPLEMENTATION_STATE.md
++++ b/IMPLEMENTATION_STATE.md
+@@ -38,3 +38,4 @@
+ 2026-11-22	فعال‌سازی کاندید→فعال + به‌روزرسانی همین سند	types.ts، utils/storage.ts، utils/wordStatus.ts، views/ExercisesView.tsx، App.tsx، components/WordDetailModal.tsx، IMPLEMENTATION_STATE.md	حلقهٔ آخر سیستم تسلط: کارت «🚀 فعال‌سازی (کاندید → فعال)» در Wortschatz — فقط واژه‌های کاندید، تمرین تولیدی (معنی → تایپ معادل)، کهنه‌ترین اول + زنجیرهٔ تولیدی pStreak + پیشنهاد ارتقای کاندید→فعال پس از ۳ تولید پیاپی درست (حداقل ۴ موفقیت تولیدی کل): بنر سبز در پاپ‌اپ + دکمهٔ «ارتقا به فعال» + پیام جشن + رفع شرط پیام جشن به «لحظهٔ گذار به آماده» (قبلاً اگر واژه بدون غلط از آستانه می‌گذشت پیام نمی‌آمد — هر دو ارتقا). ممیزی فاز ۳ سند (پروفایل واژه): هر ۴ قلم در کد موجود بود و در رابط تأیید شد — بخش بالا به ✅ تغییر کرد.	vite build ✓ — تست مرورگر ✓
+ 2026-11-22	فاز ۴ + هفت درخواست کاربر (نمایش فعل+حرف اضافه، عنوان، آیکن‌ها، هدر، Präteritum، تریک، فلش‌کارت)	data/verbPrep.ts، components/VerbPhrase.tsx (جدید)، components/WordDetailModal.tsx، views/VocabularyView.tsx، views/ExercisesView.tsx، utils/ai.ts، utils/german.ts، components/WordCompareModal.tsx، IMPLEMENTATION_STATE.md	۱) حرف اضافهٔ خودکار فعل: واژهٔ فعل موجود در دیتاست Verben mit Präpositionen (یا فهرست سفارشی VerbPrep) در ردیف فهرست واژگان و هیروی پروفایل به شکل «warten auf (A) / sich entscheiden für (A)» رندر می‌شود — فعل bold، sich و حرف اضافه/حالت یک شماره کوچکتر و غیرbold (کامپوننت VerbPhrase؛ تطبیق مستقیم یا بدون sich) ۲) عنوان طولانی هیروی پروفایل خودکار کوچک می‌شود تا یک خط بماند (اندازهٔ اولیه بر اساس طول + حلقهٔ اندازه‌گیری تا 13px، فراتر از آن شکستن خط) ۳) آیکن‌های بلندگو و چشم از ردیف واژه‌ها حذف شدند (در هدر پروفایل موجودند) + state مردهٔ visFa حذف شد ۴) هدر چسبان پروفایل (نوار واژه هنگام اسکرول) از زمینهٔ آبیِ گرادیانی به سطح روشن (سفید/تیره با خط زیرین) با فونت serif تغییر کرد؛ پالت نوار هیرو هم از آبی کارت واژه به گرادیان تِال-سرمه‌ای-بنفش جدید تغییر کرد ۵) رنگ فونت صرف Präteritum خنثی شد (قبلاً amber روی زمینهٔ amber بود و قرمزیِ پایانه‌ها دیده نمی‌شد) — در پروفایل و تمرین‌ها؛ تمرین‌ها از PratText مشترک با هایلایت قرمز استفاده می‌کنند ۶) پرامت نکات هر سه مسیر (تکمیل خودکار تک/گروهی + استخراج) خط پایانی الزامی «🎯 تریک:» گرفت — تریک صوتی/تصویری فارسی برای پیوند تلفظ واژهٔ آلمانی با معنی؛ در پروفایل به شکل کارت کهربایی برجسته رندر می‌شود ۷) پشت فلش‌کارت زیر ترجمه و مثال دوم، خط «🎯 تریک» واژه (trickOf از notes) می‌آید	vite build ✓ — تست مرورگر: ردیف warten auf (A) ✓، هیرو/هدر/پالت ✓، FitText (24px برای واژهٔ ۲۲حرفی) ✓، ging قرمز ✓، کارت تریک در پروفایل ✓، خط تریک پشت کارت روزانه ✓، خوشهٔ مترادف مقایسه (gehen/fahren) ✓، بدون کلید AI → پیام خطای مهربان ✓، ۰ خطای کنسول
+ 2026-11-24	درخواست کاربر — سرِ واژهٔ فعل با sich + حرف اضافه/حالت دستوری پس از «تکمیل»	utils/conjugation.ts (stripHeadAnnotation جدید)، data/verbPrep.ts (annotatedHeadword/bareHead/prepCaseFromNotes جدید)، utils/ai.ts، views/VocabularyView.tsx، utils/storage.ts، utils/wordStatus.ts، views/ExercisesView.tsx، utils/audio.ts، App.tsx، components/HelpModal.tsx، IMPLEMENTATION_STATE.md	بعد از هر مسیر «تکمیل» (تکی 💎⚡⚙️، گروهی، عکس، مقایسه، Excel/JSON) سرِ واژهٔ فعل در باکس واژه با «sich» و حرف اضافه/حالت دستوری کامل می‌شود: warten auf +A / sich freuen auf +A / gratulieren zu +D. اولویت منبع: فهرست سفارشی کاربر در VerbPrep ← دیتاست پایه ← خط «ساختار:» در notes هوش مصنوعی؛ idempotent، فقط فعل‌ها (اسم/صفت دست‌نخورده) و با پیام «باکس واژه کامل شد». امن‌سازی‌ها تا هیچ قابلیتی از دست نرود: تلفظ پسوند را نمی‌خواند (speak)، پاسخ‌های املا/تولید فرم برهنه و بدون sich را هم قبول می‌کنند (verbForms/checkWord)، تطبیق واژه در جمله و رنگ‌بندی صرف با سرِ پسونددار درست کار می‌کنند (findWordInSentence/baseInfinitive)، پیشنهاد وضعیت فعال/دریافتی با لِمّای برهنه (lemmaOf) و prewarm TTS با متن برهنه.	tsx تست منطقی ۳۷/۳۷ ✓ — tsc: صفر خطای جدید (۲۵ خطای قدیمیِ مخزن دست‌نخورده) — vite build ✓
++2026-11-24	رفع باگ نمایش — سرِ پسونددار فعل در فهرست و هیرو یکدست و بزرگ رندر می‌شد	data/verbPrep.ts (verbPrepOf/vpFromHead)، components/VerbPhrase.tsx	واژه‌های قدیمی (سرِ برهنه) با کامپوننت VerbPhrase درست رندر می‌شدند (فعل bold، sich و حرف اضافه/حالت کوچک)، ولی واژه‌های تازه‌اضافه چون سرِ پسونددار («sich entschließen zu +D») در دیتاست تطبیق نمی‌خورد به‌صورت متن ساده و هم‌اندازه نمایش داده می‌شد. حالا verbPrepOf سه‌مرحله‌ای شد: تطبیق مستقیم ← تطبیق سرِ برهنه‌شده (stripHeadAnnotation) ← vpFromHead (خواندن حرف اضافه/حالت از خودِ سر واژه برای فعل‌های خارج از دیتاست). در VerbPhrase هم حالت بی‌حرف‌اضافه («gedeihen +D») به شکل «+D» کوچک رندر می‌شود. رفتار واژه‌های قدیمی دست‌نخورده ماند.	tsx تست منطقی ۴۵/۴۵ ✓ (۸ تست جدید برای تطبیق سرِ پسونددار) — tsc: صفر خطا — vite build ✓
+diff --git a/src/components/VerbPhrase.tsx b/src/components/VerbPhrase.tsx
+index f901410..74d4de7 100644
+--- a/src/components/VerbPhrase.tsx
++++ b/src/components/VerbPhrase.tsx
+@@ -18,7 +18,7 @@ export const VerbPhrase: React.FC<{ vp: VP; className?: string }> = ({ vp, class
+       )}
+       <span className="font-extrabold">{base}</span>
+       <span className="font-semibold opacity-75" style={{ fontSize: '0.62em' }}>
+-        {vp.prep} ({CASE_LABEL[vp.kase] || vp.kase})
++        {vp.prep ? `${vp.prep} (${CASE_LABEL[vp.kase] || vp.kase})` : `+${CASE_LABEL[vp.kase] || vp.kase}`}
+       </span>
+     </span>
+   );
+diff --git a/src/data/verbPrep.ts b/src/data/verbPrep.ts
+index 8c0fa77..2e8c53a 100644
+--- a/src/data/verbPrep.ts
++++ b/src/data/verbPrep.ts
+@@ -185,12 +185,35 @@ const INDEX = () => {
+   return m;
+ };
+ 
+-/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم یا بدون sich)؛ بی‌نتیجه = null */
++/** VP از خودِ سرِ پسونددار فعل («sich sträuben gegen +A»، «gedeihen +D») — وقتی دیتاست جواب نمی‌دهد */
++const vpFromHead = (de: string): VP | null => {
++  const m = /^(.+?)\s*\+\s*([ad])\b\.?\s*$/i.exec((de || '').trim());
++  if (!m) return null;
++  const words = m[1].trim().split(/\s+/);
++  const last = (words[words.length - 1] || '').toLowerCase();
++  const hasPrep = words.length > 1 && isPrepToken(last);
++  const verb = hasPrep ? words.slice(0, -1).join(' ') : m[1].trim();
++  if (!verb) return null;
++  const prep = hasPrep ? last : '';
++  return { id: makeId(verb, prep), verb, prep, kase: m[2].toUpperCase() as 'A' | 'D', fa: '', ex: '' };
++};
++
++/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم، بدون sich، یا با سرِ پسونددار «warten auf +A»)؛ بی‌نتیجه = null */
+ export const verbPrepOf = (de: string): VP | null => {
+-  const t = (de || '').trim().toLowerCase();
++  const t = (de || '').trim();
+   if (!t) return null;
++  const lower = t.toLowerCase();
+   const idx = INDEX();
+-  return idx.get(t) || idx.get(baseVerb(t)) || null;
++  const direct = idx.get(lower) || idx.get(baseVerb(lower));
++  if (direct) return direct;
++  // سرِ پسونددار (warten auf +A / sich entschließen zu +D): بعد از برهنه‌سازی دوباره تطبیق بده
++  const bare = stripHeadAnnotation(t).trim().toLowerCase();
++  if (bare && bare !== lower) {
++    const hit = idx.get(bare) || idx.get(baseVerb(bare));
++    if (hit) return hit;
++  }
++  // فعل خارج از دیتاست که سرِ پسونددار دارد — خود سر واژه را بخوان
++  return vpFromHead(t);
+ };
+ 
+ const vowel = (p: string) => /^[aeiouäöü]/i.test(p);
+-- 
+2.47.3
+
