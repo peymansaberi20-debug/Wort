@@ -264,6 +264,9 @@ const CASE_OF: Record<string, PrepCaseLabel> = {
 
 const ANNOT_RE = /\+\s*(?:akk|akkusativ|acc|accusative|dat|dativ|dative|gen|genitiv|genitive|a|d|g)\b/i;
 
+/** آیا سرِ واژه پسوند حالت دستوری دارد («warten auf +A»)؟ — این پسوند فقط به فعل‌ها داده می‌شود */
+export const hasHeadAnnotation = (de: string): boolean => ANNOT_RE.test(String(de || '').trim());
+
 /** حرف اضافه‌های رایج‌تر خارج از PREPS (برای خواندن خط «ساختار») */
 const EXTRA_PREPS = new Set([
   'ohne', 'durch', 'seit', 'gegenüber', 'gegenueber', 'außer', 'ausser', 'trotz',
