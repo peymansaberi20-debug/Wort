@@ -52,6 +52,7 @@ export type ExerciseMode =
   | 'plural'
   | 'conj'
   | 'tense'
+  | 'irrverb'
   | 'case'
   | 'adjdecl'
   | 'prod'
@@ -90,6 +91,7 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   plural: { title: 'جمع اسم‌ها', icon: '🔢', desc: 'نوشتن شکل جمع اسامی آلمانی' },
   conj: { title: 'صرف فعل', icon: '🔤', desc: 'صرف فعل برای ضمایر مختلف با هایلایت پایانه و تغییر ریشه' },
   tense: { title: 'زمان فعل', icon: '⏳', desc: 'تمرین زمان‌های Präteritum و Perfekt' },
+  irrverb: { title: 'فعل‌های بی‌قاعده در سه زمان', icon: '🎢', desc: 'اول سطح را انتخاب کن؛ بعد همهٔ فعل‌های بی‌قاعدهٔ آن سطح دونه‌دونه در یک بازی دوتایی (Präteritum و Perfekt با فعل کمکی) تمرین می‌شوند و بخش‌هایی که تغییر می‌کنند قرمز نشان داده می‌شوند' },
   case: { title: 'حالت و حرف اضافه', icon: '🧩', desc: 'دو جای خالی مجزا برای حرف اضافه و آرتیکل' },
   adjdecl: { title: 'صرف صفت', icon: '🧱', desc: 'نوشتن شکل درست صفت (پایانه) با آرتیکل، حالت و جنس مختلف' },
   prod: { title: 'فارسی ← آلمانی (تایپی)', icon: '🔁', desc: 'دیدن ترجمه و نوشتن کامل واژه آلمانی' },
@@ -121,10 +123,11 @@ interface GramTab { id: string; label: string; mode: ExerciseMode; vTab?: 'learn
 interface GramCat { icon: string; label: string; desc: string; tabs: GramTab[] }
 const GRAMMATIK_CATS: GramCat[] = [
   {
-    icon: '🔤', label: 'فعل و زمان‌ها', desc: 'صرف فعل، زمان‌های Präteritum و Perfekt، داستان با همهٔ زمان‌ها',
+    icon: '🔤', label: 'فعل و زمان‌ها', desc: 'صرف فعل، زمان‌های Präteritum و Perfekt، فعل‌های بی‌قاعده، داستان با همهٔ زمان‌ها',
     tabs: [
       { id: 'conj', label: 'صرف فعل', mode: 'conj' },
       { id: 'tense', label: 'زمان فعل', mode: 'tense' },
+      { id: 'irrverb', label: 'فعل‌های بی‌قاعده', mode: 'irrverb' },
       { id: 'tstory', label: 'داستان زمان‌ها', mode: 'tstory' },
     ],
   },
@@ -170,11 +173,11 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
 ];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'wsh2';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'wsh2' || m === 'irrverb';
 
 /** تمرین‌های خودگردان گرامر — بدنهٔ آن‌ها در لایهٔ keep-alive در App.tsx رندر می‌شود
  *  تا با جابجایی تب‌ها باز بمانند (تا وقتی کاربر ضربدر را نزده). */
-const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle'];
+const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
 const isGramSelfMode = (m: ExerciseMode | null): boolean => !!m && GRAM_SELF_MODES.includes(m);
 
 export const HighlightedVerbForm: React.FC<{
