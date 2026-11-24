@@ -1068,37 +1068,40 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return item ? { item, src } : null;
   }, [qMode, currentItem, currentKind]);
 
+  const speakCardAudio = (w: Word) => {
+    stopSpeaking();
+    const opts = { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice };
+    const readEx = () => { if (settings?.autoEx && w.ex2) speak(w.ex2, opts); };
+    if (settings?.auto) speak(fullWord(w), { ...opts, onEnd: readEx });
+    else readEx();
+  };
+
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     stopSpeaking();
 
     if (!currentItem) return;
 
-    const defaultDir = settings?.dir || 'de';
-    if (hardFlashDir) {
-      setCurrentCardDir(hardFlashDir);
-    } else if (activeMode === 'free') {
-      setCurrentCardDir(freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir);
-    } else if (defaultDir === 'rand') {
-      setCurrentCardDir(Math.random() > 0.5 ? 'de' : 'fa');
-    } else if (activeMode === 'flash') {
-      setCurrentCardDir(flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir);
-    } else {
-      setCurrentCardDir(defaultDir);
-    }
 
     setRevealedCardId(null);
 
     const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review';
 
-    if (isFlashType && settings?.auto && currentCardDir === 'de' && revealedCardId !== currentItem.id) {
-      const w = currentItem as Word;
-      speak(fullWord(w), {
-        rate: settings.rate,
-        vreg: settings.vreg,
-        voiceName: settings.voice
-      });
+    // جهت واقعی این کارت (نه مقدار قدیمیِ state)
+    const defaultDir2 = settings?.dir || 'de';
+    let newDir: 'de' | 'fa';
+    if (hardFlashDir) newDir = hardFlashDir;
+    else if (activeMode === 'free') newDir = freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir;
+    else if (defaultDir2 === 'rand') newDir = Math.random() > 0.5 ? 'de' : 'fa';
+    else if (activeMode === 'flash') newDir = flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir;
+    else newDir = defaultDir2;
+    setCurrentCardDir(newDir);
+
+    // آلمانی ← فارسی: همین‌که کارت ظاهر شد، واژه و مثال دوم خوانده شود
+    if (isFlashType && newDir === 'de') {
+      speakCardAudio(currentItem as Word);
     }
+
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -1194,25 +1197,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setRevealedCardId(currentItem.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    const w = currentItem as Word;
-    if ((settings?.auto || settings?.autoEx) && currentCardDir === 'de') {
-      stopSpeaking();
-      speak(fullWord(w), {
-        rate: settings?.rate,
-        vreg: settings?.vreg,
-        voiceName: settings?.voice,
-        onEnd: () => {
-          if (settings?.autoEx && w.ex) {
-            speak(w.ex, {
-              rate: settings.rate,
-              vreg: settings.vreg,
-              voiceName: settings.voice
-            });
-          }
-        }
-      });
-    }
+    // فارسی ← آلمانی: پشت کارت (آلمانی) که باز شد، واژه و مثال دوم خوانده شود
+    if (currentCardDir === 'fa') speakCardAudio(currentItem as Word);
   };
+
 
   const runCaseCheck = (force: boolean) => {
     if (!currentItem || answerResult) return;
