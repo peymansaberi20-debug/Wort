@@ -18,7 +18,7 @@ export const VerbPhrase: React.FC<{ vp: VP; className?: string }> = ({ vp, class
       )}
       <span className="font-extrabold">{base}</span>
       <span className="font-semibold opacity-75" style={{ fontSize: '0.62em' }}>
-        {vp.prep} ({CASE_LABEL[vp.kase] || vp.kase})
+        {vp.prep ? `${vp.prep} (${CASE_LABEL[vp.kase] || vp.kase})` : `+${CASE_LABEL[vp.kase] || vp.kase}`}
       </span>
     </span>
   );
