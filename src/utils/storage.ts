@@ -3,6 +3,7 @@ import { INITIAL_SEED, P6 } from '../data/seed';
 import { dayStart, today, dstr } from './dates';
 import { parseStatus, suggestStatus } from './wordStatus';
 import { imgDbBroken, imgPutMany } from './imageStore';
+import { stripHeadAnnotation } from '../data/verbPrep';
 
 export const KEY = 'deutschlab_pro_fa_v1';
 export const EXT_KEY = 'wb_ext';
@@ -352,11 +353,14 @@ const VERB_PARTICLES = [
 /**
  * Accepted ways to write a verb as a headword. For separable verbs both the infinitive
  * ("abziehen") and the separated form ("ziehen ab") are accepted.
+ * Reflexive verbs accept the form without "sich" and the headword's prep/case annotation
+ * ("warten auf +A") is stripped — the learner types the infinitive, not the annotation.
  */
 export function verbForms(w: Partial<Word>): string[] {
-  const de = (w.de || '').trim();
+  const de = stripHeadAnnotation((w.de || '').trim());
   if (!de) return [];
   const out = new Set<string>([de]);
+  if (/^sich\s+/i.test(de)) out.add(de.replace(/^sich\s+/i, '').trim());
   const sep = (w.sep || '').trim().toLowerCase();
   const low = de.toLowerCase();
   if (sep && low.startsWith(sep) && low.length > sep.length) {
@@ -425,6 +429,9 @@ export function checkWord(
 
   let exp = isForm ? fullWord(w) : w.ans || fullWord(w);
   let accepted: string[] = [exp, ...(w.acc || [])];
+  // سرِ واژه ممکن است پسوند حرف اضافه/حالت داشته باشد (warten auf +A): فرم برهنه هم قبول است
+  const deBare = stripHeadAnnotation(w.de || '').trim();
+  if (deBare && deBare !== (w.de || '').trim()) accepted.push(deBare);
   let articleInSentence = false;
 
   // Noun blank directly after an article/determiner of the sentence: the article is NOT part of the answer
