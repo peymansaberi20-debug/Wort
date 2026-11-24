@@ -236,24 +236,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-4 text-right">
       {/* ─────────── سربرگ خوش‌آمد: سلام، تاریخ، رشتهٔ استمرار و حلقهٔ پیشرفت امروز ─────────── */}
-      <div className="bg-gradient-to-l from-[#5a5248] via-[#4c453c] to-[#332e27] rounded-2xl p-5 text-white shadow-sm">
+      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl p-5 text-purple-900 dark:text-purple-100 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
-            <p className="text-xs text-white/80 mt-0.5" dir="ltr">
+            <p className="text-xs text-purple-800/80 dark:text-purple-300/80 mt-0.5" dir="ltr">
               {todayWeekday} • {todayShamsi} • {todayGreg}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <span
-              className="bg-white/15 backdrop-blur-sm border border-white/25 px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5"
+              className="bg-white/70 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5"
               title="روزهای پیاپی تمرین"
               aria-label="رشتهٔ استمرار مطالعه"
             >
               🔥 {streakCount(state.hist)} روز استمرار
             </span>
             <span
-              className="bg-white/15 backdrop-blur-sm border border-white/25 px-3.5 py-2 rounded-xl text-sm font-bold"
+              className="bg-white/70 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-3.5 py-2 rounded-xl text-sm font-bold"
               title="کل واژگان کتابخانه"
             >
               📚 {s.words.length} واژه
@@ -264,10 +264,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex items-center gap-4 mt-4">
           <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`پیشرفت امروز: ${Math.round(ringProgress * 100)}٪`}>
             <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
-              <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-white/25" />
+              <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-purple-200 dark:stroke-purple-900" />
               <circle
                 cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" strokeLinecap="round"
-                className="stroke-emerald-300 transition-all duration-700"
+                className="stroke-emerald-500 dark:stroke-emerald-300 transition-all duration-700"
                 strokeDasharray={RING_C}
                 strokeDashoffset={RING_C * (1 - ringProgress)}
               />
@@ -278,12 +278,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="min-w-0 flex-1">
             <b className="text-sm font-bold block">هدف امروز: {totalDone} از {totalTarget > 0 ? totalTarget : '—'} تمرین</b>
-            <p className="text-xs text-white/80 mt-1">
+            <p className="text-xs text-purple-800/80 dark:text-purple-300/80 mt-1">
               {totalTarget > 0
                 ? `کلمهٔ جدید ${s.dailyNewDone}/${state.set.nw} • مرور ${s.dailyReviewDone}/${state.set.rv}`
                 : 'برای شروع، سهمیهٔ روزانه را در تنظیمات تعیین کن.'}
             </p>
-            <p className="text-xs text-white/70 mt-0.5">
+            <p className="text-xs text-purple-800/70 dark:text-purple-400/80 mt-0.5">
               {s.dailyComplete && totalTarget > 0
                 ? '✅ تمرین‌های امروز کامل شده — آفرین!'
                 : `⏳ حدود ${s.estimatedMins} دقیقه زمان می‌برد.`}
@@ -295,14 +295,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
           <button
             onClick={() => onNavigate('daily')}
-            className="bg-white text-[#4c453c] hover:bg-white/90 px-3 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5"
+            className="bg-white text-purple-800 hover:bg-purple-100 px-3 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5"
           >
             {s.dailyComplete && totalTarget > 0 ? '✅ جلسهٔ امروز کامل' : `🌟 شروع روزانه (${s.dailyTasksLeft})`}
           </button>
           {s.dueReviewWords.length > 0 && (
             <button
               onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
-              className="bg-white/15 backdrop-blur-sm border border-white/30 hover:bg-white/25 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
             >
               ⚡ مرور سررسید ({s.dueReviewWords.length})
             </button>
@@ -310,14 +310,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {s.weakList.length > 0 && (
             <button
               onClick={() => onPracticeWords(s.weakList.map(w => w.id), 'targeted')}
-              className="bg-white/15 backdrop-blur-sm border border-white/30 hover:bg-white/25 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
             >
               🎯 نقاط ضعف ({s.weakList.length})
             </button>
           )}
           <button
             onClick={() => onNavigate('lib')}
-            className="bg-white/15 backdrop-blur-sm border border-white/30 hover:bg-white/25 text-white px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+            className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-3 py-2.5 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
           >
             📚 کتابخانهٔ واژگان
           </button>
