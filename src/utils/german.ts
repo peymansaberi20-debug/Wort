@@ -98,6 +98,32 @@ export function validateConjTable(conj: string, de: string, sep = ''): ConjValid
   return { ok: problems.length === 0, forms, problems };
 }
 
+/**
+ * فعل بازتابی که هوش مصنوعی جدولش را بدون ضمیر بازتابی می‌دهد، خودکار کامل می‌شود:
+ * «sich fürchten» + fürchte|fürchtest|… → fürchte mich|fürchtest dich|…
+ * شکلِ دارای ضمیر بازتابیِ دیگری غیر از ضمیر موردانتظار دست‌نخورده می‌ماند — نقص واقعی است و باید دیده شود.
+ */
+export function healReflexiveConj(conj: string, de: string, sep = ''): string {
+  const raw = String(conj || '').trim();
+  if (!raw || !/^sich\s+/i.test(String(de || '').trim())) return String(conj || '');
+  const forms = splitConj(raw).map(f => f.trim());
+  if (forms.length !== 6 || forms.some(f => !f)) return String(conj || '');
+  const particle = String(sep || '').trim().toLowerCase();
+  let changed = false;
+  const healed = forms.map((f, i) => {
+    if (new RegExp(`(^|\\s)${REFLEXIVE[i]}(\\s|$)`, 'i').test(f)) return f;
+    if (REFLEXIVE.some(p => new RegExp(`(^|\\s)${p}(\\s|$)`, 'i').test(f))) return f;
+    changed = true;
+    // در فعل جداشدنی ضمیر قبل از پیشوند می‌آید (stelle mich vor)
+    const words = f.split(/\s+/);
+    if (particle && words.length > 1 && words[words.length - 1].toLowerCase() === particle) {
+      return [...words.slice(0, -1), REFLEXIVE[i], words[words.length - 1]].join(' ');
+    }
+    return `${f} ${REFLEXIVE[i]}`;
+  });
+  return changed ? healed.join('|') : String(conj || '');
+}
+
 /** Stored form of a table: six forms joined by "|" when usable, otherwise the original text. */
 export const normalizeConj = (conj: string): string => {
   const f = splitConj(conj);
