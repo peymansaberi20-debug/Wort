@@ -1,0 +1,71 @@
+From 423b92b3c762901d4ef2f95b464d470794303825 Mon Sep 17 00:00:00 2001
+From: Z User <z@container>
+Date: Tue, 24 Nov 2026 12:25:54 +0000
+Subject: [PATCH 2/2] =?UTF-8?q?=D8=A8=D9=87=E2=80=8C=D8=B1=D9=88=D8=B2?=
+ =?UTF-8?q?=D8=B1=D8=B3=D8=A7=D9=86=DB=8C=20=D9=85=D8=AB=D8=A7=D9=84?=
+ =?UTF-8?q?=E2=80=8C=D9=87=D8=A7=DB=8C=20=D8=B3=D8=B1=D9=90=20=D9=88=D8=A7?=
+ =?UTF-8?q?=DA=98=D9=87=D9=94=20=D9=81=D8=B9=D9=84=20(gratulieren=20zu=20+?=
+ =?UTF-8?q?D)=20=D9=88=20=D9=85=D8=B3=D8=AA=D9=86=D8=AF=D8=A7=D8=AA?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ IMPLEMENTATION_STATE.md      | 2 +-
+ src/components/HelpModal.tsx | 2 +-
+ src/utils/ai.ts              | 2 +-
+ src/views/VocabularyView.tsx | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/IMPLEMENTATION_STATE.md b/IMPLEMENTATION_STATE.md
+index 2d2edb7..faf3b10 100644
+--- a/IMPLEMENTATION_STATE.md
++++ b/IMPLEMENTATION_STATE.md
+@@ -37,4 +37,4 @@
+ 2026-11-22	تمرین دوگانهٔ فعال/دریافتی	types.ts، utils/storage.ts، utils/wordStatus.ts، views/ExercisesView.tsx، App.tsx، components/WordDetailModal.tsx	آمار دوگانهٔ تسلط (تولیدی pOk/pBad — شناختی rOk/rBad + زنجیرهٔ rStreak) + کارت «تمرین دوگانه» در Wortschatz (فعال/کاندید: تایپ معادل آلمانی؛ دریافتی: انتخاب معنی از ۴ گزینه) + پیشنهاد ارتقای دریافتی→کاندید پس از ۳ برداشت پیاپی شناختی: بنر کهربایی در پاپ‌اپ «تنظیمات واژه» + دکمهٔ ارتقا + پیام جشن. کد عکس‌ها (image.ts/imageStore.ts) دست‌نخورده ماند.	vite build ✓ — تست مرورگر: MC + تایپ + ذخیرهٔ آمار + ارتقا→کاندید ✓ (سپس در مخزن اعمال شد، Actions سبز)
+ 2026-11-22	فعال‌سازی کاندید→فعال + به‌روزرسانی همین سند	types.ts، utils/storage.ts، utils/wordStatus.ts، views/ExercisesView.tsx، App.tsx، components/WordDetailModal.tsx، IMPLEMENTATION_STATE.md	حلقهٔ آخر سیستم تسلط: کارت «🚀 فعال‌سازی (کاندید → فعال)» در Wortschatz — فقط واژه‌های کاندید، تمرین تولیدی (معنی → تایپ معادل)، کهنه‌ترین اول + زنجیرهٔ تولیدی pStreak + پیشنهاد ارتقای کاندید→فعال پس از ۳ تولید پیاپی درست (حداقل ۴ موفقیت تولیدی کل): بنر سبز در پاپ‌اپ + دکمهٔ «ارتقا به فعال» + پیام جشن + رفع شرط پیام جشن به «لحظهٔ گذار به آماده» (قبلاً اگر واژه بدون غلط از آستانه می‌گذشت پیام نمی‌آمد — هر دو ارتقا). ممیزی فاز ۳ سند (پروفایل واژه): هر ۴ قلم در کد موجود بود و در رابط تأیید شد — بخش بالا به ✅ تغییر کرد.	vite build ✓ — تست مرورگر ✓
+ 2026-11-22	فاز ۴ + هفت درخواست کاربر (نمایش فعل+حرف اضافه، عنوان، آیکن‌ها، هدر، Präteritum، تریک، فلش‌کارت)	data/verbPrep.ts، components/VerbPhrase.tsx (جدید)، components/WordDetailModal.tsx، views/VocabularyView.tsx، views/ExercisesView.tsx، utils/ai.ts، utils/german.ts، components/WordCompareModal.tsx، IMPLEMENTATION_STATE.md	۱) حرف اضافهٔ خودکار فعل: واژهٔ فعل موجود در دیتاست Verben mit Präpositionen (یا فهرست سفارشی VerbPrep) در ردیف فهرست واژگان و هیروی پروفایل به شکل «warten auf (A) / sich entscheiden für (A)» رندر می‌شود — فعل bold، sich و حرف اضافه/حالت یک شماره کوچکتر و غیرbold (کامپوننت VerbPhrase؛ تطبیق مستقیم یا بدون sich) ۲) عنوان طولانی هیروی پروفایل خودکار کوچک می‌شود تا یک خط بماند (اندازهٔ اولیه بر اساس طول + حلقهٔ اندازه‌گیری تا 13px، فراتر از آن شکستن خط) ۳) آیکن‌های بلندگو و چشم از ردیف واژه‌ها حذف شدند (در هدر پروفایل موجودند) + state مردهٔ visFa حذف شد ۴) هدر چسبان پروفایل (نوار واژه هنگام اسکرول) از زمینهٔ آبیِ گرادیانی به سطح روشن (سفید/تیره با خط زیرین) با فونت serif تغییر کرد؛ پالت نوار هیرو هم از آبی کارت واژه به گرادیان تِال-سرمه‌ای-بنفش جدید تغییر کرد ۵) رنگ فونت صرف Präteritum خنثی شد (قبلاً amber روی زمینهٔ amber بود و قرمزیِ پایانه‌ها دیده نمی‌شد) — در پروفایل و تمرین‌ها؛ تمرین‌ها از PratText مشترک با هایلایت قرمز استفاده می‌کنند ۶) پرامت نکات هر سه مسیر (تکمیل خودکار تک/گروهی + استخراج) خط پایانی الزامی «🎯 تریک:» گرفت — تریک صوتی/تصویری فارسی برای پیوند تلفظ واژهٔ آلمانی با معنی؛ در پروفایل به شکل کارت کهربایی برجسته رندر می‌شود ۷) پشت فلش‌کارت زیر ترجمه و مثال دوم، خط «🎯 تریک» واژه (trickOf از notes) می‌آید	vite build ✓ — تست مرورگر: ردیف warten auf (A) ✓، هیرو/هدر/پالت ✓، FitText (24px برای واژهٔ ۲۲حرفی) ✓، ging قرمز ✓، کارت تریک در پروفایل ✓، خط تریک پشت کارت روزانه ✓، خوشهٔ مترادف مقایسه (gehen/fahren) ✓، بدون کلید AI → پیام خطای مهربان ✓، ۰ خطای کنسول
+-2026-11-24	درخواست کاربر — سرِ واژهٔ فعل با sich + حرف اضافه/حالت دستوری پس از «تکمیل»	utils/conjugation.ts (stripHeadAnnotation جدید)، data/verbPrep.ts (annotatedHeadword/bareHead/prepCaseFromNotes جدید)، utils/ai.ts، views/VocabularyView.tsx، utils/storage.ts، utils/wordStatus.ts، views/ExercisesView.tsx، utils/audio.ts، App.tsx، components/HelpModal.tsx، IMPLEMENTATION_STATE.md	بعد از هر مسیر «تکمیل» (تکی 💎⚡⚙️، گروهی، عکس، مقایسه، Excel/JSON) سرِ واژهٔ فعل در باکس واژه با «sich» و حرف اضافه/حالت دستوری کامل می‌شود: warten → warten auf +A | sich freuen → sich freuen auf +A | helfen + DAT → helfen +D. اولویت منبع: فهرست سفارشی کاربر در VerbPrep ← دیتاست پایه ← خط «ساختار:» در notes هوش مصنوعی؛ idempotent، فقط فعل‌ها (اسم/صفت دست‌نخورده) و با پیام «باکس واژه کامل شد». امن‌سازی‌ها تا هیچ قابلیتی از دست نرود: تلفظ پسوند را نمی‌خواند (speak)، پاسخ‌های املا/تولید فرم برهنه و بدون sich را هم قبول می‌کنند (verbForms/checkWord)، تطبیق واژه در جمله و رنگ‌بندی صرف با سرِ پسونددار درست کار می‌کنند (findWordInSentence/baseInfinitive)، پیشنهاد وضعیت فعال/دریافتی با لِمّای برهنه (lemmaOf) و prewarm TTS با متن برهنه.	tsx تست منطقی ۳۷/۳۷ ✓ — tsc: صفر خطای جدید (۲۵ خطای قدیمیِ مخزن دست‌نخورده) — vite build ✓
++2026-11-24	درخواست کاربر — سرِ واژهٔ فعل با sich + حرف اضافه/حالت دستوری پس از «تکمیل»	utils/conjugation.ts (stripHeadAnnotation جدید)، data/verbPrep.ts (annotatedHeadword/bareHead/prepCaseFromNotes جدید)، utils/ai.ts، views/VocabularyView.tsx، utils/storage.ts، utils/wordStatus.ts، views/ExercisesView.tsx، utils/audio.ts، App.tsx، components/HelpModal.tsx، IMPLEMENTATION_STATE.md	بعد از هر مسیر «تکمیل» (تکی 💎⚡⚙️، گروهی، عکس، مقایسه، Excel/JSON) سرِ واژهٔ فعل در باکس واژه با «sich» و حرف اضافه/حالت دستوری کامل می‌شود: warten auf +A / sich freuen auf +A / gratulieren zu +D. اولویت منبع: فهرست سفارشی کاربر در VerbPrep ← دیتاست پایه ← خط «ساختار:» در notes هوش مصنوعی؛ idempotent، فقط فعل‌ها (اسم/صفت دست‌نخورده) و با پیام «باکس واژه کامل شد». امن‌سازی‌ها تا هیچ قابلیتی از دست نرود: تلفظ پسوند را نمی‌خواند (speak)، پاسخ‌های املا/تولید فرم برهنه و بدون sich را هم قبول می‌کنند (verbForms/checkWord)، تطبیق واژه در جمله و رنگ‌بندی صرف با سرِ پسونددار درست کار می‌کنند (findWordInSentence/baseInfinitive)، پیشنهاد وضعیت فعال/دریافتی با لِمّای برهنه (lemmaOf) و prewarm TTS با متن برهنه.	tsx تست منطقی ۳۷/۳۷ ✓ — tsc: صفر خطای جدید (۲۵ خطای قدیمیِ مخزن دست‌نخورده) — vite build ✓
+diff --git a/src/components/HelpModal.tsx b/src/components/HelpModal.tsx
+index 0397a5d..a660bbe 100644
+--- a/src/components/HelpModal.tsx
++++ b/src/components/HelpModal.tsx
+@@ -159,7 +159,7 @@ export const HELP_CONTENT: Record<string, { title: string; points: string[] }> =
+     points: [
+       'کلمهٔ آلمانی را در کادر ابتدایی وارد کنید.',
+       'می‌توانید با زدن دکمه «✨ تکمیل خودکار با هوش مصنوعی» اجازه دهید سایر فیلدها (ترجمه، مثال‌ها، مترادف، متضاد و نکات گرامری) خودکار پر شوند.',
+-      'پس از تکمیل، خودِ فعل با «sich» و حرف اضافه/حالت دستوری در باکس واژه کامل می‌شود: warten → warten auf +A، sich freuen → sich freuen auf +A، helfen → helfen +D. منبع تشخیص: فهرست فعل+حرف اضافهٔ برنامه (شامل فهرست سفارشی شما در تب حروف اضافه) و خط «ساختار:» در نکته‌ها؛ اسم‌ها و صفت‌ها تغییری نمی‌کنند.',
++      'پس از تکمیل، خودِ فعل با «sich» و حرف اضافه/حالت دستوری در باکس واژه کامل می‌شود: warten → warten auf +A، sich freuen → sich freuen auf +A، gratulieren → gratulieren zu +D. منبع تشخیص: فهرست فعل+حرف اضافهٔ برنامه (شامل فهرست سفارشی شما در تب حروف اضافه) و خط «ساختار:» در نکته‌ها؛ اسم‌ها و صفت‌ها تغییری نمی‌کنند.',
+       'همچنین می‌توانید با «📋 کپی دستور برای هوش مصنوعی» دستور را در ChatGPT یا Claude بگذارید و نتیجهٔ JSON را در کادر بچسبانید.',
+       'برای نام‌گذاری دسته‌ها، نام‌های کلی و کوتاه (مانند روزمره، کار، سفر) پیشنهاد می‌شود.'
+     ]
+diff --git a/src/utils/ai.ts b/src/utils/ai.ts
+index 3224327..5a5d014 100644
+--- a/src/utils/ai.ts
++++ b/src/utils/ai.ts
+@@ -347,7 +347,7 @@ Always begin with:
+ Explain important prepositions, complements, and cases (NOM, AKK, DAT, GEN).
+ Examples:
+ * warten: ساختار: warten auf + AKK (منتظر کسی/چیزی بودن)
+-* helfen: ساختار: helfen + DAT (به کسی کمک کردن)
++* danken: ساختار: danken + DAT (به کسی تشکر کردن)
+ If no special structure is relevant, write: ساختار: حرف اضافه یا حالت دستوری ویژه‌ای ندارد.
+ 
+ Line 3 Onward — Additional Learning Notes
+diff --git a/src/views/VocabularyView.tsx b/src/views/VocabularyView.tsx
+index 392c19f..91c32ba 100644
+--- a/src/views/VocabularyView.tsx
++++ b/src/views/VocabularyView.tsx
+@@ -566,7 +566,7 @@ return words
+         }
+         if (aiDepthRef.current === 'full') setNeedsFullFlag(false); // 💎 → the word is now fully profiled
+         // درخواست کاربر: باکس واژه پس از تکمیل، خودِ فعل با sich + حرف اضافه/حالت دستوری را نشان بدهد
+-        // (warten → warten auf +A | sich freuen → sich freuen auf +A | helfen → helfen +D)
++        // (warten → warten auf +A | sich freuen → sich freuen auf +A | gratulieren → gratulieren zu +D)
+         // فقط وقتی پایهٔ واژه همان چیزی است که کاربر نوشته/انتخاب کرده (تا املای درست‌شده هم داخل باکس بیاید)
+         if (item.de) {
+           const typedRaw = (choice?.target || formDe.trim()).trim();
+-- 
+2.47.3
+
