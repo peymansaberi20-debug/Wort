@@ -2,6 +2,7 @@ import { fixLexList, fixPlural, isNounEntry, lcFirst, normalizeConj, validateCon
 import { Word } from '../types';
 import { norm, matchCat } from './storage';
 import { AiError, describeAiError, generateText, getActiveProvider, getModel, hasApiKey } from './aiProvider';
+import { annotatedHeadword } from '../data/verbPrep';
 
 export const BASE_CATEGORIES = [
   'ارتباطات (Kommunikation)',
@@ -346,7 +347,7 @@ Always begin with:
 Explain important prepositions, complements, and cases (NOM, AKK, DAT, GEN).
 Examples:
 * warten: ساختار: warten auf + AKK (منتظر کسی/چیزی بودن)
-* helfen: ساختار: helfen + DAT (به کسی کمک کردن)
+* helfen: ساختار: helpen + DAT (به کسی کمک کردن)
 If no special structure is relevant, write: ساختار: حرف اضافه یا حالت دستوری ویژه‌ای ندارد.
 
 Line 3 Onward — Additional Learning Notes
@@ -718,6 +719,10 @@ export function aiToIMP(list: any[], existingWords: Word[], targetCategory?: str
       if (!nounLike && (looksVerb || looksAdjOrAdv) && /^[A-ZÄÖÜ]/.test(w.de)) {
         w.de = w.de.charAt(0).toLocaleLowerCase('de') + w.de.slice(1);
       }
+      // درخواست کاربر: سرِ واژهٔ فعل با sich + حرف اضافه/حالت دستوری کامل می‌شود (warten auf +A)
+      // منبع: دیتاست فعل+حرف اضافهٔ برنامه (شامل فهرست سفارشی کاربر)، بعد خط «ساختار:» در notes
+      const annotated = annotatedHeadword(w.de, { pos: w.pos, art: w.art, conj: w.conj, notes: w.notes });
+      if (annotated && annotated !== w.de) w.de = annotated;
       // noun synonyms/antonyms keep article + capital letter as AI produced them; never lowercase them
       const cv = validateConjTable(w.conj, w.de, w.sep);
       if (!cv.ok) errs.push(`«${w.de}»: ${cv.problems.join('؛ ')}`);
