@@ -43,10 +43,11 @@ import { KonnektorTrainer } from './components/KonnektorTrainer';
 import { KonnektorProTrainer } from './components/KonnektorProTrainer';
 import { SatzPuzzle } from './components/SentenceDrills';
 import { TenseStoryTrainer } from './views/TenseStoryTrainer';
+import { IrregularVerbsTrainer } from './views/IrregularVerbsTrainer';
 
 /** تمرین‌های خودگردان گرامر — بدنه‌شان در لایهٔ keep-alive زیر رندر می‌شود تا با
  *  جابجایی تب‌ها (اصلی یا زیرتب‌های گرامر) باز بمانند؛ بستن فقط با ضربدرِ خود تمرین. */
-const GRAM_SELF_MODES: string[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle'];
+const GRAM_SELF_MODES: string[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
 
 import { DashboardView } from './views/DashboardView';
 import { ExercisesView, ExerciseMode } from './views/ExercisesView';
@@ -967,6 +968,9 @@ export default function App() {
               </div>
               <div className={activeExercise === 'tstory' ? '' : 'hidden'}>
                 <TenseStoryTrainer key={`tstory-${gramResets.tstory || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onClose={() => handleSelectExercise(null)} />
+              </div>
+              <div className={activeExercise === 'irrverb' ? '' : 'hidden'}>
+                <IrregularVerbsTrainer key={`irrverb-${gramResets.irrverb || 0}`} settings={state.set} words={state.words} onShowToast={showToast} onClose={() => handleSelectExercise(null)} />
               </div>
               <div className={activeExercise === 'puzzle' ? '' : 'hidden'}>
                 <SatzPuzzle key={`puzzle-${gramResets.puzzle || 0}`} words={state.words} onShowToast={showToast} />
