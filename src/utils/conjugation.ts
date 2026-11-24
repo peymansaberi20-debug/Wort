@@ -16,6 +16,31 @@ export interface ConjSegment {
   kind: SegKind;
 }
 
+/* ============================================================
+ * درخواست کاربر: سرِ واژهٔ فعل می‌تواند پسوند «حرف اضافه + حالت دستوری»
+ * داشته باشد (warten auf +A / helfen +D / sich freuen auf +A).
+ * این تابع آن پسوند را حذف می‌کند تا مقایسه، صرف، تلفظ و پاسخ‌های
+ * تمرین با فرم لغت (بدون پسوند) کار کنند.
+ * ============================================================ */
+
+/** حرف اضافه‌هایی که در پسوند سرِ واژه («auf +A») دیده می‌شوند (هم‌نهنگ با data/verbPrep.ts) */
+const HEAD_PREPS = new Set([
+  'an', 'auf', 'aus', 'bei', 'für', 'gegen', 'in', 'mit', 'nach', 'über', 'um', 'von', 'vor', 'zu',
+  'ohne', 'durch', 'seit', 'gegenüber', 'gegenueber', 'außer', 'ausser', 'trotz',
+  'während', 'waehrend', 'ab', 'binnen', 'innerhalb', 'wegen', 'entlang', 'dank', 'laut', 'zufolge'
+]);
+
+const CASE_SUFFIX_RE = /\s*\+\s*(?:akk|akkusativ|acc|accusative|dat|dativ|dative|gen|genitiv|genitive|a|d|g)\b\.?/gi;
+
+/** حذف پسوند «حرف اضافه + حالت» از سر واژه: "warten auf +A" → "warten" | "helfen +D" → "helfen" */
+export function stripHeadAnnotation(de: string): string {
+  let out = String(de || '');
+  // اول «+A/+AKK/…» حذف می‌شود؛ اگر واژهٔ پیش از آن حرف اضافه بود، آن هم جزو پسوند است
+  out = out.replace(CASE_SUFFIX_RE, '+');
+  out = out.replace(/\s*([a-zäöüß]+)\s*\+/gi, (m, tok) => (HEAD_PREPS.has(String(tok).toLowerCase()) ? '' : m));
+  return out.replace(/\+\s*$/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 const PRON_RE = /^(ich|du|er\/sie\/es|er\/sie|er|es|wir|ihr|sie\/sie|sie)\s+(\S[\s\S]*)$/i;
 
 /** Grammatical slot (0 ich .. 5 sie/Sie) of a leading pronoun; a bare "sie" is resolved by its position. */
@@ -139,9 +164,9 @@ function infinitiveStem(base: string): string {
   return base;
 }
 
-/** Infinitive without "sich", without a separable prefix, last word only. */
+/** Infinitive without "sich", without the prep/case annotation, without a separable prefix, last word only. */
 function baseInfinitive(infinitive: string, mainLower: string, prefixCandidates: string[]): string {
-  let b = (infinitive || '').trim().toLowerCase().replace(/^sich\s+/, '');
+  let b = stripHeadAnnotation(infinitive || '').trim().toLowerCase().replace(/^sich\s+/, '');
   for (const p of prefixCandidates) {
     const pre = (p || '').trim().toLowerCase();
     if (pre && b.startsWith(pre) && b.length > pre.length && !mainLower.startsWith(pre)) {
