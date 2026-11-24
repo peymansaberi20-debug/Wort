@@ -158,6 +158,86 @@ export function isIrregularPp(inf: string, pp: string, sep?: string): boolean {
   return red || p.endsWith('en');
 }
 
+/* ───────────── مقایسهٔ حرف‌به‌حرف پاسخ کاربر با پاسخ درست ───────────── */
+
+/** یک قطعه از متن مقایسه: same = یکسان، bad = غلط کاربر، fix = چیزی که باید می‌نوشت */
+export interface AnsSeg {
+  text: string;
+  state: 'same' | 'bad' | 'fix';
+}
+
+/** مقایسهٔ دو کلمه حرف‌به‌حرف: [قطعه‌های پاسخ کاربر، قطعه‌های پاسخ درست] */
+const charPairDiff = (a: string, b: string): [AnsSeg[], AnsSeg[]] => {
+  const p = commonPrefix(a, b);
+  const s = commonSuffix(a, b, Math.min(a.length, b.length) - p);
+  const cut = (t: string, st: AnsSeg['state']): AnsSeg[] => (t.length ? [{ text: t, state: st }] : []);
+  return [
+    [...cut(a.slice(0, p), 'same'), ...cut(a.slice(p, a.length - s), 'bad'), ...cut(a.slice(a.length - s), 'same')],
+    [...cut(b.slice(0, p), 'same'), ...cut(b.slice(p, b.length - s), 'fix'), ...cut(b.slice(b.length - s), 'same')],
+  ];
+};
+
+/**
+ * مقایسهٔ پاسخ کاربر با پاسخ درست، کلمه‌به‌کلمه و داخل هر کلمه حرف‌به‌حرف.
+ * تطبیق کلمه‌ها با LCS روی شکل نرمال‌شده (بی‌حساس به بزرگی/کوچکی و اُم‌لاوت)
+ * تا «Hat» با «hat» یکی شود و فقط تفاوت واقعی هایلایت شود.
+ */
+export function answerDiff(given: string, expected: string): { g: AnsSeg[]; e: AnsSeg[] } {
+  const gt = given.trim().split(/\s+/).filter(Boolean);
+  const et = expected.trim().split(/\s+/).filter(Boolean);
+  const g: AnsSeg[] = [];
+  const e: AnsSeg[] = [];
+  const pushGap = (arr: AnsSeg[], tok: string, st: 'bad' | 'fix'): void => {
+    if (arr.length) arr.push({ text: ' ', state: 'same' });
+    arr.push({ text: tok, state: st });
+  };
+  const pushAll = (arr: AnsSeg[], segs: AnsSeg[]): void => {
+    if (!segs.length) return;
+    if (arr.length) arr.push({ text: ' ', state: 'same' });
+    arr.push(...segs);
+  };
+
+  const n = gt.length, m = et.length;
+
+  // اگر تعداد کلمه‌ها برابر است ولی هیچ کدام تطابق ندارند → مقایسهٔ حرف‌به‌حرف موضعی
+  // («ginge» با «ging» فقط حرف اضافه را نشان می‌دهد، نه کل کلمه را)
+  const anyEqual = gt.some((t, k) => et.some(u => normDe(t) === normDe(u)));
+  if (n === m && n > 0 && !anyEqual) {
+    for (let k = 0; k < n; k++) {
+      const [gs, es] = charPairDiff(gt[k], et[k]);
+      pushAll(g, gs);
+      pushAll(e, es);
+    }
+    return { g, e };
+  }
+
+  // LCS روی توکن‌ها
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = normDe(gt[i]) === normDe(et[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (normDe(gt[i]) === normDe(et[j])) {
+      const [gs, es] = charPairDiff(gt[i], et[j]);
+      pushAll(g, gs);
+      pushAll(e, es);
+      i++; j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      pushGap(g, gt[i], 'bad');
+      i++;
+    } else {
+      pushGap(e, et[j], 'fix');
+      j++;
+    }
+  }
+  for (; i < n; i++) pushGap(g, gt[i], 'bad');
+  for (; j < m; j++) pushGap(e, et[j], 'fix');
+  return { g, e };
+}
+
 /** تطبیق دو شکل آلمانی — فاصله‌ها هم بی‌اثرند («kam an» ≈ «kaman») */
 export function eqDe(a: string, b: string): boolean {
   const x = normDe(a);
