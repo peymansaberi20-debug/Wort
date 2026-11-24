@@ -105,7 +105,13 @@ export function mergeStates(local: AppState, cloud: AppState, opts: MergeOptions
   const cd = cloud.daily || { d: '', n: 0, r: 0 };
   const daily = ld.d > cd.d ? ld
     : cd.d > ld.d ? cd
-    : { d: ld.d || cd.d, n: Math.max(ld.n || 0, cd.n || 0), r: Math.max(ld.r || 0, cd.r || 0) };
+    : {
+        d: ld.d || cd.d,
+        n: Math.max(ld.n || 0, cd.n || 0),
+        r: Math.max(ld.r || 0, cd.r || 0),
+        sn: Math.max(ld.sn || 0, cd.sn || 0),
+        sr: Math.max(ld.sr || 0, cd.sr || 0)
+      };
 
   // settings: local wins, cloud fills missing keys
   const set = { ...(cloud.set || {}), ...(local.set || {}) } as AppState['set'];

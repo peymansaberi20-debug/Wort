@@ -147,7 +147,7 @@ export function loadState(): AppState {
     words: INITIAL_SEED.map(norm).filter(Boolean) as Word[],
     hist: [],
     set: { ...DEFAULT_SETTINGS },
-    daily: { d: today(), n: 0, r: 0 }
+    daily: { d: today(), n: 0, r: 0, sn: 0, sr: 0 }
   };
 }
 
@@ -207,7 +207,7 @@ export function clearReviewHistory(st: AppState): AppState {
     ...st,
     words: resetWords,
     hist: [],
-    daily: { d: today(), n: 0, r: 0 }
+    daily: { d: today(), n: 0, r: 0, sn: 0, sr: 0 }
   };
 }
 
@@ -216,13 +216,13 @@ export function clearAllVocabulary(st: AppState): AppState {
     ...st,
     words: [],
     hist: [],
-    daily: { d: today(), n: 0, r: 0 }
+    daily: { d: today(), n: 0, r: 0, sn: 0, sr: 0 }
   };
 }
 
 export function getDaily(st: AppState): DailyGoal {
   if (st.daily.d !== today()) {
-    st.daily = { d: today(), n: 0, r: 0 };
+    st.daily = { d: today(), n: 0, r: 0, sn: 0, sr: 0 };
   }
   return st.daily;
 }
