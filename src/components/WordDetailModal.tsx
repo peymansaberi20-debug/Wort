@@ -12,6 +12,7 @@ import { ShadowingModal } from './ShadowingModal';
 import { ImageCropper } from './ImageCropper';
 import { PratText } from './PratText';
 import { VerbPhrase, verbPrepFor } from './VerbPhrase';
+import { hasHeadAnnotation } from '../data/verbPrep';
 import { X, Pencil, Trash2, Mic, Sparkles, Volume2, Eye, EyeOff, Camera } from 'lucide-react';
 import {
   statusOf, clusterOf, clusterGuide, promotionReady, activationReady, PROMO_STREAK, AKT_STREAK,
@@ -73,7 +74,7 @@ export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   }, [word?.de, word?.art]);
 
   /* درخواست فاز ۴ #۱: حرف اضافهٔ خودکار فعل — warten auf (A) / sich entscheiden für (A) */
-  const heroVP = word && isVerbPos(word.pos) ? verbPrepFor(word.de) : null;
+  const heroVP = word && (isVerbPos(word.pos) || hasHeadAnnotation(word.de)) ? verbPrepFor(word.de) : null;
   // پاپ‌اپ تنظیمات واژه (سطح تسلط، رجیستر، خوشهٔ مترادف) — با ستارهٔ نوار آیکون باز می‌شود؛
   // بستنش فقط همین پاپ‌اپ را می‌بندد و پروفایل واژه زیر آن باز می‌ماند
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -553,7 +554,12 @@ const seg = pluralSegments2();
           <div dir="ltr" className="bg-white/95 dark:bg-[#141923]/95 backdrop-blur-md text-slate-900 dark:text-slate-100 px-3 py-2 flex items-center justify-between gap-2 border-b border-[#dde1ea] dark:border-[#333b4a] shadow-md">
             <div className="flex items-center gap-2 min-w-0">
               {articleBadge()}
-              <span className="font-extrabold font-serif text-base md:text-lg truncate">{word.de}</span>
+              {heroVP ? (
+                /* فعل با سرِ پسونددار در نوار چسبان هم استایل‌دار رندر می‌شود */
+                <VerbPhrase vp={heroVP} className="text-base md:text-lg text-slate-900 dark:text-slate-100" />
+              ) : (
+                <span className="font-extrabold font-serif text-base md:text-lg truncate">{word.de}</span>
+              )}
             </div>
             {showFa && word.fa && (
               <div className="flex items-center min-w-0">
