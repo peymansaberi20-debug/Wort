@@ -88,6 +88,7 @@ export function getGermanVoicesAsync(
 }
 
 export function stopSpeaking(): void {
+  speakGeneration++;
   stopAllAudio();
   const synth = getSpeechSynthesis();
   if (!synth) return;
@@ -101,6 +102,13 @@ export function stopSpeaking(): void {
 
 /** Worker address for cloud TTS (set in Settings); cached per session. */
 let ttsWorkerBase: string | null | undefined;
+
+/**
+ * شمارندهٔ نسل پخش: هر بار stopSpeaking یا speak جدید، زنجیرهٔ onEndِ پخش قبلی باطل می‌شود
+ * تا مثالِ کارت قبلی هنگام رفتن به کارت بعدی به‌اشتباه پخش نشود.
+ */
+let speakGeneration = 0;
+
 export function getTtsWorkerBase(): string | null {
   if (ttsWorkerBase !== undefined) return ttsWorkerBase;
   try { ttsWorkerBase = (localStorage.getItem('wort.ttsWorker') || '').trim().replace(/\/+$/, '') || null; }
@@ -141,12 +149,19 @@ export async function speak(
   const forceBrowser =
     typeof options === 'object' && options !== null && options.forceBrowser === true;
 
+  // هر پخش جدید نسل قبلی را باطل می‌کند (زنجیرهٔ onEnd پخش پیشین دیگر اجرا نمی‌شود)
+  speakGeneration++;
+
   // Cloud first: if a worker is configured, prefer the high-quality mp3 (works identically on iOS).
   // Skipped when the caller explicitly wants the browser voice.
   if (!forceBrowser && getTtsWorkerBase()) {
     const optsCloud: SpeakOptions = typeof options === 'object' && options !== null ? options : {};
     stopSpeaking();
-    if (speakCloud(text, optsCloud)) return;
+    const gen = speakGeneration;
+    const cloudOpts: SpeakOptions = optsCloud.onEnd
+      ? { ...optsCloud, onEnd: () => { if (gen === speakGeneration) optsCloud.onEnd!(); } }
+      : optsCloud;
+    if (speakCloud(text, cloudOpts)) return;
     // cloud failed → fall through to browser TTS below
   }
 
@@ -176,6 +191,9 @@ export async function speak(
 
     // Do not interrupt a newer utterance while waiting for voices.
     synth.cancel();
+
+    // نسل این پخش — اگر تا لحظهٔ پایان، stopSpeaking یا پخش تازه‌ای بیاید، onEnd اجرا نمی‌شود
+    const gen = speakGeneration;
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = opts.vreg || 'de-DE';
@@ -213,7 +231,7 @@ export async function speak(
     }
 
     if (opts.onEnd) {
-      utterance.onend = opts.onEnd;
+      utterance.onend = () => { if (gen === speakGeneration) opts.onEnd!(); };
     }
 
     utterance.onerror = event => {
