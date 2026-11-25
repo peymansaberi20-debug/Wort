@@ -1081,28 +1081,43 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     if (!currentItem) return;
 
     const defaultDir = settings?.dir || 'de';
+    // جهت کارتِ جدید یک‌بار همین‌جا محاسبه می‌شود — خواندنِ خودکار باید بر اساس همین مقدار تازه باشد،
+    // نه مقدار قدیمیِ currentCardDir (که مالِ کارت قبلی است و باعث پخش روی کارت فارسی می‌شد)
+    let nextCardDir: 'de' | 'fa' = 'de';
     if (hardFlashDir) {
-      setCurrentCardDir(hardFlashDir);
+      nextCardDir = hardFlashDir;
     } else if (activeMode === 'free') {
-      setCurrentCardDir(freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir);
+      nextCardDir = freeRnd ? (Math.random() > 0.5 ? 'de' : 'fa') : freeDir;
     } else if (defaultDir === 'rand') {
-      setCurrentCardDir(Math.random() > 0.5 ? 'de' : 'fa');
+      nextCardDir = Math.random() > 0.5 ? 'de' : 'fa';
     } else if (activeMode === 'flash') {
-      setCurrentCardDir(flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir);
+      nextCardDir = flashDir === 'rand' ? (Math.random() > 0.5 ? 'de' : 'fa') : flashDir;
     } else {
-      setCurrentCardDir(defaultDir);
+      nextCardDir = defaultDir;
     }
+    setCurrentCardDir(nextCardDir);
 
     setRevealedCardId(null);
 
-    const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review';
+    const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily';
 
-    if (isFlashType && settings?.auto && currentCardDir === 'de' && revealedCardId !== currentItem.id) {
+    // فقط وقتی رویِ کارت آلمانی است خودکار خوانده می‌شود؛ روی کارت فارسی هیچ‌چیز پخش نمی‌شود تا جواب لو نرود.
+    // واژه در لحظهٔ باز شدن خوانده می‌شود و بلافاصله پس از آن (در صورت فعال بودن) مثال هم خوانده می‌شود.
+    if (isFlashType && (settings?.auto || settings?.autoEx) && nextCardDir === 'de' && revealedCardId !== currentItem.id) {
       const w = currentItem as Word;
       speak(fullWord(w), {
-        rate: settings.rate,
-        vreg: settings.vreg,
-        voiceName: settings.voice
+        rate: settings?.rate,
+        vreg: settings?.vreg,
+        voiceName: settings?.voice,
+        onEnd: () => {
+          if (settings?.autoEx && w.ex) {
+            speak(w.ex, {
+              rate: settings.rate,
+              vreg: settings.vreg,
+              voiceName: settings.voice
+            });
+          }
+        }
       });
     }
 
@@ -1201,7 +1216,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     if (timerRef.current) clearInterval(timerRef.current);
 
     const w = currentItem as Word;
-    if ((settings?.auto || settings?.autoEx) && currentCardDir === 'de') {
+    // در جهت آلمانی→فارسی، واژه همان لحظهٔ باز شدن کارت خوانده شده است؛ چرخاندن فقط ترجمهٔ فارسی را نشان می‌دهد و دوباره پخش نمی‌شود.
+    // در جهت فارسی→آلمانی، روی کارت فارسی است و با چرخاندن سمت آلمانی بالا می‌آید — همین‌جا واژه (و بعدش مثال) خوانده می‌شود.
+    if ((settings?.auto || settings?.autoEx) && currentCardDir === 'fa') {
       stopSpeaking();
       speak(fullWord(w), {
         rate: settings?.rate,
@@ -1411,7 +1428,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   timeUpRef.current = () => {
     if (!currentItem) return;
     if (qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily') {
-      setRevealedCardId(currentItem.id);
+      // با پایان زمان، کارت مثل زدن دستی برمی‌گردد تا در جهت فارسی→آلمانی هم واژه خوانده شود
+      handleRevealCard();
     } else if (qMode === 'sent') {
       setSentTimeUp(n => n + 1);
     } else if (isSelfContainedMode(qMode)) {
