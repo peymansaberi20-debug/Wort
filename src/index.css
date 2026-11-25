@@ -134,3 +134,12 @@ body.green-tint::before {
 .embed-host > .fixed > div { max-width: 100% !important; max-height: none !important; width: 100% !important; margin: 0 !important; }
 .embed-host .sticky { position: static !important; }
 
+/* ===== حالت دستوری فعل (+A/+D/+G): رنگ حرف + زیرخط هم‌رنگ — درخواست کاربر ===== */
+/* اکوزاتیو نارنجی، داتیو سبز پررنگ، گنتیو آبی بین فیروزه‌ای (#06b6d4) و آسمانی (#38bdf8) */
+.vp-case-a { color: #f97316; text-decoration: underline; text-decoration-color: #f97316; text-decoration-thickness: 0.14em; text-underline-offset: 0.18em; }
+.vp-case-d { color: #15803d; text-decoration: underline; text-decoration-color: #15803d; text-decoration-thickness: 0.14em; text-underline-offset: 0.18em; }
+.vp-case-g { color: #1fb9e6; text-decoration: underline; text-decoration-color: #1fb9e6; text-decoration-thickness: 0.14em; text-underline-offset: 0.18em; }
+[data-theme=dark] .vp-case-a, .dark .vp-case-a { color: #fb923c; text-decoration-color: #fb923c; }
+[data-theme=dark] .vp-case-d, .dark .vp-case-d { color: #4ade80; text-decoration-color: #4ade80; }
+[data-theme=dark] .vp-case-g, .dark .vp-case-g { color: #38bdf8; text-decoration-color: #38bdf8; }
+
