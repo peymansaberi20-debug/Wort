@@ -11,7 +11,8 @@
  *  - تصحیح فوری: سبز/قرمز، نمایش پاسخ درست زیر پاسخ غلطِ خط‌خورده، پاک‌کردن تک‌جای خالی.
  *  - ترجمهٔ فارسی کل متن با همان دستور اول ساخته می‌شود و فقط بعد از «تصحیح» نمایش داده می‌شود.
  *  - 💬 چت با معلم دربارهٔ همین متن (با حافظهٔ گفتگو) — ذخیره‌شده در آرشیو.
- *  - 🗂 آرشیو یکدست (مثل بقیهٔ تمرین‌ها): فهرست جمع‌شونده + اجرا + حذف با تأییدیه.
+ *  - 🗂 آرشیو یکدست «تمرین‌های ذخیره‌شده»: فهرست جمع‌شونده + اجرا + آزمون دوباره + حذف با تأییدیه.
+ *  - 🪟 خودِ تمرین در پنجرهٔ تمام‌صفحه باز می‌شود؛ تصحیح و چت با معلم زیر متن؛ با ✕ بازگشت به همین صفحه.
  *  - 🖨 چاپ دو صفحه‌ای سازگار با iOS Safari: صفحهٔ ۱ تمرین + استخر کلمات، صفحهٔ ۲ پاسخنامه.
  *
  * پل هوش مصنوعی: کلید و مدل از تنظیمات برنامه (src/utils/aiProvider) می‌آید — بدون کلید،
@@ -75,7 +76,7 @@ const DEFAULT_EXERCISES: KonnektorItem[] = [
 
 const askJsonAI = async (prompt: string): Promise<string> => generateText(prompt, { json: true, timeoutMs: 90000, retries: 1 });
 const askChatAI = async (prompt: string): Promise<string> => generateText(prompt, { timeoutMs: 60000, retries: 1 });
-const aiErr = (e: unknown): string => { try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به هوش مصنوعی.'; } };
+const aiErr = (e: unknown): string => { try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به معلم.'; } };
 const hasAIKey = (): boolean => { try { return !!hasApiKey(); } catch { return false; } };
 
 /** پاسخ AI → JSON حتی وقتی ```json یا متن اضافه دارد */
@@ -148,6 +149,8 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
   const [checked, setChecked] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  /** پنجرهٔ تمام‌صفحهٔ تمرین — متن + تصحیح + چت با معلم (درخواست کاربر) */
+  const [exOpen, setExOpen] = useState(false);
   const { ask, dialog } = useConfirm();
 
   // پیکربندی ساخت تمرین جدید
@@ -185,7 +188,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
   const handleGenerateNew = async () => {
     if (generating) return;
     if (!hasAIKey()) {
-      onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات کلید را وارد و ذخیره کن.', true);
+      onShowToast('معلم در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات کلید را وارد و ذخیره کن.', true);
       return;
     }
     setGenerating(true);
@@ -238,6 +241,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
       const updated = [newItem, ...exercises];
       saveArchive(updated);
       setCurrentId(newItem.id);
+      setExOpen(true); // تمرین تازه در پنجرهٔ تمام‌صفحه باز می‌شود
       onShowToast(`تمرین جدید با ${blankMatches.length} جای خالی ساخته شد ✓`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '';
@@ -260,7 +264,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
     const q = text.trim();
     if (!q) return;
     if (!hasAIKey()) {
-      onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات کلید را وارد و ذخیره کن.', true);
+      onShowToast('معلم در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات کلید را وارد و ذخیره کن.', true);
       return;
     }
     const hist0 = currentEx.chats || [];
@@ -292,6 +296,21 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
     if (selectedWord) {
       handleDrop(blankId, selectedWord);
     }
+  };
+
+  /** باز کردن تمرین در پنجرهٔ تمام‌صفحه (ادامهٔ همان وضعیت) */
+  const openExercise = (id: string) => {
+    setCurrentId(id);
+    setExOpen(true);
+  };
+
+  /** آزمون دوباره: همان تمرین، بدون پاسخ و سفید از اول (مثل «حرف ربط انتخابی») */
+  const retakeExercise = (ex: KonnektorItem) => {
+    setCurrentId(ex.id);
+    setUserAnswers({});
+    setChecked(false);
+    setChatOpen(false);
+    setExOpen(true);
   };
 
   // تفکیک متن و جای‌گذاری باکس‌ها
@@ -329,7 +348,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
                 onClick={() => handleBlankClick(blankId)}
                 onDragOver={e => e.preventDefault()}
                 onDrop={() => draggedWord && handleDrop(blankId, draggedWord)}
-                className={`inline-flex items-center justify-center min-w-[90px] h-9 mx-1 px-3 rounded-xl border-2 font-bold text-base cursor-pointer transition align-middle ${
+                className={`inline-flex items-center justify-center min-w-[96px] h-10 mx-1 px-3 rounded-xl border-2 font-bold text-base cursor-pointer transition align-middle ${
                   checked
                     ? isCorrect
                       ? 'bg-emerald-100 border-emerald-500 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200'
@@ -359,7 +378,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
                     e.stopPropagation();
                     setUserAnswers(prev => { const n = { ...prev }; delete n[blankId]; return n; });
                   }}
-                  className="text-xs text-red-500 hover:text-red-700 font-bold mr-1"
+                  className="text-sm text-red-500 hover:text-red-700 font-bold mr-1"
                   title="پاک کردن این پاسخ"
                 >
                   ✕
@@ -453,7 +472,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
         </Section>
 
         <Section n="۲" label="تعداد جای خالی">
-          <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} unit="جای خالی" />
+          <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} />
         </Section>
 
         <Section n="۳" label="موضوع (اختیاری)">
@@ -463,154 +482,10 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
         <PrimaryBtn onClick={handleGenerateNew} busy={generating} busyLabel="⏳ در حال ساخت…" label="🚀 ساخت تمرین" />
       </div>
 
-      {/* تمرین جاری — جای‌گذاری کلمات */}
-      <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">📝 {currentEx.title}</span>
-          <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-blue-300 rounded-full px-2 py-0.5 flex-shrink-0">
-            سطح {currentEx.level || 'B1'}
-          </span>
-        </div>
-
-        {/* جعبه کلمات (Pool) برای کشیدن یا کلیک */}
-        <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 space-y-2">
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]">
-            کلمات پیشنهادی (برای جای‌گذاری بکشید یا روی کلمه و سپس جای خالی کلیک کنید):
-          </div>
-          <div className="flex flex-wrap gap-2" dir="ltr">
-            {currentEx.pool.map((word, i) => {
-              const isSelected = selectedWord === word;
-              return (
-                <div
-                  key={i}
-                  draggable
-                  onDragStart={() => setDraggedWord(word)}
-                  onClick={() => setSelectedWord(isSelected ? null : word)}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold text-sm cursor-grab active:cursor-grabbing transition shadow-xs ${
-                    isSelected
-                      ? 'bg-[#1f5fbf] text-white ring-2 ring-blue-300'
-                      : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-[#1f5fbf]'
-                  }`}
-                >
-                  {word}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* متن تمرین — LTR واقعی برای آلمانی */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#1b2029] border border-slate-200 dark:border-slate-800" dir="ltr" style={{ textAlign: 'left' }}>
-          {renderInteractiveText()}
-        </div>
-
-        {/* ترجمهٔ فارسی متن — با همان دستور اول ساخته شده و فقط بعد از تصحیح نمایش داده می‌شود */}
-        {checked && currentEx.fa && (
-          <div className="rounded-xl px-3 py-2.5 text-sm bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7">
-            🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}
-          </div>
-        )}
-
-        {/* دکمه تصحیح */}
-        <div className="flex gap-2 pt-1">
-          {!checked ? (
-            <button
-              onClick={() => setChecked(true)}
-              className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-2.5 rounded-xl text-sm font-bold shadow-md"
-            >
-              تصحیح پاسخ‌ها 🔍
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setChecked(false);
-                setUserAnswers({});
-              }}
-              className="flex-1 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-2.5 rounded-xl text-sm font-bold"
-            >
-              🔄 تلاش مجدد
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 💬 چت با معلم دربارهٔ همین متن — گفتگوها در آرشیو ذخیره می‌شوند */}
-      <div className="konn-interactive rounded-2xl border border-[#1f5fbf]/40 bg-blue-50/40 dark:bg-blue-950/20 dark:border-[#7fb0ff]/30 p-3 space-y-2" dir="rtl">
-        <button onClick={() => setChatOpen(o => !o)} className="w-full flex items-center justify-between text-sm font-bold">
-          <span>💬 چت با معلم دربارهٔ این متن{chatMsgs.length ? ` (${toFa(chatMsgs.length)})` : ''}</span>
-          <span className="text-[#5d6676]">{chatOpen ? '▲' : '▼'}</span>
-        </button>
-        {chatOpen && (
-          <>
-            <div ref={chatEndRef} className="max-h-64 overflow-y-auto space-y-2">
-              {chatMsgs.length === 0 && (
-                <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] leading-5">
-                  دربارهٔ حروف ربط این متن هر سؤالی داری بپرس — مثلاً «چرا جای خالی (۳) این‌طور است؟» — معلم متن کامل و پاسخ‌ها را می‌بیند.
-                </p>
-              )}
-              {chatMsgs.map((m, i) => (
-                <div
-                  key={i}
-                  className={`text-xs leading-6 rounded-lg px-2.5 py-1.5 max-w-[88%] ${m.role === 'user'
-                    ? 'bg-[#1f5fbf] text-white ml-auto'
-                    : 'bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]'}`}
-                  style={{ whiteSpace: 'pre-wrap' }}
-                >
-                  {m.text}
-                </div>
-              ))}
-              {chatBusy && <div className="text-[11px] text-[#5d6676] animate-pulse">هوش مصنوعی دارد می‌نویسد…</div>}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {QUICK_QS.map(q => (
-                <button
-                  key={q}
-                  onClick={() => sendChat(q)}
-                  disabled={chatBusy}
-                  className="text-[10px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-full px-2 py-0.5 transition disabled:opacity-40"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <input
-                value={chatDraft}
-                onChange={e => setChatDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') sendChat(chatDraft); }}
-                placeholder="دربارهٔ همین متن بپرس…"
-                className="flex-1 min-w-0 border-2 border-[#1f5fbf]/50 dark:border-[#7fb0ff]/40 rounded-lg px-3 py-2 text-base bg-white dark:bg-[#141923] outline-none"
-              />
-              <button
-                onClick={() => sendChat(chatDraft)}
-                disabled={chatBusy || !chatDraft.trim()}
-                className="w-10 h-10 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
-                aria-label="ارسال"
-              >
-                ↑
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* 🖨️ چاپ — فقط در پایان تمرین (بعد از تصحیح) طبق درخواست کاربر */}
-      {checked && (
-        <div className="konn-interactive">
-          <button
-            onClick={() => setPrintOpen(true)}
-            className="w-full bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white py-3 rounded-xl text-sm font-bold shadow-md"
-            title="پیش‌نمایش چاپ — صفحهٔ ۱ سؤال، صفحهٔ ۲ پاسخنامه"
-          >
-            🖨️ چاپ تمرین + پاسخنامه
-          </button>
-        </div>
-      )}
-
-      {/* 🗂 آرشیو یکدست (مثل بقیهٔ تمرین‌ها) — اجرا + حذف با تأییدیه */}
+      {/* 🗂 آرشیو یکدست (مثل بقیهٔ تمرین‌ها) — اجرا + آزمون دوباره + حذف با تأییدیه */}
       <div className="konn-interactive">
         <ArchivePanel
-          title="آرشیو تمرین‌های ساخته‌شده"
+          title="تمرین‌های ذخیره‌شده"
           count={exercises.length}
           emptyText="تمرینی ذخیره نشده است."
           footer={exercises.length > 0 ? (
@@ -619,9 +494,10 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
                 if (await ask('پاک کردن کل آرشیو', `همهٔ ${exercises.length} تمرین ذخیره‌شده برای همیشه حذف می‌شوند. مطمئن هستی؟`)) {
                   saveArchive(DEFAULT_EXERCISES);
                   setCurrentId(DEFAULT_EXERCISES[0].id);
+                  setExOpen(false);
                 }
               }}
-              className="text-[11px] text-red-500 px-2 py-1"
+              className="text-xs text-red-500 px-2 py-1"
             >
               پاک کردن کل آرشیو (بازگشت به تمرین نمونه)
             </button>
@@ -638,7 +514,8 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
                 {ex.chats && ex.chats.length > 0 && <MiniChip tone="blue">💬 {toFa(ex.chats.length)}</MiniChip>}
               </>}
             >
-              <SqBtn onClick={() => setCurrentId(ex.id)} title="اجرای این تمرین">▶</SqBtn>
+              <SqBtn onClick={() => openExercise(ex.id)} title="اجرای این تمرین">▶</SqBtn>
+              <SqBtn tone="green" onClick={() => retakeExercise(ex)} title="آزمون دوباره (همان تمرین، بدون پاسخ)">🔁</SqBtn>
               <SqBtn
                 tone="red"
                 onClick={async () => {
@@ -659,7 +536,161 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
       {printPreview}
 
       {dialog}
-      {dialog}
+
+      {/* 🪟 پنجرهٔ تمام‌صفحهٔ تمرین — متن جای‌خالی + تصحیح + چت با معلم، همه زیر هم (درخواست کاربر).
+          با «✕» بسته می‌شود و برمی‌گردی به همین صفحهٔ تمرین‌های ذخیره‌شده؛ پاسخ‌ها می‌مانند.
+          Portal نیست و داخل لایهٔ keep-alive می‌ماند تا با جابجایی تب‌ها هم پنهان شود. */}
+      {exOpen && (
+        <div className="fixed inset-0 z-[1000] overflow-y-auto bg-[#f6f7fb] dark:bg-[#12151c] text-[#1d2330] dark:text-[#eef1f6] font-sans" dir="rtl">
+          <div className="sticky top-0 z-10 bg-gradient-to-l from-[#6b4fd8] via-[#4a5ac9] to-[#1f5fbf] text-white shadow-lg flex items-center gap-3 px-3 h-14">
+            <span className="text-2xl">📝</span>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-extrabold text-base truncate">{currentEx.title}</h1>
+              <p className="text-[11px] text-white/75 truncate">سطح {currentEx.level || 'B1'} · {toFa(currentEx.blanks.length)} جای خالی{currentEx.topic ? ` · ${currentEx.topic}` : ''}</p>
+            </div>
+            <button onClick={() => setExOpen(false)} aria-label="بازگشت" title="بازگشت به تمرین‌های ذخیره‌شده" className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 text-xl flex items-center justify-center flex-shrink-0">✕</button>
+          </div>
+
+          <div className="max-w-3xl mx-auto p-3 md:p-5 pb-24 space-y-3">
+            {/* تمرین جاری — جای‌گذاری کلمات */}
+            <div className="konn-interactive bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs space-y-3">
+              {/* جعبه کلمات (Pool) برای کشیدن یا کلیک */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="text-[13px] font-bold text-[#5d6676] dark:text-[#a3adbd]">
+                  کلمات پیشنهادی (برای جای‌گذاری بکشید یا روی کلمه و سپس جای خالی کلیک کنید):
+                </div>
+                <div className="flex flex-wrap gap-2" dir="ltr">
+                  {currentEx.pool.map((word, i) => {
+                    const isSelected = selectedWord === word;
+                    return (
+                      <div
+                        key={i}
+                        draggable
+                        onDragStart={() => setDraggedWord(word)}
+                        onClick={() => setSelectedWord(isSelected ? null : word)}
+                        className={`px-4 py-2 rounded-xl font-bold text-base cursor-grab active:cursor-grabbing transition shadow-xs ${
+                          isSelected
+                            ? 'bg-[#1f5fbf] text-white ring-2 ring-blue-300'
+                            : 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-100 hover:border-[#1f5fbf]'
+                        }`}
+                      >
+                        {word}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* متن تمرین — LTR واقعی برای آلمانی */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#1b2029] border border-slate-200 dark:border-slate-800" dir="ltr" style={{ textAlign: 'left' }}>
+                {renderInteractiveText()}
+              </div>
+
+              {/* ترجمهٔ فارسی متن — با همان دستور اول ساخته شده و فقط بعد از تصحیح نمایش داده می‌شود */}
+              {checked && currentEx.fa && (
+                <div className="rounded-xl px-3 py-2.5 text-[15px] bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7">
+                  🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}
+                </div>
+              )}
+
+              {/* دکمه تصحیح */}
+              <div className="flex gap-2 pt-1">
+                {!checked ? (
+                  <button
+                    onClick={() => setChecked(true)}
+                    className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-3 rounded-xl text-base font-bold shadow-md"
+                  >
+                    تصحیح پاسخ‌ها 🔍
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setChecked(false);
+                      setUserAnswers({});
+                    }}
+                    className="flex-1 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-3 rounded-xl text-base font-bold"
+                  >
+                    🔄 تلاش مجدد
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 💬 چت با معلم دربارهٔ همین متن — گفتگوها در آرشیو ذخیره می‌شوند */}
+            <div className="konn-interactive rounded-2xl border border-[#1f5fbf]/40 bg-blue-50/40 dark:bg-blue-950/20 dark:border-[#7fb0ff]/30 p-3 space-y-2" dir="rtl">
+              <button onClick={() => setChatOpen(o => !o)} className="w-full flex items-center justify-between text-[15px] font-bold">
+                <span>💬 چت با معلم دربارهٔ این متن{chatMsgs.length ? ` (${toFa(chatMsgs.length)})` : ''}</span>
+                <span className="text-[#5d6676]">{chatOpen ? '▲' : '▼'}</span>
+              </button>
+              {chatOpen && (
+                <>
+                  <div ref={chatEndRef} className="max-h-64 overflow-y-auto space-y-2">
+                    {chatMsgs.length === 0 && (
+                      <p className="text-xs text-[#5d6676] dark:text-[#a3adbd] leading-6">
+                        دربارهٔ حروف ربط این متن هر سؤالی داری بپرس — مثلاً «چرا جای خالی (۳) این‌طور است؟» — معلم متن کامل و پاسخ‌ها را می‌بیند.
+                      </p>
+                    )}
+                    {chatMsgs.map((m, i) => (
+                      <div
+                        key={i}
+                        className={`text-[13px] leading-6 rounded-lg px-2.5 py-1.5 max-w-[88%] ${m.role === 'user'
+                          ? 'bg-[#1f5fbf] text-white ml-auto'
+                          : 'bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]'}`}
+                        style={{ whiteSpace: 'pre-wrap' }}
+                      >
+                        {m.text}
+                      </div>
+                    ))}
+                    {chatBusy && <div className="text-xs text-[#5d6676] animate-pulse">معلم دارد می‌نویسد…</div>}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {QUICK_QS.map(q => (
+                      <button
+                        key={q}
+                        onClick={() => sendChat(q)}
+                        disabled={chatBusy}
+                        className="text-xs bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-full px-3 py-1.5 transition disabled:opacity-40"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      value={chatDraft}
+                      onChange={e => setChatDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') sendChat(chatDraft); }}
+                      placeholder="دربارهٔ همین متن بپرس…"
+                      className="flex-1 min-w-0 border-2 border-[#1f5fbf]/50 dark:border-[#7fb0ff]/40 rounded-lg px-3 py-2 text-base bg-white dark:bg-[#141923] outline-none"
+                    />
+                    <button
+                      onClick={() => sendChat(chatDraft)}
+                      disabled={chatBusy || !chatDraft.trim()}
+                      className="w-11 h-11 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                      aria-label="ارسال"
+                    >
+                      ↑
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 🖨 چاپ — فقط در پایان تمرین (بعد از تصحیح) طبق درخواست کاربر */}
+            {checked && (
+              <div className="konn-interactive">
+                <button
+                  onClick={() => setPrintOpen(true)}
+                  className="w-full bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white py-3 rounded-xl text-base font-bold shadow-md"
+                  title="پیش‌نمایش چاپ — صفحهٔ ۱ سؤال، صفحهٔ ۲ پاسخنامه"
+                >
+                  🖨 چاپ / PDF
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

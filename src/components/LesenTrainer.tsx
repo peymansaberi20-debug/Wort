@@ -8,8 +8,9 @@ import { speak, stopSpeaking } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { ARCHIVE_LESEN, ExamRun, RESULTS_LESEN, S, askJson, loadList, saveList, useNoHelp } from '../utils/trainerKit';
 import { ClickableText, WordLookupModal } from './WordLookup';
+import { LevelChips } from './trainerUI';
 import type { Word } from '../types';
-import { Clock, Printer, Volume2, Square, Eye, EyeOff, Lightbulb, PauseCircle } from 'lucide-react';
+import { Clock, Volume2, Square, Eye, EyeOff, Lightbulb, PauseCircle } from 'lucide-react';
 
 interface LesenTrainerProps {
   onClose: () => void;
@@ -223,20 +224,20 @@ Return ONLY a valid JSON object (no markdown, no extra text):
               <span className="text-3xl">✨</span>
               <div>
                 <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">ساخت تمرین جدید (Lesen)</h3>
-                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">تولید آزمون‌های استاندارد درک مطلب با هوش مصنوعی و قابلیت Hör-Lesen</p>
+                <p className="text-[13px] text-[#5d6676] dark:text-[#a3adbd]">تولید آزمون‌های استاندارد درک مطلب با معلم و قابلیت Hör-Lesen</p>
               </div>
             </div>
             <button onClick={() => setView('creator')} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs">شروع ساخت ▶</button>
           </div>
           <div className={`${card} rounded-2xl p-4 flex items-center justify-between shadow-xs`}>
             <div className="flex items-center gap-3">
-              <span className="text-3xl">📂</span>
+              <span className="text-3xl">🗂</span>
               <div>
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">تمرینات قبلی (آرشیو آزمون‌ها)</h3>
-                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">دسترسی به تمام آزمون‌های ساخته‌شده و سوابق مقایسه‌ای</p>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">تمرین‌های ذخیره‌شده</h3>
+                <p className="text-[13px] text-[#5d6676] dark:text-[#a3adbd]">دسترسی به تمام آزمون‌های ساخته‌شده و سوابق مقایسه‌ای</p>
               </div>
             </div>
-            <button onClick={() => setView('archive_levels')} className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs">مشاهده آرشیو ▶</button>
+            <button onClick={() => setView('archive_levels')} className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs">مشاهده ▶</button>
           </div>
         </div>
       )}
@@ -259,10 +260,8 @@ Return ONLY a valid JSON object (no markdown, no extra text):
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1.5">انتخاب سطح:</label>
-              <select value={examLevel} onChange={e => setExamLevel(e.target.value as any)} className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
-                {availableLevels.map(lvl => <option key={lvl} value={lvl}>سطح {lvl}</option>)}
-              </select>
+              <label className="block text-[13px] font-bold mb-1.5">انتخاب سطح:</label>
+              <LevelChips value={examLevel} onChange={l => setExamLevel(l as any)} levels={availableLevels as unknown as string[]} />
             </div>
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -276,17 +275,21 @@ Return ONLY a valid JSON object (no markdown, no extra text):
       {view === 'archive_levels' && (
         <div className={`${card} rounded-3xl p-6 shadow-sm space-y-4 text-right`}>
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="font-extrabold text-base">انتخاب سطح از آرشیو تمرینات</h2>
-            <button onClick={() => setView('menu')} className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت</button>
+            <h2 className="font-extrabold text-base">🗂 تمرین‌های ذخیره‌شده — انتخاب سطح</h2>
+            <button onClick={() => setView('menu')} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold">بازگشت</button>
           </div>
-          <div className="space-y-2">
-            {['A1', 'A2', 'B1', 'B2', 'C1'].map(lvl => (
-              <button key={lvl} onClick={() => { setSelectedArchiveLevel(lvl); setView('archive_exams'); }}
-                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-800 flex items-center justify-between hover:border-[#1f5fbf] transition">
-                <span className="font-extrabold text-base text-slate-900 dark:text-slate-100">سطح {lvl}</span>
-                <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 text-[#1f5fbf] dark:text-[#7fb0ff] text-xs font-bold">{archiveExams.filter(e => e.level === lvl).length} آزمون آماده</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-5 gap-1.5">
+            {['A1', 'A2', 'B1', 'B2', 'C1'].map(lvl => {
+              const n = archiveExams.filter(e => e.level === lvl).length;
+              return (
+                <button key={lvl} onClick={() => { setSelectedArchiveLevel(lvl); setView('archive_exams'); }}
+                  title={`سطح ${lvl} — ${n} آزمون آماده`}
+                  className={`py-2.5 rounded-xl border transition ${n > 0 ? 'bg-slate-50 dark:bg-[#141923] border-slate-200 dark:border-slate-800 hover:border-[#1f5fbf]' : 'opacity-50 bg-slate-50 dark:bg-[#141923] border-slate-200 dark:border-slate-800'}`}>
+                  <span className="block font-extrabold text-[13px] text-slate-900 dark:text-slate-100">{lvl}</span>
+                  <span className="block text-[10px] text-[#5d6676] dark:text-[#a3adbd] font-bold mt-0.5">{n} آزمون</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -301,12 +304,12 @@ Return ONLY a valid JSON object (no markdown, no extra text):
             {archiveExams.filter(e => e.level === selectedArchiveLevel).length === 0 ? (
               <div className="py-12 text-center text-sm text-[#5d6676]">هیچ آزمونی در این سطح ذخیره نشده است.</div>
             ) : archiveExams.filter(e => e.level === selectedArchiveLevel).map(e => (
-              <div key={e.id} onClick={() => startArchivedExam(e)} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141923] flex items-center justify-between cursor-pointer hover:border-[#1f5fbf] transition">
+              <div key={e.id} onClick={() => startArchivedExam(e)} title="آزمون جدید — بدون پاسخ، آمادهٔ آزمون دادن" className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141923] flex items-center justify-between cursor-pointer hover:border-[#1f5fbf] transition">
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{e.title}</h4>
-                  <span className="text-xs text-[#5d6676]">سازمان: {e.org} • تاریخ ساخت: {e.createdAt}</span>
+                  <h4 className="font-bold text-[15px] text-slate-900 dark:text-slate-100">{e.title}</h4>
+                  <span className="text-[13px] text-[#5d6676]">سازمان: {e.org} • تاریخ ساخت: {e.createdAt}</span>
                 </div>
-                <span className="bg-[#1f5fbf] text-white px-4 py-2 rounded-xl text-xs font-bold">شروع آزمون ▶</span>
+                <span className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap">آزمون جدید ▶</span>
               </div>
             ))}
           </div>
@@ -430,7 +433,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         <div className={`${card} rounded-3xl p-6 shadow-sm space-y-6 text-right print:bg-white print:text-black`}>
           <div className="flex items-center justify-between print:hidden">
             <button onClick={() => setView('menu')} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت به منو</button>
-            <button onClick={() => window.print()} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1.5"><Printer size={16} /> چاپ کارنامه (PDF / iOS)</button>
+            <button onClick={() => window.print()} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1.5">🖨 چاپ / PDF</button>
           </div>
           <div className="text-center space-y-2 border-b border-slate-100 dark:border-slate-800 pb-5">
             <span className="text-4xl block">🎓</span>

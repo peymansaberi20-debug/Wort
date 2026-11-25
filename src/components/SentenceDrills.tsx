@@ -66,7 +66,7 @@ export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast }) => {
 
   /** ساخت جمله‌های هم‌سطح با هوش مصنوعی (سطح + تعداد از پیکربندی) */
   const startAi = async () => {
-    if (!hasApiKey()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
+    if (!hasApiKey()) { onShowToast('معلم در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
     setBusy(true);
     try {
       const prompt = `Du bist ein erfahrener Deutschlehrer (Niveau ${level}).
@@ -88,7 +88,7 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
         .filter((x: any) => x && typeof x.de === 'string' && x.de.trim().split(/\s+/).length >= 4)
         .map((x: any) => ({ de: String(x.de).trim(), fa: String(x.fa || '').trim(), src: 'ai' as const }))
         .slice(0, count);
-      if (!items.length) throw new Error('پاسخ هوش مصنوعی ساختار معتبر نداشت — دوباره تلاش کن.');
+      if (!items.length) throw new Error('پاسخ معلم ساختار معتبر نداشت — دوباره تلاش کن.');
       setQueue(items); setScore(0); setDone(false); setIdx(0);
       setBank(scramble(items[0].de)); setAns([]); setRes(null);
       setScreen('run');
@@ -118,11 +118,11 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setMode('own')} disabled={ownPool.length < 3} className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition disabled:opacity-40 ${mode === 'own' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>
                 📚 جمله‌های خودت
-                <span className="block text-[10px] font-medium mt-0.5 opacity-80">از مثال‌های واژگان ({toFa(ownPool.length)})</span>
+                <span className="block text-[11px] font-medium mt-0.5 opacity-80">از مثال‌های واژگان ({toFa(ownPool.length)})</span>
               </button>
               <button onClick={() => setMode('ai')} className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition ${mode === 'ai' ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>
-                🤖 ساخت با هوش مصنوعی
-                <span className="block text-[10px] font-medium mt-0.5 opacity-80">جمله‌های تازهٔ هم‌سطح</span>
+                🎓 ساخت با معلم
+                <span className="block text-[11px] font-medium mt-0.5 opacity-80">جمله‌های تازهٔ هم‌سطح</span>
               </button>
             </div>
           </Section>
@@ -133,21 +133,21 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
                 <LevelChips value={level} onChange={l => setLevel(l as Lvl)} levels={LVL_ORDER as unknown as string[]} />
               </Section>
               <Section n="۳" label="تعداد جمله‌ها">
-                <CountChips value={count} onChange={setCount} counts={[5, 8, 10]} unit="جمله" />
+                <CountChips value={count} onChange={setCount} counts={[5, 8, 10]} />
               </Section>
             </>
           )}
 
           {mode === 'own' && ownPool.length < 3 && (
             <p className="text-xs text-amber-700 dark:text-amber-300 leading-6">
-              برای این حالت به جمله‌های مثال نیاز است. در واژگانت چند واژه با «مثال» (ex) داشته باش، یا «ساخت با هوش مصنوعی» را انتخاب کن.
+              برای این حالت به جمله‌های مثال نیاز است. در واژگانت چند واژه با «مثال» (ex) داشته باش، یا «ساخت با معلم» را انتخاب کن.
             </p>
           )}
 
           <PrimaryBtn
             onClick={() => { if (mode === 'own') startOwn(); else void startAi(); }}
             busy={busy}
-            busyLabel="⏳ هوش مصنوعی دارد جمله‌ها را می‌سازد…"
+            busyLabel="⏳ معلم دارد جمله‌ها را می‌سازد…"
             label={mode === 'own' ? '▶️ شروع تمرین' : '🚀 ساخت تمرین'}
             disabled={mode === 'own' && ownPool.length < 3}
           />

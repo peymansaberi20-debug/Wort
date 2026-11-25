@@ -65,7 +65,7 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
     try {
       const out = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
       const r: any = parseAI(out)[0] || {};
-      if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
+      if (typeof r.score !== 'number') throw new Error('پاسخ نامعتبر از معلم دریافت شد.');
       setReport({
         user_fa: String(r.user_fa || ''),
         understood_fa: String(r.understood_fa || ''),
@@ -78,7 +78,7 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
         tip_fa: String(r.tip_fa || '')
       });
     } catch (e: any) {
-      setErrMsg(e?.message || 'تصحیح با هوش مصنوعی ناموفق بود.');
+      setErrMsg(e?.message || 'تصحیح با معلم ناموفق بود.');
       onShowToast(e?.message || 'تصحیح ناموفق بود.', true);
     } finally { setBusy(false); }
   };
@@ -119,7 +119,7 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
           disabled={busy || !text.trim()}
           className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-1.5"
         >
-          {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال تصحیح…</span></> : <span>🤖 تصحیح و نمره‌دهی</span>}
+          {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال تصحیح…</span></> : <span>🎓 تصحیح و نمره‌دهی</span>}
         </button>
         {report && (
           <button onClick={() => { setReport(null); setText(''); setChat([]); setChatQ(''); }} className="border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold">

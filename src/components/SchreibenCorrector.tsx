@@ -928,7 +928,7 @@ Return ONLY a valid JSON array with one object:
         {(!isExamMode || promptData) && (
           <button onClick={() => void runCheck()} disabled={busy || (!text.trim() && images.length === 0)}
             className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 shadow-md transition">
-            {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال بررسی و تصحیح…</span></> : <span>{exam ? 'ثبت متن و ادامه ✓' : '🤖 تصحیح با هوش مصنوعی'}</span>}
+            {busy ? <><span className="inline-block animate-spin">⏳</span><span>در حال بررسی و تصحیح…</span></> : <span>{exam ? 'ثبت متن و ادامه ✓' : '🎓 تصحیح با معلم'}</span>}
           </button>
         )}
         {!exam && (report || images.length > 0 || text.trim()) && (

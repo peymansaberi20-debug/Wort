@@ -31,7 +31,7 @@ const askGeminiChat = async (prompt: string, system?: string): Promise<string> =
   generateText((system ? system + '\n\n' : '') + prompt, { timeoutMs: 60000, retries: 1 });
 
 const aiErrorText = (e: unknown): string => {
-  try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به هوش مصنوعی.'; }
+  try { return describeAiError(e); } catch { return 'خطای نامشخص در اتصال به معلم.'; }
 };
 
 const hasAIKey = (): boolean => { try { return !!hasApiKey(); } catch { return false; } };
@@ -144,7 +144,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
 
   // ────────── ساخت تمرین با هوش مصنوعی ──────────
   const generate = async () => {
-    if (!hasAIKey()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
+    if (!hasAIKey()) { onShowToast('معلم در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
     setGenerating(true);
     try {
       // اگر کاربر حرف ربط انتخاب کرده باشد فقط با همان‌ها ساخته می‌شود؛ وگرنه حروف ربطِ سطح
@@ -257,7 +257,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     if (cached) { setWCard({ word: token, sentence, info: cached, loading: false }); return; }
     setWCard({ word: token, sentence, info: null, loading: true });
     if (!hasAIKey()) {
-      setWCard({ word: token, sentence, info: { lemma: token, fa: 'برای ترجمهٔ خودکار، هوش مصنوعی را در تنظیمات برنامه فعال کن.', pos: 'other' }, loading: false });
+      setWCard({ word: token, sentence, info: { lemma: token, fa: 'برای ترجمهٔ خودکار، معلم را در تنظیمات برنامه فعال کن.', pos: 'other' }, loading: false });
       return;
     }
     const lvl = ex?.level || level;
@@ -362,16 +362,16 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     const msgs = ex?.chats[no] || [];
     return (
       <div className="rounded-xl border border-[#1f5fbf]/40 bg-blue-50/40 dark:bg-blue-950/20 dark:border-[#7fb0ff]/30 p-2.5 space-y-2" dir="rtl">
-        <div className="flex items-center justify-between text-[11px] font-bold text-[#5d6676]">
+        <div className="flex items-center justify-between text-xs font-bold text-[#5d6676]">
           <span>💬 گفتگو با معلم دربارهٔ جملهٔ {toFa(no)}</span>
-          <button onClick={() => setChatOpen(null)} className="w-6 h-6 rounded bg-white/70 dark:bg-[#141923] flex items-center justify-center">✕</button>
+          <button onClick={() => setChatOpen(null)} className="w-7 h-7 rounded bg-white/70 dark:bg-[#141923] flex items-center justify-center">✕</button>
         </div>
         <div className="max-h-56 overflow-y-auto space-y-2">
-          {msgs.length === 0 && <p className="text-[11px] text-[#5d6676]">هر سؤالی دربارهٔ همین جمله داری بپرس — معلم با تصحیحِ همین جمله در گفتگو جواب می‌دهد.</p>}
+          {msgs.length === 0 && <p className="text-xs text-[#5d6676]">هر سؤالی دربارهٔ همین جمله داری بپرس — معلم با تصحیحِ همین جمله در گفتگو جواب می‌دهد.</p>}
           {msgs.map((m, i) => (
             <div
               key={i}
-              className={`text-xs leading-6 rounded-lg px-2.5 py-1.5 max-w-[88%] ${m.role === 'user'
+              className={`text-[13px] leading-6 rounded-lg px-2.5 py-1.5 max-w-[88%] ${m.role === 'user'
                 ? 'bg-[#1f5fbf] text-white ml-auto'
                 : 'bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]'}`}
               style={{ whiteSpace: 'pre-wrap' }}
@@ -379,15 +379,15 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               {m.text}
             </div>
           ))}
-          {chatBusy === no && <div className="text-[11px] text-[#5d6676] animate-pulse">هوش مصنوعی دارد می‌نویسد…</div>}
+          {chatBusy === no && <div className="text-xs text-[#5d6676] animate-pulse">معلم دارد می‌نویسد…</div>}
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {QUICK_QS.map(q => (
             <button
               key={q}
               onClick={() => sendChat(no, q)}
               disabled={chatBusy === no}
-              className="text-[10px] bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-full px-2 py-0.5 transition disabled:opacity-40"
+              className="text-xs bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-full px-3 py-1.5 transition disabled:opacity-40"
             >
               {q}
             </button>
@@ -551,9 +551,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               <LevelChips value={level} onChange={l => setLevel(l as Lvl)} levels={LVL_ORDER as unknown as string[]} />
             </Section>
 
-            {/* ۳. تعداد */}
+            {/* ۳. تعداد — فقط عدد */}
             <Section n="۳" label="تعداد جمله‌ها">
-              <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} unit="جمله" />
+              <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} />
             </Section>
 
             {/* ۴. موضوع */}
@@ -592,7 +592,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               )}
             </div>
 
-            <PrimaryBtn onClick={generate} busy={generating} busyLabel="⏳ هوش مصنوعی دارد جمله‌ها را می‌سازد…" label="🚀 ساخت تمرین" />
+            <PrimaryBtn onClick={generate} busy={generating} busyLabel="⏳ معلم دارد جمله‌ها را می‌سازد…" label="🚀 ساخت تمرین" />
           </div>
 
           {/* آرشیو یکدست: مشاهدهٔ آخرین عملکرد + آزمون دوباره + حذف با تأیید */}
@@ -607,7 +607,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     saveHist([]); setHist([]);
                   }
                 }}
-                className="text-[11px] text-red-500 px-2 py-1"
+                className="text-xs text-red-500 px-2 py-1"
               >
                 پاک کردن کل تاریخچه
               </button>
@@ -837,7 +837,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               {uncheckedCount > 0
                 ? <button onClick={continueRemaining} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ ادامهٔ {uncheckedCount} جملهٔ باقی‌مانده</button>
                 : <button onClick={() => { setScreen('play'); setChatOpen(null); }} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ مرور جمله‌ها</button>}
-              <button onClick={() => setPrintOpen(true)} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">🖨 چاپ / PDF (با پاسخنامه)</button>
+              <button onClick={() => setPrintOpen(true)} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">🖨 چاپ / PDF</button>
               <button onClick={() => { setScreen('config'); setEx(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">بازگشت به فهرست</button>
             </div>
           </div>
@@ -954,7 +954,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
             </div>
 
             {wCard.loading ? (
-              <div className="py-6 text-center text-sm text-[#5d6676] animate-pulse">⏳ هوش مصنوعی دارد ترجمه می‌کند…</div>
+              <div className="py-6 text-center text-sm text-[#5d6676] animate-pulse">⏳ معلم دارد ترجمه می‌کند…</div>
             ) : (
               <>
                 <div className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">{wCard.info?.fa}</div>

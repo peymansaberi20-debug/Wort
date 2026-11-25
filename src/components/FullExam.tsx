@@ -4,6 +4,7 @@ import { HoerenTrainer } from './HoerenTrainer';
 import { SchreibenCorrector } from './SchreibenCorrector';
 import { SprechenTrainer } from './SprechenTrainer';
 import { EXAM_HISTORY, ExamRun, SKILLS, Skill, SkillResult, loadList, minutesFor, saveList } from '../utils/trainerKit';
+import { LevelChips } from './trainerUI';
 import type { Word } from '../types';
 
 type Org = 'ÖSD' | 'Goethe' | 'telc' | 'EPD';
@@ -55,15 +56,17 @@ export const FullExam: React.FC<Props> = ({ onShowToast, onQuickAddWord, onExit 
             <h3 className="font-extrabold text-base">🏁 آزمون شبیه‌سازی کامل (۴ مهارت)</h3>
             <button onClick={onExit} className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">↩ بازگشت</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="text-xs font-bold">نوع آزمون
-              <select value={org} onChange={e => { const o = e.target.value as Org; setOrg(o); if (o === 'EPD' && !['B2', 'C1'].includes(level)) setLevel('B2'); }} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[13px] font-bold mb-1">نوع آزمون</label>
+              <select value={org} onChange={e => { const o = e.target.value as Org; setOrg(o); if (o === 'EPD' && !['B2', 'C1'].includes(level)) setLevel('B2'); }} className="w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
                 <option value="Goethe">Goethe-Zertifikat</option><option value="ÖSD">ÖSD</option><option value="telc">telc Deutsch</option><option value="EPD">EPD (دانشگاهی وین)</option>
-              </select></label>
-            <label className="text-xs font-bold">سطح
-              <select value={level} onChange={e => setLevel(e.target.value)} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
-                {levels.map(l => <option key={l} value={l}>{l}</option>)}
-              </select></label>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[13px] font-bold mb-1">سطح</label>
+              <LevelChips value={level} onChange={l => setLevel(l)} levels={levels} />
+            </div>
           </div>
           <div className="grid grid-cols-4 gap-2 text-center text-[11px] font-bold">
             {ORDER.map(s => { const m = SKILLS.find(x => x.id === s)!; return (

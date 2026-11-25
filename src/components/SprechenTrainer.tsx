@@ -24,6 +24,7 @@ import { speak, stopSpeaking, getTtsWorkerBase, setTtsWorkerBase } from '../util
 import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import { ExamRun, S, askJson, useNoHelp } from '../utils/trainerKit';
+import { LevelChips } from './trainerUI';
 
 interface SprechenTrainerProps {
   onClose: () => void;
@@ -650,11 +651,11 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
         <div className="space-y-3">
           {PrefsUI}
           <div className={card + ' flex items-center justify-between gap-3'}>
-            <div className="flex items-center gap-3"><span className="text-3xl">💬</span><div><h3 className="font-extrabold text-base">Freies Sprechen (مکالمه آزاد)</h3><p className="text-xs text-[#5d6676]">گفتگو با میکروفون، تصحیح لحظه‌ای و شخصیت ثابت</p></div></div>
+            <div className="flex items-center gap-3"><span className="text-3xl">💬</span><div><h3 className="font-extrabold text-base">Freies Sprechen (مکالمه آزاد)</h3><p className="text-[13px] text-[#5d6676]">گفتگو با میکروفون، تصحیح لحظه‌ای و شخصیت ثابت</p></div></div>
             <button onClick={() => setScreen('free_setup')} className="bg-[#1f5fbf] text-white px-4 py-2.5 rounded-xl font-bold text-sm">شروع ▶</button>
           </div>
           <div className={card + ' flex items-center justify-between gap-3'}>
-            <div className="flex items-center gap-3"><span className="text-3xl">🎓</span><div><h3 className="font-extrabold text-base">Prüfungsmodus (شبیه‌ساز آزمون Goethe / telc)</h3><p className="text-xs text-[#5d6676]">۳ بخش آزمون واقعی، تایمر و ارزیابی استاندارد</p></div></div>
+            <div className="flex items-center gap-3"><span className="text-3xl">🎓</span><div><h3 className="font-extrabold text-base">Prüfungsmodus (شبیه‌ساز آزمون Goethe / telc)</h3><p className="text-[13px] text-[#5d6676]">۳ بخش آزمون واقعی، تایمر و ارزیابی استاندارد</p></div></div>
             <button onClick={() => setScreen('exam_setup')} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm">تنظیم ▶</button>
           </div>
           <button onClick={() => { goHub(); onClose(); }} className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">↩ بازگشت</button>
@@ -688,16 +689,17 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
         <div className={card + ' space-y-4'}>
           <div className="flex items-center justify-between"><h3 className="font-extrabold">تنظیمات آزمون شفاهی (آلمان)</h3><button onClick={goHub} className="px-3 py-1 rounded-xl bg-slate-100 text-xs font-bold">بازگشت</button></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="text-xs font-bold">فرمت آزمون
+            <label className="text-[13px] font-bold">فرمت آزمون
               <select value={examType} onChange={e => setExamType(e.target.value as ExamType)} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
                 <option value="Goethe">Goethe-Zertifikat</option><option value="Telc">telc Deutsch</option><option value="ÖSD">ÖSD</option><option value="Zertifikat">Zertifikat Deutsch</option>
               </select></label>
-            <label className="text-xs font-bold">سطح
-              <select value={examLevel} onChange={e => setExamLevel(e.target.value as Level)} className="mt-1 w-full bg-slate-50 dark:bg-[#141923] border rounded-xl px-3 py-2.5 text-sm font-bold">
-                {(['A1', 'A2', 'B1', 'B2', 'C1'] as Level[]).map(l => <option key={l} value={l}>{l}</option>)}
-              </select></label>
+            <div className="text-[13px] font-bold">سطح
+              <div className="mt-1">
+                <LevelChips value={examLevel} onChange={l => setExamLevel(l as Level)} levels={['A1', 'A2', 'B1', 'B2', 'C1']} />
+              </div>
+            </div>
           </div>
-          <div className="text-[11px] text-[#5d6676] bg-slate-50 dark:bg-[#141923] rounded-xl p-2">
+          <div className="text-xs text-[#5d6676] bg-slate-50 dark:bg-[#141923] rounded-xl p-2">
             📋 شخصیت ممتحن به‌صورت خودکار بر اساس نوع آزمون انتخاب می‌شود: {EXAM_PERSONAS[examType].emoji} {EXAM_PERSONAS[examType].name} — {EXAM_PERSONAS[examType].role}
           </div>
           <button onClick={() => void startExam()} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold text-sm">شروع شبیه‌ساز آزمون 🚀</button>

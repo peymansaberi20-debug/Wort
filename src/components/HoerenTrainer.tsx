@@ -12,6 +12,7 @@ import {
   ARCHIVE_HOEREN, ExamRun, MAX_PLAYS, S, TOPICS_DE, askJson, audioGet, audioPut, hash, loadList, pick, saveList, useNoHelp
 } from '../utils/trainerKit';
 import { WordLookupModal } from './WordLookup';
+import { LevelChips } from './trainerUI';
 import type { Word } from '../types';
 
 type ExamType = 'Standard' | 'Goethe' | 'OESD' | 'Telc' | 'EPD';
@@ -421,6 +422,18 @@ export const HoerenTrainer: React.FC<{
     else onClose();
   };
 
+  /** باز کردن تمرین ذخیره‌شده از آرشیو — هر بار شروعِ تازه و خالی (نتایج قبلی فقط در تاریخچه می‌مانند) */
+  const openArchivedFresh = (item: SavedExerciseRecord) => {
+    stopAllPlayback();
+    archiveId.current = item.id; setExercise(item.exercise); setTranscript(item.transcript);
+    setAnswers({}); setSubmitted(false); setResult(null); setError(''); setWarningMsg('');
+    setHistoryAttempts(item.historyAttempts || []);
+    setSrcAudio(item.srcAudio || ''); setSrcInput(item.srcAudio || ''); srcRef.current = item.srcAudio || '';
+    setTrans(item.trans || null); setShowTr(false); setTrErr('');
+    playsRef.current = 0; setPlays(0);
+    setAudioUrl(null); setShowTranscript(false); setShowFa({}); setViewMode('exercise');
+  };
+
   const answer = (id: string, value: string) => {
     if (submitted) return;
     setWarningMsg('');
@@ -740,22 +753,25 @@ ${numbered}`,
     <div className="space-y-4 text-right max-w-4xl mx-auto pb-10" dir="rtl">
       {viewMode === 'menu' && (
         <div className="space-y-3">
+          <div className="flex justify-end">
+            <button onClick={onClose} aria-label="خروج از تمرین" title="خروج از تمرین" className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-base font-bold flex items-center justify-center flex-shrink-0 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40">✕</button>
+          </div>
           <div className={box + ' flex items-center justify-between shadow-xs'}>
             <div className="flex items-center gap-3">
               <span className="text-3xl">✨</span>
               <div>
                 <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">ساخت تمرین جدید</h3>
-                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">متن را وارد کن یا بگذار برایت بسازد؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود</p>
+                <p className="text-[13px] text-[#5d6676] dark:text-[#a3adbd]">متن را وارد کن یا بگذار برایت بسازد؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود</p>
               </div>
             </div>
             <button onClick={() => setViewMode('creator')} className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs">شروع ▶</button>
           </div>
           <div className={box + ' flex items-center justify-between shadow-xs'}>
             <div className="flex items-center gap-3">
-              <span className="text-3xl">📁</span>
+              <span className="text-3xl">🗂</span>
               <div>
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">تمرینات قبلی (آرشیو)</h3>
-                <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">تمرین‌های ذخیره‌شده را دوباره انجام بده</p>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">تمرین‌های ذخیره‌شده</h3>
+                <p className="text-[13px] text-[#5d6676] dark:text-[#a3adbd]">تمرین‌های ذخیره‌شده را دوباره انجام بده</p>
               </div>
             </div>
             <button onClick={() => setViewMode('archive')} className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-xs">مشاهده ▶</button>
@@ -778,10 +794,8 @@ ${numbered}`,
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1.5">سطح زبان:</label>
-              <select value={level} onChange={e => setLevel(e.target.value)} className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold outline-none">
-                {['A1', 'A2', 'B1', 'B2', 'C1'].map(lvl => <option key={lvl} value={lvl}>سطح {lvl}</option>)}
-              </select>
+              <label className="block text-[13px] font-bold mb-1.5">سطح زبان:</label>
+              <LevelChips value={level} onChange={l => setLevel(l)} levels={['A1', 'A2', 'B1', 'B2', 'C1']} />
             </div>
           </div>
 
@@ -818,33 +832,24 @@ ${numbered}`,
       {viewMode === 'archive' && (
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl p-6 shadow-sm space-y-4 text-right">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="font-extrabold text-base">آرشیو تمرینات شنیداری</h2>
-            <button onClick={handleBackToMenu} className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت</button>
+            <h2 className="font-extrabold text-base">🗂 تمرین‌های ذخیره‌شده</h2>
+            <button onClick={handleBackToMenu} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold">بازگشت</button>
           </div>
           <div className="space-y-3">
             {savedExercises.length === 0 ? (
-              <div className="py-12 text-center text-sm text-[#5d6676]">هیچ تمرینی در آرشیو ذخیره نشده است.</div>
+              <div className="py-12 text-center text-sm text-[#5d6676]">هیچ تمرینی ذخیره نشده است.</div>
             ) : savedExercises.map(item => {
               const last = item.historyAttempts?.[item.historyAttempts.length - 1];
               return (
                 <div key={item.id}
-                  onClick={() => {
-                    stopAllPlayback();
-                    // every opening starts a fresh, empty attempt (previous results stay only as history)
-                    archiveId.current = item.id; setExercise(item.exercise); setTranscript(item.transcript);
-                    setAnswers({}); setSubmitted(false); setResult(null); setError(''); setWarningMsg('');
-                    setHistoryAttempts(item.historyAttempts || []);
-                    setSrcAudio(item.srcAudio || ''); setSrcInput(item.srcAudio || ''); srcRef.current = item.srcAudio || '';
-                    setTrans(item.trans || null); setShowTr(false); setTrErr('');
-                    playsRef.current = 0; setPlays(0);
-                    setAudioUrl(null); setShowTranscript(false); setShowFa({}); setViewMode('exercise');
-                  }}
+                  onClick={() => openArchivedFresh(item)}
+                  title="آزمون جدید — تمرین بدون پاسخ و آمادهٔ آزمون دادن"
                   className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#141923] flex items-center justify-between cursor-pointer hover:border-[#1f5fbf] transition">
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{item.title}</h4>
-                    <span className="text-xs text-[#5d6676]">تاریخ: {item.createdAt} • سطح: {item.level}{item.srcAudio ? ' • 🔗 صدای اصلی' : ''}{last ? ` • آخرین نتیجه: ${last.percentage}%` : ''}</span>
+                    <h4 className="font-bold text-[15px] text-slate-900 dark:text-slate-100">{item.title}</h4>
+                    <span className="text-[13px] text-[#5d6676]">تاریخ: {item.createdAt} • سطح: {item.level}{item.srcAudio ? ' • 🔗 صدای اصلی' : ''}{last ? ` • آخرین نتیجه: ${last.percentage}%` : ''}</span>
                   </div>
-                  <span className="bg-[#1f5fbf] text-white px-4 py-2 rounded-xl text-xs font-bold">ورود به تمرین ▶</span>
+                  <span className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap">آزمون جدید ▶</span>
                 </div>
               );
             })}
@@ -1055,7 +1060,7 @@ ${numbered}`,
             {!submitted ? (
               <button onClick={handleCheckClick} disabled={grading}
                 className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3.5 rounded-xl font-bold text-sm shadow-md disabled:opacity-50">
-                {grading ? 'در حال بررسی و تصحیح هوش مصنوعی...' : exam ? 'ثبت پاسخ‌ها و ادامه ✓' : 'ثبت و بررسی پاسخ‌ها (Antworten überprüfen) ✓'}
+                {grading ? 'در حال بررسی و تصحیح توسط معلم...' : exam ? 'ثبت پاسخ‌ها و ادامه ✓' : 'ثبت و بررسی پاسخ‌ها (Antworten überprüfen) ✓'}
               </button>
             ) : result && (
               <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 space-y-3">

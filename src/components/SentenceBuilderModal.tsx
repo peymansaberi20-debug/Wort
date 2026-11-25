@@ -107,7 +107,7 @@ JSON REQUIREMENTS
     try {
       const out = await generateWithGemini(prompt, { timeoutMs: 45000, retries: 1 });
       const parsed = parseAI(out)[0] as SentenceReport;
-      if (!parsed || typeof parsed.score !== 'number') throw new Error('پاسخ نامعتبر از هوش مصنوعی دریافت شد.');
+      if (!parsed || typeof parsed.score !== 'number') throw new Error('پاسخ نامعتبر از معلم دریافت شد.');
       setReport({
         understood_fa: String(parsed.understood_fa || ''),
         score: Math.max(0, Math.min(100, Math.round(Number(parsed.score)))),
@@ -118,7 +118,7 @@ JSON REQUIREMENTS
         tip_fa: String(parsed.tip_fa || '')
       });
     } catch (e: any) {
-      setErrMsg(e?.message || 'تصحیح با هوش مصنوعی ممکن نشد؛ دوباره تلاش کن.');
+      setErrMsg(e?.message || 'تصحیح با معلم ممکن نشد؛ دوباره تلاش کن.');
     } finally {
       setLoading(false);
     }
@@ -187,7 +187,7 @@ JSON REQUIREMENTS
                 {loading ? (
                   <><span className="inline-block animate-spin">⏳</span><span>در حال تصحیح…</span></>
                 ) : (
-                  <span>🤖 تصحیح با هوش مصنوعی</span>
+                  <span>🎓 تصحیح با معلم</span>
                 )}
               </button>
               {report && (
