@@ -26,7 +26,7 @@ import { today } from '../utils/dates';
 import { statusOf, STATUS_BADGE } from '../utils/wordStatus';
 import { ShadowingModal } from '../components/ShadowingModal';
 import { IconBtn } from '../components/IconBtn';
-import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic, Sparkles } from 'lucide-react';
+import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic, Sparkles, MessageSquarePlus } from 'lucide-react';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { HoerenTrainer } from '../components/HoerenTrainer';
@@ -804,6 +804,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     ? gramSec.tabs.find(t => t.mode === activeMode && (t.mode !== 'vprep' || t.vTab === vprepTab))?.id
     : undefined;
   const [currentCardDir, setCurrentCardDir] = useState<'de' | 'fa'>('de');
+  /** نسخهٔ هم‌زمانِ جهت کارت — handleRevealCard از این می‌خواند تا حتی با کلیکِ بسیار سریع مقدارِ کهنه (کارت قبلی) نبیند */
+  const currentCardDirRef = useRef<'de' | 'fa'>('de');
 
   const [userInput, setUserInput] = useState<string>('');
   const [casePrepInput, setCasePrepInput] = useState<string>('');
@@ -816,7 +818,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
   const [sentenceModalWord, setSentenceModalWord] = useState<Word | null>(null);
   const [shadowWord, setShadowWord] = useState<Word | null>(null);
-  pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord;
+  // درخواست کاربر: ثانیه‌شمار تمرین هنگام باز بودن مودال تلفظ (و سایر مودال‌ها) متوقف بماند
+  pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord || !!shadowWord;
     
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [timerPopupOpen, setTimerPopupOpen] = useState(false);
@@ -1096,29 +1099,16 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       nextCardDir = defaultDir;
     }
     setCurrentCardDir(nextCardDir);
+    currentCardDirRef.current = nextCardDir;
 
     setRevealedCardId(null);
 
     const isFlashType = qMode === 'flash' || qMode === 'free' || qMode === 'review' || qMode === 'daily';
 
     // فقط وقتی رویِ کارت آلمانی است خودکار خوانده می‌شود؛ روی کارت فارسی هیچ‌چیز پخش نمی‌شود تا جواب لو نرود.
-    // واژه در لحظهٔ باز شدن خوانده می‌شود و بلافاصله پس از آن (در صورت فعال بودن) مثال هم خوانده می‌شود.
-    if (isFlashType && (settings?.auto || settings?.autoEx) && nextCardDir === 'de' && revealedCardId !== currentItem.id) {
-      const w = currentItem as Word;
-      speak(fullWord(w), {
-        rate: settings?.rate,
-        vreg: settings?.vreg,
-        voiceName: settings?.voice,
-        onEnd: () => {
-          if (settings?.autoEx && w.ex) {
-            speak(w.ex, {
-              rate: settings.rate,
-              vreg: settings.vreg,
-              voiceName: settings.voice
-            });
-          }
-        }
-      });
+    // واژه در لحظهٔ باز شدن خوانده می‌شود و بلافاصله پس از آن مثالِ کارت هم خوانده می‌شود (playCardAudio).
+    if (isFlashType && nextCardDir === 'de' && revealedCardId !== currentItem.id) {
+      playCardAudio(currentItem as Word);
     }
 
     return () => {
@@ -1126,6 +1116,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
       stopSpeaking();
     };
   }, [currentIndex, currentItem?.id, currentKey, qMode, activeMode, freeDir, freeRnd, flashDir, settings?.dir]);
+
+  /** خواندن خودکار فلش‌کارت: واژه (تنظیم auto) و سپس مثال (تنظیم autoEx).
+   *  مثالِ خوانده‌شده همان «مثال دوم» است که روی پشتِ فلش‌کارت نمایش داده می‌شود (w.ex2؛ اگر نبود مثال اول w.ex). */
+  const playCardAudio = (w: Word) => {
+    const cfg = { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice };
+    const example = w.ex2 || w.ex;
+    if (settings?.auto) {
+      speak(fullWord(w), {
+        ...cfg,
+        onEnd: () => { if (settings?.autoEx && example) speak(example, cfg); }
+      });
+    } else if (settings?.autoEx && example) {
+      speak(example, cfg);
+    }
+  };
 
   const timerCfg: ExerciseTimerCfg = qMode ? getTimerCfg(settings, qMode) : { on: false, sec: 30 };
   const timerAnswered = !!answerResult || !!caseResult || (!!currentItem && revealedCardId === currentItem.id);
@@ -1217,23 +1222,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
     const w = currentItem as Word;
     // در جهت آلمانی→فارسی، واژه همان لحظهٔ باز شدن کارت خوانده شده است؛ چرخاندن فقط ترجمهٔ فارسی را نشان می‌دهد و دوباره پخش نمی‌شود.
-    // در جهت فارسی→آلمانی، روی کارت فارسی است و با چرخاندن سمت آلمانی بالا می‌آید — همین‌جا واژه (و بعدش مثال) خوانده می‌شود.
-    if ((settings?.auto || settings?.autoEx) && currentCardDir === 'fa') {
+    // در جهت فارسی→آلمانی، رویِ کارت فارسی است و با چرخاندن سمت آلمانی بالا می‌آید — همین‌جا واژه (و بعدش مثال کارت) خوانده می‌شود.
+    // جهت از ref هم‌زمان خوانده می‌شود (نه state) تا هیچ‌وقت مقدار کهنهٔ کارت قبلی دیده نشود.
+    if (currentCardDirRef.current === 'fa') {
       stopSpeaking();
-      speak(fullWord(w), {
-        rate: settings?.rate,
-        vreg: settings?.vreg,
-        voiceName: settings?.voice,
-        onEnd: () => {
-          if (settings?.autoEx && w.ex) {
-            speak(w.ex, {
-              rate: settings.rate,
-              vreg: settings.vreg,
-              voiceName: settings.voice
-            });
-          }
-        }
-      });
+      playCardAudio(w);
     }
   };
 
@@ -2169,7 +2162,8 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   if (queueMode !== activeMode) {
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10" aria-hidden="true">
-        {renderTabHeader(mainTab === 'grammatik' ? gramStickyBars : undefined)}
+        {/* درخواست کاربر: داخل تمرین ردیفِ تب‌های اصلی (Lernkarten/Wortschatz/…) حواس‌پرت‌کن است — فقط نوارهای زیرتب گرامر می‌ماند */}
+        {!showMenu ? gramStickyBars : renderTabHeader(mainTab === 'grammatik' ? gramStickyBars : undefined)}
         <div className="min-h-[180px]" />
       </div>
     );
@@ -2205,8 +2199,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
   return (
     <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
-      {/* نوار چسبان: تب‌های اصلی + زیرتب‌های گرامر — هنگام اسکرول ثابت می‌مانند */}
-      {renderTabHeader(mainTab === 'grammatik' ? gramStickyBars : undefined)}
+      {/* نوار چسبان: در منوی تمرین‌ها تب‌های اصلی نمایش داده می‌شود؛ داخل خودِ تمرین فقط نوارهای زیرتب گرامر (بدون ردیف تب‌های اصلی) */}
+      {!showMenu
+        ? gramStickyBars
+        : renderTabHeader(mainTab === 'grammatik' ? gramStickyBars : undefined)}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2 shadow-xs">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg flex-shrink-0">{EXERCISE_NAMES[activeMode]?.icon}</span>
@@ -2227,8 +2223,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           )}
           {activeMode !== 'case' && qMode !== 'sent' && !isSelfContainedMode(qMode) && currentItem && (
             <>
-              <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><PencilLine size={18} className="text-emerald-600" /></IconBtn>
-              <IconBtn onClick={() => setShadowWord(currentItem as Word)} title="تمرین تلفظ"><Mic size={18} className="text-rose-600" /></IconBtn>
+              {/* آیکون جمله‌سازی: قبلاً مداد بود که با ویرایش واژه اشتباه گرفته می‌شد — حالا حبابِ گفت‌وگو با + */}
+              <IconBtn onClick={() => setSentenceModalWord(currentItem as Word)} title="ساخت جمله با این واژه"><MessageSquarePlus size={18} className="text-emerald-600" /></IconBtn>
+              {/* درخواست کاربر: ویرایش مستقیم همین واژه — پس از بستن فرم، تمرین معلق‌شده در App دقیقاً به همین کارت برمی‌گردد (ثانیه‌شمار هم در این فاصله متوقف است) */}
+              <IconBtn onClick={() => onEditWord?.(currentItem as Word)} title="ویرایش واژه"><PencilLine size={18} className="text-amber-500" /></IconBtn>
             </>
           )}
           <IconBtn onClick={() => onOpenHelp(activeMode)} title="راهنمای این تمرین"><HelpCircle size={18} className="text-[#1f5fbf]" /></IconBtn>
@@ -2314,7 +2312,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           );
 
           return (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div key={currentKey} className="fc-scene transition-all duration-300" style={{ height: 'min(42dvh, 380px)', minHeight: 260 }}>
                 <div className={'fc-card h-full transition-transform duration-500 ' + (isCardRevealed ? 'flipped' : '')}>
                   <div className="fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-white dark:bg-[#1b2029] flex flex-col items-center justify-center gap-3 p-6 text-center cursor-pointer select-none" onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
@@ -2326,18 +2324,22 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                             // درخواست کاربر: فعل با حرف اضافه/حالت دستوری (+A/+D رنگی) روی فلش‌کارت هم دیده شود
                             const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
                             return vp ? (
-                              <VerbPhrase vp={vp} className="text-3xl md:text-4xl text-slate-900 dark:text-slate-100 flex-wrap" />
+                              // درخواست کاربر: اندازهٔ واژهٔ آلمانی با/بدون حرف اضافه یکسان — همین اندازه روی پشت کارت هم هست
+                              <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
                             ) : (
                               <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
                             );
                           })()}
                           <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
+                          {/* درخواست کاربر: دکمهٔ تمرین تلفظ کنار بلندگو روی خود کارت (فقط وقتی سمت آلمانی دیده می‌شود) */}
+                          <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={18} className="text-rose-600" /></button>
                         </div>
                         {w.pos && <span className="text-sm text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
                     ) : (
                       <>
-                        <div className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
+                        {/* فونت نمایشی فارسی (B Titr/Lalezar) — اندازهٔ ترجمه با اندازهٔ پشت کارت یکسان */}
+                        <div className="font-fa-display text-3xl md:text-4xl text-slate-900 dark:text-slate-100" dir="rtl">{w.fa}</div>
                         {w.pos && <span className="text-sm text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
                     )}
@@ -2346,19 +2348,21 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
 
                   <div className="fc-face fc-back rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-gradient-to-b from-[#f3f7ff] to-white dark:from-[#182233] dark:to-[#1b2029] p-5 flex flex-col justify-center items-center text-center select-none" onClick={() => { if (isCardRevealed) setRevealedCardId(null); }}>
                     {!isFaDir ? (
-                      <div className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 mb-3" dir="rtl">{w.fa}</div>
+                      <div className="font-fa-display text-3xl md:text-4xl text-slate-900 dark:text-slate-100 mb-3" dir="rtl">{w.fa}</div>
                     ) : (
                       <div className="flex items-center justify-center gap-2 flex-wrap mb-3" dir="ltr">
-                        {w.art && <span className={`font-bold text-lg ${artCls}`}>{w.art}</span>}
+                        {w.art && <span className={`font-bold text-xl ${artCls}`}>{w.art}</span>}
                         {(() => {
                           const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
                           return vp ? (
-                            <VerbPhrase vp={vp} className="text-2xl md:text-3xl text-slate-900 dark:text-slate-100 flex-wrap" />
+                            // اندازهٔ واژه روی پشت کارت = اندازهٔ روی کارت
+                            <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
                           ) : (
-                            <span className="text-3xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
+                            <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
                           );
                         })()}
                         <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
+                        <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={16} className="text-rose-600" /></button>
                       </div>
                     )}
 
@@ -2383,42 +2387,34 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               </div>
 
-              {!isCardRevealed ? (
-                <button
-                  onClick={handleRevealCard}
-                  className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md active:scale-[0.99] transition"
-                >
-                  🔄 {isFaDir ? 'چرخاندن کارت (لغت آلمانی)' : 'چرخاندن کارت (ترجمه)'}
-                </button>
-              ) : (
-                <>
-                  <div className="space-y-3 pt-2">
-                    <button
-                      onClick={() => setMoreOpen(o => !o)}
-                      className="w-full flex items-center justify-center gap-1.5 text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 hover:bg-blue-100 py-2.5 rounded-xl transition shadow-xs"
-                    >
-                      {moreOpen ? '▲ بستن توضیحات کامل' : '▼ مثال و توضیحات بیشتر (سایر اطلاعات)'}
-                    </button>
+              {/* درخواست کاربر: دکمهٔ «چرخاندن کارت» حذف شد — راهنمای روی خود کارت («برای دیدن پشت کارت بزن ↻») کافی است */}
+              {isCardRevealed && (
+                <div className="space-y-2 pt-1">
+                  <button
+                    onClick={() => setMoreOpen(o => !o)}
+                    className="w-full flex items-center justify-center gap-1.5 text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff] bg-blue-50 dark:bg-slate-800 hover:bg-blue-100 py-2.5 rounded-xl transition shadow-xs"
+                  >
+                    {moreOpen ? '▲ بستن توضیحات کامل' : '▼ مثال و توضیحات بیشتر (سایر اطلاعات)'}
+                  </button>
 
-                    <div className={`overflow-hidden transition-all duration-300 ease-out ${moreOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                      {moreOpen && renderUnifiedWordCard(w)}
-                    </div>
-
-                    {qMode === 'free' ? (
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <button onClick={() => handleFreeKnow(0)} className="bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 py-3 rounded-xl font-bold text-sm shadow-xs active:scale-95 transition">❌ هنوز نه</button>
-                        <button onClick={() => handleFreeKnow(1)} className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 py-3 rounded-xl font-bold text-sm shadow-xs active:scale-95 transition">✅ بلدم</button>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-4 gap-1.5 pt-1">
-                        {gradeBtn(0, 'دوباره', 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-900')}
-                        {gradeBtn(1, 'سخت', 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900')}
-                        {gradeBtn(2, 'خوب', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900')}
-                        {gradeBtn(3, 'آسان', 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-900')}
-                      </div>
-                    )}
+                  <div className={`overflow-hidden transition-all duration-300 ease-out ${moreOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    {moreOpen && renderUnifiedWordCard(w)}
                   </div>
-                </>
+
+                  {qMode === 'free' ? (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button onClick={() => handleFreeKnow(0)} className="bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border border-red-200 dark:border-red-800 py-3 rounded-xl font-bold text-sm shadow-xs active:scale-95 transition">❌ هنوز نه</button>
+                      <button onClick={() => handleFreeKnow(1)} className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 py-3 rounded-xl font-bold text-sm shadow-xs active:scale-95 transition">✅ بلدم</button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-1.5 pt-1">
+                      {gradeBtn(0, 'دوباره', 'bg-red-50 text-red-600 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-900')}
+                      {gradeBtn(1, 'سخت', 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-900')}
+                      {gradeBtn(2, 'خوب', 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900')}
+                      {gradeBtn(3, 'آسان', 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-900')}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );
