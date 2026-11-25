@@ -763,6 +763,7 @@ export default function App() {
               settings={state.set}
               activeMode={activeExercise}
               onQuickAddWord={handleQuickAddWord}
+              onViewWord={setSelectedWord}
               practiceWordIds={practiceWordIds}
               dailyProgress={state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0 }}
               menuMode={exMenuMode}
@@ -875,6 +876,7 @@ export default function App() {
                   settings={state.set}
                   activeMode={null}
                   onQuickAddWord={handleQuickAddWord}
+                  onViewWord={setSelectedWord}
                   vprepTab={vprepTab}
                   onSetVprepTab={setVprepTab}
                   onSelectMode={handleSelectExercise}
@@ -952,28 +954,28 @@ export default function App() {
             {/* عرض تمرین‌های گرامر مثل قبل (max-w-2xl) — همه زیر یک پوسته */}
             <div className="max-w-2xl mx-auto">
               <div className={activeExercise === 'vprep' ? '' : 'hidden'}>
-                <VerbPrep key={`vprep-${gramResets.vprep || 0}`} initialTab={vprepTab} showTabBar={false} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} />
+                <VerbPrep key={`vprep-${gramResets.vprep || 0}`} initialTab={vprepTab} showTabBar={false} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} words={state.words} onViewWord={setSelectedWord} />
               </div>
               <div className={activeExercise === 'wsh' ? '' : 'hidden'}>
-                <WorksheetTrainer key={`wsh-${gramResets.wsh || 0}`} kind="prep" onShowToast={showToast} />
+                <WorksheetTrainer key={`wsh-${gramResets.wsh || 0}`} kind="prep" onShowToast={showToast} words={state.words} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
               <div className={activeExercise === 'wsh2' ? '' : 'hidden'}>
-                <WorksheetTrainer key={`wsh2-${gramResets.wsh2 || 0}`} kind="klasse" onShowToast={showToast} />
+                <WorksheetTrainer key={`wsh2-${gramResets.wsh2 || 0}`} kind="klasse" onShowToast={showToast} words={state.words} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
               <div className={activeExercise === 'konnektoren' ? '' : 'hidden'}>
-                <KonnektorTrainer key={`konn-${gramResets.konnektoren || 0}`} onClose={() => handleSelectExercise(null)} onShowToast={showToast} />
+                <KonnektorTrainer key={`konn-${gramResets.konnektoren || 0}`} onClose={() => handleSelectExercise(null)} onShowToast={showToast} words={state.words} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
               <div className={activeExercise === 'kpro' ? '' : 'hidden'}>
-                <KonnektorProTrainer key={`kpro-${gramResets.kpro || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onClose={() => handleSelectExercise(null)} />
+                <KonnektorProTrainer key={`kpro-${gramResets.kpro || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} words={state.words} onViewWord={setSelectedWord} onClose={() => handleSelectExercise(null)} />
               </div>
               <div className={activeExercise === 'tstory' ? '' : 'hidden'}>
-                <TenseStoryTrainer key={`tstory-${gramResets.tstory || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onClose={() => handleSelectExercise(null)} />
+                <TenseStoryTrainer key={`tstory-${gramResets.tstory || 0}`} settings={state.set} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} words={state.words} onViewWord={setSelectedWord} onClose={() => handleSelectExercise(null)} />
               </div>
               <div className={activeExercise === 'irrverb' ? '' : 'hidden'}>
-                <IrregularVerbsTrainer key={`irrverb-${gramResets.irrverb || 0}`} settings={state.set} words={state.words} onShowToast={showToast} onClose={() => handleSelectExercise(null)} />
+                <IrregularVerbsTrainer key={`irrverb-${gramResets.irrverb || 0}`} settings={state.set} words={state.words} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} onClose={() => handleSelectExercise(null)} />
               </div>
               <div className={activeExercise === 'puzzle' ? '' : 'hidden'}>
-                <SatzPuzzle key={`puzzle-${gramResets.puzzle || 0}`} words={state.words} onShowToast={showToast} />
+                <SatzPuzzle key={`puzzle-${gramResets.puzzle || 0}`} words={state.words} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
             </div>
           </div>
