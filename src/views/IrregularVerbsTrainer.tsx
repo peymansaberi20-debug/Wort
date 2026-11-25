@@ -22,6 +22,8 @@ import { IrrVerb, IrrLvl, IRR_LVL_ORDER, IRR_LVL_INFO, irrVerbsOf } from '../dat
 import { markForm, eqDe, normDe, answerDiff, AnsSeg } from '../utils/irrDiff';
 import { libIrregularVerbs } from '../utils/irrLibrary';
 import { LevelChips, MiniChip, toFa } from '../components/trainerUI';
+import { ClickableWords, WordLookupModal } from '../components/WordLookup';
+import { useVocabGate } from '../components/VocabDecisionDialog';
 
 /* ───────────────────────── قطعهٔ قرمزشده ───────────────────────── */
 
@@ -141,6 +143,9 @@ interface IrregularVerbsTrainerProps {
   /** کتاب واژگان کاربر — فعل‌های بی‌قاعده‌اش خودکار به بازی اضافه می‌شوند (به‌صورت زنده) */
   words?: Word[];
   onShowToast?: (msg: string) => void;
+  /** افزودن واژهٔ لمس‌شده به کتابخانه (گیت تکراری/Partizip II/مترادف) */
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  onViewWord?: (w: Word) => void;
   onClose?: () => void;
 }
 
@@ -155,7 +160,7 @@ const shuffle = <T,>(arr: T[]): T[] => {
   return a;
 };
 
-export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ words, onShowToast }) => {
+export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ words, onShowToast, onQuickAddWord, onViewWord }) => {
   const [phase, setPhase] = useState<Phase>('setup');
   const [lvl, setLvl] = useState<IrrLvl>('A1');
   const [useLib, setUseLib] = useState(true);
@@ -169,6 +174,30 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
   const [bestStreak, setBestStreak] = useState(0);
   const [mistakes, setMistakes] = useState<string[]>([]);
   const [prtOk, setPrtOk] = useState<boolean | null>(null); // نتیجهٔ قدم Präteritum — برای جمع‌بندی درست قدم دوم
+  // پاپ‌آپ واژهٔ لمس‌شده (زنجیرهٔ سه زمان، جدول مرور و نتیجه) + گیت تکراری/P2/مترادف
+  const [lookup, setLookup] = useState<string | null>(null);
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord
+  });
+
+  const lookupNodes = (
+    <>
+      {gate.node}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level={lvl}
+          cat="IrregularVerbs"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
+      )}
+    </>
+  );
 
   // فعل‌های بی‌قاعدهٔ کتاب واژگان — از prop زنده؛ هر فعل جدید خودکار وارد می‌شود
   const libVerbs = useMemo(() => libIrregularVerbs(words), [words]);
@@ -405,6 +434,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           🎮 شروع بازی ({toFa(levelVerbs.length * 2)} امتیاز)
         </button>
         </div>
+      {lookupNodes}
       </>
     );
   }
@@ -443,11 +473,11 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
               {levelVerbs.map(v => (
                 <tr key={v.inf} className="border-b border-[#eef0f5] dark:border-[#232a37] last:border-0">
                   <td className="px-2.5 py-1.5 font-sans font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                    {v.inf}
+                    <span className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(v.inf)}>{v.inf}</span>
                     {v.src === 'lib' && <span className="mr-1 text-[9px] font-extrabold text-[#1f5fbf]">📖</span>}
                   </td>
-                  <td className="px-2.5 py-1.5 whitespace-nowrap"><MarkedForm form={v.prt} verb={v} kind="prt" /></td>
-                  <td className="px-2.5 py-1.5 whitespace-nowrap"><PerfektForm verb={v} /></td>
+                  <td className="px-2.5 py-1.5 whitespace-nowrap"><span className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(v.prt)}><MarkedForm form={v.prt} verb={v} kind="prt" /></span></td>
+                  <td className="px-2.5 py-1.5 whitespace-nowrap"><span className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(v.pp)}><PerfektForm verb={v} /></span></td>
                   <td className="px-2.5 py-1.5 text-right text-[11px] text-[#5d6676] dark:text-[#a3adbd]" dir="rtl">{v.fa}</td>
                   <td className="px-1 py-1.5">
                     <button onClick={() => speakChain(v)} title="خواندن سه زمان" className="text-sm opacity-70 hover:opacity-100">🔊</button>
@@ -464,6 +494,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           🎮 با همین سطح بازی کن
         </button>
         </div>
+      {lookupNodes}
       </>
     );
   }
@@ -491,11 +522,11 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
             <p className="text-[12px] font-bold text-[#5d6676] dark:text-[#a3adbd] px-1">📋 زنجیره‌هایی که باید تکرار کنی:</p>
             {mistakesVerbs.map(v => (
               <div key={v.inf} className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap" dir="ltr">
-                <span className="font-sans font-bold text-slate-900 dark:text-slate-100">{v.inf}</span>
+                <span className="font-sans font-bold text-slate-900 dark:text-slate-100 cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(v.inf)}>{v.inf}</span>
                 <span className="text-[#8b95a7]">→</span>
-                <MarkedForm form={v.prt} verb={v} kind="prt" />
+                <span className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(v.prt)}><MarkedForm form={v.prt} verb={v} kind="prt" /></span>
                 <span className="text-[#8b95a7]">→</span>
-                <PerfektForm verb={v} />
+                <span className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(v.pp)}><PerfektForm verb={v} /></span>
                 <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd] mr-auto" dir="rtl">{v.fa}</span>
                 <button onClick={() => speakChain(v)} className="text-sm opacity-70 hover:opacity-100">🔊</button>
               </div>
@@ -520,6 +551,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           </button>
         </div>
         </div>
+      {lookupNodes}
       </>
     );
   }
@@ -555,17 +587,17 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
 
       {/* زنجیرهٔ سه زمان — قدم‌به‌قدم پر می‌شود */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3 flex items-center justify-center gap-2 flex-wrap" dir="ltr">
-        <span className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#141923] font-sans font-extrabold text-slate-900 dark:text-slate-100 text-lg">{current.inf}</span>
+        <span className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#141923] font-sans font-extrabold text-slate-900 dark:text-slate-100 text-lg cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(current.inf)}>{current.inf}</span>
         <span className="text-[#8b95a7] font-bold">→</span>
         {prtDone ? (
-          <span className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/70 dark:border-red-900/40"><MarkedForm form={current.prt} verb={current} kind="prt" size="lg" /></span>
+          <span className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/70 dark:border-red-900/40 cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(current.prt)}><MarkedForm form={current.prt} verb={current} kind="prt" size="lg" /></span>
         ) : (
           <span className="px-4 py-1.5 rounded-xl border-2 border-dashed border-[#c6cbd8] dark:border-[#3a4354] text-[#8b95a7] font-bold">؟</span>
         )}
         <span className="text-[#8b95a7] font-bold">→</span>
         {/* Perfekt فقط بعد از پاسخ به قدم دوم نشان داده می‌شود — وگرنه جواب قدم بعدی لو می‌رود */}
         {verdict && step === 'pp' ? (
-          <span className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/70 dark:border-red-900/40"><PerfektForm verb={current} size="lg" /></span>
+          <span className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200/70 dark:border-red-900/40 cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => setLookup(current.pp)}><PerfektForm verb={current} size="lg" /></span>
         ) : (
           <span className="px-4 py-1.5 rounded-xl border-2 border-dashed border-[#c6cbd8] dark:border-[#3a4354] text-[#8b95a7] font-bold">؟</span>
         )}

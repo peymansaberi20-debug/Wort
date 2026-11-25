@@ -28,6 +28,8 @@ import { parseBlanks, parseSegments, lookupWord, explainBlank, isCorrect, normal
 import { TLvl, TLVL_ORDER, TLVL_INFO, LEVEL_VERBS, LEVEL_PREPS, bandOf } from '../data/tenseStoryVerbs';
 import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrintPreview, Section, SqBtn, TopicInput, prFa, prG, toFa, useConfirm } from '../components/trainerUI';
+import { ClickableWords } from '../components/WordLookup';
+import { useVocabGate } from '../components/VocabDecisionDialog';
 
 /* ─────────────────────────── پل هوش مصنوعی برنامه ───────────────────────────
  * کلید و مدل از تنظیمات برنامه (aiProvider — Gemini/Groq/OpenRouter) می‌آید.
@@ -257,10 +259,13 @@ interface TenseStoryTrainerProps {
   settings?: AppSettings;
   onShowToast: (msg: string, isErr?: boolean) => void;
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   onClose?: () => void;
 }
 
-export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, onShowToast, onQuickAddWord, onClose }) => {
+export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, onShowToast, onQuickAddWord, words, onViewWord, onClose }) => {
   const [screen, setScreen] = useState<'config' | 'play' | 'review'>('config');
   const [lvl, setLvl] = useState<TLvl>('A1');
   const [tense, setTense] = useState<Tense>('prt');
@@ -285,6 +290,13 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   const [chatBusy, setChatBusy] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  // گیت مرکزی افزودن به واژگان: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord,
+    onDone: (data, ok) => { if (ok) { const de = String(data.de || '').replace(/^(der|die|das)\s+/i, ''); if (de) setAdded(a => new Set(a).add(de)); } }
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -547,11 +559,8 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   const addWord = (w: string, lk: Lookup) => {
     if (!onQuickAddWord) return;
     const de = lk.de || w;
-    const okAdd = onQuickAddWord({ de: lk.art ? `${lk.art} ${de}` : de, fa: lk.fa, pos: lk.pos || '', ex: lk.ex || '', exFa: lk.exFa || '' });
-    if (okAdd) {
-      setAdded(a => new Set(a).add(de));
-      onShowToast(`«${de}» به واژگان اضافه شد`);
-    } else onShowToast('افزودن به واژگان ناموفق بود.', true);
+    // مسیر گیت: تکراری/P2/مترادف → دیالوگ تصمیم؛ تازه → افزودن مستقیم (toast در App)
+    gate.attempt({ de: lk.art ? `${lk.art} ${de}` : de, fa: lk.fa, pos: lk.pos || '', ex: lk.ex || '', exFa: lk.exFa || '', lvl: ex?.lvl });
   };
 
     /* ───────── پورتال‌های مشترک: چاپ، کارت واژه، چت ───────── */
@@ -613,6 +622,9 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   const PORTALS = ex ? (
     <>
       {printPreview}
+
+      {/* دیالوگ تصمیم افزودن به واژگان (تکراری / Partizip II / مترادف) */}
+      {gate.node}
 
       {/* کارت واژه (لمس کلمه) */}
       {dictCard && createPortal(
@@ -917,7 +929,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                     <button
                       key={`${i}-${j}`}
                       onClick={() => tapWord(tk.w)}
-                      className="underline decoration-dotted decoration-[#b6c3d9] underline-offset-4 hover:bg-[#1f5fbf]/10 hover:decoration-[#1f5fbf] transition-colors"
+                      className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition-colors"
                     >
                       {tk.w}
                     </button>
@@ -958,7 +970,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                       {val || '…'}
                     </button>
                   )}
-                  <span className="text-xs text-[#5d6676] dark:text-[#8b95a7]" dir="ltr">({g.inf})</span>
+                  <span className="text-xs text-[#5d6676] dark:text-[#8b95a7]" dir="ltr">(<button onClick={() => tapWord(g.inf)} className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition-colors">{g.inf}</button>)</span>
                 </span>
               );
             })}
@@ -1092,7 +1104,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                     <button onClick={() => { setChatGap(g.no); }} className="px-2.5 py-1.5 rounded-md text-xs font-bold border border-[#1f5fbf]/30 text-[#1f5fbf] dark:text-[#7fb0ff]">💬 معلم</button>
                   </div>
                 </div>
-                <p dir="ltr" className="text-left text-xs text-[#5d6676] dark:text-[#8b95a7] mt-1 leading-6">{sentOf(ex.segs, g.no)}</p>
+                <p dir="ltr" className="text-left text-xs text-[#5d6676] dark:text-[#8b95a7] mt-1 leading-6"><ClickableWords text={sentOf(ex.segs, g.no)} onWord={tapWord} /></p>
                 {(r && (r.grammar || r.meaning || r.thinking || r.tip)) ? (
                   <div className="mt-1.5 space-y-1 text-xs leading-6">
                     {r.grammar && <p><b className="text-[#1f5fbf] dark:text-[#7fb0ff]">گرامر:</b> <span className="text-[#1f2a3d] dark:text-[#e7ecf5]">{r.grammar}</span></p>}
@@ -1110,7 +1122,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
 
         <div className="rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-4 py-4">
           <p className="text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] mb-2">متن کامل و درست:</p>
-          <p dir="ltr" className="text-left text-[15px] leading-7 text-[#1f2a3d] dark:text-[#e7ecf5]">{storyPlain(ex.segs, true)}</p>
+          <p dir="ltr" className="text-left text-[15px] leading-7 text-[#1f2a3d] dark:text-[#e7ecf5]"><ClickableWords text={storyPlain(ex.segs, true)} onWord={tapWord} /></p>
           <div className="flex justify-end mt-2">
             <button onClick={() => doSpeak(storyPlain(ex.segs, true))} className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🔊 خواندن متن کامل</button>
           </div>

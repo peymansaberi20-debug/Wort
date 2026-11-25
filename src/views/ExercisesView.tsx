@@ -38,6 +38,7 @@ import { PratText } from '../components/PratText';
 import { trickOf } from '../utils/german';
 import { stripHeadAnnotation, hasHeadAnnotation } from '../data/verbPrep';
 import { VerbPhrase, verbPrepFor } from '../components/VerbPhrase';
+import { ClickableWords, WordLookupModal } from '../components/WordLookup';
 
 export type ExerciseMode =
   | 'flash'
@@ -418,7 +419,8 @@ const SentencePractice: React.FC<{
   timeUpSignal: number;
   onGraded: (grade: number) => void;
   onNext: () => void;
-}> = ({ w, faVisible, faButton, timeUpSignal, onGraded, onNext }) => {
+  onWord?: (w: string) => void;
+}> = ({ w, faVisible, faButton, timeUpSignal, onGraded, onNext, onWord }) => {
   const [text, setText] = useState('');
   const [result, setResult] = useState<SentenceCheck | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -462,7 +464,7 @@ Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentenc
   return (
     <div className="space-y-3 text-right">
       <p className="text-sm font-semibold text-[#5d6676] dark:text-[#a3adbd] text-center">با این واژه یک جملهٔ آلمانی بنویسید:</p>
-      <div className="text-2xl md:text-3xl font-extrabold text-center font-sans" dir="ltr">{fullWord(w)}</div>
+      <div className="text-2xl md:text-3xl font-extrabold text-center font-sans" dir="ltr">{onWord ? <ClickableWords text={fullWord(w)} onWord={onWord} /> : fullWord(w)}</div>
       <div className="text-center text-base font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">{faVisible || result ? w.fa : faButton}</div>
 
       {!result ? (
@@ -487,7 +489,7 @@ Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentenc
         </>
       ) : (
         <div className="space-y-3">
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] font-sans text-base" dir="ltr">{text.trim() || '—'}</div>
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] font-sans text-base" dir="ltr">{onWord && text.trim() ? <ClickableWords text={text.trim()} onWord={onWord} /> : (text.trim() || '—')}</div>
           <ul className="space-y-1.5 text-sm leading-7">
             {result.items.map((it, i) => (
               <li key={i} className={it.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400 font-semibold'}>
@@ -499,8 +501,8 @@ Return ONLY valid JSON: [{"correct": true|false, "corrected": "corrected sentenc
             <div className="font-bold">📚 جمله‌های نمونه برای مقایسه</div>
             {w.ex || w.ex2 ? (
               <>
-                {w.ex && (<div><div dir="ltr" className="font-sans font-semibold text-left">{w.ex}</div><div className="text-[#5d6676] dark:text-[#a3adbd]">{w.exFa}</div></div>)}
-                {w.ex2 && (<div><div dir="ltr" className="font-sans font-semibold text-left">{w.ex2}</div><div className="text-[#5d6676] dark:text-[#a3adbd]">{w.ex2Fa}</div></div>)}
+                {w.ex && (<div><div dir="ltr" className="font-sans font-semibold text-left">{onWord ? <ClickableWords text={w.ex} onWord={onWord} /> : w.ex}</div><div className="text-[#5d6676] dark:text-[#a3adbd]">{w.exFa}</div></div>)}
+                {w.ex2 && (<div><div dir="ltr" className="font-sans font-semibold text-left">{onWord ? <ClickableWords text={w.ex2} onWord={onWord} /> : w.ex2}</div><div className="text-[#5d6676] dark:text-[#a3adbd]">{w.ex2Fa}</div></div>)}
               </>
             ) : (
               <div className="text-[#5d6676] dark:text-[#a3adbd]">برای این واژه هنوز جملهٔ نمونه ثبت نشده است.</div>
@@ -548,7 +550,8 @@ const VmcQuestion: React.FC<{
   onRecord: (w: Word, mode: string, grade: number) => void;
   advance: () => void;
   speakCfg?: { rate?: number; vreg?: string; voice?: string };
-}> = ({ w, poolWords, onRecord, advance, speakCfg }) => {
+  onWord?: (w: string) => void;
+}> = ({ w, poolWords, onRecord, advance, speakCfg, onWord }) => {
   const [chosen, setChosen] = useState<string | null>(null);
   const options = useMemo(() => {
     const others = poolWords.filter(o => o.id !== w.id && o.fa && o.fa !== w.fa);
@@ -574,7 +577,9 @@ const VmcQuestion: React.FC<{
         <span className="text-xs text-[#5d6676]">معنی درست را انتخاب کن:</span>
       </div>
       <div className="flex items-center justify-center gap-3">
-        <div className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans" dir="ltr">{fullWord(w)}</div>
+        <div className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans" dir="ltr">
+          {onWord ? <ClickableWords text={fullWord(w)} onWord={onWord} /> : fullWord(w)}
+        </div>
         <button
           onClick={() => speak(fullWord(w), { rate: speakCfg?.rate, vreg: speakCfg?.vreg, voiceName: speakCfg?.voice })}
           className="w-10 h-10 rounded-full bg-[#1f5fbf] text-white text-lg flex items-center justify-center shadow-md hover:opacity-95"
@@ -598,7 +603,7 @@ const VmcQuestion: React.FC<{
           </div>
           {w.ex && (
             <div className="p-2.5 bg-slate-50 dark:bg-[#141923] rounded-xl text-sm space-y-1">
-              <p dir="ltr" className="font-sans font-semibold text-slate-800 dark:text-slate-200">{w.ex}</p>
+              <p dir="ltr" className="font-sans font-semibold text-slate-800 dark:text-slate-200">{onWord ? <ClickableWords text={w.ex} onWord={onWord} /> : w.ex}</p>
               {w.exFa && <p className="text-[#5d6676]">{w.exFa}</p>}
             </div>
           )}
@@ -715,6 +720,8 @@ interface ExercisesViewProps {
   onStartHard?: (ids: string[]) => void;
   dailyProgress?: { d: string; n: number; r: number; sn?: number; sr?: number };
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** بازکردن پروفایل واژهٔ کتابخانه از داخل تمرین (پاپ‌آپ «مشاهدهٔ واژه») */
+  onViewWord?: (word: Word) => void;
   /** منو به‌جای تمرین نمایش داده شود (جابجایی بین تب‌های اصلی بدون بستن تمرین‌های گرامر) */
   menuMode?: boolean;
   /** کلیک روی یکی از تب‌های اصلی وقتی تمرینی باز است → نمایش منو (تمرین‌های گرامر باز می‌مانند) */
@@ -747,6 +754,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   onStartHard,
   dailyProgress,
   onQuickAddWord,
+  onViewWord,
   menuMode: menuModeProp,
   onEnterMenu,
   vprepTab: vprepTabProp,
@@ -818,8 +826,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   const [profileModalWord, setProfileModalWord] = useState<Word | null>(null);
   const [sentenceModalWord, setSentenceModalWord] = useState<Word | null>(null);
   const [shadowWord, setShadowWord] = useState<Word | null>(null);
+  /** واژهٔ لمس‌شده در متن‌های تمرین (کلیک روی هر واژهٔ آلمانی) + سطح/دستهٔ همان تمرین */
+  const [lookupWord, setLookupWord] = useState<{ w: string; lvl: string; cat: string } | null>(null);
+  const openWordLookup = (w: string, lvl = '', cat = '') => { const t = (w || '').trim(); if (t.length >= 2) setLookupWord({ w: t, lvl, cat }); };
   // درخواست کاربر: ثانیه‌شمار تمرین هنگام باز بودن مودال تلفظ (و سایر مودال‌ها) متوقف بماند
-  pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord || !!shadowWord;
+  pausedRef.current = !!paused || !!profileModalWord || !!sentenceModalWord || !!shadowWord || !!lookupWord;
     
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [timerPopupOpen, setTimerPopupOpen] = useState(false);
@@ -1534,7 +1545,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 {w.art}
               </span>
             )}
-            <span className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans">
+            <span className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-sans cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => openWordLookup(w.de, w.lvl, w.cat)}>
               {w.de}
             </span>
             <button
@@ -1591,7 +1602,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         {w.def && (
           <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900 p-3.5 rounded-2xl text-base" dir="ltr">
             <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide block mb-1">Bedeutung & Definition</span>
-            <span className="font-sans font-semibold text-slate-800 dark:text-slate-100">{w.def}</span>
+            <span className="font-sans font-semibold text-slate-800 dark:text-slate-100"><ClickableWords text={w.def} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
           </div>
         )}
 
@@ -1603,7 +1614,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <div className="bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
                   <p className="text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
-                    {w.ex}
+                    <ClickableWords text={w.ex} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                   </p>
                   <button onClick={() => speak(w.ex, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-base">🔊</button>
                 </div>
@@ -1618,7 +1629,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               <div className="bg-slate-50 dark:bg-[#1b2029] p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between gap-2" dir="ltr">
                   <p className="text-base font-semibold text-slate-900 dark:text-slate-100 text-left">
-                    {w.ex2}
+                    <ClickableWords text={w.ex2} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                   </p>
                   <button onClick={() => speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })} className="text-base">🔊</button>
                 </div>
@@ -1757,12 +1768,26 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     );
   })() : undefined;
 
+  // پاپ‌آپ مرکزی واژهٔ لمس‌شده — همهٔ حالت‌های تمرین این نما + منو (گیت تکراری/P2/مترادف داخل خود مودال است)
+  const lookupModal = lookupWord ? (
+    <WordLookupModal
+      word={lookupWord.w}
+      level={lookupWord.lvl || 'B1'}
+      cat={lookupWord.cat || 'تمرین'}
+      paused={pausedRef.current}
+      onQuickAddWord={onQuickAddWord}
+      words={allWords}
+      onViewWord={onViewWord}
+      onClose={() => setLookupWord(null)}
+    />
+  ) : null;
+
   // تب‌های مستقل (کامپوننت خودشان همهٔ UI را دارند و از مسیر activeMode نمی‌گذرند)
   if (showMenu && mainTab === 'sprechen') {
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
-        <SprechenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} />
+        <SprechenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
       </div>
     );
   }
@@ -1771,7 +1796,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
-        <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} />
+        <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
       </div>
     );
   }
@@ -2005,7 +2030,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                               return vp ? (
                                 <VerbPhrase vp={vp} className="text-lg" />
                               ) : (
-                                <b className="text-lg font-sans truncate">{w.de}</b>
+                                <b className="text-lg font-sans truncate cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={e => { e.stopPropagation(); openWordLookup(w.de, w.lvl, w.cat); }}>{w.de}</b>
                               );
                             })()}
                           </span>
@@ -2020,6 +2045,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             </PageOverlay>
           );
         })()}
+        {lookupModal}
       </div>
     );
   }
@@ -2153,6 +2179,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         <HoerenTrainer
           initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
           onClose={() => onSelectMode(null)}
+          onQuickAddWord={onQuickAddWord}
+          words={allWords}
+          onViewWord={onViewWord}
         />
       </div>
     );
@@ -2257,7 +2286,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           با بستن، کاربر دقیقاً به همان جای تمرین برمی‌گردد */}
       {freeOpen && (
         <PageOverlay icon="✒️" title="تولید جملهٔ آزاد" onClose={() => setFreeOpen(false)}>
-          <FreeSentencePractice onShowToast={onShowToast} />
+          <FreeSentencePractice onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
         </PageOverlay>
       )}
 
@@ -2327,7 +2356,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                               // درخواست کاربر: اندازهٔ واژهٔ آلمانی با/بدون حرف اضافه یکسان — همین اندازه روی پشت کارت هم هست
                               <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
                             ) : (
-                              <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words">{w.de}</span>
+                              <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
                             );
                           })()}
                           <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
@@ -2358,7 +2387,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                             // اندازهٔ واژه روی پشت کارت = اندازهٔ روی کارت
                             <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
                           ) : (
-                            <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100">{w.de}</span>
+                            <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
                           );
                         })()}
                         <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
@@ -2370,7 +2399,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     {w.ex2 && (
                       <div className="w-full max-w-md bg-white dark:bg-[#1b2029] p-3 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1">
                         <div className="flex items-center justify-between gap-2" dir="ltr">
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 text-left">{w.ex2}</p>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 text-left"><ClickableWords text={w.ex2} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></p>
                           <button onClick={(e) => { e.stopPropagation(); speak(w.ex2, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice }); }} className="text-sm">🔊</button>
                         </div>
                         {w.ex2Fa && <p className="text-sm text-slate-600 dark:text-slate-300 text-right font-medium">{w.ex2Fa}</p>}
@@ -2426,7 +2455,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             <div className="space-y-4 text-center">
               <p className="text-sm text-[#5d6676]">آرتیکل درست برای این اسم کدام است؟</p>
               <div className="text-3xl font-extrabold font-sans py-2" dir="ltr">
-                {w.de}
+                <ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
               </div>
               <div className="text-base font-semibold text-[#1f5fbf]">{faVisible ? w.fa : faButton}</div>
 
@@ -2481,11 +2510,11 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               </p>
 
               <div className="text-xl md:text-2xl font-bold font-sans py-2 text-slate-900 dark:text-slate-100" dir="ltr">
-                {q.s}
+                <ClickableWords text={q.s} onWord={t => openWordLookup(t, '', 'حالت و حرف اضافه')} />
               </div>
 
               <div className="text-sm text-[#5d6676]">
-                کلمه مرجع: <span className="font-bold font-sans" dir="ltr">({bareNoun})</span>
+                کلمه مرجع: <span className="font-bold font-sans cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" dir="ltr" onClick={() => openWordLookup(bareNoun, '', 'حالت و حرف اضافه')}>({bareNoun})</span>
                 {' — '}
                 {faVisible ? q.fa : faButton}
               </div>
@@ -2583,7 +2612,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   )}
                   <div className="p-3 bg-slate-50 dark:bg-[#141923] rounded-xl text-sm text-right space-y-1">
                     <p><b>قاعده:</b> {q.r}</p>
-                    <p dir="ltr" className="font-semibold text-slate-800 dark:text-slate-200">{q.ex}</p>
+                    <p dir="ltr" className="font-semibold text-slate-800 dark:text-slate-200"><ClickableWords text={q.ex} onWord={t => openWordLookup(t, '', 'حالت و حرف اضافه')} /></p>
                     <p className="text-[#5d6676]">{q.exFa}</p>
                   </div>
                   <button
@@ -2606,6 +2635,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
             onRecord={(word, mode, grade) => record(word, mode, grade)}
             advance={advanceQuestion}
             speakCfg={{ rate: settings?.rate, vreg: settings?.vreg, voice: settings?.voice }}
+            onWord={t => { const cw = currentItem as Word; openWordLookup(t, cw?.lvl, cw?.cat); }}
           />
         )}
 
@@ -2628,7 +2658,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                         return vp ? (
                           <VerbPhrase vp={vp} className="font-bold" />
                         ) : (
-                          <span className="font-bold font-sans" dir="ltr">{w.de}</span>
+                          <span className="font-bold font-sans cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" dir="ltr" onClick={() => openWordLookup(w.de, w.lvl, w.cat)}>{w.de}</span>
                         );
                       })()}
                     </span>
@@ -2641,7 +2671,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[#5d6676]">فعل را به Präteritum یا Perfekt ببرید:</p>
                   <div className="text-2xl font-bold font-sans py-1 text-slate-900 dark:text-slate-100" dir="ltr">
-                    {w.de}
+                    <ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                   </div>
                   <div className="text-sm text-[#5d6676]">
                     {faVisible ? <>ترجمه: <span className="font-bold">{w.fa}</span></> : faButton}
@@ -2653,7 +2683,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[#5d6676]">جای خالی را با کلمه مناسب تکمیل کنید:</p>
                   <div className="text-xl md:text-2xl font-bold font-sans py-2 text-slate-900 dark:text-slate-100 leading-relaxed" dir="ltr">
-                    {w.cloze || `${w.de} _____`}
+                    <ClickableWords text={w.cloze || `${w.de} _____`} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                   </div>
                   <div className="text-sm text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
                 </div>
@@ -2663,7 +2693,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-[#5d6676]">شکل جمع این اسم را بنویسید:</p>
                   <div className="text-2xl font-bold font-sans py-1" dir="ltr">
-                    {fullWord(w)}
+                    <ClickableWords text={fullWord(w)} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                   </div>
                   <div className="text-sm text-[#5d6676]">{faVisible ? `(${w.fa})` : faButton}</div>
                 </div>
@@ -2690,7 +2720,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                       {isAnt ? 'متضاد (واژهٔ مخالف)' : 'مترادف (واژهٔ هم‌معنی)'} این واژه را بنویسید:
                     </p>
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-2xl md:text-3xl font-extrabold font-sans" dir="ltr">{fullWord(w)}</span>
+                      <span className="text-2xl md:text-3xl font-extrabold font-sans" dir="ltr"><ClickableWords text={fullWord(w)} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
                       <button
                         onClick={() => speak(fullWord(w), { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
                         className="w-9 h-9 rounded-full bg-[#1f5fbf] text-white text-sm flex items-center justify-center"
@@ -2724,7 +2754,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                         </span>
                       </p>
                       <div dir="ltr" className="text-xl md:text-2xl font-bold font-sans leading-relaxed text-center">
-                        {answerResult ? adjInfo.item.full : adjInfo.item.sentence.replace('_____', `_____ (${adjInfo.item.base})`)}
+                        <ClickableWords
+                          text={answerResult ? adjInfo.item.full : adjInfo.item.sentence.replace('_____', `_____ (${adjInfo.item.base})`)}
+                          onWord={t => openWordLookup(t, String(adjInfo.item.level || '') || w.lvl, w.cat)}
+                        />
                       </div>
                       <div className="text-base font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">
                         {faVisible ? (adjInfo.src.fa || w.fa) : faButton}
@@ -2743,7 +2776,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   </p>
                   <div className="flex items-center justify-center gap-2">
                     <span className="text-2xl md:text-3xl font-extrabold font-sans" dir="ltr">
-                      {qMode === 'n2v' ? fullWord(w) : w.de}
+                      <ClickableWords text={qMode === 'n2v' ? fullWord(w) : w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                     </span>
                     <button
                       onClick={() => speak(qMode === 'n2v' ? fullWord(w) : w.de, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice })}
@@ -2766,6 +2799,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   faVisible={faShown}
                   faButton={faButton}
                   timeUpSignal={sentTimeUp}
+                  onWord={t => openWordLookup(t, w.lvl, w.cat)}
                   onGraded={grade => {
                     setAnswerResult({ ok: grade >= 2 ? 1 : 0, exp: '' });
                     record(w, 'sent', grade);
@@ -2778,6 +2812,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <FreeSentencePractice
                   key={currentKey}
                   onShowToast={onShowToast}
+                  onQuickAddWord={onQuickAddWord}
+                  words={allWords}
+                  onViewWord={onViewWord}
                 />
               )}
               {qMode === 'schreiben' && (
@@ -2785,6 +2822,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   key={currentKey}
                   variant="pruefen"
                   onShowToast={onShowToast}
+                  onQuickAddWord={onQuickAddWord}
+                  words={allWords}
+                  onViewWord={onViewWord}
                 />
               )}
               {qMode === 'schreiben_exam' && (
@@ -2792,9 +2832,12 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   key={currentKey}
                   variant="pruefung"
                   onShowToast={onShowToast}
+                  onQuickAddWord={onQuickAddWord}
+                  words={allWords}
+                  onViewWord={onViewWord}
                 />
               )}
-              {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} />}
+              {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} onViewWord={onViewWord} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
               {qMode === 'prod' && (
                 <div className="space-y-2">
@@ -2971,6 +3014,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           />
         );
       })()}
+
+      {/* پاپ‌آپ واژهٔ لمس‌شده — مشترک بین همهٔ حالت‌های تمرین */}
+      {lookupModal}
     </div>
   );
 };
