@@ -37,6 +37,31 @@ export function normInf(inf: string): string {
   return inf.trim().replace(/^sich\s+/i, '').toLowerCase();
 }
 
+/** پیشوندهای جداشدنی رایج — بلندترین تطبیق اول.
+ *  «um/über/unter/wieder» عمداً حذف شدند: هم جداشدنی دارند هم ناجداشدنی (umarmen/umziehen) و حدس خطرناک است؛
+ *  برای آن‌ها مقایسهٔ پیشوندیِ markForm کافی و درست است. */
+const SEP_PREFIXES = [
+  'zurück', 'zusammen', 'weiter', 'herunter', 'hinauf', 'hinunter', 'herauf',
+  'empor', 'entlang', 'vorbei', 'nieder', 'rauf', 'runter', 'statt',
+  'ab', 'an', 'auf', 'aus', 'bei', 'ein', 'fehl', 'fest', 'fort', 'frei',
+  'heim', 'her', 'hin', 'los', 'mit', 'nach', 'vor', 'weg', 'zu',
+];
+
+/** تشخیص ذرهٔ جداشدنی از شکل خودِ فعل (شواهد، نه فقط حدس):
+ *  prt «ging weiter» → ذره در انتها؛ pp «angekommen» → ذره در ابتدا. */
+function detectSep(inf: string, prt: string, pp: string): string | undefined {
+  for (const p of SEP_PREFIXES) {
+    if (!inf.startsWith(p) || inf.length <= p.length + 2) continue;
+    if (prt.endsWith(' ' + p) || prt.startsWith(p + ' ') || pp.startsWith(p)) return p;
+  }
+  return undefined;
+}
+
+/** فقط نخستین معنی — واژه‌های کتاب چند معنی دارند («ادامه دادن به رفتن / ادامه داشتن») و در جدول شلوغ می‌شود */
+function firstFa(fa: string): string {
+  return (fa.split(/[،,;(|/]/)[0] || '').trim().replace(/\s+/g, ' ');
+}
+
 /** فعل کمکی‌های احتمالی در ابتدای فیلد perf */
 const AUX_MAP: Record<string, 'haben' | 'sein'> = {
   ist: 'sein', bin: 'sein', war: 'sein',
@@ -105,7 +130,8 @@ export function wordToIrrVerb(w: Word): IrrVerb | null {
   const bank = BANK_BY_INF.get(inf);
   const prtFinal = prt || bank?.prt || '';
   const ppFinal = pp || bank?.pp || '';
-  const sepFinal = sep || bank?.sep;
+  // ذرهٔ جداشدنی: از واژه → از بانک → تشخیص از شکل خود فعل (پیشوند جداشدنیِ ناشناخته هم پیدایش می‌کند)
+  const sepFinal = sep || bank?.sep || detectSep(inf, prtFinal, ppFinal);
   if (!prtFinal || !ppFinal) return null;
 
   // فقط بی‌قاعده‌ها: چه Präteritum بی‌قاعده چه Partizip II چه هر دو
@@ -115,7 +141,7 @@ export function wordToIrrVerb(w: Word): IrrVerb | null {
 
   return {
     inf,
-    fa: w.fa || '',
+    fa: firstFa(w.fa || ''),
     aux,
     prt: prtFinal,
     pp: ppFinal,
@@ -133,8 +159,12 @@ export function libIrregularVerbs(words: Word[] | undefined): IrrVerb[] {
     const v = wordToIrrVerb(w);
     if (!v) continue;
     const key = normInf(v.inf);
-    if (seen.has(key) || BANK_BY_INF.has(key)) continue; // تکراری یا هم‌پوشان با بانک
+    // کنترل تکراری در همهٔ سطوح: «gelten für» هم با «geltenِ» بانک B2 یکی است
+    const tok = key.split(/\s+/)[0] || key;
+    if (seen.has(key) || seen.has(tok)) continue;
+    if (BANK_BY_INF.has(key) || BANK_BY_INF.has(tok)) continue;
     seen.add(key);
+    if (tok !== key) seen.add(tok);
     out.push(v);
   }
   return out;
