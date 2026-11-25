@@ -92,7 +92,14 @@ export function markForm(form: string, opts: MarkOpts): MarkedSeg[] {
     const sp = form.indexOf(' ');
     const core = form.slice(0, sp);
     const rest = form.slice(sp + 1);
-    const infCore = sep && inf.startsWith(sep) ? inf.slice(sep.length) : inf;
+    // حتی بدون متادیتای sep: اگر ذره در انتهای شکل، ابتدای مصدر هم باشد
+    // («ging weiter» ↔ «weitergehen») مقایسه فقط روی هسته انجام می‌شود تا
+    // حروف مشترک هسته («g») سیاه بمانند و فقط تغییر واقعی قرمز شود.
+    const infCore = rest && inf.startsWith(rest)
+      ? inf.slice(rest.length)
+      : sep && inf.startsWith(sep)
+        ? inf.slice(sep.length)
+        : inf;
     const reg = isWeakLike(core, stemOf(infCore), 'prt') ? null : changedRegion(core, infCore);
     return [
       ...(reg ? splitByRegion(core, reg) : [{ text: core, changed: false }]),
