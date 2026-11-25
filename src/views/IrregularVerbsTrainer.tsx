@@ -108,6 +108,10 @@ const irrChipLabel = (v: IrrVerb): string => {
   return 'فقط Perfekt';
 };
 
+/** کلید مرتب‌سازی «موارد شبیه زیر هم»: وارونهٔ مصدر — فعل‌هایی که پایان مشترک دارند
+ *  کنار هم می‌افتند (empfehlen/befehlen، kapieren/kontrollieren/informieren و…) */
+const rkey = (s: string): string => s.split('').reverse().join('');
+
 /* ───────────────────────── بررسی پاسخ ───────────────────────── */
 
 const checkPrt = (given: string, v: IrrVerb): boolean =>
@@ -173,8 +177,14 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     () => (useLib ? libVerbs.filter(v => v.lvl === lvl) : []),
     [libVerbs, useLib, lvl]
   );
-  /** بانک + واژگان کاربر (هم‌پوشانی‌ها در irrLibrary حذف شده‌اند) */
-  const levelVerbs = useMemo(() => [...bankVerbs, ...libForLevel], [bankVerbs, libForLevel]);
+  /** بانک + واژگان کاربر — مرتب بر اساس وارونهٔ مصدر تا فعل‌های شبیه زیر هم باشند */
+  const levelVerbs = useMemo(
+    () => [...bankVerbs, ...libForLevel].sort((a, b) => {
+      const ka = rkey(a.inf), kb = rkey(b.inf);
+      return ka < kb ? -1 : ka > kb ? 1 : a.inf < b.inf ? -1 : a.inf > b.inf ? 1 : 0;
+    }),
+    [bankVerbs, libForLevel]
+  );
   const current = queue[qi] as IrrVerb | undefined;
   const mistakesVerbs = useMemo(
     () => mistakes.map(inf => queue.find(v => v.inf === inf)).filter((v): v is IrrVerb => !!v),
@@ -252,6 +262,11 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     try { return new Date().toLocaleDateString('fa-IR'); } catch { return ''; }
   }, []);
   const ptd: React.CSSProperties = { border: '0.5pt solid #94a3b8', padding: '3pt 7pt', fontSize: '10.5pt', whiteSpace: 'nowrap' };
+  /** اندازهٔ فونت سلول چاپ بر اساس طول متن — کلمهٔ بلند کوچک می‌شود تا دوخطی نشود و ستون نپرد */
+  const fitPt = (s: string): string => {
+    const n = s.trim().length;
+    return n >= 16 ? '7.5pt' : n >= 13 ? '8.5pt' : n >= 11 ? '9.5pt' : '10.5pt';
+  };
   const printSheet = createPortal((
     <div className="irr-print" dir="rtl">
       <style>{`
@@ -279,7 +294,14 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           <span className="p-aux-sein"> ist </span>= sein • <span className="p-aux-haben"> hat </span>= haben
         </div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'ltr' }}>
+      {/* پهنای ستون‌ها ثابت (tableLayout fixed) تا در همهٔ سطح‌ها یکسان بماند؛ کلمهٔ بلند با fitPt کوچک می‌شود */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'ltr', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '23%' }} />
+          <col style={{ width: '24%' }} />
+          <col style={{ width: '31%' }} />
+          <col style={{ width: '22%' }} />
+        </colgroup>
         <thead>
           <tr>
             <th style={{ ...ptd, textAlign: 'left', fontWeight: 700 }}>Infinitiv</th>
@@ -294,9 +316,9 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
             const ppSegs = markForm(v.pp, { inf: v.inf, kind: 'pp', sep: v.sep, override: v.hPp });
             return (
               <tr key={v.inf}>
-                <td style={ptd} dir="ltr">{v.inf}{v.src === 'lib' ? ' *' : ''}</td>
-                <td style={ptd} dir="ltr">{pSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}</td>
-                <td style={ptd} dir="ltr">
+                <td style={{ ...ptd, fontSize: fitPt(v.inf + (v.src === 'lib' ? ' *' : '')) }} dir="ltr">{v.inf}{v.src === 'lib' ? ' *' : ''}</td>
+                <td style={{ ...ptd, fontSize: fitPt(v.prt) }} dir="ltr">{pSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}</td>
+                <td style={{ ...ptd, fontSize: fitPt(`${v.aux === 'sein' ? 'ist' : 'hat'} ${v.pp}`) }} dir="ltr">
                   <span className={v.aux === 'sein' ? 'p-aux-sein' : 'p-aux-haben'}>{v.aux === 'sein' ? 'ist' : 'hat'}</span>
                   {' '}
                   {ppSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}
