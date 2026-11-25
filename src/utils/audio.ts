@@ -235,6 +235,8 @@ export async function speak(
     }
 
     utterance.onerror = event => {
+      // قطعِ عمدی صدا (stopSpeaking هنگام رد کردن کارت) خطا نیست — پیام خطا فقط برای خطای واقعی
+      if (event.error === 'interrupted' || event.error === 'canceled') return;
       opts.onErr?.(`خطا در پخش تلفظ: ${event.error}`);
     };
 
