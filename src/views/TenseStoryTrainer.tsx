@@ -27,7 +27,7 @@ import { STORIES, Story } from './tenseStoryBank';
 import { parseBlanks, parseSegments, lookupWord, explainBlank, isCorrect, normalizeAnswer, Blank, Lookup } from './tenseStoryHelpers';
 import { TLvl, TLVL_ORDER, TLVL_INFO, LEVEL_VERBS, LEVEL_PREPS, bandOf } from '../data/tenseStoryVerbs';
 import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
-import { ArchivePanel, ArchiveRow, MiniChip, PrintPreview, SqBtn, prFa, prG, toFa, useConfirm } from '../components/trainerUI';
+import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrintPreview, Section, SqBtn, TopicInput, prFa, prG, toFa, useConfirm } from '../components/trainerUI';
 
 /* ─────────────────────────── پل هوش مصنوعی برنامه ───────────────────────────
  * کلید و مدل از تنظیمات برنامه (aiProvider — Gemini/Groq/OpenRouter) می‌آید.
@@ -46,7 +46,7 @@ const aiLabel = (): string => {
     const p = String(getActiveProvider() || 'AI');
     const m = String(getModel() || '').trim();
     return m ? `${p} · ${m}` : p;
-  } catch { return 'هوش مصنوعی'; }
+  } catch { return 'معلم'; }
 };
 
 /** تبدیل پاسخ AI به JSON حتی وقتی ```json یا متن اضافه دارد */
@@ -327,7 +327,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   /* ── ساخت تمرین با هوش مصنوعی ── */
   const generateAI = async () => {
     if (!aiReady()) {
-      onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — یا «داستان آماده» را بزن.', true);
+      onShowToast('معلم در تنظیمات برنامه فعال نیست — یا «داستان آماده» را بزن.', true);
       return;
     }
     setBusy('gen');
@@ -405,6 +405,12 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
     setScreen(a.results && Object.keys(a.results).length ? 'review' : 'play');
   };
 
+  /** آزمون دوباره: همان داستان، بدون پاسخ و سفید از اول — به‌عنوان تلاشِ جدید ذخیره می‌شود (مثل «حرف ربط انتخابی») */
+  const retake = (a: Attempt) => {
+    const e: Exercise = { id: uid(), ts: Date.now(), lvl: a.lvl, tense: a.tense, topic: a.topic, title: a.title, titleFa: a.titleFa, src: a.src, segs: a.segs };
+    startEx(e);
+  };
+
   /* ── ورود پاسخ جای خالی ── */
   const submitGap = (no: number, val: string) => {
     const next = { ...answers, [no]: val.trim() };
@@ -423,7 +429,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
     const answered = Object.values(answers).filter(v => v.trim()).length;
     if (answered === 0) { onShowToast('اول حداقل یک جای خالی را پر کن.', true); return; }
     if (!aiReady()) {
-      if (ex.src !== 'bank') { onShowToast('برای تصحیح هوشمند، هوش مصنوعی را در تنظیمات برنامه فعال کن.', true); return; }
+      if (ex.src !== 'bank') { onShowToast('برای تصحیح هوشمند، معلم را در تنظیمات برنامه فعال کن.', true); return; }
       // داستان بانک: تصحیح آفلاین با پاسخ‌های شناخته‌شده
       const res: Record<number, GapResult> = {};
       for (const g of gaps) {
@@ -517,7 +523,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
     if (!ex || chatGap === null || chatBusy) return;
     const q0 = (override || chatDraft).trim();
     if (!q0) return;
-    if (!aiReady()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست.', true); return; }
+    if (!aiReady()) { onShowToast('معلم در تنظیمات برنامه فعال نیست.', true); return; }
     const g = gaps.find(x => x.no === chatGap)!;
     const given = (answers[g.no] || '').trim();
     const q = q0;
@@ -624,32 +630,32 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                       <button onClick={() => setDictCard(null)} className="px-2 py-1 rounded-lg text-xs font-bold text-[#5d6676] dark:text-[#8b95a7]">✕</button>
                     </div>
                   </div>
-                  {LK.art && <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#6b4fd8]/10 text-[#6b4fd8]" dir="ltr">{LK.art}</span>}
-                  {LK.pos && <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-[#0f141d] text-[#5d6676] dark:text-[#8b95a7] ml-1">{LK.pos}</span>}
+                  {LK.art && <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#6b4fd8]/10 text-[#6b4fd8]" dir="ltr">{LK.art}</span>}
+                  {LK.pos && <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-[#0f141d] text-[#5d6676] dark:text-[#8b95a7] ml-1">{LK.pos}</span>}
                   <p className="text-sm font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">{LK.fa}</p>
                   {chain && (
-                    <div dir="ltr" className="text-left text-[11px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] bg-slate-50 dark:bg-[#0f141d] rounded-lg px-2.5 py-1.5">
+                    <div dir="ltr" className="text-left text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] bg-slate-50 dark:bg-[#0f141d] rounded-lg px-2.5 py-1.5">
                       {LK.inf} → {chain.prt3} → {chain.pp}
                       <span className="text-[#5d6676] dark:text-[#8b95a7]"> (Perfekt mit {chain.aux})</span>
                     </div>
                   )}
                   {LK.ex && (
                     <div className="rounded-lg bg-slate-50 dark:bg-[#0f141d] px-2.5 py-2">
-                      <p dir="ltr" className="text-left text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5]">{LK.ex}</p>
-                      {LK.exFa && <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] mt-0.5">{LK.exFa}</p>}
+                      <p dir="ltr" className="text-left text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5]">{LK.ex}</p>
+                      {LK.exFa && <p className="text-xs text-[#5d6676] dark:text-[#8b95a7] mt-0.5">{LK.exFa}</p>}
                     </div>
                   )}
                   {onQuickAddWord && LK.fa && LK.fa !== 'این کلمه در واژه‌نامهٔ این تمرین نیست.' && (
                     <button
                       onClick={() => addWord(dictCard.word, LK)}
                       disabled={added.has(LK.de || dictCard.word)}
-                      className="w-full py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white disabled:opacity-50"
+                      className="w-full py-2.5 rounded-lg text-sm font-bold bg-emerald-600 text-white disabled:opacity-50"
                     >
                       {added.has(LK.de || dictCard.word) ? '✓ به واژگان اضافه شد' : '＋ افزودن به واژگان'}
                     </button>
                   )}
                   {!dictCard.ai && (!LK.fa || LK.fa === 'این کلمه در واژه‌نامهٔ این تمرین نیست.') && (
-                    <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7]">{aiReady() ? 'واژه‌نامهٔ آفلاین پاسخی نداشت و پرسش از هوش مصنوعی هم ناموفق بود.' : 'در واژه‌نامهٔ آفلاین نیست؛ برای ترجمه، هوش مصنوعی را در تنظیمات برنامه فعال کن.'}</p>
+                    <p className="text-xs text-[#5d6676] dark:text-[#8b95a7]">{aiReady() ? 'واژه‌نامهٔ آفلاین پاسخی نداشت و پرسش از معلم هم ناموفق بود.' : 'در واژه‌نامهٔ آفلاین نیست؛ برای ترجمه، معلم را در تنظیمات برنامه فعال کن.'}</p>
                   )}
                 </div>
               );
@@ -671,26 +677,26 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                 <>
                   <div className="px-4 py-2.5 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-extrabold text-[#1f2a3d] dark:text-[#e7ecf5]">
+                      <p className="text-[13px] font-extrabold text-[#1f2a3d] dark:text-[#e7ecf5]">
                         💬 معلم — جای خالی {g.no}: <span dir="ltr">{g.inf}</span>
                       </p>
-                      <p dir="ltr" className="text-left text-[10px] text-[#5d6676] dark:text-[#8b95a7] truncate">{sentOf(ex.segs, g.no)}</p>
+                      <p dir="ltr" className="text-left text-[11px] text-[#5d6676] dark:text-[#8b95a7] truncate">{sentOf(ex.segs, g.no)}</p>
                     </div>
                     <button onClick={() => setChatGap(null)} className="px-2 py-1 rounded-lg text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] shrink-0">✕</button>
                   </div>
                   <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2 min-h-[180px]">
-                    {msgs.length === 0 && <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] py-3 text-center">دربارهٔ همین جای خالی بپرس: «چرا این‌طور؟»، «مثال بده»، …</p>}
+                    {msgs.length === 0 && <p className="text-xs text-[#5d6676] dark:text-[#8b95a7] py-3 text-center">دربارهٔ همین جای خالی بپرس: «چرا این‌طور؟»، «مثال بده»، …</p>}
                     {msgs.map((m, i) => (
-                      <div key={i} className={`max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-6 whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#1f5fbf] text-white ml-auto' : 'bg-slate-50 dark:bg-[#0f141d] text-[#1f2a3d] dark:text-[#e7ecf5] border border-[#dde1ea] dark:border-[#333b4a]'}`}>
+                      <div key={i} className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-6 whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#1f5fbf] text-white ml-auto' : 'bg-slate-50 dark:bg-[#0f141d] text-[#1f2a3d] dark:text-[#e7ecf5] border border-[#dde1ea] dark:border-[#333b4a]'}`}>
                         {m.text}
                       </div>
                     ))}
-                    {chatBusy && <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7]">معلم در حال نوشتن…</p>}
+                    {chatBusy && <p className="text-xs text-[#5d6676] dark:text-[#8b95a7]">معلم در حال نوشتن…</p>}
                     <div ref={chatEndRef} />
                   </div>
                   <div className="px-3 pb-2 flex flex-wrap gap-1.5">
                     {QUICK_QS.map(q => (
-                      <button key={q} onClick={() => sendChat(q)} disabled={chatBusy} className="px-2.5 py-1 rounded-full text-[10px] font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] disabled:opacity-50">
+                      <button key={q} onClick={() => sendChat(q)} disabled={chatBusy} className="px-3 py-1.5 rounded-full text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] disabled:opacity-50">
                         {q}
                       </button>
                     ))}
@@ -701,9 +707,9 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                       onChange={e => setChatDraft(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') sendChat(); }}
                       placeholder="پرسشت را بنویس…"
-                      className="flex-1 border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-3 py-2 text-xs bg-white dark:bg-[#141923] outline-none"
+                      className="flex-1 border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-3 py-2 text-sm bg-white dark:bg-[#141923] outline-none"
                     />
-                    <button onClick={() => sendChat()} disabled={chatBusy || !chatDraft.trim()} className="px-4 rounded-lg text-xs font-extrabold text-white bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-50">فرستادن</button>
+                    <button onClick={() => sendChat()} disabled={chatBusy || !chatDraft.trim()} className="px-4 rounded-lg text-sm font-extrabold text-white bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-50">فرستادن</button>
                   </div>
                 </>
               );
@@ -715,97 +721,65 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
     </>
   ) : null;
 
-  /* ═══════════════════ صفحهٔ تنظیم تمرین ═══════════════════ */
+  /* ═══════════════════ صفحهٔ تنظیم تمرین (پوستهٔ یکدست مثل بقیهٔ تمرین‌ها) ═══════════════════ */
   if (screen === 'config') {
     return (
       <div dir="rtl" className="space-y-3">
-        {/* سطح */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] mb-1.5">۱. سطح</div>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {TLVL_ORDER.map(l => (
-              <button
-                key={l}
-                onClick={() => { setLvl(l); setVerbCard(null); }}
-                className={`py-2.5 rounded-xl text-xs font-bold border transition ${
-                  lvl === l
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent shadow'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#1f2a3d] dark:text-[#e7ecf5]'
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] mt-2 leading-5">{TLVL_INFO[lvl].label}</p>
-        </div>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
+          {/* ۱. سطح — چیپ‌های قابل کلیک در یک خط */}
+          <Section n="۱" label="سطح">
+            <LevelChips value={lvl} onChange={l => { setLvl(l as TLvl); setVerbCard(null); }} levels={TLVL_ORDER as unknown as string[]} />
+            <p className="text-xs text-[#5d6676] dark:text-[#8b95a7] mt-2 leading-5">{TLVL_INFO[lvl].label}</p>
+          </Section>
 
-        {/* زمان */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] mb-1.5">۲. زمان دستوری</div>
-          <div className="grid grid-cols-3 md:grid-cols-7 gap-2">
-            {TENSE_ORDER.map(t => (
-              <button
-                key={t}
-                onClick={() => setTense(t)}
-                title={TENSE_INFO[t].expl}
-                className={`py-2 rounded-xl text-[11px] font-bold border transition leading-4 ${
-                  tense === t
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent shadow'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#1f2a3d] dark:text-[#e7ecf5]'
-                }`}
-              >
-                {TENSE_INFO[t].de}
-                <span className="block text-[9px] font-medium opacity-80">{TENSE_INFO[t].fa}</span>
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] mt-2 leading-5">{TENSE_INFO[tense].expl}</p>
-        </div>
+          {/* ۲. زمان دستوری — چیپ‌ها در یک خط (کشیدنی افقی) */}
+          <Section n="۲" label="زمان دستوری">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {TENSE_ORDER.map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTense(t)}
+                  title={TENSE_INFO[t].expl}
+                  className={`flex-shrink-0 min-w-[80px] py-2.5 rounded-xl text-xs font-bold border transition leading-4 ${
+                    tense === t
+                      ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent shadow'
+                      : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#1f2a3d] dark:text-[#e7ecf5]'
+                  }`}
+                >
+                  {TENSE_INFO[t].de}
+                  <span className="block text-[10px] font-medium opacity-80">{TENSE_INFO[t].fa}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[#5d6676] dark:text-[#8b95a7] mt-2 leading-5">{TENSE_INFO[tense].expl}</p>
+          </Section>
 
-        {/* تعداد جاهای خالی */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] mb-1.5">۳. تعداد جاهای خالی</div>
-          <div className="flex gap-2">
-            {[5, 8, 10, 12].map(c => (
-              <button
-                key={c}
-                onClick={() => setCount(c)}
-                className={`px-5 py-2 rounded-xl text-sm font-bold border transition ${
-                  count === c
-                    ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent shadow'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#1f2a3d] dark:text-[#e7ecf5]'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
+          {/* ۳. تعداد جاهای خالی — فقط عدد، در یک خط */}
+          <Section n="۳" label="تعداد جاهای خالی">
+            <CountChips value={count} onChange={setCount} counts={[5, 8, 10, 12]} />
+          </Section>
 
-        {/* موضوع */}
-        <div>
-          <div className="text-xs font-bold text-[#5d6676] dark:text-[#8b95a7] mb-1.5">۴. موضوع (اختیاری)</div>
-          <input
-            value={topic}
-            onChange={e => setTopic(e.target.value)}
-            placeholder="مثلاً: اولین سفر با قطار"
-            className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-lg px-3 py-2 text-sm bg-white dark:bg-[#141923] outline-none text-right"
-          />
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {TOPIC_CHIPS.map(t => (
-              <button
-                key={t}
-                onClick={() => setTopic(t === topic ? '' : t)}
-                className={`px-3 py-1 rounded-full text-[11px] font-bold border transition ${
-                  topic === t
-                    ? 'bg-[#1f5fbf] text-white border-transparent'
-                    : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
+          {/* ۴. موضوع (اختیاری) */}
+          <Section n="۴" label="موضوع (اختیاری)">
+            <TopicInput value={topic} onChange={setTopic} chips={TOPIC_CHIPS} placeholder="مثلاً: اولین سفر با قطار" />
+          </Section>
+
+          {/* دکمه‌های ساخت */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button
+              onClick={generateAI}
+              disabled={busy !== null}
+              className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] shadow disabled:opacity-50"
+            >
+              {busy === 'gen' ? 'در حال ساختن داستان…' : '✨ ساخت داستان با معلم'}
+            </button>
+            <button
+              onClick={generateBank}
+              disabled={busy !== null}
+              className="w-full py-3 rounded-xl text-sm font-extrabold border-2 border-[#1f5fbf] text-[#1f5fbf] dark:text-[#7fb0ff] bg-white dark:bg-[#141923] disabled:opacity-50"
+            >
+              📖 داستان آمادهٔ آفلاین ({BAND_INFO[bandOf(lvl)].label})
+            </button>
           </div>
         </div>
 
@@ -813,14 +787,14 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         <div className="border border-[#dde1ea] dark:border-[#333b4a] rounded-xl overflow-hidden">
           <button
             onClick={() => setGuideOpen(o => !o)}
-            className="w-full px-3 py-2.5 flex items-center justify-between text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] bg-slate-50 dark:bg-[#0f141d]"
+            className="w-full px-3 py-3 flex items-center justify-between text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] bg-slate-50 dark:bg-[#0f141d]"
           >
             <span>📚 راهنمای فعل‌ها و حروف اضافهٔ سطح {lvl}</span>
-            <span className={`transition-transform text-[10px] ${guideOpen ? 'rotate-180' : ''}`}>▼</span>
+            <span className={`transition-transform text-xs ${guideOpen ? 'rotate-180' : ''}`}>▼</span>
           </button>
           {guideOpen && (
             <div className="px-3 pb-3 pt-2 space-y-2">
-              <div className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] leading-5">
+              <div className="text-xs text-[#5d6676] dark:text-[#8b95a7] leading-5">
                 داستانِ این سطح عمدتاً با این فعل‌ها ساخته می‌شود. روی هر فعل بزن تا صرفش را ببینی.
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -828,7 +802,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                   <button
                     key={v}
                     onClick={() => setVerbCard(v === verbCard ? null : v)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
                       verbCard === v
                         ? 'bg-[#1f5fbf] text-white border-transparent'
                         : 'bg-white dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#1f2a3d] dark:text-[#e7ecf5]'
@@ -839,7 +813,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                 ))}
               </div>
               {verbCard && VERBS[verbCard] && (
-                <div className="rounded-lg bg-slate-50 dark:bg-[#0f141d] border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[12px] leading-6">
+                <div className="rounded-lg bg-slate-50 dark:bg-[#0f141d] border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[13px] leading-6">
                   <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">{verbCard}</b>
                   <span className="text-[#5d6676] dark:text-[#8b95a7]"> — {VERBS[verbCard].fa}</span>
                   <div dir="ltr" className="text-left font-bold text-[#1f2a3d] dark:text-[#e7ecf5] mt-1">
@@ -848,35 +822,17 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                   </div>
                 </div>
               )}
-              <div className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] pt-1">حروف اضافهٔ این سطح:</div>
+              <div className="text-xs text-[#5d6676] dark:text-[#8b95a7] pt-1">حروف اضافهٔ این سطح:</div>
               <div className="flex flex-wrap gap-1.5">
                 {LEVEL_PREPS[lvl].map(p => (
-                  <span key={p} dir="ltr" className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-50 dark:bg-[#0f141d] border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]">{p}</span>
+                  <span key={p} dir="ltr" className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-50 dark:bg-[#0f141d] border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7]">{p}</span>
                 ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* دکمه‌های ساخت */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-          <button
-            onClick={generateAI}
-            disabled={busy !== null}
-            className="w-full py-3 rounded-xl text-sm font-extrabold text-white bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] shadow disabled:opacity-50"
-          >
-            {busy === 'gen' ? 'در حال ساختن داستان…' : '✨ ساخت داستان با هوش مصنوعی'}
-          </button>
-          <button
-            onClick={generateBank}
-            disabled={busy !== null}
-            className="w-full py-3 rounded-xl text-sm font-extrabold border-2 border-[#1f5fbf] text-[#1f5fbf] dark:text-[#7fb0ff] bg-white dark:bg-[#141923] disabled:opacity-50"
-          >
-            📖 داستان آمادهٔ آفلاین ({BAND_INFO[bandOf(lvl)].label})
-          </button>
-        </div>
-
-        {/* تاریخچه — آرشیو یکدست (مثل بقیهٔ تمرین‌ها) + حذف با تأییدیه */}
+        {/* تاریخچه — آرشیو یکدست «تمرین‌های ذخیره‌شده» + آزمون دوباره + حذف با تأییدیه */}
         <ArchivePanel
           title="تمرین‌های ذخیره‌شده"
           count={history.length}
@@ -888,7 +844,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
             return (
               <ArchiveRow
                 key={a.id}
-                title={<button onClick={() => reopen(a)} className="text-right w-full text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] truncate">{a.title}</button>}
+                title={<button onClick={() => reopen(a)} className="text-right w-full text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] truncate">{a.title}</button>}
                 chips={<>
                   <MiniChip tone="blue">{a.lvl}</MiniChip>
                   <MiniChip>{TENSE_INFO[a.tense].fa}</MiniChip>
@@ -897,6 +853,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                 </>}
               >
                 <SqBtn onClick={() => reopen(a)} title="بازگشایی این داستان">▶</SqBtn>
+                <SqBtn tone="green" onClick={() => retake(a)} title="آزمون دوباره (همان داستان، بدون پاسخ)">🔁</SqBtn>
                 <SqBtn
                   tone="red"
                   onClick={async () => {
@@ -921,12 +878,12 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="min-w-0">
             <h2 className="text-base font-extrabold text-[#1f2a3d] dark:text-[#e7ecf5] truncate">{ex.title}</h2>
-            {ex.titleFa && <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] mt-0.5">{ex.titleFa}</p>}
+            {ex.titleFa && <p className="text-xs text-[#5d6676] dark:text-[#8b95a7] mt-0.5">{ex.titleFa}</p>}
             <div className="flex gap-1.5 mt-1 flex-wrap">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1f5fbf]/10 text-[#1f5fbf] dark:text-[#7fb0ff]">{ex.lvl}</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#6b4fd8]/10 text-[#6b4fd8]">{TENSE_INFO[ex.tense].de}</span>
-              {ex.topic && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-[#0f141d] text-[#5d6676] dark:text-[#8b95a7]">{ex.topic}</span>}
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-[#0f141d] text-[#5d6676] dark:text-[#8b95a7]">{ex.src === 'ai' ? '🤖 هوش مصنوعی' : '📖 بانک داستان'}</span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#1f5fbf]/10 text-[#1f5fbf] dark:text-[#7fb0ff]">{ex.lvl}</span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#6b4fd8]/10 text-[#6b4fd8]">{TENSE_INFO[ex.tense].de}</span>
+              {ex.topic && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-[#0f141d] text-[#5d6676] dark:text-[#8b95a7]">{ex.topic}</span>}
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-[#0f141d] text-[#5d6676] dark:text-[#8b95a7]">{ex.src === 'ai' ? '🎓 معلم' : '📖 بانک داستان'}</span>
             </div>
           </div>
           <div className="flex gap-1.5">
@@ -936,12 +893,12 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         </div>
 
         {/* نوار پیشرفت */}
-        <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-3 py-2 flex items-center justify-between text-xs">
+        <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-3 py-2 flex items-center justify-between text-[13px]">
           <span className="text-[#5d6676] dark:text-[#8b95a7] font-bold">
             {checked && score ? `نتیجه: ${score.ok} از ${score.total} درست ${score.ok === score.total ? '🎉' : ''}` : `پاسخ داده‌شده: ${answered} از ${gaps.length}`}
           </span>
           {!checked && (
-            <span className="text-[10px] text-[#5d6676] dark:text-[#8b95a7]">فعل مصدر داخل پرانتز است؛ شکل درست زمان را بنویس</span>
+            <span className="text-xs text-[#5d6676] dark:text-[#8b95a7]">فعل مصدر داخل پرانتز است؛ شکل درست زمان را بنویس</span>
           )}
           {checked && score && (
             <div className="h-2 w-28 rounded-full bg-slate-100 dark:bg-[#0f141d] overflow-hidden">
@@ -952,7 +909,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
 
         {/* متن داستان — آلمانی: چپ‌به‌راست (درخواست کاربر، تصویر ۵) */}
         <div className="rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-4 py-4 shadow-sm" dir="ltr" style={{ textAlign: 'left' }}>
-          <p className="text-[15px] leading-[2.4] text-[#1f2a3d] dark:text-[#e7ecf5]" style={{ textAlign: 'left' }}>
+          <p className="text-[17px] leading-[2.4] text-[#1f2a3d] dark:text-[#e7ecf5]" style={{ textAlign: 'left' }}>
             {ex.segs.map((s, i) => {
               if (s.t === 'txt') {
                 return tokenize(s.x).map((tk, j) =>
@@ -989,26 +946,26 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                       onChange={e => setGapDraft(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { submitGap(g.no, gapDraft); } if (e.key === 'Escape') { setOpenGap(null); setGapDraft(''); } }}
                       onBlur={() => { if (gapDraft.trim()) submitGap(g.no, gapDraft); else { setOpenGap(null); setGapDraft(''); } }}
-                      placeholder={g.ans}
-                      className="w-32 border-2 border-[#1f5fbf] rounded-md px-1.5 py-0 text-sm bg-white dark:bg-[#0f141d] text-left outline-none mx-1"
+                      placeholder="…"
+                      className="w-32 border-2 border-[#1f5fbf] rounded-md px-1.5 py-1 text-base bg-white dark:bg-[#0f141d] text-left outline-none mx-1"
                     />
                   ) : (
                     <button
                       onClick={() => { setOpenGap(g.no); setGapDraft(val); }}
-                      className={`inline-block min-w-[76px] px-2 rounded-md border-b-2 text-sm font-bold text-center transition ${stateCls}`}
+                      className={`inline-block min-w-[86px] px-2 rounded-md border-b-2 text-base font-bold text-center transition ${stateCls}`}
                       dir="ltr"
                     >
                       {val || '…'}
                     </button>
                   )}
-                  <span className="text-[10px] text-[#5d6676] dark:text-[#8b95a7]" dir="ltr">({g.inf})</span>
+                  <span className="text-xs text-[#5d6676] dark:text-[#8b95a7]" dir="ltr">({g.inf})</span>
                 </span>
               );
             })}
           </p>
           <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#dde1ea] dark:border-[#333b4a]" dir="rtl" style={{ direction: 'rtl' }}>
-            <span className="text-[10px] text-[#5d6676] dark:text-[#8b95a7]">💡 هر کلمهٔ متن را لمس کن: ترجمه + مثال + افزودن به واژگان</span>
-            <button onClick={() => doSpeak(storyPlain(ex.segs, false))} className="text-[10px] font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🔊 خواندن داستان</button>
+            <span className="text-xs text-[#5d6676] dark:text-[#8b95a7]">💡 هر کلمهٔ متن را لمس کن: ترجمه + مثال + افزودن به واژگان</span>
+            <button onClick={() => doSpeak(storyPlain(ex.segs, false))} className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🔊 خواندن داستان</button>
           </div>
         </div>
 
@@ -1017,22 +974,22 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           <button
             onClick={checkAll}
             disabled={busy !== null}
-            className="py-2.5 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] shadow disabled:opacity-50"
+            className="py-3 rounded-xl text-[13px] font-extrabold text-white bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] shadow disabled:opacity-50"
           >
             {busy === 'check' ? 'در حال تصحیح…' : '✅ تصحیح'}
           </button>
-          <button onClick={revealAll} className="py-2.5 rounded-xl text-xs font-extrabold border-2 border-amber-400 text-amber-600 dark:text-amber-400 bg-white dark:bg-[#141923]">
+          <button onClick={revealAll} className="py-3 rounded-xl text-[13px] font-extrabold border-2 border-amber-400 text-amber-600 dark:text-amber-400 bg-white dark:bg-[#141923]">
             👀 نمایش پاسخ‌ها
           </button>
           <button
             onClick={() => setScreen('review')}
             disabled={!checked}
-            className="py-2.5 rounded-xl text-xs font-extrabold border-2 border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] bg-white dark:bg-[#141923] disabled:opacity-40"
+            className="py-3 rounded-xl text-[13px] font-extrabold border-2 border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] bg-white dark:bg-[#141923] disabled:opacity-40"
           >
             📋 پاسخنامهٔ کامل
           </button>
-          <button onClick={() => setPrintOpen(true)} className="py-2.5 rounded-xl text-xs font-extrabold border-2 border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] bg-white dark:bg-[#141923]">
-            🖨️ چاپ/PDF
+          <button onClick={() => setPrintOpen(true)} className="py-3 rounded-xl text-[13px] font-extrabold border-2 border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] bg-white dark:bg-[#141923]">
+            🖨 چاپ / PDF
           </button>
         </div>
 
@@ -1050,34 +1007,34 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
                   className={`rounded-xl border px-3 py-2.5 ${r.ok ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30' : 'border-red-200 dark:border-red-900 bg-red-50/60 dark:bg-red-950/30'}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-xs font-bold flex items-center gap-1.5 flex-wrap">
+                    <div className="text-[13px] font-bold flex items-center gap-1.5 flex-wrap">
                       <span className={r.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}>{r.ok ? '✓' : '✗'} جای خالی {g.no}</span>
                       <span dir="ltr" className="font-extrabold text-[#1f2a3d] dark:text-[#e7ecf5]">{g.inf}</span>
                       <span className="text-[#5d6676] dark:text-[#8b95a7] font-medium">→</span>
                       <span dir="ltr" className="font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">{shown}</span>
-                      {!r.ok && r.given && <span className="text-[10px] text-[#b91c1c] dark:text-red-400">(پاسخ تو: {r.given})</span>}
+                      {!r.ok && r.given && <span className="text-[11px] text-[#b91c1c] dark:text-red-400">(پاسخ تو: {r.given})</span>}
                     </div>
                     <button
                       onClick={() => { setChatGap(g.no); }}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-[#1f5fbf]/30 text-[#1f5fbf] dark:text-[#7fb0ff] bg-white dark:bg-[#141923] shrink-0"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-[#1f5fbf]/30 text-[#1f5fbf] dark:text-[#7fb0ff] bg-white dark:bg-[#141923] shrink-0"
                     >
                       💬 معلم{chatCount ? ` (${chatCount})` : ''}
                     </button>
                   </div>
                   {!r.ok && (r.grammar || r.meaning || r.thinking || r.tip) && (
-                    <div className="mt-1.5 space-y-1 text-[11px] leading-5">
+                    <div className="mt-1.5 space-y-1 text-xs leading-6">
                       {r.grammar && <p className="text-[#1f2a3d] dark:text-[#e7ecf5]"><b className="text-[#1f5fbf] dark:text-[#7fb0ff]">گرامر:</b> {r.grammar}</p>}
                       {r.meaning && <p className="text-[#1f2a3d] dark:text-[#e7ecf5]"><b className="text-[#1f5fbf] dark:text-[#7fb0ff]">معنا:</b> {r.meaning}</p>}
                       {r.thinking && <p className="text-[#1f2a3d] dark:text-[#e7ecf5]"><b className="text-[#6b4fd8]">تفکر آلمانی:</b> {r.thinking}</p>}
                       {r.tip && <p className="text-[#5d6676] dark:text-[#8b95a7]"><b>💡</b> {r.tip}</p>}
-                      {r.offline && <p className="text-[10px] text-[#5d6676] dark:text-[#8b95a7]">تصحیح آفلاین (بانک داستان) — برای توضیح کامل، با معلم گفتگو کن یا تصحیح هوشمند را فعال کن.</p>}
+                      {r.offline && <p className="text-xs text-[#5d6676] dark:text-[#8b95a7]">تصحیح آفلاین (بانک داستان) — برای توضیح کامل، با معلم گفتگو کن یا تصحیح هوشمند را فعال کن.</p>}
                     </div>
                   )}
                   {r.ok && r.thinking && (
-                    <p className="mt-1 text-[11px] leading-5 text-[#1f2a3d] dark:text-[#e7ecf5]"><b className="text-[#6b4fd8]">تفکر آلمانی:</b> {r.thinking}</p>
+                    <p className="mt-1 text-xs leading-6 text-[#1f2a3d] dark:text-[#e7ecf5]"><b className="text-[#6b4fd8]">تفکر آلمانی:</b> {r.thinking}</p>
                   )}
                   {!r.ok && !r.offline && !r.grammar && !r.tip && (
-                    <button onClick={() => setChatGap(g.no)} className="mt-1 text-[11px] font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">چرا نادرست بود؟ از معلم بپرس 💬</button>
+                    <button onClick={() => setChatGap(g.no)} className="mt-1 text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">چرا نادرست بود؟ از معلم بپرس 💬</button>
                   )}
                 </div>
               );
@@ -1113,7 +1070,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
             <p className="text-[#5d6676] dark:text-[#8b95a7]">{ex.lvl} · {TENSE_INFO[ex.tense].de} ({TENSE_INFO[ex.tense].fa}){ex.topic ? ` · ${ex.topic}` : ''}</p>
             <p className="text-[#5d6676] dark:text-[#8b95a7]">{okN === tot ? 'بی‌نقص! 🎉' : okN >= tot * 0.7 ? 'خوب بود — موارد قرمز را با معلم مرور کن.' : 'با حوصله موارد قرمز را بخوان و دوباره تمرین کن.'}</p>
           </div>
-          <button onClick={() => setPrintOpen(true)} className="mr-auto px-3 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] shrink-0">🖨️ چاپ</button>
+          <button onClick={() => setPrintOpen(true)} className="mr-auto px-3 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] shrink-0">🖨 چاپ / PDF</button>
         </div>
 
         <div className="space-y-2">
@@ -1125,26 +1082,26 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
             return (
               <div key={g.no} className={`rounded-xl border px-3 py-2.5 ${r && r.ok ? 'border-emerald-200 dark:border-emerald-900' : 'border-red-200 dark:border-red-900'} bg-white dark:bg-[#141923]`}>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5]">
+                  <div className="text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5]">
                     <span className={r && r.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}>{r && r.ok ? '✓' : '✗'}</span>
                     {' '}جای خالی {g.no}: <span dir="ltr" className="font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">{g.inf} → {shown}</span>
-                    {r && !r.ok && r.given && <span className="text-[10px] text-[#b91c1c] dark:text-red-400"> (پاسخ تو: {r.given})</span>}
+                    {r && !r.ok && r.given && <span className="text-[11px] text-[#b91c1c] dark:text-red-400"> (پاسخ تو: {r.given})</span>}
                   </div>
                   <div className="flex gap-1.5">
-                    <button onClick={() => doSpeak(sentOf(ex.segs, g.no))} className="px-2 py-1 rounded-md text-[10px] border border-[#dde1ea] dark:border-[#333b4a]">🔊 جمله</button>
-                    <button onClick={() => { setChatGap(g.no); }} className="px-2 py-1 rounded-md text-[10px] font-bold border border-[#1f5fbf]/30 text-[#1f5fbf] dark:text-[#7fb0ff]">💬 معلم</button>
+                    <button onClick={() => doSpeak(sentOf(ex.segs, g.no))} className="px-2.5 py-1.5 rounded-md text-xs border border-[#dde1ea] dark:border-[#333b4a]">🔊 جمله</button>
+                    <button onClick={() => { setChatGap(g.no); }} className="px-2.5 py-1.5 rounded-md text-xs font-bold border border-[#1f5fbf]/30 text-[#1f5fbf] dark:text-[#7fb0ff]">💬 معلم</button>
                   </div>
                 </div>
-                <p dir="ltr" className="text-left text-[11px] text-[#5d6676] dark:text-[#8b95a7] mt-1 leading-5">{sentOf(ex.segs, g.no)}</p>
+                <p dir="ltr" className="text-left text-xs text-[#5d6676] dark:text-[#8b95a7] mt-1 leading-6">{sentOf(ex.segs, g.no)}</p>
                 {(r && (r.grammar || r.meaning || r.thinking || r.tip)) ? (
-                  <div className="mt-1.5 space-y-1 text-[11px] leading-5">
+                  <div className="mt-1.5 space-y-1 text-xs leading-6">
                     {r.grammar && <p><b className="text-[#1f5fbf] dark:text-[#7fb0ff]">گرامر:</b> <span className="text-[#1f2a3d] dark:text-[#e7ecf5]">{r.grammar}</span></p>}
                     {r.meaning && <p><b className="text-[#1f5fbf] dark:text-[#7fb0ff]">معنا:</b> <span className="text-[#1f2a3d] dark:text-[#e7ecf5]">{r.meaning}</span></p>}
                     {r.thinking && <p><b className="text-[#6b4fd8]">تفکر آلمانی:</b> <span className="text-[#1f2a3d] dark:text-[#e7ecf5]">{r.thinking}</span></p>}
                     {r.tip && <p className="text-[#5d6676] dark:text-[#8b95a7]"><b>💡</b> {r.tip}</p>}
                   </div>
                 ) : (
-                  <p className="mt-1.5 text-[11px] leading-5 text-[#5d6676] dark:text-[#8b95a7]">{offlineNote}{r && r.offline ? ' (تصحیح آفلاین)' : ''}</p>
+                  <p className="mt-1.5 text-xs leading-6 text-[#5d6676] dark:text-[#8b95a7]">{offlineNote}{r && r.offline ? ' (تصحیح آفلاین)' : ''}</p>
                 )}
               </div>
             );
@@ -1152,10 +1109,10 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         </div>
 
         <div className="rounded-2xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] px-4 py-4">
-          <p className="text-xs font-bold text-[#1f2a3d] dark:text-[#e7ecf5] mb-2">متن کامل و درست:</p>
-          <p dir="ltr" className="text-left text-[13px] leading-7 text-[#1f2a3d] dark:text-[#e7ecf5]">{storyPlain(ex.segs, true)}</p>
+          <p className="text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] mb-2">متن کامل و درست:</p>
+          <p dir="ltr" className="text-left text-[15px] leading-7 text-[#1f2a3d] dark:text-[#e7ecf5]">{storyPlain(ex.segs, true)}</p>
           <div className="flex justify-end mt-2">
-            <button onClick={() => doSpeak(storyPlain(ex.segs, true))} className="text-[10px] font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🔊 خواندن متن کامل</button>
+            <button onClick={() => doSpeak(storyPlain(ex.segs, true))} className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🔊 خواندن متن کامل</button>
           </div>
         </div>
         {PORTALS}

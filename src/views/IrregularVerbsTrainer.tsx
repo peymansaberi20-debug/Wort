@@ -21,7 +21,7 @@ import { speak } from '../utils/audio';
 import { IrrVerb, IrrLvl, IRR_LVL_ORDER, IRR_LVL_INFO, irrVerbsOf } from '../data/irregularVerbs';
 import { markForm, eqDe, normDe, answerDiff, AnsSeg } from '../utils/irrDiff';
 import { libIrregularVerbs } from '../utils/irrLibrary';
-import { MiniChip, toFa } from '../components/trainerUI';
+import { LevelChips, MiniChip, toFa } from '../components/trainerUI';
 
 /* ───────────────────────── قطعهٔ قرمزشده ───────────────────────── */
 
@@ -352,28 +352,14 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           </p>
         </div>
 
-        <div className="grid grid-cols-6 gap-1.5" dir="ltr">
-          {IRR_LVL_ORDER.map(l => (
-            <button
-              key={l}
-              onClick={() => setLvl(l)}
-              className={`py-2.5 rounded-xl text-xs font-bold border transition ${
-                lvl === l
-                  ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent shadow'
-                  : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a] text-[#1f2a3d] dark:text-[#e7ecf5]'
-              }`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <p className="text-[11px] text-[#5d6676] dark:text-[#8b95a7] -mt-2 leading-5">{IRR_LVL_INFO[lvl].label}</p>
+        <LevelChips value={lvl} onChange={l => setLvl(l as IrrLvl)} levels={IRR_LVL_ORDER as unknown as string[]} />
+        <p className="text-xs text-[#5d6676] dark:text-[#8b95a7] -mt-1 leading-5">{IRR_LVL_INFO[lvl].label}</p>
 
         <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-[#141923] rounded-xl px-3.5 py-2.5 border border-[#dde1ea] dark:border-[#333b4a]">
-          <span className="text-[12px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5]">
+          <span className="text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5]">
             🎯 {toFa(levelVerbs.length)} فعل بی‌قاعده در سطح {lvl}
             {useLib && libForLevel.length > 0 && (
-              <span className="text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd]">
+              <span className="text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]">
                 {' '}(بانک: {toFa(bankVerbs.length)} + واژگان تو: {toFa(libForLevel.length)})
               </span>
             )}
@@ -381,15 +367,15 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
           <div className="flex gap-1.5 flex-shrink-0">
             <button
               onClick={() => setPhase('table')}
-              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
             >
               🗂 جدول مرور
             </button>
             <button
               onClick={() => window.print()}
-              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
             >
-              🖨 چاپ
+              🖨 چاپ / PDF
             </button>
           </div>
         </div>
@@ -399,13 +385,13 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
             onClick={() => setUseLib(x => !x)}
             className="w-full flex items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 border transition bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]"
           >
-            <span className="text-[12px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] text-right">
+            <span className="text-[13px] font-bold text-[#1f2a3d] dark:text-[#e7ecf5] text-right">
               📖 فعل‌های بی‌قاعدهٔ کتاب واژگان خودت
-              <span className="block text-[10.5px] font-bold text-[#5d6676] dark:text-[#a3adbd] leading-4 mt-0.5">
+              <span className="block text-xs font-bold text-[#5d6676] dark:text-[#a3adbd] leading-4 mt-0.5">
                 {toFa(libVerbs.length)} فعل از واژگان تو شناسایی شده — فعل جدیدی هم که اضافه کنی خودکار می‌آید
               </span>
             </span>
-            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold flex-shrink-0 ${useLib ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400' : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]'}`}>
+            <span className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex-shrink-0 ${useLib ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400' : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]'}`}>
               {useLib ? '✓ اضافه می‌شوند' : 'خاموش'}
             </span>
           </button>
@@ -431,8 +417,8 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
         <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-1.5">
-            <button onClick={() => setPhase('setup')} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">→ انتخاب سطح</button>
-            <button onClick={() => window.print()} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">🖨 چاپ A4</button>
+            <button onClick={() => setPhase('setup')} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold">→ انتخاب سطح</button>
+            <button onClick={() => window.print()} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold">🖨 چاپ / PDF</button>
           </div>
           <b className="text-xs text-[#5d6676] dark:text-[#a3adbd]">🗂 فعل‌های بی‌قاعدهٔ سطح {lvl} — {toFa(levelVerbs.length)} فعل</b>
         </div>
