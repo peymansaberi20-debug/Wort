@@ -143,3 +143,27 @@ body.green-tint::before {
 [data-theme=dark] .vp-case-d, .dark .vp-case-d { color: #4ade80; text-decoration-color: #4ade80; }
 [data-theme=dark] .vp-case-g, .dark .vp-case-g { color: #38bdf8; text-decoration-color: #38bdf8; }
 
+
+/* ===== فونت نمایشی فارسی فلش‌کارت (درخواست کاربر: B Titr یا مشابه) ===== */
+/* B Titr اگر روی دستگاه نصب باشد استفاده می‌شود؛ وگرنه Lalezar (باندل‌شده در برنامه —
+   نزدیک‌ترین فونت آزاد به تیتر، لایسنس OFL) جایگزین می‌شود. */
+@font-face {
+  font-family: 'Lalezar';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/Lalezar-arabic.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFC, U+200C-200E;
+}
+@font-face {
+  font-family: 'Lalezar';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/Lalezar-latin.woff2') format('woff2');
+}
+.font-fa-display {
+  font-family: 'B Titr', 'BTitr', 'B Titr Bold', 'Lalezar', 'Vazirmatn', Tahoma, sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+}
