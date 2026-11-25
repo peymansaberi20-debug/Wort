@@ -596,7 +596,7 @@ export function parseAI(t: string): any[] {
   const snippet = raw.trim().replace(/\s+/g, ' ').slice(0, 160);
   let s = raw.replace(/```(?:json)?/gi, '').trim();
   const i = s.search(/[\[{]/);
-  if (i < 0) throw new Error(`پاسخ هوش مصنوعی JSON نداشت. ابتدای پاسخ: «${snippet}»`);
+  if (i < 0) throw new Error(`پاسخ معلم JSON نداشت. ابتدای پاسخ: «${snippet}»`);
   s = s.slice(i);
   // JSON.parse, then once more with trailing commas removed
   const tryParse = (x: string): any => {
@@ -630,7 +630,7 @@ export function parseAI(t: string): any[] {
     if (!part.length && s.startsWith('{')) { const k = s.indexOf('['); if (k > 0) part = salvage(s.slice(k)); } // truncated {"words":[...]}
     if (part.length) o = part;
   }
-  if (o === undefined) throw new Error(`پاسخ هوش مصنوعی قابل تبدیل به JSON نبود (ناقص یا نامعتبر). ابتدای پاسخ: «${snippet}»`);
+  if (o === undefined) throw new Error(`پاسخ معلم قابل تبدیل به JSON نبود (ناقص یا نامعتبر). ابتدای پاسخ: «${snippet}»`);
   if (o && Array.isArray(o.words)) o = o.words;
   return Array.isArray(o) ? o : [o];
 }

@@ -143,7 +143,7 @@ export async function askJson<T = any>(
       if (e?.kind && e.kind !== 'bad_response') throw e; // quota / key / network: do not hammer the provider
     }
   }
-  throw new Error('پاسخ هوش مصنوعی ساختار معتبر نداشت؛ دوباره تلاش کنید.');
+  throw new Error('پاسخ معلم ساختار معتبر نداشت؛ دوباره تلاش کنید.');
 }
 
 /* -------------------------------- audio cache -------------------------------- */

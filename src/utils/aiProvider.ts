@@ -721,11 +721,11 @@ function friendlyErr(e: unknown): unknown {
 /** پیام خطای خوانا برای کاربر */
 export function describeAiError(e: unknown): string {
   const msg = e instanceof AiError && e.code ? e.code : (e instanceof Error ? e.message : String(e || ''));
-  if (msg === 'NO_KEY') return 'کلید هوش مصنوعی در تنظیمات وارد نشده است';
-  if (msg === 'AI_TIMEOUT') return 'هوش مصنوعی دیر جواب داد (timeout) — کمی بعد دوباره تلاش کن.';
-  if (msg === 'AI_NETWORK') return 'اتصال به سرور هوش مصنوعی برقرار نشد — اینترنت را چک کن.';
+  if (msg === 'NO_KEY') return 'کلید معلم (سرویس هوش مصنوعی) در تنظیمات وارد نشده است';
+  if (msg === 'AI_TIMEOUT') return 'معلم دیر جواب داد (timeout) — کمی بعد دوباره تلاش کن.';
+  if (msg === 'AI_NETWORK') return 'اتصال به معلم برقرار نشد — اینترنت را چک کن.';
   if (msg.startsWith('AI_BLOCKED')) return 'پاسخ توسط فیلتر ایمنی ارائه‌دهنده بازداشته شد — سؤال را کمی عوض کن.';
-  if (msg.startsWith('AI_HTTP_401') || msg.startsWith('AI_HTTP_403')) return 'کلید هوش مصنوعی نامعتبر است یا اجازه ندارد — در تنظیمات چک کن.';
+  if (msg.startsWith('AI_HTTP_401') || msg.startsWith('AI_HTTP_403')) return 'کلید معلم نامعتبر است یا اجازه ندارد — در تنظیمات چک کن.';
   if (msg.startsWith('AI_HTTP_404')) return 'مدل انتخابی پیدا نشد — در تنظیمات مدل را عوض کن.';
   if (msg.startsWith('AI_HTTP_429')) {
     const cur = getActiveProvider();
@@ -733,11 +733,11 @@ export function describeAiError(e: unknown): string {
     return `سقف درخواست «${PROVIDERS[cur].label}» پر شده (محدودیت دقیقه‌ای یا روزانه). چند دقیقه صبر کن، یا از منوی ⋮ ← تنظیمات ← «اتصال به هوش مصنوعی» سرویس دیگر (${others}) را انتخاب و «ذخیره و فعال‌سازی» بزن.` + (e instanceof AiError && e.detail ? ' — ' + e.detail : '');
   }
   if (/^AI_HTTP_5/.test(msg)) return 'خطای سرور ارائه‌دهنده (' + msg.replace('AI_HTTP_', 'کد ') + ') — کمی بعد تلاش کن.';
-  if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرویس هوش مصنوعی (کد HTTP ' + msg.replace('AI_HTTP_', '') + ')' + (e instanceof AiError && e.detail ? ' — ' + e.detail : ' — کلید، مدل و اینترنت را چک کن.');
+  if (msg.startsWith('AI_HTTP_')) return 'خطای شبکه/سرویس معلم (کد HTTP ' + msg.replace('AI_HTTP_', '') + ')' + (e instanceof AiError && e.detail ? ' — ' + e.detail : ' — کلید، مدل و اینترنت را چک کن.');
   if (msg === 'AI_NO_VISION') return 'سرویس فعلی (' + PROVIDERS[getActiveProvider()].label + ') فقط متن را می‌فهمد و برای عکس باید کلید Gemini یا OpenRouter هم ذخیره شده باشد — در تنظیمات ← «اتصال به هوش مصنوعی» کلید Gemini را وارد و «ذخیره و فعال‌سازی» بزن (کلید رایگان: aistudio.google.com/apikey).';
   if (msg === 'AI_NO_GEMINI_KEY') return 'ساخت تصویر فقط با Gemini ممکن است — در تنظیمات ← «اتصال به هوش مصنوعی» کلید Gemini را وارد و «ذخیره و فعال‌سازی» بزن.';
   if (msg === 'AI_NO_IMAGE') return 'Gemini این بار تصویری برنگرداند (احتمالاً فیلتر ایمنی یا فقط متن) — دوباره امتحان کن.';
-  if (msg === 'AI_EMPTY') return 'هوش مصنوعی پاسخ خالی داد — دوباره تلاش کن.';
-  if (msg === 'AI_PARSE') return 'پاسخ هوش مصنوعی قابل تبدیل به JSON نبود — دوباره تلاش کن.';
-  return 'خطای نامشخص در اتصال به هوش مصنوعی: ' + msg.slice(0, 120);
+  if (msg === 'AI_EMPTY') return 'معلم پاسخ خالی داد — دوباره تلاش کن.';
+  if (msg === 'AI_PARSE') return 'پاسخ معلم قابل تبدیل به JSON نبود — دوباره تلاش کن.';
+  return 'خطای نامشخص در اتصال به معلم: ' + msg.slice(0, 120);
 }
