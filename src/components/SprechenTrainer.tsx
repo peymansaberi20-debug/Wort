@@ -25,10 +25,16 @@ import { describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import { ExamRun, S, askJson, useNoHelp } from '../utils/trainerKit';
 import { LevelChips } from './trainerUI';
+import { ClickableWords, WordLookupModal } from './WordLookup';
+import type { Word } from '../types';
 
 interface SprechenTrainerProps {
   onClose: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   exam?: ExamRun;
 }
 
@@ -209,12 +215,13 @@ const reportCheck = S.obj({
   corrections: S.arr(S.obj({ original: S.req, corrected: S.req, why_fa: S.str() })), model_answer_de: S.str()
 });
 
-export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onShowToast, exam }) => {
+export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onShowToast, onQuickAddWord, words, onViewWord, exam }) => {
   const [screen, setScreen] = useState<'hub' | 'free_setup' | 'free' | 'exam_setup' | 'exam' | 'report'>(exam ? 'exam' : 'hub');
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
   const [personaId, setPersonaId] = useState<string>(loadPersona);
   const [topic, setTopic] = useState(FREE_TOPICS[0]);
   const [msgs, setMsgsState] = useState<Msg[]>([]);
+  const [lookup, setLookup] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -607,16 +614,16 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
                 <span className="text-[10px] font-bold opacity-75">{m.who === 'ai' ? (isExam ? 'Prüfer/in' : activePersona.name) : 'Du'}</span>
                 {m.who === 'ai' && (!limited || blocked) && <button onClick={() => sayDe(m.text)} className="text-xs"><Volume2 size={14} /></button>}
               </div>
-              <div className="font-sans text-base leading-relaxed">{m.text}</div>
+              <div className="font-sans text-base leading-relaxed"><ClickableWords text={m.text} onWord={setLookup} /></div>
             </div>
             {m.fb && !limited && (
               <div className="max-w-[92%] mt-1 rounded-xl border bg-white dark:bg-[#141923] px-3 py-2 text-sm space-y-1.5" dir="rtl">
                 {m.fb.ok ? <div className="text-emerald-700 font-bold text-xs">✓ کاملاً درست و طبیعی</div> : (
                   <>
-                    <div dir="ltr" className="font-sans font-bold text-emerald-700 text-left">✅ {m.fb.corrected}</div>
+                    <div dir="ltr" className="font-sans font-bold text-emerald-700 text-left">✅ <ClickableWords text={m.fb.corrected} onWord={setLookup} /></div>
                     {m.fb.issues.map((x, k) => (
                       <div key={k} className="text-xs leading-6">
-                        <span dir="ltr" className="font-sans"><s className="text-rose-600">{x.wrong}</s> → <b className="text-emerald-700">{x.correct}</b></span>
+                        <span dir="ltr" className="font-sans"><s className="text-rose-600"><ClickableWords text={x.wrong} onWord={setLookup} /></s> → <b className="text-emerald-700"><ClickableWords text={x.correct} onWord={setLookup} /></b></span>
                         <div className="text-[#5d6676]">{x.why_fa}</div>
                         <button onClick={() => { addErrors([{ original: x.wrong, corrected: x.correct, type: 'گرامر مکالمه', why: x.why_fa, src: 'Sprechen' }]); onShowToast('خطا به دفترچه خطاها افزوده شد ✓'); }}
                           className="mt-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold flex items-center gap-1">
@@ -711,7 +718,7 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
           <div className="flex items-start justify-between gap-2">
             <div className="space-y-1 min-w-0">
               <b className="text-sm">🎓 {examType} {examLevel} — Teil {partIdx + 1} von {parts.length || 3}</b>
-              <p className="text-base font-extrabold font-sans" dir="ltr">{parts[partIdx]?.task_de}</p>
+              <p className="text-base font-extrabold font-sans" dir="ltr"><ClickableWords text={parts[partIdx]?.task_de || ''} onWord={setLookup} /></p>
               {!limited && (showFa
                 ? <p className="text-xs text-[#9aa3b2]">{parts[partIdx]?.task_fa}</p>
                 : <button onClick={() => setShowFa(true)} className="text-xs font-bold text-[#1f5fbf]">👁 نمایش فارسی</button>)}
@@ -758,7 +765,7 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
           {report.improvements_fa.length > 0 && <div className="text-sm"><b className="text-amber-700">⚠️ نقاط قابل بهبود</b><ul className="list-disc pr-5 leading-7">{report.improvements_fa.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
           {report.corrections.length > 0 && <div className="space-y-2">{report.corrections.map((c, i) => (
             <div key={i} className="p-2.5 rounded-xl border text-xs space-y-1">
-              <div dir="ltr" className="font-sans"><s className="text-rose-600">{c.original}</s> → <b className="text-emerald-700">{c.corrected}</b></div>
+              <div dir="ltr" className="font-sans"><s className="text-rose-600"><ClickableWords text={c.original} onWord={setLookup} /></s> → <b className="text-emerald-700"><ClickableWords text={c.corrected} onWord={setLookup} /></b></div>
               <div className="text-[#5d6676]">{c.why_fa}</div>
             </div>))}</div>}
           {report.model_answer_de && (
@@ -767,11 +774,24 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
                 <span className="text-xs font-extrabold text-[#1f5fbf]">🎧 پاسخ نمونه استاندارد (Model Answer):</span>
                 <button onClick={() => sayDe(report.model_answer_de)} className="px-3 py-1 rounded-lg bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1"><Volume2 size={14} /> پخش صوتی پاسخ نمونه</button>
               </div>
-              <p className="font-sans text-sm text-slate-800 dark:text-slate-100 text-left" dir="ltr">{report.model_answer_de}</p>
+              <p className="font-sans text-sm text-slate-800 dark:text-slate-100 text-left" dir="ltr"><ClickableWords text={report.model_answer_de} onWord={setLookup} /></p>
             </div>
           )}
           {!exam && <button onClick={goHub} className="w-full bg-[#1f5fbf] text-white py-3 rounded-xl font-bold text-sm">بازگشت به منو 🔄</button>}
         </div>
+      )}
+
+      {/* پاپ‌آپ واژهٔ لمس‌شده — مشترک در چت، تصحیح‌ها، تکلیف آزمون و کارنامه */}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level={isExam ? examLevel : prefs.level}
+          cat="Sprechen"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
       )}
     </div>
   );

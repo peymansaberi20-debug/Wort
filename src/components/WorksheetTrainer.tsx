@@ -16,6 +16,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
+import { ClickableWords, WordLookupModal } from './WordLookup';
+import { useVocabGate } from './VocabDecisionDialog';
+import type { Word } from '../types';
 
 /* ───────────── مدل برگه ───────────── */
 
@@ -423,7 +426,11 @@ export const WorksheetTrainer: React.FC<{
   kind: Kind;
   onShowToast?: (m: string, e?: boolean) => void;
   onClose?: () => void;
-}> = ({ kind, onShowToast }) => {
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  onViewWord?: (w: Word) => void;
+}> = ({ kind, onShowToast, words, onQuickAddWord, onViewWord }) => {
   const info = KIND_INFO[kind];
   const [phase, setPhase] = useState<Phase>('config');
   const [sess, setSess] = useState<Session | null>(null);
@@ -444,8 +451,15 @@ export const WorksheetTrainer: React.FC<{
   const [chatDraft, setChatDraft] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  const [lookup, setLookup] = useState<string | null>(null);
   const [arch, setArch] = useState<WshArch[]>(() => loadArch().filter((a) => a.kind === kind));
   const { ask, dialog } = useConfirm();
+  // گیت مرکزی افزودن به واژگان: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (chatIdx !== null) setTimeout(() => chatEndRef.current?.scrollIntoView({ block: 'end' }), 120); }, [chatIdx, sess?.chats]);
@@ -678,7 +692,7 @@ export const WorksheetTrainer: React.FC<{
               className={`text-xs leading-6 rounded-lg px-2.5 py-1.5 max-w-[88%] ${m.role === 'user' ? 'bg-[#1f5fbf] text-white ml-auto' : 'bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]'}`}
               style={{ whiteSpace: 'pre-wrap' }}
             >
-              {m.text}
+              <ClickableWords text={m.text} onWord={setLookup} />
             </div>
           ))}
           {chatBusy && <div className="text-[11px] text-[#5d6676] animate-pulse">هوش مصنوعی دارد می‌نویسد…</div>}
@@ -886,7 +900,7 @@ export const WorksheetTrainer: React.FC<{
                     <div key={wi} className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] p-3 space-y-1">
                       <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">مورد {toFa(wi + 1)}</div>
                       <div dir="ltr" className="font-sans text-sm leading-7">
-                        {w.prompt} <b className="text-[#6b4fd8] dark:text-[#a68bff]">{w.connector}</b> <span className="text-emerald-700 dark:text-emerald-300">✓ {w.model}</span>
+                        <ClickableWords text={w.prompt + ' '} onWord={setLookup} /> <b className="text-[#6b4fd8] dark:text-[#a68bff]"><ClickableWords text={w.connector || ''} onWord={setLookup} /></b> <span className="text-emerald-700 dark:text-emerald-300">✓ <ClickableWords text={w.model} onWord={setLookup} /></span>
                       </div>
                       <div className="text-xs text-[#5d6676] dark:text-[#a3adbd]">💡 {w.note}</div>
                     </div>
@@ -898,8 +912,8 @@ export const WorksheetTrainer: React.FC<{
                     <div dir="ltr" className="font-sans text-sm leading-7">
                       {w.seg.map((s, i) => (
                         <React.Fragment key={i}>
-                          <span className="whitespace-pre-wrap">{s}</span>
-                          {i < w.answers.length && <b className="text-emerald-600 dark:text-emerald-400 mx-0.5">{w.answers[i]}</b>}
+                          <span className="whitespace-pre-wrap"><ClickableWords text={s} onWord={setLookup} /></span>
+                          {i < w.answers.length && <b className="text-emerald-600 dark:text-emerald-400 mx-0.5"><ClickableWords text={w.answers[i]} onWord={setLookup} /></b>}
                         </React.Fragment>
                       ))}
                     </div>
@@ -921,6 +935,20 @@ export const WorksheetTrainer: React.FC<{
         </div>
         <button onClick={() => { setPhase('config'); setSess(null); }} className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">پیکربندی و آرشیو</button>
         {printPreview}
+
+        {/* دیالوگ تصمیم افزودن به واژگان + پاپ‌آپ واژهٔ لمس‌شده */}
+        {gate.node}
+        {lookup && (
+          <WordLookupModal
+            word={lookup}
+            level={sess.level}
+            cat={kind === 'prep' ? 'Präpositionen' : 'Satzbau'}
+            onQuickAddWord={onQuickAddWord}
+            words={words}
+            onViewWord={onViewWord}
+            onClose={() => setLookup(null)}
+          />
+        )}
         {dialog}
       </div>
     );
@@ -959,8 +987,8 @@ export const WorksheetTrainer: React.FC<{
         {isOpen(it) ? (
           <>
             <div dir="ltr" className="text-lg md:text-xl leading-9 font-sans text-slate-800 dark:text-slate-100">
-              <span className="whitespace-pre-wrap">{it.prompt} </span>
-              {it.connector && <b className="text-[#6b4fd8] dark:text-[#a68bff]">{it.connector}</b>}
+              <ClickableWords text={it.prompt + ' '} onWord={setLookup} />
+              {it.connector && <b className="text-[#6b4fd8] dark:text-[#a68bff]"><ClickableWords text={it.connector} onWord={setLookup} /></b>}
               <span className="text-[#9aa3b2]"> ______</span>
             </div>
             <textarea
@@ -975,7 +1003,7 @@ export const WorksheetTrainer: React.FC<{
             />
             {openModel && (
               <div className="rounded-xl px-3 py-2 text-sm bg-[#f6f7fb] dark:bg-[#12151c] leading-7">
-                ادامهٔ نمونه: <b dir="ltr">{it.connector} {it.model}</b>
+                ادامهٔ نمونه: <b dir="ltr"><ClickableWords text={`${it.connector} ${it.model}`} onWord={setLookup} /></b>
               </div>
             )}
             {openVerdict && openVerdict.ok !== null && (
@@ -998,7 +1026,7 @@ export const WorksheetTrainer: React.FC<{
                     <div className="text-sm font-bold text-emerald-800 dark:text-emerald-200">✅ چیزهایی که درست نوشتی</div>
                     {openVerdict.good.map((g, i) => (
                       <div key={i} className="text-xs leading-6 text-emerald-900 dark:text-emerald-100">
-                        <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans">{g.text}</b>}{g.text && g.why ? ' — ' : ''}{g.why}
+                        <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans"><ClickableWords text={g.text} onWord={setLookup} /></b>}{g.text && g.why ? ' — ' : ''}{g.why}
                       </div>
                     ))}
                   </div>
@@ -1011,9 +1039,9 @@ export const WorksheetTrainer: React.FC<{
                       <div key={i} className="text-xs leading-6 text-red-900 dark:text-red-100">
                         <div>
                           <b className="text-red-600 dark:text-red-300">✗</b>{' '}
-                          {er.bad && <b dir="ltr" className="font-sans line-through">{er.bad}</b>}
+                          {er.bad && <b dir="ltr" className="font-sans line-through"><ClickableWords text={er.bad} onWord={setLookup} /></b>}
                           {er.bad && er.fix ? <span> → </span> : null}
-                          {er.fix && <b dir="ltr" className="font-sans text-emerald-700 dark:text-emerald-300">{er.fix}</b>}
+                          {er.fix && <b dir="ltr" className="font-sans text-emerald-700 dark:text-emerald-300"><ClickableWords text={er.fix} onWord={setLookup} /></b>}
                         </div>
                         {er.why && <div className="text-red-800/90 dark:text-red-200/90">{er.why}</div>}
                       </div>
@@ -1024,7 +1052,7 @@ export const WorksheetTrainer: React.FC<{
                 {/* جملهٔ کامل (درست یا بهتر) */}
                 <div dir="ltr" className="rounded-xl px-3 py-2 text-sm leading-7 font-sans bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]">
                   {openVerdict.ok ? '✅ جملهٔ کامل: ' : '✍️ جملهٔ بهتر: '}
-                  <b>{it.prompt} {it.connector} {openVerdict.model}</b>
+                  <b><ClickableWords text={`${it.prompt} ${it.connector} ${openVerdict.model}`} onWord={setLookup} /></b>
                 </div>
                 {/* ترجمهٔ پاسخ نمونه */}
                 {it.fa && (
@@ -1037,7 +1065,7 @@ export const WorksheetTrainer: React.FC<{
             {openVerdict && openVerdict.ok === null && (
               <div className="rounded-xl px-3 py-2 text-sm space-y-2 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                 <div>{openVerdict.err || 'بررسی هوش مصنوعی در دسترس نبود.'}</div>
-                <div dir="ltr" className="leading-7">جملهٔ نمونه: <b>{it.prompt} {it.connector} {openVerdict.model}</b></div>
+                <div dir="ltr" className="leading-7">جملهٔ نمونه: <b><ClickableWords text={`${it.prompt} ${it.connector} ${openVerdict.model}`} onWord={setLookup} /></b></div>
                 <div>خودت با پاسخ نمونه مقایسه کن و بگو:</div>
                 <div className="flex gap-2">
                   <button onClick={() => selfCheck(true)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold">درست بود ✓</button>
@@ -1089,7 +1117,7 @@ export const WorksheetTrainer: React.FC<{
             <div dir="ltr" className="text-lg md:text-xl leading-10 font-sans text-slate-800 dark:text-slate-100">
               {it.seg.map((s, i) => (
                 <React.Fragment key={i}>
-                  <span className="whitespace-pre-wrap">{s}</span>
+                  <span className="whitespace-pre-wrap"><ClickableWords text={s} onWord={setLookup} /></span>
                   {i < it.answers.length && (() => {
                     const good = checked ? checked[i] : null;
                     return (
@@ -1120,7 +1148,7 @@ export const WorksheetTrainer: React.FC<{
 
             {checked && (
               <div className={`rounded-xl px-3 py-2 text-sm space-y-1 ${itemOk ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200'}`}>
-                <div>{itemOk ? '✅ درست بود!' : <>❌ نادرست — پاسخ درست: <b dir="ltr">{it.answers.join(' + ')}</b></>}</div>
+                <div>{itemOk ? '✅ درست بود!' : <>❌ نادرست — پاسخ درست: <b dir="ltr"><ClickableWords text={it.answers.join(' + ')} onWord={setLookup} /></b></>}</div>
                 <div>💡 {it.note}</div>
               </div>
             )}
@@ -1170,6 +1198,20 @@ export const WorksheetTrainer: React.FC<{
           </>
         )}
       </div>
+
+      {/* دیالوگ تصمیم افزودن به واژگان + پاپ‌آپ واژهٔ لمس‌شده */}
+      {gate.node}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level={sess.level}
+          cat={kind === 'prep' ? 'Präpositionen' : 'Satzbau'}
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
+      )}
       {dialog}
     </div>
   );

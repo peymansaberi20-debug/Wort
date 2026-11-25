@@ -16,6 +16,9 @@ interface LesenTrainerProps {
   onClose: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   exam?: ExamRun;
 }
 
@@ -82,7 +85,7 @@ const examCheck = (x: any): ReadingExam => {
   return { org: '', level: '', title: S.str()(x?.title) || 'Leseverstehen', durationMinutes: S.num(5, 180, 60)(x?.durationMinutes), parts };
 };
 
-export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuickAddWord, exam: run }) => {
+export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuickAddWord, words, onViewWord, exam: run }) => {
   const [view, setView] = useState<'menu' | 'creator' | 'archive_levels' | 'archive_exams' | 'exam_active' | 'result'>(run ? 'exam_active' : 'menu');
 
   const [examOrg, setExamOrg] = useState<'ÖSD' | 'Goethe' | 'telc' | 'EPD'>(run ? run.org : 'ÖSD');
@@ -425,7 +428,7 @@ Return ONLY a valid JSON object (no markdown, no extra text):
       )}
 
       {lookup && (
-        <WordLookupModal word={lookup} level={examLevel} cat="Lesen" paused onQuickAddWord={onQuickAddWord}
+        <WordLookupModal word={lookup} level={examLevel} cat="Lesen" paused onQuickAddWord={onQuickAddWord} words={words} onViewWord={onViewWord}
           onClose={() => { setLookup(null); setIsTimerPaused(false); }} />
       )}
 

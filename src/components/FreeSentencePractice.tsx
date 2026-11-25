@@ -11,6 +11,7 @@ import React, { useState } from 'react';
 import { Word } from '../types';
 import { ShadowingModal } from './ShadowingModal';
 import { toFa } from './trainerUI';
+import { ClickableWords, WordLookupModal } from './WordLookup';
 import { generateWithGemini, parseAI } from '../utils/ai';
 
 const germanTokens = (t: string): string[] => t.split(/[^\p{L}]+/u).filter(Boolean);
@@ -47,9 +48,16 @@ const FREE_ISSUE_BADGE: Record<string, string> = {
   'معنا و منطق جمله': 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
 };
 
-export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boolean) => void }> = ({ onShowToast }) => {
+export const FreeSentencePractice: React.FC<{
+  onShowToast: (m: string, e?: boolean) => void;
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
+}> = ({ onShowToast, onQuickAddWord, words, onViewWord }) => {
   const [text, setText] = useState('');
   const [report, setReport] = useState<FreeReport | null>(null);
+  const [lookup, setLookup] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState('');
   const [chat, setChat] = useState<{ q: string; a: string; err?: boolean }[]>([]);
@@ -159,7 +167,7 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
               <div className="text-sm font-bold text-emerald-800 dark:text-emerald-200">✅ چیزهایی که درست نوشتی</div>
               {report.good.map((g, i) => (
                 <div key={i} className="text-xs leading-6 text-emerald-900 dark:text-emerald-100">
-                  <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans">{g.text}</b>}{g.text && g.why_fa ? ' — ' : ''}{g.why_fa}
+                  <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans"><ClickableWords text={g.text} onWord={setLookup} /></b>}{g.text && g.why_fa ? ' — ' : ''}{g.why_fa}
                 </div>
               ))}
             </div>
@@ -176,9 +184,9 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
                   </div>
                   {(it.wrong || it.correct) && (
                     <div className="flex flex-wrap items-baseline gap-2 text-base" dir="ltr">
-                      {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
+                      {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through"><ClickableWords text={it.wrong} onWord={setLookup} /></span>}
                       {it.wrong && it.correct && <span className="text-slate-400">→</span>}
-                      {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
+                      {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300"><ClickableWords text={it.correct} onWord={setLookup} /></span>}
                     </div>
                   )}
                   {it.why_fa && <div className="text-xs leading-6 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
@@ -197,7 +205,7 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
           {report.corrected_de && (
             <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
               <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
-              <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
+              <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100"><ClickableWords text={report.corrected_de} onWord={setLookup} /></div>
               <button
                 onClick={() => setShadowOpen(true)}
                 className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-1.5"
@@ -240,6 +248,19 @@ export const FreeSentencePractice: React.FC<{ onShowToast: (m: string, e?: boole
             </div>
           </div>
         </div>
+      )}
+
+      {/* پاپ‌آپ واژهٔ لمس‌شده — جملهٔ تصحیح‌شده، ایرادها و پاسخ معلم */}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level={FREE_SENT_WORD.lvl || 'A2'}
+          cat="جملهٔ آزاد"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
       )}
     </div>
   );

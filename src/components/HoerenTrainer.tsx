@@ -11,7 +11,7 @@ import { addErrors } from '../utils/errorBook';
 import {
   ARCHIVE_HOEREN, ExamRun, MAX_PLAYS, S, TOPICS_DE, askJson, audioGet, audioPut, hash, loadList, pick, saveList, useNoHelp
 } from '../utils/trainerKit';
-import { WordLookupModal } from './WordLookup';
+import { ClickableWords, WordLookupModal } from './WordLookup';
 import { LevelChips } from './trainerUI';
 import type { Word } from '../types';
 
@@ -253,8 +253,11 @@ export const HoerenTrainer: React.FC<{
   onClose: () => void;
   initialView?: 'menu' | 'creator' | 'archive';
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   exam?: ExamRun;
-}> = ({ onClose, initialView = 'menu', onQuickAddWord, exam }) => {
+}> = ({ onClose, initialView = 'menu', onQuickAddWord, words, onViewWord, exam }) => {
   const [viewMode, setViewMode] = useState<'menu' | 'creator' | 'archive' | 'exercise'>(initialView === 'creator' ? 'creator' : initialView === 'archive' ? 'archive' : 'menu');
   const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>(() => loadList<SavedExerciseRecord>(ARCHIVE_HOEREN));
   const archiveId = useRef<string | null>(null);
@@ -710,12 +713,13 @@ ${numbered}`,
     const d = result?.details?.[id];
     if (!submitted || !d) return null;
     const tone = d.points === 1 ? 'bg-emerald-50 text-emerald-800' : d.points > 0 ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-700';
+    const tap = (t: string) => { const w = cleanWord(t); if (w) setLookup(w); };
     return (
       <div className={`p-2.5 rounded-xl text-xs space-y-1 ${tone}`}>
         <div className="font-bold">{d.points === 1 ? '✔' : d.points > 0 ? '◐' : '✘'} امتیاز: {d.points} / 1</div>
         {d.given !== undefined && <div>پاسخ شما: <span dir="ltr" className="font-sans font-bold">{d.given || '— (بدون پاسخ)'}</span></div>}
-        {d.points < 1 && d.expected && <div>پاسخ صحیح: <span dir="ltr" className="font-sans font-bold">{d.expected}</span></div>}
-        {d.feedback && <div dir="ltr" className="font-sans text-left">{d.feedback}</div>}
+        {d.points < 1 && d.expected && <div>پاسخ صحیح: <span dir="ltr" className="font-sans font-bold cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition" onClick={() => tap(d.expected!)}>{d.expected}</span></div>}
+        {d.feedback && <div dir="ltr" className="font-sans text-left"><ClickableWords text={d.feedback} onWord={tap} /></div>}
         {d.feedbackFa && <div>{d.feedbackFa}</div>}
       </div>
     );
@@ -980,7 +984,7 @@ ${numbered}`,
               )}
             </div>
           )}
-          {lookup && <WordLookupModal word={lookup} level={exercise.level} cat="Hören" onQuickAddWord={onQuickAddWord} onClose={() => setLookup(null)} />}
+          {lookup && <WordLookupModal word={lookup} level={exercise.level} cat="Hören" onQuickAddWord={onQuickAddWord} words={words} onViewWord={onViewWord} onClose={() => setLookup(null)} />}
 
           <div className="bg-white dark:bg-[#1b2029] border rounded-3xl p-6 space-y-6">
             {exercise.part1TF.length > 0 && (
@@ -988,7 +992,7 @@ ${numbered}`,
                 <h4 className="font-extrabold text-sm text-[#1f5fbf]">بخش ۱: درست یا نادرست (Richtig / Falsch)</h4>
                 {exercise.part1TF.map((q, idx) => { const id = `tf-${idx}`; return (
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
-                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.statement}</p>
+                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. <ClickableWords text={q.statement} onWord={t => setLookup(t)} /></p>
                     {faBtn(id, q.translation)}
                     <div className="flex gap-2" dir="ltr">
                       <button onClick={() => answer(id, 'true')} className={`px-4 py-2 rounded-xl text-xs font-bold border ${optCls(answers[id] === 'true', q.answer === true)}`}>Richtig{limited && !submitted ? '' : ' (درست)'}</button>
@@ -1004,11 +1008,11 @@ ${numbered}`,
                 <h4 className="font-extrabold text-sm text-[#1f5fbf]">بخش ۲: چندگزینه‌ای (Multiple Choice)</h4>
                 {exercise.part2MC.map((q, idx) => { const id = `mc-${idx}`; return (
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
-                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.question}</p>
+                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. <ClickableWords text={q.question} onWord={t => setLookup(t)} /></p>
                     {faBtn(id, q.translation)}
                     <div className="space-y-1.5" dir="ltr">
                       {q.options.map((o, oi) => (
-                        <button key={oi} onClick={() => answer(id, String(oi))} className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold border ${optCls(answers[id] === String(oi), oi === q.answerIndex)}`}>{String.fromCharCode(65 + oi)}) {o}</button>
+                        <button key={oi} onClick={() => answer(id, String(oi))} className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold border ${optCls(answers[id] === String(oi), oi === q.answerIndex)}`}>{String.fromCharCode(65 + oi)}) <ClickableWords text={o} onWord={t => setLookup(t)} /></button>
                       ))}
                     </div>
                     {fb(id)}
@@ -1021,7 +1025,7 @@ ${numbered}`,
                 <h4 className="font-extrabold text-sm text-[#1f5fbf]">بخش ۳: جای‌خالی (Lückentext)</h4>
                 {exercise.part3Gap.map((q, idx) => { const id = `gap-${idx}`; return (
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
-                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.sentence}</p>
+                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. <ClickableWords text={q.sentence} onWord={t => setLookup(t)} /></p>
                     {faBtn(id, q.translation)}
                     <input dir="ltr" readOnly={submitted} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
                     {fb(id)}
@@ -1034,7 +1038,7 @@ ${numbered}`,
                 <h4 className="font-extrabold text-sm text-[#1f5fbf]">بخش ۴: سؤال‌های باز (Offene Fragen)</h4>
                 {exercise.part4Short.map((q, idx) => { const id = `short-${idx}`; return (
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
-                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. {q.question}</p>
+                    <p className="text-base font-extrabold text-left" dir="ltr">{idx + 1}. <ClickableWords text={q.question} onWord={t => setLookup(t)} /></p>
                     {faBtn(id, q.translation)}
                     <textarea dir="ltr" rows={2} readOnly={submitted} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
                     {fb(id)}
@@ -1047,7 +1051,7 @@ ${numbered}`,
                 <h4 className="font-extrabold text-sm text-[#1f5fbf]">بخش ۵: واژگان (Wortschatz) — معنی/توضیح بنویس</h4>
                 {exercise.vocabulary.map((q, idx) => { const id = `v-${idx}`; return (
                   <div key={id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-[#141923] space-y-2">
-                    <p className="text-base font-extrabold text-left" dir="ltr">{q.word}</p>
+                    <p className="text-base font-extrabold text-left" dir="ltr"><ClickableWords text={q.word} onWord={t => setLookup(t)} /></p>
                     <input dir="ltr" readOnly={submitted} value={answers[id] || ''} onChange={e => answer(id, e.target.value)} className={inp} />
                     {fb(id)}
                   </div>); })}

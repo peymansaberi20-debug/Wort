@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { PauseCircle, PlusCircle } from 'lucide-react';
 import { speak } from '../utils/audio';
 import { askJson, S } from '../utils/trainerKit';
 import { describeAiError } from '../utils/aiProvider';
+import { findDuplicateWord } from '../utils/duplicates';
+import { useVocabGate } from './VocabDecisionDialog';
 import type { Word } from '../types';
 
 export const cleanToken = (t: string) => t.replace(/[.,!?;:"„“”()[\]—–\-«»]/g, '').trim();
@@ -24,6 +26,31 @@ export const ClickableText: React.FC<{ text: string; onWord: (w: string) => void
   </>
 );
 
+/**
+ * نسخهٔ درون‌خطی ClickableText — فقط span می‌سازد (بدون <p>) تا داخل عناصر موجود
+ * (خط رنگی تفاوت‌ها، بولدها، …) هم بدون شکستن چیدمان قابل استفاده باشد.
+ * ظاهر واژه‌ها عادی می‌ماند؛ فقط هنگام هاور کمی زمینه می‌گیرد (بدون خط نقطه‌چین).
+ */
+export const ClickableWords: React.FC<{ text: string; onWord: (w: string) => void; disabled?: boolean; className?: string }> = ({ text, onWord, disabled, className }) => {
+  if (!text) return null;
+  const toks = text.split(/(\s+)/);
+  return (
+    <>
+      {toks.map((tok, ti) => {
+        if (/^\s+$/.test(tok)) return <span key={ti}> </span>;
+        if (disabled) return <span key={ti}>{tok}</span>;
+        return (
+          <span
+            key={ti}
+            onClick={e => { e.stopPropagation(); const w = cleanToken(tok); if (w.length >= 2) onWord(w); }}
+            className={`cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition ${className || ''}`}
+          >{tok}</span>
+        );
+      })}
+    </>
+  );
+};
+
 const infoCheck = S.obj({ lemma: S.req, art: S.str(), fa: S.req, ex: S.str() });
 
 interface Props {
@@ -33,16 +60,32 @@ interface Props {
   /** shows the "timer paused" notice (the parent pauses/resumes its own timer) */
   paused?: boolean;
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — فعال‌کنندهٔ گیتِ تکراری/Partizip II/مترادف قبل از افزودن */
+  words?: Word[];
+  /** بازکردن پروفایل واژهٔ کتابخانه‌ای («مشاهدهٔ واژه») */
+  onViewWord?: (w: Word) => void;
   onClose: () => void;
 }
 
-export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQuickAddWord, onClose }) => {
+export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQuickAddWord, words, onViewWord, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [adding, setAdding] = useState(false);
   const [f, setF] = useState({ de: word, art: '', fa: '', ex: '' });
 
+  // واژهٔ لمس‌شده ممکن است خودش از قبل در کتابخانه باشد → بدون تماس AI، اطلاعات کتابخانه نمایش داده می‌شود
+  const libHit = useMemo(() => (words && words.length ? findDuplicateWord(word, '', words) : null), [word, words]);
+
+  // گیت مرکزی افزودن: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord,
+    onDone: (_data, ok) => { if (ok) onClose(); }
+  });
+
   useEffect(() => {
+    if (libHit) { setLoading(false); setErr(''); setAdding(false); return; }
     let live = true;
     setLoading(true); setErr('');
     askJson<{ lemma: string; art: string; fa: string; ex: string }>(
@@ -54,10 +97,19 @@ export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQ
     }).catch(e => { if (live) setErr(describeAiError(e)); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [word]);
+  }, [word, libHit]);
 
   const save = () => {
-    if (onQuickAddWord?.({ de: f.de.trim(), art: f.art, fa: f.fa.trim(), ex: f.ex.trim(), cat, lvl: level })) onClose();
+    if (!onQuickAddWord) return;
+    // گیت مرکزی: اگر واژه تازه باشد مستقیم اضافه می‌شود؛ وگرنه دیالوگ تصمیم باز می‌شود
+    gate.attempt({ de: f.de.trim(), art: f.art, fa: f.fa.trim(), ex: f.ex.trim(), cat, lvl: level });
+  };
+
+  const viewLib = () => {
+    if (libHit && onViewWord) {
+      onViewWord(libHit);
+      onClose();
+    }
   };
 
   return (
@@ -66,6 +118,7 @@ export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQ
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <span className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
             {paused && <><PauseCircle size={14} /> زمان آزمون متوقف شد</>}
+            {!paused && libHit && <span className="text-amber-600 dark:text-amber-400">★ در کتابخانهٔ تو</span>}
           </span>
           <button onClick={onClose} className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold">✕</button>
         </div>
@@ -77,9 +130,11 @@ export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQ
               <button onClick={() => speak(word)} className="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 text-sm">🔊</button>
             </div>
             <div className="text-sm font-semibold text-[#1f5fbf] dark:text-[#7fb0ff]">
-              {loading ? 'در حال دریافت معنی...' : err ? err : `${f.art ? f.art + ' ' : ''}${f.de} — ${f.fa}`}
+              {loading ? 'در حال دریافت معنی...' : err ? err : libHit
+                ? `${libHit.art ? libHit.art + ' ' : ''}${libHit.de} — ${libHit.fa}`
+                : `${f.art ? f.art + ' ' : ''}${f.de} — ${f.fa}`}
             </div>
-            {!loading && !err && f.ex && <div dir="ltr" className="text-xs text-slate-500 font-sans">{f.ex}</div>}
+            {!loading && !err && (libHit ? libHit.ex : f.ex) && <div dir="ltr" className="text-xs text-slate-500 font-sans">{libHit ? libHit.ex : f.ex}</div>}
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -97,6 +152,10 @@ export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQ
         <div className="flex gap-2">
           {onQuickAddWord && (adding ? (
             <button onClick={save} disabled={!f.de.trim() || !f.fa.trim()} className="flex-1 bg-[#1f5fbf] disabled:opacity-40 text-white py-2.5 rounded-xl text-xs font-bold">ذخیره در کتابخانه</button>
+          ) : libHit && onViewWord ? (
+            <button onClick={viewLib} className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
+              این واژه در کتابخانه است — مشاهده
+            </button>
           ) : (
             <button onClick={() => setAdding(true)} disabled={loading} className="flex-1 bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-50 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5">
               <PlusCircle size={15} /> افزودن به واژه‌نامه
@@ -104,6 +163,9 @@ export const WordLookupModal: React.FC<Props> = ({ word, level, cat, paused, onQ
           ))}
           <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">{paused ? 'ادامه آزمون' : 'بستن'}</button>
         </div>
+
+        {/* دیالوگ تصمیم (تکراری / Partizip II / مترادف) — روی همین پاپ‌آپ باز می‌شود */}
+        {gate.node}
       </div>
     </div>
   );

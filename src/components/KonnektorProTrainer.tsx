@@ -21,6 +21,8 @@ import { Lvl, Kat, KAT_LABEL, LVL_ORDER, KonnektorItem, KONNEKTOREN, connectorsF
 import { SYS_AI, buildExercisePrompt, buildCorrectionPrompt, buildWordPrompt, buildChatPrompt, ChatCtx } from '../utils/konnektorPrompts';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
+import { ClickableWords } from './WordLookup';
+import { useVocabGate } from './VocabDecisionDialog';
 
 /* ───────────────────────── پل هوش مصنوعی برنامه ───────────────────────── */
 
@@ -86,6 +88,9 @@ interface KonnektorProTrainerProps {
   settings?: AppSettings;
   onShowToast: (msg: string, isErr?: boolean) => void;
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   onClose?: () => void;
 }
 
@@ -95,7 +100,7 @@ const ALL_KONNS: KonnektorItem[] = [...KONNEKTOREN].sort((a, b) => {
   return li !== 0 ? li : a.w.localeCompare(b.w, 'de');
 });
 
-export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settings, onShowToast, onQuickAddWord, onClose }) => {
+export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settings, onShowToast, onQuickAddWord, words, onViewWord, onClose }) => {
   const [screen, setScreen] = useState<'config' | 'play' | 'review'>('config');
   const [level, setLevel] = useState<Lvl>('A1');
   const [count, setCount] = useState(8);
@@ -117,6 +122,13 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
   const [guideOpen, setGuideOpen] = useState(false);
   const { ask, dialog } = useConfirm();
   const wCache = useRef<Map<string, WInfo>>(new Map());
+  // گیت مرکزی افزودن به واژگان: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord,
+    onDone: (data, ok) => { if (ok) { const de = String(data.de || ''); if (de) setAdded(a => new Set(a).add(de)); } }
+  });
 
   // ذخیرهٔ خودکار (با تأخیر ۷۰۰ms تا هر حروف تایپ محاسبه نشود)
   useEffect(() => {
@@ -279,20 +291,20 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     setWCard({ word: k.w, sentence: '', info: { lemma: k.w, fa: k.fa + (k.note ? ' — ' + k.note : ''), pos: 'phrase' }, loading: false });
   };
 
+  /** لمس واژه از متن‌های غیرلمس‌پذیر (بازخورد/مرور) — بدون رویداد ماوس */
+  const tapTok = (token: string, sentence: string) => {
+    tapWord({ stopPropagation: () => {} } as unknown as React.MouseEvent, token, sentence);
+  };
+
   const addWord = () => {
     const wc = wCard;
     if (!wc || !wc.info) return;
     const de = wc.info.lemma || wc.word;
     if (!onQuickAddWord) { onShowToast('افزودن به واژگان در این بخش متصل نشده است.', true); return; }
     if (added.has(de)) { onShowToast('این واژه همین حالا اضافه شده بود.'); return; }
-    const w = { de, fa: wc.info.fa, pos: wc.info.pos, art: wc.info.art || undefined, lvl: ex?.level || level } as unknown as Partial<Word>;
-    const ok = onQuickAddWord(w);
-    if (ok) {
-      setAdded(new Set([...added, de]));
-      onShowToast(`«${de}» به واژگان اضافه شد ✓`);
-    } else {
-      onShowToast('افزودن به واژگان انجام نشد.', true);
-    }
+    const w = { de, fa: wc.info.fa, pos: wc.info.pos, art: wc.info.art || undefined, lvl: ex?.level || level, ex: wc.info.ex || '', exFa: wc.info.exFa || '' } as unknown as Partial<Word>;
+    // مسیر گیت: تکراری/P2/مترادف → دیالوگ تصمیم؛ تازه → افزودن مستقیم (toast در App)
+    gate.attempt(w);
   };
 
   /** مشاهدهٔ آخرین عملکرد: همان تمرین با پاسخ‌ها و تصحیح‌های قبلی */
@@ -726,12 +738,12 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     </div>
                     {!c.ok && ans.trim() && (
                       <div dir="ltr" className="text-sm leading-7" style={{ textAlign: 'left' }}>
-                        <span className="text-[#5d6676] font-sans">{it.first} </span>
+                        <span className="text-[#5d6676] font-sans"><ClickableWords text={it.first} onWord={t => tapTok(t, it.first)} /> </span>
                         <b className="text-red-500 line-through decoration-1 font-sans">{ans}</b>
                       </div>
                     )}
                     {c.corrected && (
-                      <div dir="ltr" className="text-sm leading-7 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}>{c.corrected}</div>
+                      <div dir="ltr" className="text-sm leading-7 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}><ClickableWords text={c.corrected} onWord={t => tapTok(t, c.corrected || '')} /></div>
                     )}
                     {/* ترجمهٔ جملهٔ کاربر — اول از همه (درخواست کاربر) */}
                     {c.userFa && (
@@ -859,7 +871,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                       </button>
                     </div>
                     <div dir="ltr" className="text-sm leading-7 mt-2 font-sans" style={{ textAlign: 'left' }}>
-                      <span className="text-[#5d6676]">{it.first} </span><b>{userAns || '—'}</b>
+                      <span className="text-[#5d6676]"><ClickableWords text={it.first} onWord={t => tapTok(t, it.first)} /> </span><b><ClickableWords text={userAns || '—'} onWord={t => tapTok(t, it.first + ' ' + userAns)} /></b>
                     </div>
                   </div>
                 );
@@ -887,7 +899,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
 
                   {c.corrected && (
                     <div dir="ltr" className="flex items-start gap-2 text-sm leading-7 rounded-xl p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800" style={{ textAlign: 'left' }}>
-                      <span className="flex-1 font-sans font-bold text-emerald-900 dark:text-emerald-200">{c.corrected}</span>
+                      <span className="flex-1 font-sans font-bold text-emerald-900 dark:text-emerald-200"><ClickableWords text={c.corrected} onWord={t => tapTok(t, c.corrected || '')} /></span>
                       <button onClick={() => doSpeak(c.corrected)} className="text-base flex-shrink-0 mt-1" title="تلفظ جملهٔ درست">🔊</button>
                     </div>
                   )}
@@ -983,6 +995,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       {/* برگهٔ چاپ */}
       {printPreview}
       {dialog}
+
+      {/* دیالوگ تصمیم افزودن به واژگان (تکراری / Partizip II / مترادف) */}
+      {gate.node}
     </div>
   );
 };

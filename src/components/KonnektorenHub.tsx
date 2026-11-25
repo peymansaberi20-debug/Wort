@@ -18,6 +18,9 @@ interface KonnektorenHubProps {
   settings?: AppSettings;
   onShowToast: (msg: string, isErr?: boolean) => void;
   onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   onClose?: () => void;
   /** اگر از حالت قدیمی «konnektoren» باز شود، مستقیم روی تب متن جای‌خالی می‌رود */
   initialTab?: KonnektorenTab;
@@ -34,7 +37,7 @@ const loadTab = (initialTab?: KonnektorenTab): KonnektorenTab => {
   return 'ai';
 };
 
-export const KonnektorenHub: React.FC<KonnektorenHubProps> = ({ settings, onShowToast, onQuickAddWord, onClose, initialTab }) => {
+export const KonnektorenHub: React.FC<KonnektorenHubProps> = ({ settings, onShowToast, onQuickAddWord, words, onViewWord, onClose, initialTab }) => {
   const [tab, setTab] = useState<KonnektorenTab>(() => loadTab(initialTab));
 
   const pick = (t: KonnektorenTab): void => {
@@ -65,12 +68,17 @@ export const KonnektorenHub: React.FC<KonnektorenHubProps> = ({ settings, onShow
           settings={settings}
           onShowToast={onShowToast}
           onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
           onClose={onClose}
         />
       ) : (
         <KonnektorTrainer
           onClose={onClose}
           onShowToast={onShowToast}
+          words={words}
+          onQuickAddWord={onQuickAddWord}
+          onViewWord={onViewWord}
         />
       )}
     </div>

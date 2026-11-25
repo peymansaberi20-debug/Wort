@@ -12,6 +12,8 @@ import { generateWithImages, describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import { ExamRun, S, askJson, pick, sentenceFix, useNoHelp } from '../utils/trainerKit';
 import { faDate, LevelChips, PrintPreview, prFa, prG, toFa } from './trainerUI';
+import { ClickableWords, WordLookupModal } from './WordLookup';
+import type { Word } from '../types';
 
 /** Shrinks a photo to max 1800px JPEG so the upload stays small and reliable. */
 const shrinkImage = (file: File): Promise<{ dataUrl: string; mimeType: string; base64: string }> =>
@@ -291,11 +293,15 @@ const wc = (t: string) => t.split(/\s+/).filter(w => /\p{L}/u.test(w)).length;
 
 interface SchreibenCorrectorProps {
   onShowToast: (m: string, e?: boolean) => void;
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onViewWord?: (w: Word) => void;
   variant?: 'pruefung' | 'pruefen';
   exam?: ExamRun;
 }
 
-export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowToast, variant = 'pruefen', exam }) => {
+export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowToast, onQuickAddWord, words, onViewWord, variant = 'pruefen', exam }) => {
   const isExamMode = variant === 'pruefung' || !!exam;
   const [noHelp, setNoHelp] = useNoHelp();
   const limited = !!exam || noHelp;           // hides the Persian task text and key points
@@ -316,6 +322,8 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   const [savedList, setSavedList] = useState<SavedExercise[]>(() => loadSaved());
 
   const [images, setImages] = useState<{ dataUrl: string; mimeType: string; base64: string }[]>([]);
+  // پاپ‌آپ واژهٔ لمس‌شده (صورت سوال، متن مبدأ، ایده‌ها و تصحیح‌ها)
+  const [lookup, setLookup] = useState<string | null>(null);
   // صف کراپ: هر عکس تازه قبل از ورود به فهرست از کراپ می‌گذرد (درخواست #۶)
   const [pendingCrop, setPendingCrop] = useState<{ dataUrl: string; rest: { dataUrl: string; mimeType: string; base64: string }[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -830,20 +838,20 @@ Return ONLY a valid JSON array with one object:
               {/* رندر مرتب مثل نمونهٔ رسمی: عنوان درشت → دستور پررنگ → مقدمه → Zitat ایتالیک در کادر جدا → خطوط دستور */}
               {promptData.structured ? (
                 <div className="space-y-2.5">
-                  <div dir="ltr" className="text-left font-sans text-lg font-extrabold text-slate-900 dark:text-white leading-8">{promptData.structured.title}</div>
-                  <div dir="ltr" className="text-left font-sans font-bold text-slate-800 dark:text-slate-100">{promptData.structured.aufgabe}</div>
-                  <div dir="ltr" className="text-left font-sans text-slate-700 dark:text-slate-300">{promptData.structured.intro}</div>
-                  <div dir="ltr" className="text-left font-serif italic text-[15px] leading-8 text-slate-800 dark:text-slate-100 bg-white dark:bg-[#141923] p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50">{promptData.structured.quote}</div>
-                  <div dir="ltr" className="text-left font-sans font-bold text-slate-800 dark:text-slate-100">{promptData.structured.instrBold}</div>
-                  {promptData.structured.instrRest.map((line, i) => <div key={i} dir="ltr" className="text-left font-sans text-slate-700 dark:text-slate-300">{line}</div>)}
+                  <div dir="ltr" className="text-left font-sans text-lg font-extrabold text-slate-900 dark:text-white leading-8"><ClickableWords text={promptData.structured.title} onWord={setLookup} /></div>
+                  <div dir="ltr" className="text-left font-sans font-bold text-slate-800 dark:text-slate-100"><ClickableWords text={promptData.structured.aufgabe} onWord={setLookup} /></div>
+                  <div dir="ltr" className="text-left font-sans text-slate-700 dark:text-slate-300"><ClickableWords text={promptData.structured.intro} onWord={setLookup} /></div>
+                  <div dir="ltr" className="text-left font-serif italic text-[15px] leading-8 text-slate-800 dark:text-slate-100 bg-white dark:bg-[#141923] p-3.5 rounded-xl border border-indigo-100 dark:border-indigo-900/50"><ClickableWords text={promptData.structured.quote} onWord={setLookup} /></div>
+                  <div dir="ltr" className="text-left font-sans font-bold text-slate-800 dark:text-slate-100"><ClickableWords text={promptData.structured.instrBold} onWord={setLookup} /></div>
+                  {promptData.structured.instrRest.map((line, i) => <div key={i} dir="ltr" className="text-left font-sans text-slate-700 dark:text-slate-300"><ClickableWords text={line} onWord={setLookup} /></div>)}
                 </div>
               ) : (
-                <div dir="ltr" className="font-sans font-bold text-base text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap">{promptData.taskDe}</div>
+                <div dir="ltr" className="font-sans font-bold text-base text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap"><ClickableWords text={promptData.taskDe} onWord={setLookup} /></div>
               )}
               {promptData.sourceText && (
                 <div className="space-y-1">
                   <div className="font-bold text-indigo-900 dark:text-indigo-200">📄 متن مبدأ (Ausgangstext):</div>
-                  <div dir="ltr" className="font-sans text-sm text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap">{promptData.sourceText}</div>
+                  <div dir="ltr" className="font-sans text-sm text-slate-800 dark:text-slate-100 text-left bg-white dark:bg-[#141923] p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 whitespace-pre-wrap"><ClickableWords text={promptData.sourceText} onWord={setLookup} /></div>
                 </div>
               )}
               {!limited && (showFa ? (
@@ -869,7 +877,7 @@ Return ONLY a valid JSON array with one object:
                       <ol className="list-decimal list-inside space-y-2.5">
                         {ideas.map((it, i) => (
                           <li key={i}>
-                            <div dir="ltr" className="text-left font-serif italic text-slate-800 dark:text-slate-100 leading-7">{it.de}</div>
+                            <div dir="ltr" className="text-left font-serif italic text-slate-800 dark:text-slate-100 leading-7"><ClickableWords text={it.de} onWord={setLookup} /></div>
                             {!limited && it.fa && <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{it.fa}</div>}
                           </li>
                         ))}
@@ -957,7 +965,7 @@ Return ONLY a valid JSON array with one object:
           {report.transcribed_de && (
             <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/70 border border-slate-300 dark:border-slate-700 space-y-1.5">
               <div className="text-sm font-bold text-slate-700 dark:text-slate-200">📄 متن استخراج‌شده از تصویر شما:</div>
-              <div dir="ltr" className="font-sans text-base text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed">{report.transcribed_de}</div>
+              <div dir="ltr" className="font-sans text-base text-slate-900 dark:text-slate-100 whitespace-pre-wrap leading-relaxed"><ClickableWords text={report.transcribed_de} onWord={setLookup} /></div>
             </div>
           )}
 
@@ -975,9 +983,9 @@ Return ONLY a valid JSON array with one object:
                   <span className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-bold ${ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{it.type}</span>
                   {(it.wrong || it.correct) && (
                     <div className="flex flex-wrap items-baseline gap-2 text-base" dir="ltr">
-                      {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
+                      {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through"><ClickableWords text={it.wrong} onWord={setLookup} /></span>}
                       {it.wrong && it.correct && <span className="text-slate-400">→</span>}
-                      {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
+                      {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300"><ClickableWords text={it.correct} onWord={setLookup} /></span>}
                     </div>
                   )}
                   {it.why_fa && <div className="text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
@@ -995,7 +1003,7 @@ Return ONLY a valid JSON array with one object:
           {report.corrected_de && (
             <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 space-y-2">
               <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">✅ نسخه اصلاح‌شده و طبیعی:</div>
-              <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{report.corrected_de}</div>
+              <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap"><ClickableWords text={report.corrected_de} onWord={setLookup} /></div>
               <button onClick={() => setShadowOpen(true)} className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center gap-1.5 shadow-xs">🎙 تمرین تلفظ این متن</button>
             </div>
           )}
@@ -1034,6 +1042,19 @@ Return ONLY a valid JSON array with one object:
           meta={`${targetLevel} • ${activeExamLabel} • ${faDate(Date.now())} • نام: ...........................`}
           questions={printQuestions}
           hint="پیش‌نمایش چاپ — برگهٔ A4: سؤال بالای برگه و خط‌کشی برای نوشتن"
+        />
+      )}
+
+      {/* پاپ‌آپ واژهٔ لمس‌شده — مشترک در صورت سوال، متن مبدأ، ایده‌ها و تصحیح‌ها */}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level={targetLevel}
+          cat="Schreiben"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
         />
       )}
     </div>

@@ -23,11 +23,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
+import { ClickableWords, WordLookupModal } from './WordLookup';
+import { useVocabGate } from './VocabDecisionDialog';
+import type { Word } from '../types';
 
 interface KonnektorTrainerProps {
   /** optional — the hub may be shown without a close button (e.g. embedded tab) */
   onClose?: () => void;
   onShowToast: (msg: string, isErr?: boolean) => void;
+  /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */
+  words?: Word[];
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  onViewWord?: (w: Word) => void;
 }
 
 interface KonnektorBlank { id: number; answer: string }
@@ -132,7 +139,7 @@ Antworte kurz und klar auf Persisch (Farsi); Fachbegriffe und Beispiele auf Deut
 /* استایل چاپ → PrintPreview مشترک در trainerUI (نمای یکدست همهٔ تمرین‌ها) */
 
 
-export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast }) => {
+export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast, words, onQuickAddWord, onViewWord }) => {
   const [exercises, setExercises] = useState<KonnektorItem[]>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -152,6 +159,13 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
   /** پنجرهٔ تمام‌صفحهٔ تمرین — متن + تصحیح + چت با معلم (درخواست کاربر) */
   const [exOpen, setExOpen] = useState(false);
   const { ask, dialog } = useConfirm();
+  // پاپ‌آپ واژهٔ لمس‌شده (متن تمرین، عنوان‌ها و پاسخ معلم) + گیت تکراری/P2/مترادف
+  const [lookup, setLookup] = useState<string | null>(null);
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord
+  });
 
   // پیکربندی ساخت تمرین جدید
   const [level, setLevel] = useState<Lvl>('B1');
@@ -334,7 +348,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
           const blankId = index + 1;
           const hasBlank = index < usableBlanks.length;
           if (!hasBlank) {
-            return <span key={index} className="inline-block">{part}</span>;
+            return <span key={index} className="inline-block"><ClickableWords text={part} onWord={setLookup} /></span>;
           }
           const correctAnswer = usableBlanks[index].answer;
           const filled = userAnswers[blankId];
@@ -343,7 +357,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
 
           return (
             <React.Fragment key={index}>
-              <span className="inline-block">{part}</span>
+              <span className="inline-block"><ClickableWords text={part} onWord={setLookup} /></span>
               <span
                 onClick={() => handleBlankClick(blankId)}
                 onDragOver={e => e.preventDefault()}
@@ -506,7 +520,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
           {exercises.map(ex => (
             <ArchiveRow
               key={ex.id}
-              title={<>{ex.id === currentId && <span className="text-emerald-600">● </span>}{ex.title}</>}
+              title={<>{ex.id === currentId && <span className="text-emerald-600">● </span>}<span onClick={e => { e.stopPropagation(); setLookup(ex.title); }} className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition">{ex.title}</span></>}
               chips={<>
                 <MiniChip tone="blue">سطح {ex.level || 'B1'}</MiniChip>
                 <MiniChip>{toFa(ex.blanks.length)} جای خالی</MiniChip>
@@ -535,6 +549,19 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
 
       {printPreview}
 
+      {/* پاپ‌آپ واژهٔ لمس‌شده — صفحهٔ فهرست (زمانی که تمرین تمام‌صفحه باز نیست) */}
+      {lookup && !exOpen && (
+        <WordLookupModal
+          word={lookup}
+          level={currentEx.level || 'B1'}
+          cat="Konnektoren"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
+      )}
+      {gate.node}
       {dialog}
 
       {/* 🪟 پنجرهٔ تمام‌صفحهٔ تمرین — متن جای‌خالی + تصحیح + چت با معلم، همه زیر هم (درخواست کاربر).
@@ -545,7 +572,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
           <div className="sticky top-0 z-10 bg-gradient-to-l from-[#6b4fd8] via-[#4a5ac9] to-[#1f5fbf] text-white shadow-lg flex items-center gap-3 px-3 h-14">
             <span className="text-2xl">📝</span>
             <div className="flex-1 min-w-0">
-              <h1 className="font-extrabold text-base truncate">{currentEx.title}</h1>
+              <h1 className="font-extrabold text-base truncate"><ClickableWords text={currentEx.title} onWord={setLookup} /></h1>
               <p className="text-[11px] text-white/75 truncate">سطح {currentEx.level || 'B1'} · {toFa(currentEx.blanks.length)} جای خالی{currentEx.topic ? ` · ${currentEx.topic}` : ''}</p>
             </div>
             <button onClick={() => setExOpen(false)} aria-label="بازگشت" title="بازگشت به تمرین‌های ذخیره‌شده" className="w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 text-xl flex items-center justify-center flex-shrink-0">✕</button>
@@ -638,7 +665,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
                           : 'bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]'}`}
                         style={{ whiteSpace: 'pre-wrap' }}
                       >
-                        {m.text}
+                        <ClickableWords text={m.text} onWord={setLookup} />
                       </div>
                     ))}
                     {chatBusy && <div className="text-xs text-[#5d6676] animate-pulse">معلم دارد می‌نویسد…</div>}
@@ -689,6 +716,19 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast 
               </div>
             )}
           </div>
+
+          {/* پاپ‌آپ واژهٔ لمس‌شده — داخل پنجرهٔ تمام‌صفحهٔ تمرین (ز-index بالای اورلی) */}
+          {lookup && (
+            <WordLookupModal
+              word={lookup}
+              level={currentEx.level || 'B1'}
+              cat="Konnektoren"
+              onQuickAddWord={onQuickAddWord}
+              words={words}
+              onViewWord={onViewWord}
+              onClose={() => setLookup(null)}
+            />
+          )}
         </div>
       )}
     </div>

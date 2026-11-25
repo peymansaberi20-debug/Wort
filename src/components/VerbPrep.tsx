@@ -8,6 +8,7 @@ import { generateWithGemini, parseAI } from '../utils/ai';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { CountChips, LevelChips, PrimaryBtn, Section, toFa, useConfirm } from './trainerUI';
 import { PageOverlay } from './PageOverlay';
+import { useVocabGate } from './VocabDecisionDialog';
 
 const STATS_KEY = 'wb_vprep_stats';
 const CUSTOM_KEY = 'wb_vprep_custom';
@@ -59,7 +60,7 @@ const TapText: React.FC<{ text: string; onTap?: (w: string) => void }> = ({ text
   }
   if (last < text.length) toks.push({ w: text.slice(last), isWord: false });
   return <>{toks.map((t, i) => t.isWord
-    ? <button key={i} onClick={() => onTap(t.w)} className="underline decoration-dotted decoration-[#b6c3d9] underline-offset-4 hover:bg-[#1f5fbf]/10 transition-colors">{t.w}</button>
+    ? <button key={i} onClick={() => onTap(t.w)} className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition-colors">{t.w}</button>
     : <span key={i}>{t.w}</span>)}</>;
 };
 
@@ -87,7 +88,7 @@ function sentenceParts(v: VP): { before: string; art: string | null; rest: strin
   return { before, art: null, rest: trimmed };
 }
 
-export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
+export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean; /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */ words?: Word[]; onViewWord?: (w: Word) => void }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar, words, onViewWord }) => {
   const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab === 'add' ? 'learn' : (initialTab || 'practice'));
   // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان؛ «افزودن» دیگر تب بالا نیست (درخواست کاربر) → پاپ‌آپ پایین صفحه
   const [addOpen, setAddOpen] = useState(initialTab === 'add');
@@ -125,6 +126,13 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [chatBusy, setChatBusy] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const { ask, dialog } = useConfirm();
+  // گیت مرکزی افزودن به واژگان: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
+  const gate = useVocabGate({
+    words: words || [],
+    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
+    onView: onViewWord,
+    onDone: (data, ok) => { if (ok) { const de = String(data.de || ''); if (de) setAdded(a => new Set(a).add(de)); } }
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => new Map(all.map(v => [v.id, v])), [all]);
@@ -308,9 +316,8 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const addWord = (w: string, info: WInfo) => {
     if (!onQuickAddWord) return;
     const de = info.art ? `${info.art} ${w}` : w;
-    const okAdd = onQuickAddWord({ de, fa: info.fa, pos: info.pos || '', ex: info.ex || '', exFa: info.exFa || '' });
-    if (okAdd) { setAdded(a => new Set(a).add(de)); onShowToast(`«${de}» به واژگان اضافه شد`); }
-    else onShowToast('افزودن به واژگان ناموفق بود.', true);
+    // مسیر گیت: تکراری/P2/مترادف → دیالوگ تصمیم؛ تازه → افزودن مستقیم (toast در App)
+    gate.attempt({ de, fa: info.fa, pos: info.pos || '', ex: info.ex || '', exFa: info.exFa || '' });
   };
 
   const Tab = (id: typeof tab, label: string) => (
@@ -759,6 +766,9 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
       )}
 
       {dialog}
+
+      {/* دیالوگ تصمیم افزودن به واژگان (تکراری / Partizip II / مترادف) */}
+      {gate.node}
     </div>
   );
 };

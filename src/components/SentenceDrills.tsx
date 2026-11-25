@@ -4,9 +4,16 @@ import { speak } from '../utils/audio';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { CountChips, LevelChips, PrimaryBtn, Section, toFa } from './trainerUI';
+import { ClickableWords, WordLookupModal } from './WordLookup';
 
 interface Item { de: string; fa: string; src: 'own' | 'ai' }
-interface DrillProps { words: Word[]; onShowToast: (m: string, e?: boolean) => void }
+interface DrillProps {
+  words: Word[];
+  onShowToast: (m: string, e?: boolean) => void;
+  onQuickAddWord?: (w: Partial<Word>) => boolean;
+  /** بازکردن پروفایل واژهٔ کتابخانه («مشاهدهٔ واژه») */
+  onViewWord?: (w: Word) => void;
+}
 
 const card = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3';
 const shuffle = <T,>(a: T[]): T[] => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
@@ -38,9 +45,10 @@ const Done: React.FC<{ score: number; total: number; onAgain: () => void }> = ({
  *  - «جمله‌های خودت»: از مثال‌های واژگان کاربر (مثل قبل)
  *  - «ساخت با هوش مصنوعی»: انتخاب سطح + تعداد جمله → AI جمله‌های تازهٔ هم‌سطح می‌سازد
  */
-export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast }) => {
+export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast, onQuickAddWord, onViewWord }) => {
   const ownPool = useMemo(() => collect(words), [words]);
   const [screen, setScreen] = useState<'config' | 'run'>('config');
+  const [lookup, setLookup] = useState<string | null>(null);
   const [mode, setMode] = useState<'own' | 'ai'>(ownPool.length >= 3 ? 'own' : 'ai');
   const [level, setLevel] = useState<Lvl>('A2');
   const [count, setCount] = useState(8);
@@ -176,7 +184,7 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
         ) : (
           <div className="space-y-2">
             <div className={`p-3 rounded-xl text-sm font-bold ${res ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>{res ? '✅ درست!' : '❌ ترتیب درست:'}</div>
-            <div dir="ltr" className="font-sans font-bold text-base leading-8">{cur.de}</div>
+            <div dir="ltr" className="font-sans font-bold text-base leading-8"><ClickableWords text={cur.de} onWord={setLookup} /></div>
             <div className="flex gap-2">
               <button onClick={say} className="px-4 h-11 rounded-xl bg-rose-600 text-white text-sm font-bold">🔊</button>
               {!res && <button onClick={() => { setScore(s => s + 1); setRes(true); }} className="px-3 h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold">ترتیب من هم درست است</button>}
@@ -185,6 +193,18 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
           </div>
         )}
       </div>
+      {/* پاپ‌آپ واژهٔ لمس‌شده — جملهٔ درست بعد از بررسی */}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level={mode === 'ai' ? level : 'A2'}
+          cat="Satzbau"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
+      )}
     </div>
   );
 };
@@ -206,10 +226,11 @@ const diff = (orig: string, typed: string): { cells: Cell[]; extra: string[]; pc
   return { cells, extra, pct: A.length ? Math.round((cells.filter(c => c.ok).length / A.length) * 100) : 0 };
 };
 
-export const Diktat: React.FC<DrillProps> = ({ words, onShowToast }) => {
+export const Diktat: React.FC<DrillProps> = ({ words, onShowToast, onQuickAddWord, onViewWord }) => {
   const pool = useMemo(() => collect(words, 3, 12), [words]);
   const make = () => shuffle(pool).slice(0, 8);
   const [queue, setQueue] = useState<Item[]>(make);
+  const [lookup, setLookup] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
   const [text, setText] = useState('');
   const [slow, setSlow] = useState(false);
@@ -244,7 +265,7 @@ export const Diktat: React.FC<DrillProps> = ({ words, onShowToast }) => {
           <div className="space-y-2">
             <div className="font-extrabold text-sm">دقت: <span className={res.pct >= 80 ? 'text-emerald-600' : res.pct >= 50 ? 'text-amber-600' : 'text-rose-600'} dir="ltr">{res.pct}%</span></div>
             <div dir="ltr" className="font-sans text-base leading-9 flex flex-wrap gap-x-1.5">
-              {res.cells.map((c, i) => <span key={i} className={c.ok ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold underline decoration-wavy'}>{c.t}</span>)}
+              {res.cells.map((c, i) => <span key={i} onClick={() => setLookup(clean(c.t) || c.t)} className={`cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition ${c.ok ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold underline decoration-wavy'}`}>{c.t}</span>)}
             </div>
             {res.extra.length > 0 && <div className="text-xs text-rose-600 dark:text-rose-400" dir="ltr">✗ {res.extra.join(' · ')}</div>}
             {cur.fa && <div className="text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">{cur.fa}</div>}
@@ -252,6 +273,18 @@ export const Diktat: React.FC<DrillProps> = ({ words, onShowToast }) => {
           </div>
         )}
       </div>
+      {/* پاپ‌آپ واژهٔ لمس‌شده — سلول‌های نتیجهٔ دیکته */}
+      {lookup && (
+        <WordLookupModal
+          word={lookup}
+          level="A2"
+          cat="Diktat"
+          onQuickAddWord={onQuickAddWord}
+          words={words}
+          onViewWord={onViewWord}
+          onClose={() => setLookup(null)}
+        />
+      )}
     </div>
   );
 };
