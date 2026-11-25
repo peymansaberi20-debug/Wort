@@ -8,7 +8,6 @@ import { generateWithGemini, parseAI } from '../utils/ai';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { CountChips, LevelChips, PrimaryBtn, Section, toFa, useConfirm } from './trainerUI';
 import { PageOverlay } from './PageOverlay';
-import { useVocabGate } from './VocabDecisionDialog';
 
 const STATS_KEY = 'wb_vprep_stats';
 const CUSTOM_KEY = 'wb_vprep_custom';
@@ -23,6 +22,49 @@ const kCol = (k: string) => (k === 'A' ? 'bg-orange-100 text-orange-800 dark:bg-
 const shuffle = <T,>(a: T[]): T[] => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const load = <T,>(k: string, d: T): T => { try { const v = JSON.parse(localStorage.getItem(k) || ''); return v ?? d; } catch { return d; } };
 const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
+
+/* ───────── چاپ فهرست «فعل + حرف اضافه» ─────────
+ * پیش‌نمایش تمام‌صفحه + برگهٔ A4 (Portal به body، فقط هنگام باز بودن پیش‌نمایش رندر می‌شود).
+ * قانون چاپ با اولویتِ بالا (html body >) نوشته شده تا قانون چاپِ تمرینِ «فعل‌های بی‌قاعده»
+ * (irr-print که به‌خاطر لایهٔ keep-alive همیشه در صفحه هست) این برگه را خالی نکند؛
+ * بدون این اولویت، دو قانون رقیبِ «هر چیز جز برگهٔ من را حذف کن» به برگهٔ سفید می‌رسیدند. */
+const VPP_PRINT_CSS = `
+.vpp-screen { position: fixed; inset: 0; z-index: 1000; background: #3f4753; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.vpp-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1f2937; color: #fff; flex-wrap: wrap; }
+.vpp-btn { border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.14); color: #fff; }
+.vpp-btn-primary { background: #1f5fbf; }
+.vpp-hint { font-size: 11px; opacity: .85; margin-inline-start: auto; }
+.vpp-pages { max-width: 800px; margin: 18px auto 48px; padding: 0 10px; }
+.vpp-sheet { background: #fff; color: #111; padding: 34px 36px; box-shadow: 0 3px 18px rgba(0,0,0,.45); }
+@media print {
+  html, body { background: #fff !important; }
+  html body > *:not(.vpp-screen) { display: none !important; }
+  html body > .vpp-screen { display: block !important; position: static !important; background: #fff !important; overflow: visible !important; }
+  .vpp-bar { display: none !important; }
+  .vpp-pages { max-width: none; margin: 0; padding: 0; }
+  .vpp-sheet { box-shadow: none; padding: 0; }
+  @page { size: A4; margin: 12mm 11mm; }
+}
+.vpp-screen, .vpp-screen * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.vpp-head { text-align: center; margin-bottom: 7pt; }
+.vpp-title { font-size: 14.5pt; font-weight: 800; letter-spacing: .2pt; }
+.vpp-sub { font-size: 9pt; color: #555; margin-top: 2.5pt; direction: rtl; unicode-bidi: embed; }
+.vpp-rule { border-bottom: 1.6pt solid #1f5fbf; margin: 5pt 0 8pt; }
+.vpp-cols { column-count: 2; column-gap: 9mm; }
+.vpp-ghead { display: flex; align-items: baseline; justify-content: space-between; gap: 4pt; font-size: 11pt; font-weight: 800; color: #1f5fbf; border-bottom: 1pt solid #1f5fbf; padding-bottom: 1.5pt; margin: 7pt 0 3pt; direction: ltr; }
+.vpp-group:first-child .vpp-ghead { margin-top: 0; }
+.vpp-gcount { font-size: 8pt; font-weight: 700; color: #777; direction: rtl; unicode-bidi: embed; }
+.vpp-item { break-inside: avoid; page-break-inside: avoid; padding: 2pt 0 2.5pt; border-bottom: 0.4pt dotted #c9cdd4; }
+.vpp-line { display: flex; align-items: baseline; justify-content: space-between; gap: 5pt; }
+.vpp-verb { font-size: 9.5pt; font-weight: 700; white-space: nowrap; }
+.vpp-prep { color: #1f5fbf; font-weight: 800; }
+.vpp-case { font-size: 7.5pt; font-weight: 800; color: #b45309; white-space: nowrap; }
+.vpp-star { color: #b45309; font-weight: 800; }
+.vpp-fa { font-size: 8.5pt; direction: rtl; unicode-bidi: embed; text-align: right; }
+.vpp-ex { font-size: 8.5pt; font-style: italic; color: #333; margin-top: 1pt; line-height: 1.45; }
+.vpp-exprep { color: #1f5fbf; font-weight: 800; font-style: normal; text-decoration: underline; }
+.vpp-legend { margin-top: 9pt; padding-top: 4pt; border-top: 0.6pt solid #aab2bf; font-size: 8pt; color: #555; direction: rtl; text-align: center; }
+`;
 
 /* ───────── پل هوش مصنوعی برنامه: کلید و مدل از تنظیمات (aiProvider) ─────────
  * هیچ کارت کلیدی داخل تمرین نیست؛ اگر کلید در تنظیمات نباشد فقط پیام راهنما می‌بینی
@@ -60,7 +102,7 @@ const TapText: React.FC<{ text: string; onTap?: (w: string) => void }> = ({ text
   }
   if (last < text.length) toks.push({ w: text.slice(last), isWord: false });
   return <>{toks.map((t, i) => t.isWord
-    ? <button key={i} onClick={() => onTap(t.w)} className="cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition-colors">{t.w}</button>
+    ? <button key={i} onClick={() => onTap(t.w)} className="underline decoration-dotted decoration-[#b6c3d9] underline-offset-4 hover:bg-[#1f5fbf]/10 transition-colors">{t.w}</button>
     : <span key={i}>{t.w}</span>)}</>;
 };
 
@@ -88,7 +130,7 @@ function sentenceParts(v: VP): { before: string; art: string | null; rest: strin
   return { before, art: null, rest: trimmed };
 }
 
-export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean; /** کل کتابخانه — گیتِ تکراری/Partizip II/مترادف */ words?: Word[]; onViewWord?: (w: Word) => void }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar, words, onViewWord }) => {
+export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
   const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab === 'add' ? 'learn' : (initialTab || 'practice'));
   // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان؛ «افزودن» دیگر تب بالا نیست (درخواست کاربر) → پاپ‌آپ پایین صفحه
   const [addOpen, setAddOpen] = useState(initialTab === 'add');
@@ -126,13 +168,6 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [chatBusy, setChatBusy] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const { ask, dialog } = useConfirm();
-  // گیت مرکزی افزودن به واژگان: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
-  const gate = useVocabGate({
-    words: words || [],
-    onAdd: data => (onQuickAddWord ? onQuickAddWord(data) : false),
-    onView: onViewWord,
-    onDone: (data, ok) => { if (ok) { const de = String(data.de || ''); if (de) setAdded(a => new Set(a).add(de)); } }
-  });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => new Map(all.map(v => [v.id, v])), [all]);
@@ -157,6 +192,30 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     // معنی‌های نزدیک به هم کنار هم، بعد الفبای آلمانی (درخواست کاربر)
     return [...matches].sort((a, b) => (a.fa || '').localeCompare(b.fa || '', 'fa') || a.verb.localeCompare(b.verb, 'de'));
   }, [all, fPrep, fLvl, search]);
+
+  /* ── چاپ فهرست فعل + حرف اضافه (درخواست کاربر): پیش‌نمایش + برگهٔ A4 مرتب بر اساس حرف اضافه ── */
+  const [printOpen, setPrintOpen] = useState(false);
+  useEffect(() => {
+    if (!printOpen) return;
+    const off = () => setPrintOpen(false); // بعد از چاپ یا لغو دیالوگ چاپ، پیش‌نمایش بسته شود
+    window.addEventListener('afterprint', off);
+    return () => window.removeEventListener('afterprint', off);
+  }, [printOpen]);
+  /** گروه‌بندی فهرستِ (فیلترشدهٔ) یادگیری بر اساس حرف اضافه — ترتیب گروه‌ها مثل ترتیب PREPS، فعل‌ها الفبایی */
+  const printGroups = useMemo(() => {
+    const map = new Map<string, VP[]>();
+    for (const v of learnList) { const arr = map.get(v.prep); if (arr) arr.push(v); else map.set(v.prep, [v]); }
+    const order = (p: string) => { const i = PREPS.indexOf(p); return i < 0 ? 99 : i; };
+    return [...map.entries()]
+      .sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0], 'de'))
+      .map(([p, vs]) => [p, [...vs].sort((a, b) => a.verb.localeCompare(b.verb, 'de'))] as [string, VP[]]);
+  }, [learnList]);
+  const printDate = useMemo(() => { try { return new Date().toLocaleDateString('fa-IR'); } catch { return ''; } }, []);
+  const printMeta = useMemo(() => [
+    fPrep ? `حرف اضافه: ${fPrep}` : 'همهٔ حرف‌های اضافه',
+    fLvl || 'همهٔ سطح‌ها',
+    search.trim() ? `جستجو: «${search.trim()}»` : ''
+  ].filter(Boolean).join(' • '), [fPrep, fLvl, search]);
 
   const start = () => {
     const now = Date.now();
@@ -316,8 +375,9 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const addWord = (w: string, info: WInfo) => {
     if (!onQuickAddWord) return;
     const de = info.art ? `${info.art} ${w}` : w;
-    // مسیر گیت: تکراری/P2/مترادف → دیالوگ تصمیم؛ تازه → افزودن مستقیم (toast در App)
-    gate.attempt({ de, fa: info.fa, pos: info.pos || '', ex: info.ex || '', exFa: info.exFa || '' });
+    const okAdd = onQuickAddWord({ de, fa: info.fa, pos: info.pos || '', ex: info.ex || '', exFa: info.exFa || '' });
+    if (okAdd) { setAdded(a => new Set(a).add(de)); onShowToast(`«${de}» به واژگان اضافه شد`); }
+    else onShowToast('افزودن به واژگان ناموفق بود.', true);
   };
 
   const Tab = (id: typeof tab, label: string) => (
@@ -385,7 +445,16 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
           <div className={card + ' !p-3'}>
             <div className="flex items-center justify-between flex-wrap gap-1">
               <b className="text-base font-sans" dir="ltr">{fPrep || 'همهٔ حرف‌های اضافه'} <span className="text-xs font-normal text-[#5d6676]">({toFa(learnList.length)})</span></b>
-              <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">مرتب بر اساس معنی‌های نزدیک، سپس الفبای آلمانی</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">مرتب بر اساس معنی‌های نزدیک، سپس الفبای آلمانی</span>
+                {/* چاپ فهرست فعل‌ها با معنی و مثال (درخواست کاربر) — همان فیلتر/جستجویی که دیده می‌شود چاپ می‌شود */}
+                <button
+                  onClick={() => setPrintOpen(true)}
+                  disabled={!learnList.length}
+                  title="چاپ فهرست فعل‌ها با معنی فارسی و جملهٔ مثال"
+                  className="px-3 py-1.5 rounded-lg bg-[#1f5fbf] text-white text-[11px] font-bold flex items-center gap-1 flex-shrink-0 active:scale-[.97] transition disabled:opacity-40"
+                >🖨 چاپ / PDF</button>
+              </div>
             </div>
             {learnList.length === 0 && (
               <div className="text-sm text-[#5d6676] py-3 text-center">ففعلی با این فیلتر/جستجو پیدا نشد.</div>
@@ -765,10 +834,61 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         document.body
       )}
 
-      {dialog}
+      {/* ── پیش‌نمایش چاپ فهرست فعل + حرف اضافه (درخواست کاربر) ──
+          برگهٔ A4: گروه‌بندی بر اساس حرف اضافه؛ هر فعل با معنی فارسی و جملهٔ مثال
+          (حرف اضافهٔ داخل مثال زیرخط‌دار). فقط هنگام باز بودن پیش‌نمایش در صفحه است،
+          پس با برگه‌های چاپ تمرین‌های دیگر تداخل نمی‌کند. */}
+      {printOpen && createPortal(
+        <div className="vpp-screen" dir="rtl" role="dialog" aria-modal="true">
+          <style>{VPP_PRINT_CSS}</style>
+          <div className="vpp-bar">
+            <button onClick={() => setPrintOpen(false)} className="vpp-btn">✕ بستن</button>
+            <button onClick={() => window.print()} className="vpp-btn vpp-btn-primary">🖨 چاپ / PDF</button>
+            <span className="vpp-hint">پیش‌نمایش چاپ — فهرست فعل + حرف اضافه با معنی و مثال</span>
+          </div>
+          <div className="vpp-pages">
+            <div className="vpp-sheet" dir="ltr">
+              <div className="vpp-head">
+                <div className="vpp-title">Verben mit Präpositionen</div>
+                <div className="vpp-sub">فعل + حرف اضافه — {toFa(learnList.length)} فعل • {printMeta} • {printDate}</div>
+              </div>
+              <div className="vpp-rule" />
+              <div className="vpp-cols">
+                {printGroups.map(([prep, vs]) => (
+                  <div className="vpp-group" key={prep}>
+                    <div className="vpp-ghead"><span>{prep}</span><span className="vpp-gcount">{toFa(vs.length)} فعل</span></div>
+                    {vs.map(v => {
+                      const sp = splitEx(v.ex, v.prep);
+                      return (
+                        <div className="vpp-item" key={v.id}>
+                          <div className="vpp-line">
+                            <span className="vpp-verb" dir="ltr">
+                              {v.verb} <span className="vpp-prep">{v.prep}</span>{' '}
+                              <span className="vpp-case">+{v.kase === 'A' ? 'Akk' : 'Dat'}</span>
+                              {v.custom && <span className="vpp-star"> *</span>}
+                            </span>
+                            <span className="vpp-fa" dir="rtl">{v.fa}</span>
+                          </div>
+                          <div className="vpp-ex" dir="ltr">
+                            {sp ? (<>{sp[0]}<span className="vpp-exprep">{sp[1]}</span>{sp[2]}</>) : v.ex}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <div className="vpp-legend">
+                <span dir="ltr">+Akk</span> = Akkusativ · <span dir="ltr">+Dat</span> = Dativ
+                {printGroups.some(([, vs]) => vs.some(v => v.custom)) && <> · <span className="vpp-star" dir="ltr">*</span> = فعل افزودهٔ خودت</>}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
-      {/* دیالوگ تصمیم افزودن به واژگان (تکراری / Partizip II / مترادف) */}
-      {gate.node}
+      {dialog}
     </div>
   );
 };
