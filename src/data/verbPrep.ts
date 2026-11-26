@@ -1,7 +1,9 @@
 /** Verben mit Präpositionen: verb | preposition | case (A = Akkusativ, D = Dativ) | Persian | example (preposition appears as its own word). */
 import { splitConj, stripHeadAnnotation } from '../utils/conjugation';
 
-export interface VP { id: string; verb: string; prep: string; kase: 'A' | 'D'; fa: string; ex: string; custom?: boolean; lvl?: string }
+export interface VP { id: string; verb: string; prep: string; kase: 'A' | 'D'; fa: string; ex: string; custom?: boolean; lvl?: string; editOf?: string }
+/* editOf: وقتی این VP نسخهٔ ویرایش‌شدهٔ یک فعلِ پایه است، شناسهٔ اصلی فعل در دیتاست را نگه می‌دارد
+ * (درخواست ویرایش/حذف فعل‌ها) — آمار مرور فاصله‌دار با شناسهٔ اصلی حفظ می‌شود. */
 
 export const PREPS = ['an', 'auf', 'aus', 'bei', 'für', 'gegen', 'in', 'mit', 'nach', 'über', 'um', 'von', 'vor', 'zu'];
 
@@ -170,8 +172,72 @@ const loadCustom = (): VP[] => {
   } catch { return []; }
 };
 
-/** همهٔ فعل+حرف اضافه‌ها: دیتاست پایه + فهرست سفارشی کاربر */
-export const allVerbPreps = (): VP[] => [...VERB_PREPS, ...loadCustom()];
+/* ============================================================
+ * ویرایش و حذف فعل‌ها (درخواست کاربر):
+ *   - ویرایش فعل پایه → نسخهٔ ویرایش‌شده با کلید «شناسهٔ اصلی» در wb_vprep_edits ذخیره
+ *     می‌شود؛ چون شناسهٔ اصلی عوض نمی‌شود، آمار مرور فاصله‌دار همان فعل دست‌نخورده می‌ماند.
+ *   - حذف فعل پایه → شناسه‌اش در wb_vprep_deleted ثبت می‌شود (فقط از فهرست پنهان می‌شود
+ *     و هر زمان از بخش «افزودن فعل جدید» قابل بازیابی است؛ دیتاستِ سورس هرگز دست نمی‌خورد).
+ *   - فعل‌های افزودهٔ کاربر (custom) مستقیم از لیست wb_vprep_custom ویرایش/حذف می‌شوند.
+ * همهٔ مصرف‌کننده‌ها (فهرست یادگیری، تمرین، نشان‌گذاری سرِ واژهٔ فعل در واژگان) از
+ * allVerbPreps() تغذیه می‌کنند پس همه‌جا به‌طور خودکار هم‌گام می‌شوند.
+ * ============================================================ */
+
+const EDITS_KEY = 'wb_vprep_edits';
+const DELETED_KEY = 'wb_vprep_deleted';
+
+/** ویرایش‌های کاربر روی فعل‌های پایه — کلید: شناسهٔ اصلی دیتاست */
+export const loadVPrepEdits = (): Record<string, VP> => {
+  try { const v = JSON.parse(localStorage.getItem(EDITS_KEY) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
+};
+export const saveVPrepEdits = (m: Record<string, VP>): void => { try { localStorage.setItem(EDITS_KEY, JSON.stringify(m)); } catch { /* ignore */ } };
+/** شناسهٔ فعل‌های پایهٔ حذف‌شده */
+export const loadVPrepDeleted = (): string[] => {
+  try { const v = JSON.parse(localStorage.getItem(DELETED_KEY) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch { return []; }
+};
+export const saveVPrepDeleted = (ids: string[]): void => { try { localStorage.setItem(DELETED_KEY, JSON.stringify(ids)); } catch { /* ignore */ } };
+
+/** ثبت ویرایش یک فعل پایه — کلید = شناسهٔ اصلی؛ آمار یادگیری همان فعل حفظ می‌شود */
+export const upsertVPrepEdit = (origId: string, vp: VP): Record<string, VP> => {
+  const m = loadVPrepEdits();
+  m[origId] = { ...vp, editOf: origId };
+  saveVPrepEdits(m);
+  return m;
+};
+/** لغو ویرایش: بازگرداندن فعل پایه به نسخهٔ اصلی دیتاست */
+export const removeVPrepEdit = (origId: string): Record<string, VP> => {
+  const m = loadVPrepEdits();
+  delete m[origId];
+  saveVPrepEdits(m);
+  return m;
+};
+/** حذف فعل از فهرست (فعل پایه فقط پنهان می‌شود و قابل بازیابی است) */
+export const deleteVerbPrep = (id: string): string[] => {
+  const ids = [...new Set([...loadVPrepDeleted(), id])];
+  saveVPrepDeleted(ids);
+  return ids;
+};
+/** بازیابی فعل حذف‌شده */
+export const restoreVerbPrep = (id: string): string[] => {
+  const ids = loadVPrepDeleted().filter(x => x !== id);
+  saveVPrepDeleted(ids);
+  return ids;
+};
+/** فعل‌های پایهٔ حذف‌شده (برای بخش بازیابی در پاپ‌آپ افزودن) */
+export const deletedVerbPreps = (): VP[] => {
+  const del = new Set(loadVPrepDeleted());
+  return VERB_PREPS.filter(v => del.has(v.id));
+};
+
+/** دیتاست پایهٔ اثرگذار: منهای حذف‌شده‌ها، هر فعل با نسخهٔ ویرایش‌شدهٔ کاربر (اگر دارد) */
+const effectiveBase = (): VP[] => {
+  const del = new Set(loadVPrepDeleted());
+  const ed = loadVPrepEdits();
+  return VERB_PREPS.filter(v => !del.has(v.id)).map(v => ed[v.id] || v);
+};
+
+/** همهٔ فعل+حرف اضافه‌ها: دیتاست پایه (با ویرایش/حذف‌های کاربر) + فهرست سفارشی کاربر */
+export const allVerbPreps = (): VP[] => [...effectiveBase(), ...loadCustom()];
 
 /** جداکردن «sich » از ابتدای فعل برای تطبیق */
 export const baseVerb = (v: string): string => (v || '').trim().replace(/^sich\s+/i, '').toLowerCase();
@@ -290,11 +356,11 @@ export function isVerbHead(de: string, opts: HeadAnnotationInput = {}): boolean 
   return /^[a-zäöüß]{2,}(?:eln|ern|en)$/i.test((de || '').trim());
 }
 
-/** دیتاست (سفارشی کاربر اول، بعد پایه) جفت حرف اضافه/حالت این فعل را دارد؟ */
+/** دیتاست (سفارشی کاربر اول، بعد پایهٔ ویرایش‌شده) جفت حرف اضافه/حالت این فعل را دارد؟ */
 function datasetPrepCase(base: string): { prep: string; kase: 'A' | 'D' } | null {
   const t = (base || '').trim().toLowerCase();
   if (!t) return null;
-  for (const vp of [...loadCustom(), ...VERB_PREPS]) {
+  for (const vp of [...loadCustom(), ...effectiveBase()]) {
     if (baseVerb(vp.verb) === t) return { prep: vp.prep, kase: vp.kase };
   }
   return null;
