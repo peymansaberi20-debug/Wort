@@ -26,6 +26,7 @@ import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn,
 import { Printer } from 'lucide-react';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 import { useVocabGate } from './VocabDecisionDialog';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank, omitTop } from '../utils/aiBank';
 import type { Word } from '../types';
 
 interface KonnektorTrainerProps {
@@ -58,6 +59,14 @@ const STORAGE_KEY = 'wb_konnektor_archive_v1'; // همان کلید قبلی —
 const TOPIC_CHIPS = ['Alltag', 'Beruf', 'Reise', 'Umwelt', 'Technik', 'Gesundheit'];
 const QUICK_QS = ['چرا این‌طور درست است؟', 'قاعدهٔ جایگاه فعل را بگو', 'یک مثال مشابه بده', 'فرق wenn و als چیست؟'];
 
+/* ── بانک مشترک ابری تمرین‌های AI (درخواست: دسترس‌پذیری همه‌جا) ──
+ * تمرین‌های ساخته‌شده با AI به کالکشن عمومی Firestore فرستاده می‌شوند و تمرین‌های بانک
+ * که روی این دستگاه نیستند به آرشیو افزوده می‌شوند — با هر ایمیل یا حتی بدون ورود.
+ * تمرین‌های پیش‌فرض ثابت (DEFAULT_EXERCISES) به بانک فرستاده نمی‌شوند؛ گفتگوهای چت هم
+ * فقط محلی می‌مانند. */
+const BANK_SKILL = 'konn';
+const toBank = (it: KonnektorItem): KonnektorItem => omitTop(it as any, ['chats']) as KonnektorItem;
+
 const DEFAULT_EXERCISES: KonnektorItem[] = [
   {
     id: 'konn-1',
@@ -79,6 +88,9 @@ const DEFAULT_EXERCISES: KonnektorItem[] = [
     chats: []
   }
 ];
+
+/** شناسهٔ تمرین‌های پیش‌فرض ثابت — این‌ها به بانک مشترک فرستاده نمی‌شوند */
+const DEFAULT_IDS = new Set<string>(DEFAULT_EXERCISES.map((x) => x.id));
 
 /* ───────────── پل هوش مصنوعی برنامه (کلید از تنظیمات) ───────────── */
 
@@ -191,6 +203,32 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
     if (chatOpen) setTimeout(() => chatEndRef.current?.scrollIntoView({ block: 'end' }), 120);
   }, [chatOpen, currentEx?.chats]);
 
+  // همگام‌سازی آرشیو با بانک مشترک ابری — فقط یک‌بار هنگام مونت؛ بی‌صدا در خطا
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<KonnektorItem>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        setExercises((prev) => {
+          const merged = mergeAiBank(prev, cloud, seen);
+          if (merged !== prev && merged.length > prev.length) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged.slice(0, 40))); } catch { /* ignore */ }
+            return merged;
+          }
+          return prev;
+        });
+        const have = new Set(cloud.map((c) => c.id));
+        const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') as KonnektorItem[]; } catch { return []; } })();
+        local.filter((x) => x?.id && !DEFAULT_IDS.has(x.id) && !have.has(x.id)).slice(0, 25)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, toBank(x), { level: x.level, topic: x.topic, count: x.blanks?.length }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const saveArchive = (list: KonnektorItem[]) => {
     setExercises(list);
     try {
@@ -255,6 +293,8 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
 
       const updated = [newItem, ...exercises];
       saveArchive(updated);
+      // ☁️ ذخیره در بانک مشترک — بدون گفتگوهای چت؛ همهٔ کاربران به آن دسترسی دارند
+      pushAiBank(BANK_SKILL, newItem.id, toBank(newItem), { level, topic: topic.trim(), count: blankMatches.length });
       setCurrentId(newItem.id);
       setExOpen(true); // تمرین تازه در پنجرهٔ تمام‌صفحه باز می‌شود
       onShowToast(`تمرین جدید با ${blankMatches.length} جای خالی ساخته شد ✓`);

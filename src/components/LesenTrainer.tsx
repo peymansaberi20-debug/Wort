@@ -8,6 +8,7 @@ import { speak, stopSpeaking } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { ARCHIVE_LESEN, ExamRun, RESULTS_LESEN, S, askJson, loadList, saveList, useNoHelp } from '../utils/trainerKit';
 import { ClickableText, WordLookupModal } from './WordLookup';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank } from '../utils/aiBank';
 import { LevelChips, PrintPreview } from './trainerUI';
 import type { Word } from '../types';
 import { Clock, Volume2, Square, Eye, EyeOff, Lightbulb, PauseCircle, Printer } from 'lucide-react';
@@ -25,6 +26,12 @@ interface LesenTrainerProps {
 interface ReadingQuestion { id: number; question: string; options: string[]; correct: string; explanation?: string }
 interface ReadingPart { partNumber: number; partTitle: string; instruction: string; strategyTip?: string; text: string; questions: ReadingQuestion[] }
 interface ReadingExam { id?: string; org: string; level: string; title: string; durationMinutes: number; parts: ReadingPart[]; createdAt?: string }
+
+/* ── بانک مشترک ابری آزمون‌های خواندن AI (درخواست: دسترس‌پذیری همه‌جا) ──
+ * آزمون‌های ساخته‌شده با AI به کالکشن عمومی Firestore فرستاده می‌شوند و آزمون‌های بانک
+ * که روی این دستگاه نیستند به آرشیو افزوده می‌شوند — با هر ایمیل یا حتی بدون ورود.
+ * نتایج آزمون کاربر جدا و محلی می‌ماند (مثل قبل). */
+const BANK_SKILL = 'lesen';
 interface ExamResultRecord {
   id: string; examId: string; examTitle: string; org: string; level: string; date: string; score: number; total: number; percentage: number; userAnswers: Record<number, string>;
 }
@@ -93,6 +100,28 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuick
 
   const [archiveExams, setArchiveExams] = useState<ReadingExam[]>(() => loadList<ReadingExam>(ARCHIVE_LESEN));
   const [examResults, setExamResults] = useState<ExamResultRecord[]>(() => loadList<ExamResultRecord>(RESULTS_LESEN));
+
+  // همگام‌سازی آرشیو با بانک مشترک ابری — یک‌بار هنگام مونت؛ بی‌صدا در خطا
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<ReadingExam>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        setArchiveExams((prev) => {
+          const merged = mergeAiBank(prev, cloud, seen);
+          if (merged !== prev && merged.length > prev.length) { saveList(ARCHIVE_LESEN, merged); return merged; }
+          return prev;
+        });
+        const have = new Set(cloud.map((c) => c.id));
+        loadList<ReadingExam>(ARCHIVE_LESEN).filter((x): x is ReadingExam & { id: string } => !!x?.id && !have.has(x.id)).slice(0, 20)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, x, { level: x.level, title: x.title }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
   const [selectedArchiveLevel, setSelectedArchiveLevel] = useState<string>('');
 
   const [isLoading, setIsLoading] = useState(false);
@@ -282,6 +311,8 @@ Return ONLY a valid JSON object (no markdown, no extra text):
       setCurrentExam(ex);
       setSecondsLeft((ex.durationMinutes || spec.duration) * 60);
       saveExamToArchive(ex);
+      // ☁️ ذخیرهٔ آزمون تازه در بانک مشترک — با هر دستگاه/ایمیل/بدون ورود در دسترس همه
+      pushAiBank(BANK_SKILL, ex.id, ex, { level: ex.level, title: ex.title, count: (ex.parts || []).length });
     } catch (e: any) {
       if (run) setLoadErr(describeAiError(e));
       else { onShowToast(describeAiError(e), true); setView('menu'); }

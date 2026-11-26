@@ -11,6 +11,7 @@ import {
   ARCHIVE_HOEREN, ExamRun, MAX_PLAYS, S, TOPICS_DE, askJson, audioGet, audioPut, hash, loadList, pick, saveList, useNoHelp
 } from '../utils/trainerKit';
 import { ClickableWords, WordLookupModal } from './WordLookup';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank, omitTop } from '../utils/aiBank';
 import { LevelChips, PrintPreview, WriteLines } from './trainerUI';
 import { Printer } from 'lucide-react';
 import type { Word } from '../types';
@@ -35,6 +36,14 @@ type SavedExerciseRecord = {
   sentencePairsCache?: { de: string; fa: string }[]; audioUrl?: string; srcAudio?: string; trans?: TrChunk[][]; answers: Record<string, string>; submitted: boolean;
   result: GradingResult | null; historyAttempts?: HistoryAttempt[];
 };
+
+/* ── بانک مشترک ابری آزمون‌های شنیداری AI (درخواست: دسترس‌پذیری همه‌جا) ──
+ * آزمون‌های ساخته‌شده با AI (متن + سؤال‌ها) به کالکشن عمومی Firestore فرستاده می‌شوند و
+ * آزمون‌های بانک که روی این دستگاه نیستند به آرشیو افزوده می‌شوند — با هر ایمیل یا حتی
+ * بدون ورود. پاسخ‌ها/نتیجه/تاریخچهٔ خود کاربر فقط محلی می‌مانند و به بانک نمی‌روند. */
+const BANK_SKILL = 'hoeren';
+const toBank = (r: SavedExerciseRecord): SavedExerciseRecord =>
+  omitTop(r as any, ['answers', 'submitted', 'result', 'historyAttempts', 'audioUrl']) as SavedExerciseRecord;
 
 const DEFAULT_TTS_WORKER = 'https://wort-tts.peymansaberi20.workers.dev';
 const ETYPE: Record<string, ExamType> = { Goethe: 'Goethe', 'ÖSD': 'OESD', telc: 'Telc', EPD: 'EPD' };
@@ -262,6 +271,28 @@ export const HoerenTrainer: React.FC<{
   const [savedExercises, setSavedExercises] = useState<SavedExerciseRecord[]>(() => loadList<SavedExerciseRecord>(ARCHIVE_HOEREN));
   const archiveId = useRef<string | null>(null);
 
+  // همگام‌سازی آرشیو با بانک مشترک ابری — یک‌بار هنگام مونت؛ بی‌صدا در خطا
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<SavedExerciseRecord>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        setSavedExercises((prev) => {
+          const merged = mergeAiBank(prev, cloud, seen);
+          if (merged !== prev && merged.length > prev.length) { saveList(ARCHIVE_HOEREN, merged); return merged; }
+          return prev;
+        });
+        const have = new Set(cloud.map((c) => c.id));
+        loadList<SavedExerciseRecord>(ARCHIVE_HOEREN).filter((x) => x?.id && !have.has(x.id)).slice(0, 20)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, toBank(x), { level: x.level, kind: x.examType, title: x.title }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const [transcript, setTranscript] = useState('');
   const [examType, setExamType] = useState<ExamType>(exam ? ETYPE[exam.org] : 'Standard');
   const [level, setLevel] = useState(exam ? exam.level : 'B1');
@@ -362,6 +393,20 @@ export const HoerenTrainer: React.FC<{
       saveList(ARCHIVE_HOEREN, list);
       return list;
     });
+  };
+
+  /** ☁️ ارسال نسخهٔ تمیزِ آزمونِ تازه به بانک مشترک (بدون پاسخ/نتیجهٔ کاربر) —
+   *  فقط یک‌بار بلافاصله بعد از ساخته‌شدن آزمون صدا زده می‌شود. */
+  const pushCurrentToBank = (curEx: Exercise, curTr: string) => {
+    if (!archiveId.current) return;
+    const rec: SavedExerciseRecord = {
+      id: archiveId.current,
+      createdAt: new Date().toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+      title: curEx.title, examType: curEx.examType, level: curEx.level, transcript: curTr, exercise: curEx,
+      answers: {}, submitted: false, result: null,
+      ...(srcRef.current ? { srcAudio: srcRef.current } : {})
+    };
+    pushAiBank(BANK_SKILL, rec.id, toBank(rec), { level: curEx.level, kind: curEx.examType, title: curEx.title });
   };
 
   const handleBackToMenu = () => {
@@ -536,6 +581,7 @@ Ausgabe NUR als JSON: {"results":[{"id":"gap-0","points":1,"feedback":"Begründu
       const ex = await askJson<Exercise>(`${buildPrompt(examType, level)}\n\nTRANSKRIPT:\n${tr}`, exerciseCheck(examType, level), { timeoutMs: 60000, cacheKey: 'hx:' + hash(examType + level + tr) });
       setExercise(ex); setViewMode('exercise');
       persistCurrentToArchive(ex, tr, {}, false, null, []);
+      pushCurrentToBank(ex, tr);
     } catch (e: any) { setError(describeAiError(e)); } finally { setLoading(false); }
   };
 
@@ -601,6 +647,7 @@ ${numbered}`,
       const url = await makeAudio(tr, setAudioGenProgress);
       setTranscript(tr); setExercise(ex); setAudioUrl(url); setViewMode('exercise'); setSecondsLeft(exam.minutes * 60);
       persistCurrentToArchive(ex, tr, {}, false, null, []);
+      pushCurrentToBank(ex, tr);
     } catch (e: any) { setBuildErr(e?.message && !/^AI_/.test(e.message) ? e.message : describeAiError(e)); } finally { setLoading(false); }
   };
   useEffect(() => { if (exam) void autoBuild(); }, []);

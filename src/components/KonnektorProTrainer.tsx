@@ -28,6 +28,7 @@ import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn,
 import { Printer } from 'lucide-react';
 import { ClickableWords } from './WordLookup';
 import { useVocabGate } from './VocabDecisionDialog';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank, omitTop } from '../utils/aiBank';
 
 /* ───────────────────────── پل هوش مصنوعی برنامه ───────────────────────── */
 
@@ -90,6 +91,13 @@ const loadHist = (): KExercise[] => {
 };
 const saveHist = (h: KExercise[]) => { try { localStorage.setItem(HKEY, JSON.stringify(h.slice(0, 30))); } catch { /* ignore */ } };
 
+/* ── بانک مشترک ابری تمرین‌های AI (درخواست: دسترس‌پذیری همه‌جا) ──
+ * تمرین‌های ساخته‌شده با AI («حرف ربط انتخابی» و «تکمیل جمله») به کالکشن عمومی Firestore
+ * فرستاده می‌شوند و تمرین‌های بانک که روی این دستگاه نیستند به آرشیو افزوده می‌شوند —
+ * با هر ایمیل یا حتی بدون ورود. پاسخ‌ها/تصحیح‌ها/گفتگوهای خود کاربر فقط محلی می‌مانند. */
+const BANK_SKILL = 'kpro';
+const toBank = (e: KExercise): KExercise => omitTop(e as any, ['answers', 'corrections', 'chats']) as KExercise;
+
 interface KonnektorProTrainerProps {
   settings?: AppSettings;
   onShowToast: (msg: string, isErr?: boolean) => void;
@@ -150,6 +158,34 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     return () => clearTimeout(t);
   }, [ex]);
 
+  // همگام‌سازی آرشیو با بانک مشترک ابری — یک‌بار هنگام مونت؛ بی‌صدا در خطا
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<KExercise>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        // نرمال‌سازی ورودی‌های بانک مشترک: پاسخ‌ها/تصحیح‌ها/گفتگوها در بانک ذخیره نمی‌شوند
+        // → خالی می‌شوند تا بازکردن تمرین از آرشیو بدون خطا کار کند
+        const cloudNorm = cloud.map((c) => {
+          const d = (c.data || {}) as Partial<KExercise>;
+          return { ...c, data: { answers: {}, corrections: {}, chats: {}, ...d } as KExercise };
+        });
+        setHist((prev) => {
+          const merged = mergeAiBank(prev, cloudNorm, seen);
+          if (merged !== prev && merged.length > prev.length) { saveHist(merged); return merged; }
+          return prev;
+        });
+        const have = new Set(cloud.map((c) => c.id));
+        loadHist().filter((x) => x?.id && !have.has(x.id)).slice(0, 25)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, toBank(x), { level: x.level, topic: x.topic, count: x.items?.length }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const doSpeak = (text: string) => {
     try {
       speak(text, { rate: settings?.rate, vreg: settings?.vreg, voiceName: settings?.voice });
@@ -191,6 +227,8 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
         ts: Date.now(), level, topic: topic.trim(),
         items: clean, answers: {}, corrections: {}, chats: {}
       };
+      // ☁️ ذخیرهٔ تمرین تازه در بانک مشترک — با هر دستگاه/ایمیل/بدون ورود در دسترس همه
+      pushAiBank(BANK_SKILL, e.id, toBank(e), { level, topic: e.topic, count: clean.length });
       setEx(e);
       setCurNo(1);
       setScreen('play');

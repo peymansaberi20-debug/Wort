@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Word } from '../types';
 import { speak } from '../utils/audio';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
-import { CountChips, LevelChips, PrimaryBtn, Section, toFa } from './trainerUI';
+import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, Section, SqBtn, TopicInput, faDate, toFa, useConfirm } from './trainerUI';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank } from '../utils/aiBank';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 
 interface Item { de: string; fa: string; src: 'own' | 'ai' }
@@ -39,7 +40,21 @@ const Done: React.FC<{ score: number; total: number; onAgain: () => void }> = ({
   </div>
 );
 
-// ---------------------------------------------------------------- Satzbau puzzle
+/* ───────────────────────── آرشیو تمرین‌های ساخته‌شدهٔ AI + بانک مشترک ابری ─────────────────────────
+ * درخواست کاربر: تمرین‌های ساخته‌شده با هوش مصنوعی در برنامه ذخیره شوند و روی همهٔ
+ * دستگاه‌ها / با هر ایمیل / حتی بدون ورود در دسترس همه باشند. برای «چیدن جمله» که قبلاً
+ * آرشیو نداشت، آرشیو محلی جدید (wb_satzbau_ai_arch_v1) + بانک مشترک Firestore اضافه شد. */
+const SATZ_ARCH_KEY = 'wb_satzbau_ai_arch_v1';
+const SATZ_BANK = 'satzbau';
+interface SatzArch { id: string; ts: number; level: string; count: number; items: { de: string; fa: string }[] }
+const loadSatzArch = (): SatzArch[] => {
+  try {
+    const a = JSON.parse(localStorage.getItem(SATZ_ARCH_KEY) || '[]');
+    return Array.isArray(a) ? a.filter((x: SatzArch) => x?.id && Array.isArray(x.items)) : [];
+  } catch { return []; }
+};
+const saveSatzArch = (a: SatzArch[]): void => { try { localStorage.setItem(SATZ_ARCH_KEY, JSON.stringify(a.slice(0, 30))); } catch { /* ignore */ } };
+
 /**
  * چیدن جمله (Satzbau) — با پیکربندی یکدست مثل بقیهٔ تمرین‌ها (درخواست کاربر):
  *  - «جمله‌های خودت»: از مثال‌های واژگان کاربر (مثل قبل)
@@ -63,6 +78,32 @@ export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast, onQuickAd
   const [res, setRes] = useState<null | boolean>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+
+  // آرشیو تمرین‌های ساخته‌شدهٔ AI + بانک مشترک ابری
+  const [arch, setArch] = useState<SatzArch[]>(loadSatzArch);
+  const { ask: askDel, dialog: delDialog } = useConfirm();
+
+  // همگام‌سازی با بانک مشترک — یک‌بار هنگام مونت؛ بی‌صدا در خطا (آفلاین = همان رفتار محلی)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(SATZ_BANK);
+        const cloud = await fetchAiBank<SatzArch>(SATZ_BANK);
+        if (!alive) return;
+        aiBankMarkSeen(SATZ_BANK, cloud.map(c => c.id));
+        setArch(prev => {
+          const merged = mergeAiBank(prev, cloud, seen);
+          if (merged !== prev && merged.length > prev.length) { saveSatzArch(merged); return merged; }
+          return prev;
+        });
+        const have = new Set(cloud.map(c => c.id));
+        loadSatzArch().filter(x => x?.id && !have.has(x.id)).slice(0, 25)
+          .forEach(x => pushAiBank(SATZ_BANK, x.id, x, { level: x.level, count: x.count }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   /** شروع با جمله‌های خودت */
   const startOwn = () => {
@@ -97,10 +138,15 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
         .map((x: any) => ({ de: String(x.de).trim(), fa: String(x.fa || '').trim(), src: 'ai' as const }))
         .slice(0, count);
       if (!items.length) throw new Error('پاسخ معلم ساختار معتبر نداشت — دوباره تلاش کن.');
+      // ☁️ ذخیرهٔ مجموعهٔ ساخته‌شده در آرشیو محلی + بانک مشترک (همهٔ دستگاه‌ها/کاربران)
+      const entry: SatzArch = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ts: Date.now(), level, count: items.length, items: items.map(i => ({ de: i.de, fa: i.fa })) };
+      const nextArch = [entry, ...loadSatzArch()];
+      saveSatzArch(nextArch); setArch(nextArch);
+      pushAiBank(SATZ_BANK, entry.id, entry, { level, count: entry.count });
       setQueue(items); setScore(0); setDone(false); setIdx(0);
       setBank(scramble(items[0].de)); setAns([]); setRes(null);
       setScreen('run');
-      onShowToast(`${items.length} جمله ساخته شد ✓`);
+      onShowToast(`${items.length} جمله ساخته شد ✓ ☁️`);
     } catch (e) {
       onShowToast(describeAiError ? describeAiError(e) : String(e), true);
     } finally {
@@ -111,6 +157,20 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
   const cur = queue[idx];
   const goto = (q: Item[], i: number) => { setIdx(i); setBank(scramble(q[i].de)); setAns([]); setRes(null); };
   const restart = () => { setScreen('config'); setDone(false); };
+  /** اجرای یک تمرین ذخیره‌شدهٔ آرشیو (محلی یا دریافتی از بانک مشترک) */
+  const runArch = (a: SatzArch) => {
+    const q: Item[] = (a.items || []).map(i => ({ de: String(i?.de || ''), fa: String(i?.fa || ''), src: 'ai' as const })).filter(i => i.de);
+    if (!q.length) return;
+    setQueue(q); setScore(0); setDone(false); setIdx(0);
+    setBank(scramble(q[0].de)); setAns([]); setRes(null);
+    setScreen('run');
+  };
+  /** حذف از آرشیو محلی (با تأییدیه) — نسخهٔ بانک مشترک برای دستگاه‌های دیگر می‌ماند */
+  const removeArch = async (a: SatzArch) => {
+    if (!await askDel('حذف تمرین ذخیره‌شده', 'این مجموعهٔ تمرین از آرشیو این دستگاه حذف شود؟ (کپیِ بانک مشترک برای دستگاه‌های دیگر باقی می‌ماند.)')) return;
+    const next = loadSatzArch().filter(x => x.id !== a.id);
+    saveSatzArch(next); setArch(next);
+  };
   const next = () => { if (idx + 1 >= queue.length) setDone(true); else goto(queue, idx + 1); };
   const pick = (t: { id: number; text: string }) => { if (res !== null) return; setBank(b => b.filter(x => x.id !== t.id)); setAns(a => [...a, t]); };
   const back = (t: { id: number; text: string }) => { if (res !== null) return; setAns(a => a.filter(x => x.id !== t.id)); setBank(b => [...b, t]); };
@@ -160,6 +220,25 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
             disabled={mode === 'own' && ownPool.length < 3}
           />
         </div>
+
+        {/* 🗂 آرشیو تمرین‌های ساخته‌شدهٔ AI — محلی + بانک مشترک ابری (همهٔ دستگاه‌ها) */}
+        <ArchivePanel
+          title="🗂 تمرین‌های ساخته‌شدهٔ قبلی (AI)"
+          count={arch.length}
+          emptyText="هنوز تمرینی با معلم نساخته‌ای — هر مجموعه که بسازی اینجا ذخیره می‌شود و روی همهٔ دستگاه‌ها و برای همهٔ کاربران در دسترس خواهد بود."
+        >
+          {arch.map(a => (
+            <ArchiveRow
+              key={a.id}
+              title={<span dir="ltr" className="font-sans">Satzbau — Niveau {a.level || '—'}</span>}
+              chips={<><MiniChip>{toFa(a.count || a.items?.length || 0)} جمله</MiniChip><MiniChip>{faDate(a.ts)}</MiniChip><MiniChip tone="blue">☁️ بانک مشترک</MiniChip></>}
+            >
+              <SqBtn onClick={() => runArch(a)} title="اجرای این تمرین" tone="green">▶</SqBtn>
+              <SqBtn onClick={() => void removeArch(a)} title="حذف از آرشیو این دستگاه" tone="red">🗑</SqBtn>
+            </ArchiveRow>
+          ))}
+        </ArchivePanel>
+        {delDialog}
       </div>
     );
   }

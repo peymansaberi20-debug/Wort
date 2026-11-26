@@ -20,6 +20,7 @@ import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 import { useVocabGate } from './VocabDecisionDialog';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank, omitTop } from '../utils/aiBank';
 import { Printer } from 'lucide-react';
 import type { Word } from '../types';
 
@@ -296,6 +297,15 @@ const saveAllArch = (a: WshArch[]): void => {
   try { localStorage.setItem(ARCH_KEY, JSON.stringify(a.slice(0, 40))); } catch { /* ignore */ }
 };
 
+/* ───────────── بانک مشترک ابری (درخواست: تمرین‌های AI همه‌جا در دسترس باشند) ─────────────
+ * برگه‌های ساخته‌شدهٔ AI به کالکشن عمومی Firestore («بانک مشترک») فرستاده می‌شوند و هنگام
+ * باز شدن تمرین، برگه‌های موجود در بانک که روی این دستگاه نیستند به آرشیو محلی افزوده
+ * می‌شوند — با همان ایمیل از دستگاه دیگر، با هر ایمیل دیگری یا حتی بدون ورود.
+ * داده‌های پیشرفت (نمره/گفتگوها) فقط محلی می‌مانند و به بانک فرستاده نمی‌شوند. */
+const BANK_SKILL = 'wsh';
+/** نسخهٔ تمیزِ برگه برای بانک مشترک — بدون نمره و گفتگوها (محتوای تمرین کامل می‌ماند) */
+const toBank = (a: WshArch): WshArch => ({ ...omitTop(a as any, ['score', 'chats']), items: a.items || [] } as WshArch);
+
 /* ───────────── چت معلم ───────────── */
 
 const buildChatPrompt = (level: string, it: WshEntry, q: string, convo: ChatMsg[]): string => {
@@ -353,6 +363,32 @@ export const WorksheetTrainer: React.FC<{
 
   useEffect(() => { if (chatIdx !== null) setTimeout(() => chatEndRef.current?.scrollIntoView({ block: 'end' }), 120); }, [chatIdx, sess?.chats]);
 
+  // همگام‌سازی با بانک مشترک ابری — فقط یک‌بار هنگام باز شدن تمرین؛ خطا بی‌صدا نادیده
+  // گرفته می‌شود (بدون اینترنت/بدون قوانین → همان رفتار محلی قبلی)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<WshArch>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        const local = loadArch();
+        const merged = mergeAiBank(local, cloud, seen);
+        if (merged !== local && merged.length > local.length) {
+          saveAllArch(merged);
+          setArch(merged.filter((x) => x.kind === kind));
+        }
+        // برگه‌های محلیِ که هنوز در بانک نیستند (از قبلِ این قابلیت) — یک‌بار برای همه ارسال می‌شود
+        const have = new Set(cloud.map((c) => c.id));
+        local.filter((x) => x.id && !have.has(x.id)).slice(0, 25)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, toBank(x), { kind: x.kind, level: x.level, topic: x.topic, count: x.items?.length }));
+      } catch { /* بی‌صدا — رفتار محلی حفظ می‌شود */ }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ذخیرهٔ خودکار برگه در آرشیو (با تأخیر؛ نمره و گفتگوها هم به‌روز می‌شوند)
   useEffect(() => {
     if (!sess || !sess.items.length) return;
@@ -408,8 +444,12 @@ export const WorksheetTrainer: React.FC<{
       }
       if (!items.length) throw new Error('پاسخ هوش مصنوعی ساختار معتبر نداشت — دوباره تلاش کن.');
       if (combos.length) savePrepRecent(theLvl, combos);
-      runSheet(items, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ts: Date.now(), level: theLvl, topic: topic.trim() });
-      onShowToast?.(`برگهٔ جدید با ${items.length} مورد ساخته شد ✓`);
+      const meta = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ts: Date.now(), level: theLvl, topic: topic.trim() };
+      runSheet(items, meta);
+      // ☁️ ذخیرهٔ برگهٔ تازه در بانک مشترک — با هر دستگاه/ایمیل/بدون ورود در دسترس همه
+      pushAiBank(BANK_SKILL, meta.id, toBank({ id: meta.id, ts: meta.ts, kind, level: meta.level, topic: meta.topic, items, chats: {} }),
+        { kind, level: theLvl, topic: meta.topic, count: items.length });
+      onShowToast?.(`برگهٔ جدید با ${items.length} مورد ساخته شد ✓ ☁️`);
     } catch (e) {
       onShowToast?.(aiErr(e), true);
     } finally {

@@ -14,6 +14,7 @@ import { ExamRun, S, askJson, pick, sentenceFix, useNoHelp } from '../utils/trai
 import { faDate, LevelChips, PrintPreview, WriteLines, prFa, prG, toFa } from './trainerUI';
 import { Printer } from 'lucide-react';
 import { ClickableWords, WordLookupModal } from './WordLookup';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank } from '../utils/aiBank';
 import type { Word } from '../types';
 
 /** Shrinks a photo to max 1800px JPEG so the upload stays small and reliable. */
@@ -236,6 +237,12 @@ const saveSavedExercise = (e: SavedExercise): void => {
   } catch { /* ignore */ }
 };
 
+/* ── بانک مشترک ابری تمرین‌های نوشتن (درخواست: دسترس‌پذیری همه‌جا) ──
+ * تمرین‌های ساخته‌شده با AI (task + نکات + ساختار) به کالکشن عمومی Firestore فرستاده
+ * می‌شوند و تمرین‌های بانک که روی این دستگاه نیستند به بایگانی افزوده می‌شوند — با هر
+ * ایمیل یا حتی بدون ورود. */
+const BANK_SKILL = 'schreiben';
+
 const ISSUE_BADGE: Record<string, string> = {
   'گرامر': 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
   'املا': 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
@@ -321,6 +328,31 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   // بایگانی تمرین‌ها + پیش‌نمایش برگهٔ A4
   const [printOpen, setPrintOpen] = useState(false);
   const [savedList, setSavedList] = useState<SavedExercise[]>(() => loadSaved());
+
+  // همگام‌سازی بایگانی با بانک مشترک ابری — یک‌بار هنگام مونت؛ بی‌صدا در خطا
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<SavedExercise>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        setSavedList((prev) => {
+          const merged = mergeAiBank(prev, cloud, seen);
+          if (merged !== prev && merged.length > prev.length) {
+            try { localStorage.setItem(SAVED_KEY, JSON.stringify(merged.slice(0, 60))); } catch { /* ignore */ }
+            return merged;
+          }
+          return prev;
+        });
+        const have = new Set(cloud.map((c) => c.id));
+        loadSaved().filter((x) => x?.id && !have.has(x.id)).slice(0, 25)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, x, { level: x.level, topic: x.topicId, kind: x.examId, count: (x.points || []).length }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const [images, setImages] = useState<{ dataUrl: string; mimeType: string; base64: string }[]>([]);
   // پاپ‌آپ واژهٔ لمس‌شده (صورت سوال، متن مبدأ، ایده‌ها و تصحیح‌ها)
@@ -568,6 +600,8 @@ Return ONLY valid JSON: {"ideas":[{"de":"...","fa":"ترجمهٔ فارسی کو
   const rememberExercise = (topicId: string, lvl: string, pd: NonNullable<typeof promptData>, examId = 'free') => {
     const e: SavedExercise = { id: `${Date.now()}`, ts: Date.now(), topicId, level: lvl, examId, taskDe: pd.taskDe, taskFa: pd.taskFa, sourceText: pd.sourceText, points: pd.points, structured: pd.structured };
     saveSavedExercise(e);
+    // ☁️ ذخیره در بانک مشترک — با هر دستگاه/ایمیل/بدون ورود در دسترس همه
+    pushAiBank(BANK_SKILL, e.id, e, { level: lvl, topic: topicId, kind: examId, count: (e.points || []).length });
     setSavedList(loadSaved());
   };
   // باز کردن یک تمرین قبلی از لیست — همان صفحهٔ تمرین، با پاسخ خالی
