@@ -4,7 +4,7 @@ import { Word, WordStatus } from '../types';
 import { dueText } from '../utils/dates';
 import { speak } from '../utils/audio';
 import { P6 } from '../data/seed';
-import { isLeech, isVerbPos } from '../utils/storage';
+import { isLeech, isVerbPos, leechRecoveryProgress } from '../utils/storage';
 import { splitConj } from '../utils/conjugation';
 import { ConjugatedForm, ConjugationLegend } from './ConjugatedForm';
 import { IconBtn } from './IconBtn';
@@ -24,6 +24,8 @@ interface WordDetailModalProps {
   word: Word | null;
   /** همهٔ واژگان کتابخانه — برای یافتن اعضای خوشهٔ مترادف */
   words?: Word[];
+  /** آستانهٔ خطای واژهٔ سخت از تنظیمات (leechN) — فاز ۵: به‌جای عدد ثابت ۴ */
+  leechN?: number;
   /** اعمال تغییرات وضعیت/رجیستر/خوشه بدون باز کردن فرم ویرایش */
   onPatchWord?: (word: Word, patch: Partial<Word>) => void;
   onClose: () => void;
@@ -35,6 +37,7 @@ interface WordDetailModalProps {
 export const WordDetailModal: React.FC<WordDetailModalProps> = ({
   word,
   words = [],
+  leechN = 4,
   onPatchWord,
   onClose,
   onEdit,
@@ -596,10 +599,34 @@ const seg = pluralSegments2();
                 {REGISTER_LABELS[word.register] || word.register}
               </span>
             )}
-            {isLeech(word) && (
+            {isLeech(word, leechN) && (
               <span className="bg-red-500 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">🩸 واژه سخت</span>
             )}
           </div>
+
+          {/* فاز ۵: پیشرفت بازیابی واژهٔ سخت — مسیر خروج از لیست 🩸 و جایگاه فعلی در آن */}
+          {isLeech(word, leechN) && (() => {
+            const rec = leechRecoveryProgress(word, leechN);
+            return (
+              <div dir="rtl" className="mx-auto max-w-md mt-2.5 bg-white/10 border border-white/25 rounded-xl px-3 py-2 text-[11px] md:text-xs text-white/90 leading-5 space-y-0.5">
+                <div className="font-bold">راه خروج از لیست سخت:</div>
+                <div>
+                  زنجیرهٔ درستِ پیاپی: <span className="font-bold">{Math.min(rec.streak, rec.streakNeeded)}/{rec.streakNeeded}</span>
+                  {' · '}
+                  دقت {rec.winN > 0 ? `${rec.winN} پاسخ اخیر` : 'کل'}: <span className="font-bold">{100 - rec.winErrPct}٪</span>
+                  {' · '}
+                  خطای کل: <span className="font-bold">{rec.lifetimeErrPct}٪</span>
+                </div>
+                <div className="text-white/70">
+                  {rec.byLifetime
+                    ? (rec.streak >= rec.streakNeeded
+                      ? '۳ درستِ پیاپی داری — با حفظ دقت اخیر ≥ ۷۰٪ (یا افت خطای کل زیر ۴۰٪) از لیست خارج می‌شود.'
+                      : '۳ پاسخ درستِ پیاپی + دقت اخیر ≥ ۷۰٪، یا افت نرخ خطای کل زیر ۴۰٪ — هر کدام زودتر برسد.')
+                    : 'نرخ خطای کل این واژه سالم است؛ مشکل فقط پاسخ‌های اخیر است: ۳ درستِ پیاپی + دقت اخیر ≥ ۷۰٪ تا از لیست خارج شود.'}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 3. the word in a card, with audio and translation toggle (icons only) */}
           <div dir="ltr" className="mt-3 mx-auto max-w-md rounded-2xl bg-white dark:bg-[#10151f] text-slate-900 dark:text-white shadow-lg ring-1 ring-white/40 px-4 py-3.5">
