@@ -74,7 +74,6 @@ export type ExerciseMode =
   | 'tstory'
   | 'kpro'
   | 'wsh'
-  | 'wsh2'
   | 'hoeren'
   | 'hoeren_new'
   | 'hoeren_archive';
@@ -111,9 +110,8 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: '۱۰۰+ فعل مهم با حرف اضافه و حالت دستوری؛ سه تمرین جدا: یادگیری با فیلتر و مثال لمس‌پذیر، تمرین فاصله‌دار و افزودن فعل جدید' },
   konnektoren: { title: 'متن جای‌خالی (Konnektoren)', icon: '📝', desc: 'متن جای‌خالی با حروف ربط؛ سطح و تعداد جای خالی را انتخاب کن تا معلم هر بار متن تازه بسازد؛ کشیدن/کلیک کلمه‌ها، تصحیح فوری، چت با معلم، برگهٔ A4 دوسطحی و تمرین‌های ذخیره‌شده' },
   tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و برگهٔ A4' },
-  kpro: { title: 'حرف ربط انتخابی', icon: '🎓', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ حروف ربط را می‌توانی خودت انتخاب کنی (یکی یا چندتا از همهٔ سطوح)؛ تصحیح سه‌لایه، ترجمهٔ فارسی بعد از بررسی، گفتگو با معلم، آزمون دوباره و برگهٔ A4 — سطح A1 تا C2' },
+  kpro: { title: 'تکمیل جمله', icon: '🧾', desc: 'طرف اول جمله + حرف ربطِ هدف را می‌بینی و ادامه را خودت می‌نویسی؛ حروف ربط را می‌توانی خودت انتخاب کنی (یکی یا چندتا از همهٔ سطوح) یا به سطح وابسته باشی؛ تصحیح سه‌لایه + برداشت یک آلمانی + «چیزهایی که درست نوشتی» + ایرادهای آیتم‌به‌آیتم، ترجمهٔ فارسی، پاسخ نمونه با ترجمه، گفتگو با معلم، آزمون دوباره و برگهٔ A4 — سطح A1 تا C2' },
   wsh: { title: 'جای‌خالی فعل + حرف اضافه (با معلم)', icon: '📄', desc: 'معلم هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، ترجمهٔ فارسی بعد از بررسی، چت با معلم، تولید جملهٔ آزاد و برگهٔ A4' },
-  wsh2: { title: 'تکمیل جمله', icon: '🧾', desc: 'طرف اول جمله + حرف ربطِ انتها را می‌بینی و ادامهٔ جمله را با جایگاه فعل درست می‌نویسی؛ تصحیح با معلم، ترجمهٔ فارسی بعد از بررسی، چت با معلم و آرشیو' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
   hoeren_archive: { title: 'تمرین‌های ذخیره‌شده', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
@@ -142,20 +140,21 @@ const GRAMMATIK_CATS: GramCat[] = [
     ],
   },
   {
-    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ جای‌خالی فعل+حرف اضافه و تکمیل جمله',
+    icon: '🔗', label: 'حروف اضافه', desc: 'فعل + حرف اضافه: یادگیری، تمرین فاصله‌دار و افزودن فعل؛ جای‌خالی فعل+حرف اضافه با معلم',
     tabs: [
       { id: 'vprepl', label: 'یادگیری فعل‌ها', mode: 'vprep', vTab: 'learn' },
       { id: 'vprepp', label: 'تمرین فعل‌ها', mode: 'vprep', vTab: 'practice' },
       // «افزودن فعل» از ردیف بالا حذف شد — دکمهٔ آن پایین فهرست یادگیری است و پاپ‌آپ باز می‌کند (درخواست کاربر)
       { id: 'wsh', label: 'جای‌خالی فعل+حرف اضافه', mode: 'wsh' },
-      { id: 'wsh2', label: 'تکمیل جمله', mode: 'wsh2' },
+      // «تکمیل جمله» (wsh2) از این دسته حذف شد — با تمرین «حرف ربط انتخابی» (kpro) در دستهٔ حروف ربط
+      // ادغام شد و همان با عنوان «تکمیل جمله» می‌ماند (درخواست کاربر: حذف تکراری، نگه‌داشتن کامل‌ترین)
     ],
   },
   {
-    icon: '🧩', label: 'حروف ربط و جمله‌سازی', desc: 'متن جای‌خالی با حروف ربط، حرف ربط انتخابی و چیدن جمله',
+    icon: '🧩', label: 'حروف ربط و جمله‌سازی', desc: 'متن جای‌خالی با حروف ربط، تکمیل جمله و چیدن جمله',
     tabs: [
       { id: 'konnektoren', label: 'متن جای‌خالی', mode: 'konnektoren' },
-      { id: 'kpro', label: 'حرف ربط انتخابی', mode: 'kpro' },
+      { id: 'kpro', label: 'تکمیل جمله', mode: 'kpro' },
       { id: 'puzzle', label: 'چیدن جمله', mode: 'puzzle' },
     ],
   },
@@ -175,11 +174,11 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
 ];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'wsh2' || m === 'irrverb';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'irrverb';
 
 /** تمرین‌های خودگردان گرامر — بدنهٔ آن‌ها در لایهٔ keep-alive در App.tsx رندر می‌شود
  *  تا با جابجایی تب‌ها باز بمانند (تا وقتی کاربر ضربدر را نزده). */
-const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
+const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
 const isGramSelfMode = (m: ExerciseMode | null): boolean => !!m && GRAM_SELF_MODES.includes(m);
 
 export const HighlightedVerbForm: React.FC<{
