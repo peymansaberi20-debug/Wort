@@ -6,8 +6,9 @@ import { speak } from '../utils/audio';
 import { addErrors } from '../utils/errorBook';
 import { generateWithGemini, parseAI } from '../utils/ai';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
-import { CountChips, LevelChips, PrimaryBtn, Section, toFa, useConfirm } from './trainerUI';
+import { CountChips, LevelChips, PrimaryBtn, PrintPreview, Section, toFa, useConfirm } from './trainerUI';
 import { PageOverlay } from './PageOverlay';
+import { Printer } from 'lucide-react';
 
 const STATS_KEY = 'wb_vprep_stats';
 const CUSTOM_KEY = 'wb_vprep_custom';
@@ -24,28 +25,10 @@ const load = <T,>(k: string, d: T): T => { try { const v = JSON.parse(localStora
 const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
 
 /* ───────── چاپ فهرست «فعل + حرف اضافه» ─────────
- * پیش‌نمایش تمام‌صفحه + برگهٔ A4 (Portal به body، فقط هنگام باز بودن پیش‌نمایش رندر می‌شود).
- * قانون چاپ با اولویتِ بالا (html body >) نوشته شده تا قانون چاپِ تمرینِ «فعل‌های بی‌قاعده»
- * (irr-print که به‌خاطر لایهٔ keep-alive همیشه در صفحه هست) این برگه را خالی نکند؛
- * بدون این اولویت، دو قانون رقیبِ «هر چیز جز برگهٔ من را حذف کن» به برگهٔ سفید می‌رسیدند. */
+ * از پیش‌نمایش مشترک trainerUI استفاده می‌شود (یکدست با همهٔ تمرین‌ها).
+ * اینجا فقط استایل‌های محتوای برگه تعریف شده — قواعدِ body-isolation و نوار دکمه‌ها
+ * و پنجرهٔ چاپ همه از PRINT_PREVIEW_CSS مشترک می‌آیند. */
 const VPP_PRINT_CSS = `
-.vpp-screen { position: fixed; inset: 0; z-index: 1000; background: #3f4753; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.vpp-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1f2937; color: #fff; flex-wrap: wrap; }
-.vpp-btn { border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.14); color: #fff; }
-.vpp-btn-primary { background: #1f5fbf; }
-.vpp-hint { font-size: 11px; opacity: .85; margin-inline-start: auto; }
-.vpp-pages { max-width: 800px; margin: 18px auto 48px; padding: 0 10px; }
-.vpp-sheet { background: #fff; color: #111; padding: 34px 36px; box-shadow: 0 3px 18px rgba(0,0,0,.45); }
-@media print {
-  html, body { background: #fff !important; }
-  html body > *:not(.vpp-screen) { display: none !important; }
-  html body > .vpp-screen { display: block !important; position: static !important; background: #fff !important; overflow: visible !important; }
-  .vpp-bar { display: none !important; }
-  .vpp-pages { max-width: none; margin: 0; padding: 0; }
-  .vpp-sheet { box-shadow: none; padding: 0; }
-  @page { size: A4; margin: 12mm 11mm; }
-}
-.vpp-screen, .vpp-screen * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .vpp-head { text-align: center; margin-bottom: 7pt; }
 .vpp-title { font-size: 14.5pt; font-weight: 800; letter-spacing: .2pt; }
 .vpp-sub { font-size: 9pt; color: #555; margin-top: 2.5pt; direction: rtl; unicode-bidi: embed; }
@@ -447,13 +430,14 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
               <b className="text-base font-sans" dir="ltr">{fPrep || 'همهٔ حرف‌های اضافه'} <span className="text-xs font-normal text-[#5d6676]">({toFa(learnList.length)})</span></b>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">مرتب بر اساس معنی‌های نزدیک، سپس الفبای آلمانی</span>
-                {/* چاپ فهرست فعل‌ها با معنی و مثال (درخواست کاربر) — همان فیلتر/جستجویی که دیده می‌شود چاپ می‌شود */}
+                {/* برگهٔ A4 فهرست فعل‌ها با معنی و مثال — همان فیلتر/جستجویی که دیده می‌شود، چاپ می‌شود */}
                 <button
                   onClick={() => setPrintOpen(true)}
                   disabled={!learnList.length}
-                  title="چاپ فهرست فعل‌ها با معنی فارسی و جملهٔ مثال"
-                  className="px-3 py-1.5 rounded-lg bg-[#1f5fbf] text-white text-[11px] font-bold flex items-center gap-1 flex-shrink-0 active:scale-[.97] transition disabled:opacity-40"
-                >🖨 چاپ / PDF</button>
+                  title="برگهٔ A4 فهرست فعل‌ها با معنی فارسی و جملهٔ مثال"
+                  aria-label="برگهٔ A4 فهرست فعل‌ها"
+                  className="w-9 h-9 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 active:scale-[.97] transition disabled:opacity-40"
+                ><Printer size={15} /></button>
               </div>
             </div>
             {learnList.length === 0 && (
@@ -834,20 +818,20 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         document.body
       )}
 
-      {/* ── پیش‌نمایش چاپ فهرست فعل + حرف اضافه (درخواست کاربر) ──
+      {/* ── پیش‌نمایش فهرست فعل + حرف اضافه — پیش‌نمایش مشترک trainerUI ──
           برگهٔ A4: گروه‌بندی بر اساس حرف اضافه؛ هر فعل با معنی فارسی و جملهٔ مثال
-          (حرف اضافهٔ داخل مثال زیرخط‌دار). فقط هنگام باز بودن پیش‌نمایش در صفحه است،
-          پس با برگه‌های چاپ تمرین‌های دیگر تداخل نمی‌کند. */}
-      {printOpen && createPortal(
-        <div className="vpp-screen" dir="rtl" role="dialog" aria-modal="true">
-          <style>{VPP_PRINT_CSS}</style>
-          <div className="vpp-bar">
-            <button onClick={() => setPrintOpen(false)} className="vpp-btn">✕ بستن</button>
-            <button onClick={() => window.print()} className="vpp-btn vpp-btn-primary">🖨 چاپ / PDF</button>
-            <span className="vpp-hint">پیش‌نمایش چاپ — فهرست فعل + حرف اضافه با معنی و مثال</span>
-          </div>
-          <div className="vpp-pages">
-            <div className="vpp-sheet" dir="ltr">
+          (حرف اضافهٔ داخل مثال زیرخط‌دار). فقط هنگام باز بودن پیش‌نمایش در صفحه است. */}
+      {printOpen && (
+        <PrintPreview
+          open={printOpen}
+          onClose={() => setPrintOpen(false)}
+          title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>Verben mit Präpositionen</span>}
+          docTitle="Verben mit Präpositionen"
+          meta={<><span dir="ltr">+Akk/+Dat</span> — فهرست فعل + حرف اضافه با معنی و مثال • {toFa(learnList.length)} فعل • {printMeta} • {printDate}</>}
+          hint="پیش‌نمایش برگهٔ A4 — فهرست فعل + حرف اضافه با معنی فارسی و جملهٔ مثال"
+          questions={
+            <div dir="ltr">
+              <style>{VPP_PRINT_CSS}</style>
               <div className="vpp-head">
                 <div className="vpp-title">Verben mit Präpositionen</div>
                 <div className="vpp-sub">فعل + حرف اضافه — {toFa(learnList.length)} فعل • {printMeta} • {printDate}</div>
@@ -883,9 +867,8 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
                 {printGroups.some(([, vs]) => vs.some(v => v.custom)) && <> · <span className="vpp-star" dir="ltr">*</span> = فعل افزودهٔ خودت</>}
               </div>
             </div>
-          </div>
-        </div>,
-        document.body
+          }
+        />
       )}
 
       {dialog}

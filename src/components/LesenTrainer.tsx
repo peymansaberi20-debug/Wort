@@ -8,9 +8,9 @@ import { speak, stopSpeaking } from '../utils/audio';
 import { describeAiError } from '../utils/aiProvider';
 import { ARCHIVE_LESEN, ExamRun, RESULTS_LESEN, S, askJson, loadList, saveList, useNoHelp } from '../utils/trainerKit';
 import { ClickableText, WordLookupModal } from './WordLookup';
-import { LevelChips } from './trainerUI';
+import { LevelChips, PrintPreview } from './trainerUI';
 import type { Word } from '../types';
-import { Clock, Volume2, Square, Eye, EyeOff, Lightbulb, PauseCircle } from 'lucide-react';
+import { Clock, Volume2, Square, Eye, EyeOff, Lightbulb, PauseCircle, Printer } from 'lucide-react';
 
 interface LesenTrainerProps {
   onClose: () => void;
@@ -140,6 +140,91 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuick
     if (run) run.onFinish({ score: rec.score, max: rec.total, note: `${rec.percentage}%` });
     else setView('result');
   };
+
+  /* ── برگهٔ چاپ یکدست (trainerUI): صفحهٔ ۱+۲ متن‌ها و سؤال‌ها سفید و بدون پاسخ،
+     بعد پاسخنامهٔ مستقل و کارنامهٔ تلاش‌ها — هر صفحه از صفحهٔ تازه شروع می‌شود. ── */
+  const [printOpen, setPrintOpen] = useState(false);
+  /** آزمونی که باید چاپ شود — null = آزمون جاری؛ برای چاپ از آرشیو بدون شروع آزمون */
+  const [printExam, setPrintExam] = useState<ReadingExam | null>(null);
+  const printSrcExam = printExam || currentExam;
+  const printDate = new Date().toLocaleDateString('fa-IR');
+  const lesenQuestions = printSrcExam ? (
+    <div dir="ltr">
+      {printSrcExam.parts.map((part, pi) => (
+        <div key={pi} style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, borderBottom: '1.5px solid #1f5fbf', paddingBottom: 4, marginBottom: 6 }}>
+            Teil {part.partNumber || pi + 1} — {part.partTitle}
+          </div>
+          {part.instruction && <div style={{ fontSize: 11.5, color: '#444', marginBottom: 6 }}>{part.instruction}</div>}
+          {part.text && (
+            <div style={{ fontSize: 12, lineHeight: 1.85, border: '1px solid #c9cdd4', borderRadius: 6, padding: '8px 10px', marginBottom: 10, whiteSpace: 'pre-wrap', textAlign: 'justify' }}>{part.text}</div>
+          )}
+          {part.questions.map(q => (
+            <div key={q.id} style={{ fontSize: 12.5, marginBottom: 11 }}>
+              <b>{q.id}. {q.question}</b>
+              {q.options.map((opt, oi) => (
+                <div key={oi} style={{ fontSize: 12, lineHeight: 1.7, marginInlineStart: 14 }}>
+                  ☐ {opt}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+      <div style={{ marginTop: 14, fontSize: 11, color: '#555' }}>Name: ..............................  Datum: {printDate}</div>
+    </div>
+  ) : null;
+  const lesenSolutions = printSrcExam ? (
+    <div dir="ltr">
+      {printSrcExam.parts.map((part, pi) => (
+        <div key={pi} style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1f5fbf', marginBottom: 6 }}>Teil {part.partNumber || pi + 1} — {part.partTitle}</div>
+          {part.questions.map(q => (
+            <div key={q.id} style={{ fontSize: 12, marginBottom: 8 }}>
+              <b>{q.id}.</b> <b style={{ color: '#1a7a3a' }}>{q.correct}</b>
+              {q.explanation ? <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>{q.explanation}</div> : null}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  ) : null;
+  /** کارنامهٔ تلاش‌های قبلی همین آزمون — فقط وقتی از صفحهٔ نتیجه چاپ می‌شود (printExam خالی) */
+  const lesenReport = !printExam && currentExam ? (
+    <div dir="rtl">
+      <h4 style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 8 }}>📊 مقایسهٔ تلاش‌های این آزمون</h4>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, textAlign: 'center' }}>
+        <thead>
+          <tr>
+            <th style={{ border: '0.5pt solid #94a3b8', padding: '3pt 7pt' }}>تاریخ ثبت</th>
+            <th style={{ border: '0.5pt solid #94a3b8', padding: '3pt 7pt' }}>درصد</th>
+            <th style={{ border: '0.5pt solid #94a3b8', padding: '3pt 7pt' }}>نمره</th>
+          </tr>
+        </thead>
+        <tbody>
+          {examResults.filter(r => r.examId === currentExam.id).map(r => (
+            <tr key={r.id}>
+              <td style={{ border: '0.5pt solid #94a3b8', padding: '3pt 7pt' }}>{r.date}</td>
+              <td style={{ border: '0.5pt solid #94a3b8', padding: '3pt 7pt' }} dir="ltr"><b style={{ color: '#1a7a3a' }}>{r.percentage}%</b></td>
+              <td style={{ border: '0.5pt solid #94a3b8', padding: '3pt 7pt' }} dir="ltr">{r.score}/{r.total}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : null;
+  const lesenPrintPreview = printSrcExam ? (
+    <PrintPreview
+      open={printOpen}
+      onClose={() => { setPrintOpen(false); setPrintExam(null); }}
+      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{printSrcExam.title}</span>}
+      docTitle={`Lesen — ${printSrcExam.title}`}
+      meta={`${printSrcExam.org ? `${printSrcExam.org} • ` : ''}Niveau ${printSrcExam.level} • ${printSrcExam.durationMinutes} دقیقه • ${printDate} • نام: ...........................`}
+      questions={lesenQuestions}
+      solutions={lesenSolutions}
+      extraPages={lesenReport ? [{ title: 'کارنامه — Versuchsergebnisse', content: lesenReport }] : undefined}
+    />
+  ) : null;
 
   useEffect(() => {
     if (view !== 'exam_active' || isLoading || secondsLeft <= 0 || isTimerPaused) return;
@@ -312,7 +397,17 @@ Return ONLY a valid JSON object (no markdown, no extra text):
                   <h4 className="font-bold text-[15px] text-slate-900 dark:text-slate-100">{e.title}</h4>
                   <span className="text-[13px] text-[#5d6676]">سازمان: {e.org} • تاریخ ساخت: {e.createdAt}</span>
                 </div>
-                <span className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap">آزمون جدید ▶</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={ev => { ev.stopPropagation(); setPrintExam(e); setPrintOpen(true); }}
+                    title="برگهٔ A4 این آزمون ذخیره‌شده — سؤال‌ها و پاسخنامه"
+                    aria-label="برگهٔ A4"
+                    className="w-9 h-9 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center hover:bg-[#194ea0] transition"
+                  >
+                    <Printer size={15} />
+                  </button>
+                  <span className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap">آزمون جدید ▶</span>
+                </div>
               </div>
             ))}
           </div>
@@ -324,6 +419,16 @@ Return ONLY a valid JSON object (no markdown, no extra text):
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
             <span className="font-extrabold text-sm md:text-base text-[#1f5fbf] dark:text-[#7fb0ff] block">{currentExam?.title}</span>
             <div className="flex items-center gap-2">
+              {currentExam && !run && (
+                <button
+                  onClick={() => { setPrintExam(null); setPrintOpen(true); }}
+                  title="برگهٔ A4 این آزمون — سؤال‌ها و پاسخنامه"
+                  aria-label="برگهٔ A4"
+                  className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-[#1f5fbf] dark:text-[#7fb0ff] flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition flex-shrink-0"
+                >
+                  <Printer size={15} />
+                </button>
+              )}
               {!isLoading && secondsLeft > 0 && (
                 <span className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 ${isTimerPaused ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 text-rose-700' : 'bg-amber-50 dark:bg-amber-950/50 border-amber-200 text-amber-800 dark:text-amber-200'}`}>
                   {isTimerPaused ? <PauseCircle size={14} /> : <Clock size={14} />}{formatTime(secondsLeft)}{isTimerPaused && <span className="text-[10px] font-sans">(متوقف)</span>}
@@ -436,7 +541,14 @@ Return ONLY a valid JSON object (no markdown, no extra text):
         <div className={`${card} rounded-3xl p-6 shadow-sm space-y-6 text-right print:bg-white print:text-black`}>
           <div className="flex items-center justify-between print:hidden">
             <button onClick={() => setView('menu')} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">بازگشت به منو</button>
-            <button onClick={() => window.print()} className="px-4 py-2 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold flex items-center gap-1.5">🖨 چاپ / PDF</button>
+            <button
+              onClick={() => { setPrintExam(null); setPrintOpen(true); }}
+              title="برگهٔ A4 — سؤال‌ها، پاسخنامه و کارنامهٔ تلاش‌ها"
+              aria-label="برگهٔ A4"
+              className="w-10 h-10 rounded-xl bg-[#1f5fbf] text-white flex items-center justify-center hover:bg-[#194ea0] transition"
+            >
+              <Printer size={16} />
+            </button>
           </div>
           <div className="text-center space-y-2 border-b border-slate-100 dark:border-slate-800 pb-5">
             <span className="text-4xl block">🎓</span>
@@ -476,6 +588,8 @@ Return ONLY a valid JSON object (no markdown, no extra text):
           </div>
         </div>
       )}
+
+      {lesenPrintPreview}
     </div>
   );
 };

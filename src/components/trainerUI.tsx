@@ -23,35 +23,108 @@ export const faDate = (ts: number): string => {
   catch { return new Date(ts).toLocaleDateString(); }
 };
 
-/* ───────────────────────── پیش‌نمایش چاپ مشترک ─────────────────────────
- * همهٔ تمرین‌هایی که چاپ دارند از همین یک نمای استفاده می‌کنند (درخواست کاربر):
- *   - اورلی تمام‌صفحه با «🖨 چاپ / PDF» و «✕ بستن» بالای صفحه
- *   - صفحهٔ ۱ = سؤال‌ها با جای کافی برای نوشتن با خودکار
- *   - صفحهٔ ۲ = پاسخنامه (Lösungen)
- *   - جمله‌های آلمانی چپ‌به‌راست، توضیح فارسی خط مستقل راست‌به‌چپ
- *   - بدون صفحهٔ خالی اضافی در انتهای چاپ
+/* ───────────────────────── سیستم چاپ یکدست برنامه (نسخهٔ ۲) ─────────────────────────
+ * همهٔ تمرین‌ها از همین یک نمای استفاده می‌کنند — هیچ تمرینی CSS چاپ خودش را ندارد،
+ * پس دیگر قاعدهٔ رقیبِ «هر چیز جز برگهٔ من را پنهان کن» وجود ندارد که برگهٔ سفید می‌ساخت.
+ *
+ *   - اورلی تمام‌صفحه؛ نوار بالای آن فقط دو دکمهٔ آیکونی دارد: پرینتر و بستن (✕)
+ *     — طبق درخواست کاربر هیچ‌جا واژهٔ «چاپ» یا مشابه آن نوشته نمی‌شود، فقط آیکون.
+ *   - دکمهٔ پرینتر دقیقاً در همان رویداد کلیک window.print() را صدا می‌زند
+ *     (بدون setTimeout) تا در Safari/iOS هم gesture حفظ شود و پنجرهٔ چاپ باز شود.
+ *   - صفحهٔ ۱ (+حداکثر صفحهٔ ۲) = سؤال‌ها سفید و بدون پاسخ؛ صفحهٔ بعد = پاسخنامهٔ مستقل
+ *     (Lösungen)؛ صفحات اختیاری بعدی (Transkript، کارنامه) هرکدام از صفحهٔ تازه شروع می‌شوند.
+ *   - جمله‌های آلمانی LTR چپ‌چین (prG) و توضیح فارسی RTL راست‌چین (prFa).
+ *   - <WriteLines/> فضای نوشتن را تا انتهای صفحهٔ A4 با خط‌کشی ۹ میلی‌متری پر می‌کند.
+ *   - فقط یک پیش‌نمایش اجازهٔ چاپ دارد: اگر چند اورلیِ keep-alive هم‌زمان مونت باشند،
+ *     جدیدترین‌شان «فعال» می‌شود و بقیه با data-wpr-suppressed از چاپ حذف می‌شوند.
  * راه چاپ: Portal به body + پنهان‌کردن هر چیز غیر از .wpr-screen در print —
- * همین باعث می‌شود نوارها و هدر برنامه داخل برگه چاپ نشوند (باگ تصویر ۱۵). */
+ * همین باعث می‌شود نوارها و هدر برنامه داخل برگه چاپ نشوند. */
+
+import { Printer, X } from 'lucide-react';
+
+/** رجیستری اورلی‌های چاپ باز — فقط آخرین اورلی اجازهٔ چاپ دارد (بقیه suppressed) */
+const wprStack: HTMLElement[] = [];
+const wprRepick = (): void => {
+  wprStack.forEach(el => el.removeAttribute('data-wpr-suppressed'));
+  const active = wprStack[wprStack.length - 1] || null;
+  wprStack.forEach(el => { if (el !== active) el.setAttribute('data-wpr-suppressed', ''); });
+};
+
+/** چاپِ سازگار با همهٔ مرورگرها به‌خصوص Safari/iOS:
+ *  صدا زدن window.print() باید هم‌زمان با کلیک کاربر (user gesture) و بدون واسطهٔ
+ *  setTimeout انجام شود وگرنه سافاری آن را نادیده می‌گیرد یا برگهٔ سفید می‌دهد.
+ *  عنوان سند موقتاً عوض می‌شود تا نام فایل PDF پیشنهادی معنادار باشد؛ پس‌زمینهٔ
+ *  ریشه/بدنه هم موقتاً سفید می‌شود (inline !important از هر قانون لایه‌دار قوی‌تر است). */
+export const runPrint = (docTitle?: string): void => {
+  const html = document.documentElement;
+  const body = document.body;
+  const savedHtml = html.getAttribute('style') || '';
+  const savedBody = body.getAttribute('style') || '';
+  try {
+    const prev = document.title;
+    if (docTitle) {
+      const clean = docTitle.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean) document.title = `${clean} — Wortschatz-Trainer`;
+    }
+    // سافاری گاهی ناحیهٔ اسکرول‌شدهٔ اورلی را با شیفت چاپ می‌کند — به بالای برگه برگرد
+    document.querySelectorAll<HTMLElement>('.wpr-screen').forEach(el => { el.scrollTop = 0; });
+    window.scrollTo(0, 0);
+    // پس‌زمینهٔ تم برنامه (index.css داخل @layer base با !important) کاغذ را کمرنگ می‌کند — inline قوی‌تر است
+    html.style.setProperty('background', '#fff', 'important');
+    body.style.setProperty('background', '#fff', 'important');
+    window.print();
+    if (docTitle) window.setTimeout(() => { document.title = prev; }, 1200);
+    window.setTimeout(() => {
+      html.setAttribute('style', savedHtml);
+      body.setAttribute('style', savedBody);
+    }, 1500);
+  } catch {
+    html.setAttribute('style', savedHtml);
+    body.setAttribute('style', savedBody);
+  }
+};
 
 export const PRINT_PREVIEW_CSS = `
 .wpr-screen { position: fixed; inset: 0; z-index: 1000; background: #3f4753; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.wpr-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #1f2937; color: #fff; flex-wrap: wrap; }
-.wpr-btn { border-radius: 10px; padding: 8px 14px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.14); color: #fff; }
-.wpr-btn-primary { background: #1f5fbf; }
+.wpr-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); background: #1f2937; color: #fff; flex-wrap: wrap; }
+.wpr-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 36px; border-radius: 10px; background: rgba(255,255,255,.14); color: #fff; }
+.wpr-btn:hover { background: rgba(255,255,255,.24); }
+.wpr-btn-primary { background: #1f5fbf; width: 46px; }
+.wpr-btn-primary:hover { background: #194ea0; }
 .wpr-hint { font-size: 11px; opacity: .85; margin-inline-start: auto; }
 .wpr-pages { max-width: 780px; margin: 18px auto 48px; padding: 0 10px; }
 .wpr-page { background: #fff; color: #111; padding: 42px 46px; min-height: 1010px; box-shadow: 0 3px 18px rgba(0,0,0,.45); margin-bottom: 20px; }
 .wpr-head { border-bottom: 2px solid #1f5fbf; padding-bottom: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .wpr-title { font-size: 15px; font-weight: 800; }
 .wpr-meta { font-size: 10.5px; color: #555; }
+.wpr-page li { break-inside: avoid; page-break-inside: avoid; }
+/* خط‌کشی نوشتن: روی صفحه ارتفاع ثابت، در چاپ تا انتهای صفحهٔ A4 پر می‌شود (فاصلهٔ خطوط ۹ میلی‌متر) */
+.wpr-write { background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--wpr-gap, 9mm) - 1px), #98a0ae calc(var(--wpr-gap, 9mm) - 1px), #98a0ae var(--wpr-gap, 9mm)); background-origin: content-box; }
 @media print {
-  body > *:not(.wpr-screen) { display: none !important; }
-  .wpr-screen { position: static !important; background: #fff !important; overflow: visible !important; }
+  /* پوستهٔ برنامه در index.css روی :root/html/body[data-theme] رنگ‌های !important داخل
+     @layer base دارد — برای important، قانون لایه‌دار از قانون لایه‌نخورده قوی‌تر است؛
+     پس override هم باید داخل همان لایه و با specificity دست‌کم برابر (:root + attribute) باشد
+     وگرنه کاغذ چاپ به‌جای سفید، #f6f7fb (روشن) یا #12151c (تیره) می‌شود */
+  @layer base {
+    :root[data-theme="light"], :root[data-theme="dark"],
+    html[data-theme], body[data-theme],
+    html, body {
+      background: #fff !important;
+      color-scheme: light;
+    }
+  }
+  /* همهٔ فرزندان body جز اورلی فعال حذف می‌شوند — ارتفاع صفر، پس صفحهٔ خالی نمی‌سازند */
+  html body > *:not(.wpr-screen) { display: none !important; }
+  html body > .wpr-screen { display: block !important; position: static !important; inset: auto !important; height: auto !important; background: #fff !important; overflow: visible !important; }
+  html body > .wpr-screen[data-wpr-suppressed] { display: none !important; }
   .wpr-bar { display: none !important; }
   .wpr-pages { max-width: none; margin: 0; padding: 0; }
-  .wpr-page { box-shadow: none; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  .wpr-page { box-shadow: none !important; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
   .wpr-page:not(:last-child) { page-break-after: always; break-after: page; }
-  @page { size: A4; margin: 13mm 13mm; }
+  /* صفحه‌ای که <WriteLines/> دارد: ستون فلکس با ارتفاع دقیق A4 منهای حاشیه‌ها — خط‌کشی تا پایین برگه پر می‌شود */
+  .wpr-page:has(.wpr-write) { display: flex; flex-direction: column; height: 271mm; overflow: hidden; }
+  .wpr-page:has(.wpr-write) .wpr-write { height: auto !important; flex: 1 1 auto; min-height: 40mm; }
+  @page { size: A4; margin: 13mm; }
 }
 .wpr-screen, .wpr-screen * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 `;
@@ -62,42 +135,64 @@ export const prG = (extra?: React.CSSProperties): React.CSSProperties =>
 export const prFa = (extra?: React.CSSProperties): React.CSSProperties =>
   ({ direction: 'rtl' as const, unicodeBidi: 'embed', textAlign: 'right', ...extra });
 
+/** خط‌کشی نوشتن با فاصلهٔ منطقی (پیش‌فرض ۹ میلی‌متر مثل دفتر مدرسه) — در چاپ تا انتهای صفحهٔ A4 پر می‌شود */
+export const WriteLines: React.FC<{ gapMm?: number; screenHeight?: number }> = ({ gapMm = 9, screenHeight = 620 }) => (
+  <div className="wpr-write" style={{ height: screenHeight, ['--wpr-gap' as never]: `${gapMm}mm` }} />
+);
+
 export const PrintPreview: React.FC<{
   open: boolean;
   onClose: () => void;
   title: React.ReactNode;
+  /** عنوان سند هنگام چاپ → نام پیشنهادی فایل PDF (اختیاری) */
+  docTitle?: string;
   meta?: React.ReactNode;
   questions: React.ReactNode;
   solutions?: React.ReactNode;
   solutionsMeta?: React.ReactNode;
-  hint?: string;   // متن راهنمای نوار بالای پیش‌نمایش (اختیاری — برای تمرین‌های بدون پاسخنامه)
-}> = ({ open, onClose, title, meta, questions, solutions, solutionsMeta, hint }) => {
+  /** صفحات اختیاری بعد از پاسخنامه — هرکدام از صفحهٔ تازه شروع می‌شوند (مثل Transkript و کارنامهٔ Hören) */
+  extraPages?: { title: React.ReactNode; meta?: React.ReactNode; content: React.ReactNode }[];
+  hint?: string;   // متن راهنمای نوار بالای پیش‌نمایش (اختیاری)
+}> = ({ open, onClose, title, docTitle, meta, questions, solutions, solutionsMeta, extraPages, hint }) => {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const el = rootRef.current;
+    if (!el) return;
+    wprStack.push(el);
+    wprRepick();
+    return () => { const i = wprStack.indexOf(el); if (i >= 0) wprStack.splice(i, 1); wprRepick(); };
+  }, [open]);
   if (!open) return null;
+  const pages: { title?: React.ReactNode; meta?: React.ReactNode; content: React.ReactNode }[] = [
+    { title, meta, content: questions },
+  ];
+  if (solutions) pages.push({ title: 'Lösungen — پاسخنامه', meta: solutionsMeta ?? meta, content: solutions });
+  if (extraPages) pages.push(...extraPages);
   return createPortal(
-    <div className="wpr-screen" role="dialog" aria-modal="true" dir="rtl">
+    <div className="wpr-screen" ref={rootRef} role="dialog" aria-modal="true" dir="rtl">
       <style>{PRINT_PREVIEW_CSS}</style>
       <div className="wpr-bar">
-        <button onClick={onClose} className="wpr-btn">✕ بستن</button>
-        <button onClick={() => window.print()} className="wpr-btn wpr-btn-primary">🖨 چاپ / PDF</button>
-        <span className="wpr-hint">{hint || 'پیش‌نمایش چاپ — صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه'}</span>
+        <button onClick={() => runPrint(docTitle)} className="wpr-btn wpr-btn-primary" aria-label="چاپ برگه">
+          <Printer size={17} />
+        </button>
+        <button onClick={onClose} className="wpr-btn" aria-label="بستن">
+          <X size={17} />
+        </button>
+        <span className="wpr-hint">{hint || 'پیش‌نمایش برگهٔ A4 — سؤال‌ها سفید و بدون پاسخ، پاسخنامه در صفحهٔ مستقل بعدی'}</span>
       </div>
       <div className="wpr-pages">
-        <div className="wpr-page">
-          <div className="wpr-head">
-            <div className="wpr-title">{title}</div>
-            {meta && <div className="wpr-meta">{meta}</div>}
+        {pages.map((p, i) => (
+          <div className="wpr-page" key={i}>
+            {p.title !== undefined && (
+              <div className="wpr-head">
+                <div className="wpr-title">{p.title}</div>
+                {p.meta && <div className="wpr-meta">{p.meta}</div>}
+              </div>
+            )}
+            {p.content}
           </div>
-          {questions}
-        </div>
-        {solutions && (
-          <div className="wpr-page">
-            <div className="wpr-head">
-              <div className="wpr-title">Lösungen — پاسخنامه</div>
-              {solutionsMeta || meta}
-            </div>
-            {solutions}
-          </div>
-        )}
+        ))}
       </div>
     </div>,
     document.body

@@ -18,6 +18,7 @@ import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 import { useVocabGate } from './VocabDecisionDialog';
+import { Printer } from 'lucide-react';
 import type { Word } from '../types';
 
 /* ───────────── مدل برگه ───────────── */
@@ -730,15 +731,20 @@ export const WorksheetTrainer: React.FC<{
     );
   };
 
-  /* ── برگهٔ چاپ مشترک: صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه ── */
+  /* ── برگهٔ چاپ مشترک: صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامهٔ مستقل ──
+     printArch: برگهٔ هدف چاپ — از آرشیو یا null (= برگهٔ جاری) */
+  const [printArch, setPrintArch] = useState<WshArch | null>(null);
+  const pSess = printArch
+    ? { level: printArch.level, topic: printArch.topic, items: printArch.items, ts: printArch.ts }
+    : sess;
   const printTitle = kind === 'prep' ? 'Verben mit Präpositionen — جای‌خالی فعل + حرف اضافه' : 'Sätze komplettieren — تکمیل جمله';
-  const printMeta = sess
-    ? `Niveau ${sess.level}${sess.topic ? ` • ${sess.topic}` : ''} • ${toFa(sess.items.length)} مورد • ${faDate(sess.ts)} • نام و تاریخ: ...........................`
+  const printMeta = pSess
+    ? `Niveau ${pSess.level}${pSess.topic ? ` • ${pSess.topic}` : ''} • ${toFa(pSess.items.length)} مورد • ${faDate(pSess.ts)} • نام و تاریخ: ...........................`
     : '';
 
-  const printQuestions = sess ? (
+  const printQuestions = pSess ? (
     <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
-      {sess.items.map((entry, i) => (
+      {pSess.items.map((entry, i) => (
         <li key={i} style={{ fontSize: 12, marginBottom: 16, lineHeight: 1.9, breakInside: 'avoid' }}>
           {isOpen(entry) ? (
             <>
@@ -765,9 +771,9 @@ export const WorksheetTrainer: React.FC<{
     </ol>
   ) : null;
 
-  const printSolutions = sess ? (
+  const printSolutions = pSess ? (
     <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
-      {sess.items.map((entry, i) => (
+      {pSess.items.map((entry, i) => (
         <li key={i} style={{ fontSize: 11.5, marginBottom: 11, lineHeight: 1.8, breakInside: 'avoid' }}>
           {isOpen(entry) ? (
             <>
@@ -794,11 +800,12 @@ export const WorksheetTrainer: React.FC<{
     </ol>
   ) : null;
 
-  const printPreview = sess ? (
+  const printPreview = pSess ? (
     <PrintPreview
       open={printOpen}
-      onClose={() => setPrintOpen(false)}
+      onClose={() => { setPrintOpen(false); setPrintArch(null); }}
       title={printTitle}
+      docTitle={`${kind === 'prep' ? 'Verben mit Präpositionen' : 'Sätze komplettieren'} — ${pSess.level}`}
       meta={printMeta}
       questions={printQuestions}
       solutions={printSolutions}
@@ -855,6 +862,9 @@ export const WorksheetTrainer: React.FC<{
               </>}
             >
               <SqBtn onClick={() => openArch(a)} title="اجرای دوبارهٔ این برگه">▶</SqBtn>
+              <SqBtn onClick={() => { setPrintArch(a); setPrintOpen(true); }} title="برگهٔ A4 این برگهٔ ذخیره‌شده — سؤال‌ها و پاسخنامه">
+                <Printer size={15} />
+              </SqBtn>
               <SqBtn
                 tone="red"
                 onClick={async () => {
@@ -931,7 +941,9 @@ export const WorksheetTrainer: React.FC<{
           <button onClick={() => generate(sess.level, sess.items.length)} disabled={busy} className="py-2.5 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-sm font-bold disabled:opacity-60">
             {busy ? '⏳ …' : '✨ برگهٔ جدید (همین تنظیمات)'}
           </button>
-          <button onClick={() => setPrintOpen(true)} className="py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">🖨 چاپ برگه + پاسخنامه</button>
+          <button onClick={() => { setPrintArch(null); setPrintOpen(true); }} disabled={!sess}
+            title="برگهٔ A4 — سؤال‌ها + پاسخنامه" aria-label="برگهٔ A4"
+            className="w-11 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold flex items-center justify-center disabled:opacity-40"><Printer size={16} /></button>
         </div>
         <button onClick={() => { setPhase('config'); setSess(null); }} className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">پیکربندی و آرشیو</button>
         {printPreview}

@@ -23,6 +23,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
+import { Printer } from 'lucide-react';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 import { useVocabGate } from './VocabDecisionDialog';
 import type { Word } from '../types';
@@ -409,10 +410,10 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
    * نسخهٔ چاپ متن: جای‌خالی‌ها به‌صورت (۱)، (۲)، ... با خط زیر نشان داده می‌شوند.
    * این نسخه در screen پنهان است و فقط هنگام print نمایش داده می‌شود.
    */
-  const renderPrintText = () => {
-    const parts = currentEx.text.split(/_{3,}|\(\s*\d+\s*\)|\[\s*\d+\s*\]|\{\s*\d+\s*\}/g);
+  const renderPrintText = (ex: KonnektorItem) => {
+    const parts = ex.text.split(/_{3,}|\(\s*\d+\s*\)|\[\s*\d+\s*\]|\{\s*\d+\s*\}/g);
     const blankCount = parts.length - 1;
-    const usableBlanks = currentEx.blanks.slice(0, blankCount);
+    const usableBlanks = ex.blanks.slice(0, blankCount);
 
     return (
       <div className="konn-print-text">
@@ -435,18 +436,20 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
 
   const chatMsgs = currentEx.chats || [];
 
-  /* ── برگهٔ چاپ مشترک: صفحهٔ ۱ متن تمرین + جعبهٔ کلمات، صفحهٔ ۲ پاسخنامه ──
-     (Portal به body — نوارها و هدر برنامه داخل برگه چاپ نمی‌شوند) */
-  const printMeta = `${currentEx.level || 'B1'} · ${toFa(currentEx.blanks.length)} جای خالی${currentEx.topic ? ` · ${currentEx.topic}` : ''} · ${faDate(Date.now())} · نام و تاریخ: ...........................`;
+  /* ── برگهٔ چاپ مشترک: صفحهٔ ۱ متن تمرین + جعبهٔ کلمات، صفحهٔ ۲ پاسخنامهٔ مستقل ──
+     printEx: تمرینِ هدف چاپ — یا از آرشیو انتخاب شده یا null (= تمرین جاری) */
+  const [printEx, setPrintEx] = useState<KonnektorItem | null>(null);
+  const pEx = printEx || currentEx;
+  const printMeta = `${pEx.level || 'B1'} · ${toFa(pEx.blanks.length)} جای خالی${pEx.topic ? ` · ${pEx.topic}` : ''} · ${faDate(Date.now())} · نام و تاریخ: ...........................`;
   const printQuestions = (
     <>
       <div style={prFa({ fontSize: 10.5, color: '#555', marginBottom: 8 })}>
         جای خالی‌های شماره‌دار را با کلماتِ مناسب از جعبهٔ «Wörter» پر کنید.
       </div>
-      <div style={prG({ fontSize: 12.5, lineHeight: 2.1 })}>{renderPrintText()}</div>
-      {currentEx.pool.length > 0 && (
+      <div style={prG({ fontSize: 12.5, lineHeight: 2.1 })}>{renderPrintText(pEx)}</div>
+      {pEx.pool.length > 0 && (
         <div style={{ marginTop: 14, padding: '8pt 10pt', border: '1.2px solid #555', borderRadius: 5 }}>
-          <div style={prG({ fontSize: 11.5, fontWeight: 700 })}>Wörter: {currentEx.pool.join('   |   ')}</div>
+          <div style={prG({ fontSize: 11.5, fontWeight: 700 })}>Wörter: {pEx.pool.join('   |   ')}</div>
         </div>
       )}
     </>
@@ -454,14 +457,14 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
   const printSolutions = (
     <>
       <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
-        {currentEx.blanks.map(b => (
+        {pEx.blanks.map(b => (
           <li key={b.id} style={{ fontSize: 12, marginBottom: 5 }}>
             <span style={prG({})}><b>({b.id})</b> {b.answer}</span>
           </li>
         ))}
       </ol>
-      {currentEx.fa && (
-        <div style={prFa({ marginTop: 12, fontSize: 10, color: '#333' })}>🇮🇷 ترجمهٔ فارسی متن: {currentEx.fa}</div>
+      {pEx.fa && (
+        <div style={prFa({ marginTop: 12, fontSize: 10, color: '#333' })}>🇮🇷 ترجمهٔ فارسی متن: {pEx.fa}</div>
       )}
       <div style={prFa({ marginTop: 14, fontSize: 9, color: '#666', borderTop: '1px solid #ccc', paddingTop: 6 })}>WörterBuchMitPeyman — Konnektoren &amp; Präpositionen</div>
     </>
@@ -469,9 +472,10 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
   const printPreview = (
     <PrintPreview
       open={printOpen}
-      onClose={() => setPrintOpen(false)}
-      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{currentEx.title}</span>}
-      meta={<>{`تمرین حروف ربط و اضافه — سطح ${currentEx.level || 'B1'}`}</>}
+      onClose={() => { setPrintOpen(false); setPrintEx(null); }}
+      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{pEx.title}</span>}
+      docTitle={`Konnektoren — ${pEx.title}`}
+      meta={<>{`تمرین حروف ربط و اضافه — سطح ${pEx.level || 'B1'}`}</>}
       questions={printQuestions}
       solutions={printSolutions}
     />
@@ -530,6 +534,9 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
             >
               <SqBtn onClick={() => openExercise(ex.id)} title="اجرای این تمرین">▶</SqBtn>
               <SqBtn tone="green" onClick={() => retakeExercise(ex)} title="آزمون دوباره (همان تمرین، بدون پاسخ)">🔁</SqBtn>
+              <SqBtn onClick={() => { setPrintEx(ex); setPrintOpen(true); }} title="برگهٔ A4 این تمرین ذخیره‌شده — سؤال‌ها و پاسخنامه">
+                <Printer size={15} />
+              </SqBtn>
               <SqBtn
                 tone="red"
                 onClick={async () => {
@@ -703,15 +710,16 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
               )}
             </div>
 
-            {/* 🖨 چاپ — فقط در پایان تمرین (بعد از تصحیح) طبق درخواست کاربر */}
+            {/* برگهٔ A4 — فقط در پایان تمرین (بعد از تصحیح)؛ پیش‌نمایش: صفحهٔ ۱ سؤال، صفحهٔ ۲ پاسخنامه */}
             {checked && (
               <div className="konn-interactive">
                 <button
-                  onClick={() => setPrintOpen(true)}
-                  className="w-full bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white py-3 rounded-xl text-base font-bold shadow-md"
-                  title="پیش‌نمایش چاپ — صفحهٔ ۱ سؤال، صفحهٔ ۲ پاسخنامه"
+                  onClick={() => { setPrintEx(null); setPrintOpen(true); }}
+                  className="w-12 h-11 mx-auto bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl shadow-md flex items-center justify-center"
+                  title="برگهٔ A4 — سؤال‌ها + پاسخنامه"
+                  aria-label="برگهٔ A4"
                 >
-                  🖨 چاپ / PDF
+                  <Printer size={18} />
                 </button>
               </div>
             )}

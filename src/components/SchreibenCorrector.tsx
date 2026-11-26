@@ -11,7 +11,8 @@ import { Camera, ImagePlus, Trash2 } from 'lucide-react';
 import { generateWithImages, describeAiError } from '../utils/aiProvider';
 import { addErrors } from '../utils/errorBook';
 import { ExamRun, S, askJson, pick, sentenceFix, useNoHelp } from '../utils/trainerKit';
-import { faDate, LevelChips, PrintPreview, prFa, prG, toFa } from './trainerUI';
+import { faDate, LevelChips, PrintPreview, WriteLines, prFa, prG, toFa } from './trainerUI';
+import { Printer } from 'lucide-react';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 import type { Word } from '../types';
 
@@ -317,7 +318,7 @@ export const SchreibenCorrector: React.FC<SchreibenCorrectorProps> = ({ onShowTo
   // ایده‌های نوشتن: اگر کاربر ایده‌ای برای متن نداشت (درخواست جدید کاربر)
   const [ideas, setIdeas] = useState<{ de: string; fa: string }[] | null>(null);
   const [ideasBusy, setIdeasBusy] = useState(false);
-  // بایگانی تمرین‌ها + پیش‌نمایش چاپ (درخواست‌های جدید کاربر)
+  // بایگانی تمرین‌ها + پیش‌نمایش برگهٔ A4
   const [printOpen, setPrintOpen] = useState(false);
   const [savedList, setSavedList] = useState<SavedExercise[]>(() => loadSaved());
 
@@ -692,20 +693,41 @@ Return ONLY a valid JSON array with one object:
       ) : (
         <div className="space-y-2">
           {arr.slice(0, 12).map(s => (
-            <button key={s.id} onClick={() => openSaved(s)}
-              className="w-full block text-right p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-800 transition">
-              <div className="flex items-center justify-between gap-2">
-                <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300">{s.level}</span>
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{faDate(s.ts)}</span>
-              </div>
-              <div dir="ltr" className="text-left text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1.5 truncate">{labelOf(s)}</div>
-            </button>
+            <div key={s.id} className="flex items-stretch gap-2">
+              <button onClick={() => openSaved(s)}
+                className="flex-1 min-w-0 block text-right p-3 rounded-xl bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-300 dark:hover:border-indigo-800 transition">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300">{s.level}</span>
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{faDate(s.ts)}</span>
+                </div>
+                <div dir="ltr" className="text-left text-xs font-semibold text-slate-700 dark:text-slate-200 mt-1.5 truncate">{labelOf(s)}</div>
+              </button>
+              {/* برگهٔ A4 از همین تمرین ذخیره‌شده — بدون باز کردن تمرین */}
+              <button
+                onClick={() => printSaved(s)}
+                title="برگهٔ A4 این تمرین ذخیره‌شده — صورت سوال + خط‌کشی نوشتن"
+                aria-label="برگهٔ A4"
+                className="w-11 rounded-xl bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 hover:bg-[#194ea0] transition"
+              >
+                <Printer size={16} />
+              </button>
+            </div>
           ))}
           {arr.length > 12 && <div className="text-[11px] text-slate-400">{toFa(arr.length - 12)} تمرین قدیمی‌تر هم در بایگانی هست.</div>}
         </div>
       )}
     </div>
   );
+  /** بارگذاری تمرین ذخیره‌شده فقط برای گرفتن برگهٔ A4 — مثل openSaved ولی بدون بستن پیش‌نمایش */
+  const printSaved = (e: SavedExercise) => {
+    const ex = e.examId || 'free';
+    setExamType(ex); setTargetLevel(e.level);
+    if (ex === 'free') { setSelectedTopic(e.topicId); setSelectedTeil(''); }
+    else { setSelectedTeil(e.topicId); setSelectedTopic(''); }
+    setText(''); setReport(null); setImages([]); setErrMsg(''); setShowFa(false); setIdeas(null);
+    setPromptData({ taskDe: e.taskDe, taskFa: e.taskFa, sourceText: e.sourceText, points: e.points, structured: e.structured });
+    setPrintOpen(true);
+  };
   const savedLabelFree = (s: SavedExercise) => s.structured ? `${s.structured.title} — ${s.structured.intro}` : s.taskDe.slice(0, 90);
   const savedLabelExam = (s: SavedExercise) => {
     const t = teilOf(s.examId || '', s.topicId);
@@ -731,7 +753,8 @@ Return ONLY a valid JSON array with one object:
         <div style={prG({ fontSize: 11.5, whiteSpace: 'pre-wrap', lineHeight: 1.8, border: '1px solid #bbb', borderRadius: 8, padding: '8px 10px', background: '#fafafa', marginTop: 10 })}>{promptData.sourceText}</div>
       )}
       <div style={prFa({ fontSize: 10.5, color: '#555', margin: '18px 0 8px' })}>✍️ پاسخ خودت را خط‌به‌خط بنویس:</div>
-      {Array.from({ length: 20 }).map((_, i) => <div key={i} style={{ borderBottom: '1.2px solid #999', height: 30 }} />)}
+      {/* خط‌کشی ۹ میلی‌متری — در چاپ تا انتهای صفحهٔ A4 پر می‌شود (<WriteLines/> در trainerUI) */}
+      <WriteLines gapMm={9} screenHeight={560} />
     </div>
   ) : null;
 
@@ -824,11 +847,13 @@ Return ONLY a valid JSON array with one object:
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-indigo-200 dark:border-indigo-800 text-xs font-bold text-indigo-700 dark:text-indigo-300">{targetLevel}</span>
                   <span className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#141923] border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 max-w-[180px] truncate">{activeExamLabel}</span>
-                  {/* چاپ قبل از پاسخ‌دادن هم ممکن است (درخواست کاربر) + خروج به صفحهٔ انتخاب */}
+                  {/* برگهٔ A4 قبل از پاسخ‌دادن هم ممکن است + خروج به صفحهٔ انتخاب */}
                   {!exam && (
                     <>
                       <button onClick={() => setPrintOpen(true)}
-                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#141923] border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition">🖨 چاپ</button>
+                        title="برگهٔ A4 — صورت سوال + خط‌کشی نوشتن"
+                        aria-label="برگهٔ A4"
+                        className="w-9 h-9 rounded-xl bg-[#1f5fbf] text-white flex items-center justify-center hover:bg-[#194ea0] transition"><Printer size={15} /></button>
                       <button onClick={exitExercise}
                         className="px-3 py-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition">← خروج</button>
                     </>
@@ -1033,7 +1058,7 @@ Return ONLY a valid JSON array with one object:
         </div>
       )}
 
-      {/* پیش‌نمایش چاپ A4 — سؤال با خط‌کشی برای نوشتن، همان سبک تب گرامر (درخواست کاربر) */}
+      {/* پیش‌نمایش A4 — سؤال با خط‌کشی برای نوشتن، همان سبک تب گرامر */}
       {promptData && (
         <PrintPreview
           open={printOpen}
@@ -1041,7 +1066,7 @@ Return ONLY a valid JSON array with one object:
           title="Schreiben — Übungsblatt"
           meta={`${targetLevel} • ${activeExamLabel} • ${faDate(Date.now())} • نام: ...........................`}
           questions={printQuestions}
-          hint="پیش‌نمایش چاپ — برگهٔ A4: سؤال بالای برگه و خط‌کشی برای نوشتن"
+          hint="پیش‌نمایش برگهٔ A4 — سؤال بالای برگه و خط‌کشی برای نوشتن"
         />
       )}
 

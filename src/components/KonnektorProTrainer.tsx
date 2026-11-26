@@ -21,6 +21,7 @@ import { Lvl, Kat, KAT_LABEL, LVL_ORDER, KonnektorItem, KONNEKTOREN, connectorsF
 import { SYS_AI, buildExercisePrompt, buildCorrectionPrompt, buildWordPrompt, buildChatPrompt, ChatCtx } from '../utils/konnektorPrompts';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, TopicInput, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
+import { Printer } from 'lucide-react';
 import { ClickableWords } from './WordLookup';
 import { useVocabGate } from './VocabDecisionDialog';
 
@@ -427,17 +428,20 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
   };
 
   // ────────── برگهٔ چاپ مشترک (PrintPreview): صفحهٔ ۱ سؤال‌ها، صفحهٔ ۲ تصحیح‌شده ──────────
-  const printMeta = ex
-    ? `سطح ${ex.level}${ex.topic ? ` • ${ex.topic}` : ''} • تاریخ: ${faDate(ex.ts)} • ${ex.items.length} جمله • امتیاز: … / ${ex.items.length}`
+  /* برگهٔ چاپ مشترک — printHist: تمرین هدف چاپ از تاریخچه، یا null (= تمرین جاری) */
+  const [printHist, setPrintHist] = useState<KExercise | null>(null);
+  const pEx = printHist || ex;
+  const printMeta = pEx
+    ? `سطح ${pEx.level}${pEx.topic ? ` • ${pEx.topic}` : ''} • تاریخ: ${faDate(pEx.ts)} • ${pEx.items.length} جمله • امتیاز: … / ${pEx.items.length}`
     : '';
 
-  const printQuestions = ex ? (
+  const printQuestions = pEx ? (
     <>
       <p style={prFa({ fontSize: 11, color: '#333', marginBottom: 10 })}>
         Ergänzen Sie die Sätze sinnvoll und sprachlich richtig! — ادامهٔ هر جمله را طوری بنویسید که معنایی کامل و ساختار درست (جایگاه فعل، کاما) داشته باشد.
       </p>
       <ol style={{ margin: '10px 0 0', paddingInlineStart: 20, listStyle: 'decimal' }}>
-        {ex.items.map(it => (
+        {pEx.items.map(it => (
           <li key={it.no} style={{ fontSize: 12.5, marginBottom: 18, lineHeight: 1.9, breakInside: 'avoid' }}>
             <span style={prG()}>
               {it.first} <span style={{ letterSpacing: 1 }}>__________________</span>
@@ -450,10 +454,10 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     </>
   ) : null;
 
-  const printSolutions = ex && Object.keys(ex.corrections).length > 0 ? (
+  const printSolutions = pEx && Object.keys(pEx.corrections).length > 0 ? (
     <>
-      {ex.items.map(it => {
-        const c = ex.corrections[it.no];
+      {pEx.items.map(it => {
+        const c = pEx.corrections[it.no];
         return (
           <div key={it.no} style={{ fontSize: 11, marginBottom: 12, breakInside: 'avoid' }}>
             <div style={prG({ fontSize: 11.5, fontWeight: 700, color: c?.ok ? '#047857' : '#b45309' })}>
@@ -461,7 +465,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
             </div>
             {c?.userFa && <div style={prFa({ color: '#333', marginTop: 2 })}>🇮🇷 ترجمهٔ جملهٔ تو: {c.userFa}</div>}
             {c?.fa && <div style={prFa({ color: '#333', marginTop: 1 })}>🇮🇷 ترجمهٔ جملهٔ اصلاح‌شده: {c.fa}</div>}
-            <div style={prFa({ color: '#555', marginTop: 1 })}>پاسخ شما: {(ex.answers[it.no] || '').trim() || '—'}</div>
+            <div style={prFa({ color: '#555', marginTop: 1 })}>پاسخ شما: {(pEx.answers[it.no] || '').trim() || '—'}</div>
             {c?.grammar && <div style={prFa({ marginTop: 2 })}>• گرامری: {c.grammar}</div>}
             {c?.meaning && <div style={prFa({})}>• مفهومی: {c.meaning}</div>}
             {c?.thinking && <div style={prFa({})}>• تفکر آلمانی: {c.thinking}</div>}
@@ -469,22 +473,23 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
         );
       })}
     </>
-  ) : ex ? (
+  ) : pEx ? (
     <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
-      {ex.items.map(it => (
+      {pEx.items.map(it => (
         <li key={it.no} style={{ fontSize: 11.5, marginBottom: 7, lineHeight: 1.8, breakInside: 'avoid' }}>
-          <span style={prG()}>{it.no}. <b>{it.first}</b> — پاسخ تو: {(ex.answers[it.no] || '').trim() || '(بدون پاسخ)'}</span>
+          <span style={prG()}>{it.no}. <b>{it.first}</b> — پاسخ تو: {(pEx.answers[it.no] || '').trim() || '(بدون پاسخ)'}</span>
         </li>
       ))}
     </ol>
   ) : null;
 
-  const printPreview = ex ? (
+  const printPreview = pEx ? (
     <PrintPreview
       open={printOpen}
-      onClose={() => setPrintOpen(false)}
+      onClose={() => { setPrintOpen(false); setPrintHist(null); }}
       title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>Sätze komplettieren</span>}
-      meta={<>{`حرف ربط انتخابی (سطح ${ex.level})`}</>}
+      docTitle="Sätze komplettieren — Konnektoren"
+      meta={<>{`حرف ربط انتخابی (سطح ${pEx.level})`}</>}
       questions={printQuestions}
       solutions={printSolutions}
     />
@@ -637,6 +642,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               >
                 <SqBtn onClick={() => openFromHistory(h)} title="مشاهدهٔ آخرین عملکرد">▶</SqBtn>
                 <SqBtn tone="green" onClick={() => retakeFromHistory(h)} title="آزمون دوباره (همان جمله‌ها، خالی)">🔁</SqBtn>
+                <SqBtn onClick={() => { setPrintHist(h); setPrintOpen(true); }} title="برگهٔ A4 این تمرین ذخیره‌شده — سؤال‌ها و پاسخنامه">
+                  <Printer size={15} />
+                </SqBtn>
                 <SqBtn
                   tone="red"
                   onClick={async () => {
@@ -849,7 +857,9 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
               {uncheckedCount > 0
                 ? <button onClick={continueRemaining} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ ادامهٔ {uncheckedCount} جملهٔ باقی‌مانده</button>
                 : <button onClick={() => { setScreen('play'); setChatOpen(null); }} className="bg-[#1f5fbf] text-white py-2.5 rounded-xl text-xs font-bold">✏️ مرور جمله‌ها</button>}
-              <button onClick={() => setPrintOpen(true)} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">🖨 چاپ / PDF</button>
+              <button onClick={() => { setPrintHist(null); setPrintOpen(true); }} disabled={!ex}
+                title="برگهٔ A4 — سؤال‌ها + پاسخنامه" aria-label="برگهٔ A4"
+                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold flex items-center justify-center disabled:opacity-40"><Printer size={15} /></button>
               <button onClick={() => { setScreen('config'); setEx(null); }} className="bg-slate-100 dark:bg-slate-800 py-2.5 rounded-xl text-xs font-bold">بازگشت به فهرست</button>
             </div>
           </div>
