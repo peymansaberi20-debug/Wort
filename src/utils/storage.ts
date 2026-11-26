@@ -86,6 +86,9 @@ export function norm(w: any): Word | null {
     rBad: Math.max(0, +w.rBad || 0),
     rStreak: Math.max(0, +w.rStreak || 0),
     pStreak: Math.max(0, +w.pStreak || 0), // فاز ۳: زنجیرهٔ تولید پیاپی — پایهٔ ارتقای کاندید → فعال
+    // فاز ۵: پنجرهٔ اخیر و زنجیرهٔ موفقیت — پایهٔ خروج از لیست واژهٔ سخت (در پشتیبان‌گیری/واردات حفظ می‌شود)
+    win: Array.isArray(w.win) ? w.win.slice(-10).map((x: any) => (x ? 1 : 0)) : undefined,
+    stOk: Math.max(0, +w.stOk || 0) || undefined,
     img: IMGOK.test(s('img')) && s('img').length < 1600000 ? s('img') : '',
     added: +w.added || Date.now(),
     last: +w.last || 0,
@@ -204,10 +207,131 @@ export function saveExtData(ext: ExtData): void {
   } catch (e) {}
 }
 
-export const isLeech = (w: Word, threshold = 4): boolean =>
-  w.bad >= threshold && (w.ok + w.bad > 0) && (w.bad / (w.ok + w.bad) >= 0.4);
-export const isWeak = (w: Word, threshold = 4): boolean =>
-  isLeech(w, threshold) || (w.bad >= 2 && w.bad >= w.ok * 0.5);
+/* ============================================================
+ * فاز ۵ — واژهٔ سخت (لِیچ 🩸): ورود علمی + خروج بازیابی‌محور
+ *
+ * ورود به لیست (دو مسیر، کافی است یکی برقرار باشد):
+ *  ۱) قاعدهٔ قدیمی (حفظ‌شده): خطاهای کل ≥ آستانه (leechN) و نرخ خطای کل ≥ ۴۰٪
+ *  ۲) قاعدهٔ جدید «واژهٔ فرسوده»: در ۱۰ پاسخِ آخر ≥ آستانه خطا و نرخ خطای اخیر ≥ ۴۰٪ —
+ *     واژه‌ای که قبلاً مسلط بوده و همین حالا شروع به شکستنِ مداوم کرده را هم می‌گیرد
+ *     (با منطق قدیمی هرگز پرچم نمی‌خورد چون نرخ کلش رقیق شده بود).
+ *
+ * خروج از لیست (بازیابی — دو مسیر موازی، هیچ‌کدام رفتار قبلی را سخت‌تر نمی‌کنند):
+ *  ۱) قاعدهٔ قدیمی خروج (حفظ‌شده): نرخ خطای کل زیر ۴۰٪ برود
+ *  ۲) بازیابی سریع علمی: زنجیرهٔ ۳ پاسخ درستِ پیاپی + دقتِ پاسخ‌های اخیر ≥ ۷۰٪
+ *     + حداقل ۵ پاسخِ دیده‌شده (تا ۳ تای محضِ شانسی کافی نباشد).
+ *     مبنا «عملکرد اخیر» است نه آمار کل عمر واژه — با این کار اشتباه‌های قدیمی
+ *     با درست‌زدن‌های جدید بی‌اثر می‌شوند و لیست همیشه وضعیت فعلیِ واژه را نشان می‌دهد.
+ * ============================================================ */
+
+/** زنجیرهٔ درستِ پیاپی لازم برای خروج از لیست سخت — هم‌سو با PROMO_STREAK/AKT_STREAK واژه‌نامه */
+export const LEECH_EXIT_STREAK = 3;
+
+/** طول پنجرهٔ اخیر: قضاوتِ بازیابی و ورودِ اخیر فقط روی ۱۰ پاسخ آخر انجام می‌شود */
+export const LEECH_WINDOW = 10;
+
+/** حداقل تعداد پاسخِ دیده‌شده تا قضاوتِ بازیابی معتبر باشد */
+export const LEECH_MIN_EVIDENCE = 5;
+
+/** حداکثر نرخ خطای مجاز در قضاوت بازیابی برای خروج از لیست سخت (۳۰٪) */
+export const LEECH_WINDOW_MAX_ERR = 0.3;
+
+/** حداقل نرخ خطا برای ورود به لیست سخت (۴۰٪) — در هر دو مسیر ورود */
+export const LEECH_ENTRY_ERR = 0.4;
+
+/** ثبت نتیجهٔ یک پاسخ در پنجرهٔ اخیر واژه + به‌روزرسانی زنجیرهٔ موفقیت (با هر غلط صفر می‌شود) */
+export function recordRecent(w: Word, ok: boolean): void {
+  const win = Array.isArray(w.win) ? w.win.slice() : [];
+  win.push(ok ? 1 : 0);
+  while (win.length > LEECH_WINDOW) win.shift();
+  w.win = win;
+  w.stOk = ok ? (w.stOk || 0) + 1 : 0;
+}
+
+/** قاعدهٔ قدیمی ورود — آمار کل عمر واژه (رفتار قبلی، دست‌نخورده) */
+const leechByLifetime = (w: Word, threshold: number): boolean => {
+  const ok = w.ok || 0;
+  const bad = w.bad || 0;
+  const total = ok + bad;
+  return bad >= threshold && total > 0 && bad / total >= LEECH_ENTRY_ERR;
+};
+
+/** قاعدهٔ جدید ورود — فقط عملکرد اخیر؛ واژهٔ فرسوده را می‌گیرد */
+const leechByRecent = (w: Word, threshold: number): boolean => {
+  const win = Array.isArray(w.win) ? w.win : null;
+  if (!win || win.length < LEECH_MIN_EVIDENCE) return false;
+  const bad = win.filter(x => !x).length;
+  return bad >= threshold && bad / win.length >= LEECH_ENTRY_ERR;
+};
+
+/** آمار بازیابی واژهٔ سخت — برای نمایش پیشرفت خروج در پروفایل واژه */
+export function leechRecoveryProgress(w: Word, threshold = 4): {
+  byLifetime: boolean; // با قاعدهٔ کل عمر پرچم خورده؟
+  byRecent: boolean; // با قاعدهٔ ۱۰ پاسخ اخیر پرچم خورده؟
+  streak: number; // زنجیرهٔ درستِ پیاپی فعلی
+  streakNeeded: number; // زنجیرهٔ لازم (۳)
+  winN: number; // تعداد پاسخ‌های پنجرهٔ اخیر
+  winBad: number; // خطاهای پنجرهٔ اخیر
+  winErrPct: number; // نرخ خطای مبنای قضاوت (اخیر، وگرنه کل) — درصد
+  lifetimeErrPct: number; // نرخ خطای کل عمر واژه — درصد
+  ready: boolean; // واجد خروج از لیست سخت؟
+} {
+  const byLifetime = leechByLifetime(w, threshold);
+  const byRecent = leechByRecent(w, threshold);
+  const win = Array.isArray(w.win) ? w.win : [];
+  const winBad = win.filter(x => !x).length;
+  const ok = w.ok || 0;
+  const bad = w.bad || 0;
+  const total = ok + bad;
+  const lifetimeErrPct = total ? Math.round((bad / total) * 100) : 0;
+  // قضاوت روی پنجرهٔ اخیر؛ تا وقتی پنجره خالی است، نرخ کل مبناست
+  const errRate = win.length ? winBad / win.length : (total ? bad / total : 1);
+  const judgeN = win.length || total;
+  // مسیر ۱ (حفظ‌شده): نرخ خطای کل زیر ۴۰٪ برود — همان خروجِ ضمنی قدیمی؛
+  // فقط برای واژه‌ای معنا دارد که با قاعدهٔ کل عمر پرچم خورده — وگرنه واژهٔ فرسوده
+  // (با نرخ کل سالم) هرگز پرچم نمی‌گرفت و قاعدهٔ اخیر بی‌اثر می‌شد
+  const legacyRecovered = total > 0 && bad / total < LEECH_ENTRY_ERR;
+  // مسیر ۲ (جدید): زنجیرهٔ ۳ درست پیاپی + دقت اخیر ≥ ۷۰٪ + حداقل ۵ پاسخ دیده‌شده
+  const streakRecovered = (w.stOk || 0) >= LEECH_EXIT_STREAK &&
+    judgeN >= LEECH_MIN_EVIDENCE && errRate <= LEECH_WINDOW_MAX_ERR;
+  return {
+    byLifetime,
+    byRecent,
+    streak: w.stOk || 0,
+    streakNeeded: LEECH_EXIT_STREAK,
+    winN: win.length,
+    winBad,
+    winErrPct: Math.round(errRate * 100),
+    lifetimeErrPct,
+    ready: byLifetime ? (legacyRecovered || streakRecovered) : streakRecovered,
+  };
+}
+
+/** آیا واژه واجد خروج از لیست سخت است؟ */
+export const leechRecoveryReady = (w: Word, threshold = 4): boolean =>
+  leechRecoveryProgress(w, threshold).ready;
+
+/**
+ * واژهٔ سخت (لِیچ 🩸) — ورود با یکی از دو قاعدهٔ بالا، منهای بازیابیِ انجام‌شده.
+ * واژه‌ای که زنجیرهٔ بازیابی ساخته ولی هنوز نرخ خطای کلش بالاست، با اولین غلطِ جدید
+ * دوباره پرچم می‌خورد (هنوز شکننده است) — ولی با ۳ درستِ پیاپی دوباره آزاد می‌شود.
+ */
+export const isLeech = (w: Word, threshold = 4): boolean => {
+  const rec = leechRecoveryProgress(w, threshold);
+  return (rec.byLifetime || rec.byRecent) && !rec.ready;
+};
+
+export const isWeak = (w: Word, threshold = 4): boolean => {
+  if (isLeech(w, threshold)) return true;
+  if ((w.bad || 0) >= 2 && (w.bad || 0) >= (w.ok || 0) * 0.5) return true;
+  // واژه‌ای که همین اخیراً بیش از نصف پاسخ‌هایش غلط بوده — فاصلهٔ مرورش کوتاه بماند
+  const win = Array.isArray(w.win) ? w.win : null;
+  if (win && win.length >= 3) {
+    const bad = win.filter(x => !x).length;
+    if (bad >= 2 && bad / win.length >= 0.5) return true;
+  }
+  return false;
+};
 
 export function clearReviewHistory(st: AppState): AppState {
   const resetWords = st.words.map(w => ({
@@ -219,7 +343,10 @@ export function clearReviewHistory(st: AppState): AppState {
     stage: 0,
     ok: 0,
     bad: 0,
-    res: ''
+    res: '',
+    // فاز ۵: پنجرهٔ اخیر و زنجیرهٔ موفقیت هم پاک شود تا قضاوت بازیابی روی دادهٔ کهنه نماند
+    win: undefined,
+    stOk: undefined
   }));
   return {
     ...st,
