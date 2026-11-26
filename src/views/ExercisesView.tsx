@@ -911,10 +911,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     hardCountedRef.current = new Set();
 
     if (activeMode === 'hard') {
+      // فاز ۵: آستانهٔ استخر واژهٔ سخت از تنظیمات (leechN) — به‌جای عدد ثابت ۳؛
+      // عمداً روی words است نه pool: واژه‌های سختِ تعلیق‌شده هم اینجا تمرین‌پذیرند و راه بازیابی دارند
+      const leechN = settings?.leechN || 4;
       const wanted = new Set(
         practiceWordIds && practiceWordIds.length > 0
           ? practiceWordIds
-          : words.filter(w => (w.bad || 0) > 3).map(w => w.id)
+          : words.filter(w => (w.bad || 0) >= leechN).map(w => w.id)
       );
       qIds = buildHardQueue(words.filter(w => wanted.has(w.id)), settings?.rv || 20);
     } else if (practiceWordIds && practiceWordIds.length > 0) {
@@ -1050,7 +1053,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     setHintLevel(0);
     setFaShown(false);
     setConjPron(Math.floor(Math.random() * 6));
-  }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct]);
+  }, [activeMode, practiceWordIds, isFlashConfigured, flashCat, settings?.order, settings?.activeCats, settings?.leechAct, settings?.leechN]);
 
   const currentItem = useMemo(() => {
     if (queue.length === 0 || currentIndex >= queue.length) return null;

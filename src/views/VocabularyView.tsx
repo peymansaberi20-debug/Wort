@@ -50,6 +50,8 @@ const findExistingDuplicate = (input: string, selectedArt: string, words: Word[]
 
 interface VocabularyViewProps {
   words: Word[];
+  /** آستانهٔ خطای واژهٔ سخت از تنظیمات (leechN) — فاز ۵: به‌جای عدد ثابت ۴ */
+  leechN?: number;
   editingWordId: string | null;
   onSetEditingWordId: (id: string | null) => void;
   onSaveWord: (wordData: Partial<Word>, isEdit: boolean) => void;
@@ -71,6 +73,7 @@ interface VocabularyViewProps {
 
 export const VocabularyView: React.FC<VocabularyViewProps> = ({
   words,
+  leechN = 4,
   editingWordId,
   onSetEditingWordId,
   onSaveWord,
@@ -231,7 +234,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
           filterStatus === 'all' ||
           (filterStatus === 'new' ? !w.last :
           filterStatus === 'due' ? w.last && w.due <= n :
-          filterStatus === 'hard' ? isLeech(w) :
+          filterStatus === 'hard' ? isLeech(w, leechN) :
           w.last);
         const matchesWStatus =
           filterWStatus === 'all' || statusOf(w) === filterWStatus;
@@ -251,7 +254,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (sortBy === 'hard') return b.bad - a.bad;
         return a.due - b.due;
       });
-  }, [words, searchQuery, filterArt, filterStatus, filterWStatus, filterLvl, sortBy]);
+  }, [words, searchQuery, filterArt, filterStatus, filterWStatus, filterLvl, sortBy, leechN]);
   // فاز ۱: شمارندهٔ واژگان به تفکیک وضعیت (روی کل کتابخانه، مستقل از فیلترها)
   const wStatusCounts = useMemo(() => statusCounts(words), [words]);
   // Typo-tolerant suggestions from the user's own library
@@ -1936,7 +1939,7 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                             {w.needsFull && (
                               <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-bold" title="پروفایل سبک است — در پروفایل، 💎 تکمیل کامل بزن">⚡</span>
                             )}
-                            {isLeech(w) && <span>🩸</span>}
+                            {isLeech(w, leechN) && <span>🩸</span>}
                             {w.img && <span>🖼</span>}
                           </div>
                         </div>

@@ -330,6 +330,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium text-center transition focus:ring-2 focus:ring-blue-500/20"
                 />
                 <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">تعداد خطاهای مکرر (۲ تا ۲۰)</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-0.5">خروج از لیست سخت: ۳ پاسخ درستِ پیاپی + دقت اخیر ≥ ۷۰٪، یا افت نرخ خطای کل زیر ۴۰٪</span>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
@@ -344,6 +345,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <option value="mark">فقط نشانه‌گذاری با 🩸 (بدون تعلیق)</option>
                   <option value="suspend">نشانه‌گذاری و تعلیق از جلسات روزانه</option>
                 </select>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">واژهٔ تعلیق‌شده با «تمرین ترکیبی واژه‌های سخت» در داشبورد قابل بازیابی است و پس از خروج از لیست 🩸 به جلسه‌ها برمی‌گردد</span>
               </div>
             </div>
           </div>

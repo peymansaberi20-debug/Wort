@@ -142,8 +142,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
 
     const weakList = stageLists.weak;
+    // فاز ۵: آستانهٔ واژهٔ دشوار از تنظیمات (leechN) — به‌جای عدد ثابت ۳
+    const leechN = state.set.leechN || 4;
     const hardMistakenWords = words
-      .filter(w => (w.bad || 0) > 3)
+      .filter(w => (w.bad || 0) >= leechN)
       .sort((a, b) => (b.bad || 0) - (a.bad || 0) || (a.ok || 0) - (b.ok || 0));
 
     const totalAuditedIssues = words
