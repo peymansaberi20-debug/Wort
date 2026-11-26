@@ -315,7 +315,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
         <div style={{ fontSize: '15pt', fontWeight: 800 }}>فعل‌های بی‌قاعده در سه زمان — سطح {lvl}</div>
         <div className="irr-p-dim" style={{ fontSize: '9.5pt', marginTop: '3pt' }}>
           {toFa(levelVerbs.length)} فعل • {printDate} • <span className="irr-p-chg">قرمز</span> = تغییر نسبت به مصدر •
-          <span className="irr-p-aux-sein"> ist </span>= sein • <span className="irr-p-aux-haben"> hat </span>= haben
+          <span dir="ltr"><span className="irr-p-aux-sein"> ist </span>= sein • <span className="irr-p-aux-haben"> hat </span>= haben</span>
         </div>
       </div>
       {/* پهنای ستون‌ها ثابت (tableLayout fixed) تا در همهٔ سطح‌ها یکسان بماند؛ کلمهٔ بلند با fitPt کوچک می‌شود */}
