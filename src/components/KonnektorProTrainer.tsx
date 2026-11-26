@@ -1,5 +1,5 @@
 /**
- * KonnektorProTrainer.tsx — «حرف ربط انتخابی» (Sätze komplettieren)
+ * KonnektorProTrainer.tsx — «تکمیل جمله» (Sätze komplettieren)
  *
  * مثل تمرین کتاب: بخش اول جمله با حرف ربطِ هدف داده می‌شود و شما ادامه را می‌نویسید.
  * جملات را هوش مصنوعی طبق سطح انتخابی A1–C2 می‌سازد — یا فقط با حروف ربطی که خودت از
@@ -8,6 +8,10 @@
  *
  * امکانات:
  *  - تصحیح سه‌لایه + ترجمهٔ فارسی جملهٔ نهایی (با همان دستور اول گرفته می‌شود، بعد از بررسی نمایش داده می‌شود)
+ *  - بازخورد کامل تصحیح (ادغام‌شده از تمرین قبلی «تکمیل جمله»): ترجمهٔ جملهٔ خود کاربر،
+ *    «برداشت یک آلمانی»، باکس سبز «چیزهایی که درست نوشتی» و باکس قرمز «ایرادها» آیتم‌به‌آیتم (bad → fix → چرا)
+ *  - «پاسخ نمونه 💡» برای هر جمله قبل از بررسی (با ترجمهٔ فارسی) — و خودارزیابی وقتی معلم در دسترس نیست
+ *  - تمرکز جایگاه فعل در تولید جمله: قید ربط → فعل در جایگاه ۲؛ وابسته‌ساز → فعل در آخر
  *  - چت درون‌خطی با معلمِ هوش مصنوعی برای همین جمله (با حافظهٔ گفتگوی همان جمله)
  *  - لمس هر کلمه → ترجمه فارسی درون‌متنی + مثال + افزودن به واژگان (پنجره وسط صفحه باز می‌شود)
  *  - آرشیو یکدست: «مشاهدهٔ آخرین عملکرد» (همان‌طور که بود) و «آزمون دوباره» (همان جمله‌ها، خالی و سفید)
@@ -54,11 +58,12 @@ function parseJSONLoose<T>(raw: string): T {
 
 const HKEY = 'konnektor_pro_history_v1';
 const WORD_RE = /[A-Za-zÄÖÜäöüß]+(?:-[A-Za-zÄÖÜäöüß]+)*/g;
-const QUICK_QS = ['چرا این‌طور درست است؟', 'یک مثال مشابه بده', 'ساده‌تر چطور بگویم؟', 'با حرف ربط دیگری هم می‌شود؟'];
+const QUICK_QS = ['چرا این‌طور درست است؟', 'یک مثال مشابه بده', 'ساده‌تر چطور بگویم؟', 'با حرف ربط دیگری هم می‌شود؟', 'قاعدهٔ جایگاه فعل را بگو'];
 const TOPIC_CHIPS = ['Alltag', 'Reise', 'Arbeit', 'Umwelt', 'Technik', 'Medien', 'Gesundheit'];
 
-interface KItem { no: number; connector: string; first: string; hint?: string; }
-interface Correction { no: number; ok: boolean; corrected: string; userFa?: string; fa?: string; grammar: string; meaning: string; thinking: string; }
+interface KItem { no: number; connector: string; first: string; hint?: string; /** ادامهٔ نمونهٔ خوب (بدون تکرار حرف ربط) — از ادغام تمرین «تکمیل جمله» */ model?: string; /** ترجمهٔ فارسی کل جملهٔ نمونه */ fa?: string; }
+/** بازخورد کامل: سه لایهٔ اصلی + لایه‌های ادغام‌شده از «تکمیل جمله» (understanding/good/errors) */
+interface Correction { no: number; ok: boolean; corrected: string; userFa?: string; fa?: string; grammar: string; meaning: string; thinking: string; understanding?: string; good?: { text: string; why: string }[]; errors?: { bad: string; fix: string; why: string }[]; /** true = معلم در دسترس نبود → باکس خودارزیابی با پاسخ نمونه */ failed?: boolean; }
 interface ChatMsg { role: 'user' | 'ai'; text: string; }
 interface KExercise {
   id: string; ts: number; level: Lvl; topic: string;
@@ -114,6 +119,8 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
   const [generating, setGenerating] = useState(false);
   const [correcting, setCorrecting] = useState(false);
   const [chatOpen, setChatOpen] = useState<number | null>(null);
+  // «پاسخ نمونه» بازشده در صفحهٔ تمرین (ادغام از «تکمیل جمله») — کلید = شمارهٔ جمله
+  const [modelOpen, setModelOpen] = useState<number | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState<number | null>(null);
   const [wCard, setWCard] = useState<{ word: string; sentence: string; info: WInfo | null; loading: boolean } | null>(null);
@@ -169,7 +176,15 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       const items = parseJSONLoose<KItem[]>(raw);
       const clean: KItem[] = (Array.isArray(items) ? items : [])
         .filter(i => i && typeof i.first === 'string' && i.first.trim().length > 10)
-        .map((i, idx) => ({ no: idx + 1, connector: String(i.connector || '').trim(), first: String(i.first).trim(), hint: i.hint ? String(i.hint).trim() : '' }));
+        .map((i, idx) => ({
+          no: idx + 1,
+          connector: String(i.connector || '').trim(),
+          first: String(i.first).trim(),
+          hint: i.hint ? String(i.hint).trim() : '',
+          // ادغام «تکمیل جمله»: پاسخ نمونهٔ هر جمله + ترجمهٔ کل جملهٔ نمونه
+          model: i.model ? String(i.model).trim() : '',
+          fa: i.fa ? String(i.fa).trim() : ''
+        }));
       if (!clean.length) throw new Error('AI_EMPTY');
       const e: KExercise = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -180,6 +195,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       setCurNo(1);
       setScreen('play');
       setChatOpen(null);
+      setModelOpen(null);
       setAdded(new Set());
       onShowToast(`تمرین با ${clean.length} جمله ساخته شد ✓`);
     } catch (e) {
@@ -200,24 +216,59 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     try {
       const raw = await askGemini(buildCorrectionPrompt(ex.level, [it], { [it.no]: ans }), SYS_AI);
       const corr = parseJSONLoose<Correction[]>(raw);
-      const c0 = (Array.isArray(corr) ? corr : []).find(c => c && typeof c.no === 'number')
-        || { no: it.no, ok: false, corrected: '', fa: '', grammar: 'پاسخ بررسی نشد', meaning: '', thinking: '' };
-      const merged: Record<number, Correction> = { ...ex.corrections, [it.no]: { ...c0, no: it.no } };
+      const hit = (Array.isArray(corr) ? corr : []).find(c => c && typeof c.no === 'number');
+      if (!hit) throw new Error('AI_PARSE');
+      // لایه‌های ادغام‌شده از «تکمیل جمله»: برداشت آلمانی + نقاط قوت + ایرادهای آیتم‌به‌آیتم
+      const good = Array.isArray(hit.good)
+        ? (hit.good as { text?: unknown; why?: unknown }[]).map(g => ({ text: String(g?.text ?? '').trim(), why: String(g?.why ?? '').trim() })).filter(g => g.text || g.why)
+        : [];
+      const errors = Array.isArray(hit.errors)
+        ? (hit.errors as { bad?: unknown; fix?: unknown; why?: unknown }[]).map(er => ({ bad: String(er?.bad ?? '').trim(), fix: String(er?.fix ?? '').trim(), why: String(er?.why ?? '').trim() })).filter(er => er.bad || er.fix)
+        : [];
+      const merged: Record<number, Correction> = {
+        ...ex.corrections,
+        [it.no]: { ...hit, no: it.no, understanding: String(hit.understanding || '').trim(), good, errors, failed: false }
+      };
       setEx({ ...ex, corrections: merged });
-      onShowToast(c0.ok ? '✓ قابل قبول بود' : 'بررسی شد — بازخورد زیر جمله است.');
+      onShowToast(hit.ok ? '✓ قابل قبول بود' : 'بررسی شد — بازخورد زیر جمله است.');
     } catch (e) {
+      // معلم در دسترس نبود → باکس خودارزیابی با پاسخ نمونه (ادغام از «تکمیل جمله»)
+      const fallback: Correction = {
+        no: it.no, ok: false, corrected: '', fa: '', failed: true,
+        grammar: 'بررسی خودکار در دسترس نبود — خودت با پاسخ نمونه مقایسه کن.',
+        meaning: '', thinking: '', understanding: '', good: [], errors: []
+      };
+      setEx(prev => prev ? { ...prev, corrections: { ...prev.corrections, [it.no]: fallback } } : prev);
       onShowToast(aiErrorText(e), true);
     } finally {
       setCorrecting(false);
     }
   };
 
+  // خودارزیابی وقتی معلم در دسترس نیست: کاربر با پاسخ نمونه مقایسه می‌کند (ادغام از «تکمیل جمله»)
+  const selfCheck = (okVal: boolean) => {
+    if (!ex) return;
+    const it = ex.items[curNo - 1];
+    if (!it) return;
+    const c: Correction = {
+      no: it.no,
+      ok: okVal,
+      corrected: it.model ? `${it.first} ${it.connector} ${it.model}` : '',
+      fa: it.fa || '',
+      grammar: okVal ? 'خودت تأیید کردی — با پاسخ نمونه مقایسه شد.' : 'خودت رد کردی — «پاسخ نمونه 💡» را ببین و دوباره بنویس.',
+      meaning: '', thinking: '', understanding: '', good: [], errors: []
+    };
+    setEx({ ...ex, corrections: { ...ex.corrections, [it.no]: c } });
+    onShowToast(okVal ? 'خودت تأیید کردی ✓' : 'خودت رد کردی ✗');
+  };
+
   // جملهٔ بعدی — یا در آخرین جمله، نتیجهٔ جلسه
   const nextItem = () => {
     if (!ex) return;
-    if (curNo >= ex.items.length) { setScreen('review'); setChatOpen(null); return; }
+    if (curNo >= ex.items.length) { setScreen('review'); setChatOpen(null); setModelOpen(null); return; }
     setCurNo(curNo + 1);
     setChatOpen(null);
+    setModelOpen(null);
   };
 
   // رد کردن بدون بررسی
@@ -230,6 +281,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     if (open) setCurNo(open.no);
     setScreen('play');
     setChatOpen(null);
+    setModelOpen(null);
   };
 
   // ────────── چت درون‌خطیِ هر جمله ──────────
@@ -316,6 +368,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     const open = h.items.find(i => !h.corrections || !h.corrections[i.no]);
     if (open) { setScreen('play'); setCurNo(open.no); } else { setScreen('review'); }
     setChatOpen(null);
+    setModelOpen(null);
   };
 
   /** آزمون دوباره: همین جمله‌ها، بدون پاسخ و سفید از اول */
@@ -326,6 +379,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
     setCurNo(1);
     setScreen('play');
     setChatOpen(null);
+    setModelOpen(null);
     setAdded(new Set());
   };
 
@@ -472,6 +526,10 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
             {c?.grammar && <div style={prFa({ marginTop: 2 })}>• گرامری: {c.grammar}</div>}
             {c?.meaning && <div style={prFa({})}>• مفهومی: {c.meaning}</div>}
             {c?.thinking && <div style={prFa({})}>• تفکر آلمانی: {c.thinking}</div>}
+            {c?.understanding && <div style={prFa({})}>• برداشت آلمانی: {c.understanding}</div>}
+            {(c?.errors?.length || 0) > 0 && (c!.errors || []).map((er, i) => (
+              <div key={i} style={prFa({ color: '#555', marginTop: 1 })}>• ایراد: {er.bad} → {er.fix}{er.why ? ` — ${er.why}` : ''}</div>
+            ))}
           </div>
         );
       })}
@@ -481,6 +539,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       {pEx.items.map(it => (
         <li key={it.no} style={{ fontSize: 11.5, marginBottom: 7, lineHeight: 1.8, breakInside: 'avoid' }}>
           <span style={prG()}>{it.no}. <b>{it.first}</b> — پاسخ تو: {(pEx.answers[it.no] || '').trim() || '(بدون پاسخ)'}</span>
+          {it.model ? <div style={prFa({ color: '#555', marginTop: 1 })}>پاسخ نمونه: {it.connector} {it.model}</div> : null}
         </li>
       ))}
     </ol>
@@ -492,7 +551,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       onClose={() => { setPrintOpen(false); setPrintHist(null); }}
       title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>Sätze komplettieren</span>}
       docTitle="Sätze komplettieren — Konnektoren"
-      meta={<>{`حرف ربط انتخابی (سطح ${pEx.level})`}</>}
+      meta={<>{`تکمیل جمله (سطح ${pEx.level})`}</>}
       questions={printQuestions}
       solutions={printSolutions}
     />
@@ -680,14 +739,19 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                   <span className="bg-blue-50 dark:bg-blue-950/40 text-[#1f5fbf] dark:text-[#7fb0ff] rounded-full px-2 py-0.5 font-bold">سطح {ex.level}</span>
                   {ex.topic && <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-full px-2 py-0.5 font-bold">{ex.topic}</span>}
                 </div>
-                <div className="text-[#5d6676] font-bold">جملهٔ {toFa(curNo)} از {toFa(ex.items.length)}</div>
+                <div className="flex items-center gap-2 text-[#5d6676] font-bold">
+                  <span>جملهٔ {toFa(curNo)} از {toFa(ex.items.length)}</span>
+                  {/* شمارندهٔ زندهٔ امتیاز (ادغام از «تکمیل جمله») */}
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400">✓ {toFa(okCount)} قابل قبول</span>
+                </div>
               </div>
               <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden mb-3">
                 <div className="h-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] transition-all duration-300" style={{ width: `${pct}%` }} />
               </div>
               <p className="text-[11px] text-[#5d6676] leading-5 mb-3">
-                جمله را کامل کن و «بررسی همین جمله» را بزن — همان‌جا تصحیح و بازخورد سه‌لایه می‌گیری؛
-                با 💬 همان‌جا از معلم بپرس، بعد با «بعدی» برو سراغ جملهٔ بعد.
+                جمله را کامل کن و «بررسی همین جمله» را بزن — همان‌جا تصحیح و بازخورد سه‌لایه می‌گیری
+                (ترجمهٔ جملهٔ تو، برداشت یک آلمانی، چیزهایی که درست نوشتی و ایرادها آیتم‌به‌آیتم)؛
+                با 💬 همان‌جا از معلم بپرس، با «پاسخ نمونه 💡» جواب نمونه را ببین و بعد با «بعدی» برو سراغ جملهٔ بعد.
                 روی حرف ربط سبز بزنی نکتهٔ گرامری‌اش را می‌بینی و روی هر کلمه بزنی ترجمهٔ فارسی می‌آید.
               </p>
 
@@ -740,8 +804,29 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                   className="w-full border-2 border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-base font-sans bg-white dark:bg-[#141923] outline-none focus:border-[#1f5fbf] dark:focus:border-[#7fb0ff] transition text-left"
                 />
 
+                {/* «پاسخ نمونه 💡» قبل از بررسی — ادغام از «تکمیل جمله» */}
+                {!c && it.model && (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => setModelOpen(modelOpen === it.no ? null : it.no)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold transition"
+                    >
+                      {modelOpen === it.no ? '▲ پنهان‌کردن پاسخ نمونه' : 'پاسخ نمونه 💡'}
+                    </button>
+                    {modelOpen === it.no && (
+                      <div className="rounded-xl px-3 py-2 text-sm bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] leading-7 space-y-1">
+                        <div dir="ltr" style={{ textAlign: 'left' }}>
+                          <span className="text-[#5d6676] font-sans"><ClickableWords text={it.first} onWord={t => tapTok(t, it.first)} /> </span>
+                          <b className="font-sans text-emerald-700 dark:text-emerald-300"><ClickableWords text={`${it.connector} ${it.model}`} onWord={t => tapTok(t, `${it.first} ${it.connector} ${it.model}`)} /></b>
+                        </div>
+                        {it.fa && <div className="text-xs text-sky-700 dark:text-sky-300">🇮🇷 ترجمهٔ جملهٔ نمونه: {it.fa}</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* بازخورد فوری همان‌جا — بعد از بررسی */}
-                {c && (
+                {c && !c.failed && (
                   <div className={`rounded-xl p-3 space-y-2 border ${c.ok ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800'}`}>
                     <div className="flex items-center justify-between">
                       <span className={`text-xs font-bold ${c.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{c.ok ? '✓ قابل قبول' : '✗ نیاز به اصلاح'}</span>
@@ -755,6 +840,12 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     )}
                     {c.corrected && (
                       <div dir="ltr" className="text-sm leading-7 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}><ClickableWords text={c.corrected} onWord={t => tapTok(t, c.corrected || '')} /></div>
+                    )}
+                    {/* برداشت یک آلمانی از جملهٔ کاربر — ادغام از «تکمیل جمله» */}
+                    {c.understanding && (
+                      <div className="text-xs leading-6 rounded-lg bg-white/70 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
+                        <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت یک آلمانی از این جمله:</b> {c.understanding}
+                      </div>
                     )}
                     {/* ترجمهٔ جملهٔ کاربر — اول از همه (درخواست کاربر) */}
                     {c.userFa && (
@@ -783,7 +874,52 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                         <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🇩🇪 تفکر آلمانی:</b> {c.thinking}
                       </div>
                     )}
+                    {/* باکس سبز: چیزهایی که درست نوشتی — ادغام از «تکمیل جمله» */}
+                    {(c.good?.length || 0) > 0 && (
+                      <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-3 space-y-1.5">
+                        <div className="text-xs font-bold text-emerald-800 dark:text-emerald-200">✅ چیزهایی که درست نوشتی</div>
+                        {c.good!.map((g, i) => (
+                          <div key={i} className="text-xs leading-6 text-emerald-900 dark:text-emerald-100">
+                            <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans"><ClickableWords text={g.text} onWord={t => tapTok(t, g.text)} /></b>}{g.text && g.why ? ' — ' : ''}{g.why}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* باکس قرمز: ایرادها آیتم‌به‌آیتم — ادغام از «تکمیل جمله» */}
+                    {(c.errors?.length || 0) > 0 && (
+                      <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-3 space-y-2">
+                        <div className="text-xs font-bold text-red-800 dark:text-red-200">❌ ایرادها</div>
+                        {c.errors!.map((er, i) => (
+                          <div key={i} className="text-xs leading-6 text-red-900 dark:text-red-100">
+                            <div>
+                              <b className="text-red-600 dark:text-red-300">✗</b>{' '}
+                              {er.bad && <b dir="ltr" className="font-sans line-through"><ClickableWords text={er.bad} onWord={t => tapTok(t, er.bad)} /></b>}
+                              {er.bad && er.fix ? <span> → </span> : null}
+                              {er.fix && <b dir="ltr" className="font-sans text-emerald-700 dark:text-emerald-300"><ClickableWords text={er.fix} onWord={t => tapTok(t, er.fix)} /></b>}
+                            </div>
+                            {er.why && <div className="text-red-800/90 dark:text-red-200/90">{er.why}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[11px] text-[#5d6676]">سؤال داری؟ با 💬 همین‌جا از معلم بپرس، بعد «بعدی» را بزن.</p>
+                  </div>
+                )}
+                {/* خودارزیابی وقتی معلم در دسترس نیست — ادغام از «تکمیل جمله» */}
+                {c && c.failed && (
+                  <div className="rounded-xl px-3 py-2.5 text-sm space-y-2 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                    <div>{c.grammar}</div>
+                    {it.model && (
+                      <div dir="ltr" className="leading-7" style={{ textAlign: 'left' }}>
+                        <span className="text-[#5d6676] font-sans"><ClickableWords text={it.first} onWord={t => tapTok(t, it.first)} /> </span>
+                        <b className="font-sans text-emerald-700 dark:text-emerald-300"><ClickableWords text={`${it.connector} ${it.model}`} onWord={t => tapTok(t, `${it.first} ${it.connector} ${it.model}`)} /></b>
+                      </div>
+                    )}
+                    <div className="text-xs">خودت با پاسخ نمونه مقایسه کن و بگو:</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => selfCheck(true)} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold">درست بود ✓</button>
+                      <button onClick={() => selfCheck(false)} className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-xs font-bold">نادرست بود ✗</button>
+                    </div>
                   </div>
                 )}
                 {chatOpen === it.no && renderChatBox(it.no)}
@@ -886,6 +1022,13 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     <div dir="ltr" className="text-sm leading-7 mt-2 font-sans" style={{ textAlign: 'left' }}>
                       <span className="text-[#5d6676]"><ClickableWords text={it.first} onWord={t => tapTok(t, it.first)} /> </span><b><ClickableWords text={userAns || '—'} onWord={t => tapTok(t, it.first + ' ' + userAns)} /></b>
                     </div>
+                    {/* پاسخ نمونه برای موارد بررسی‌نشده — ادغام از «تکمیل جمله» */}
+                    {it.model && (
+                      <div dir="ltr" className="text-sm leading-7 mt-2 rounded-xl p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800" style={{ textAlign: 'left' }}>
+                        <span className="text-[11px] text-[#5d6676]">پاسخ نمونه: </span>
+                        <b className="font-sans"><ClickableWords text={`${it.first} ${it.connector} ${it.model}`} onWord={t => tapTok(t, `${it.first} ${it.connector} ${it.model}`)} /></b>
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -929,6 +1072,13 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                     </div>
                   )}
 
+                  {/* برداشت یک آلمانی از جملهٔ کاربر — ادغام از «تکمیل جمله» */}
+                  {c.understanding && (
+                    <div className="text-xs leading-6 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
+                      <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🧠 برداشت یک آلمانی از این جمله:</b> {c.understanding}
+                    </div>
+                  )}
+
                   {c.grammar && (
                     <div className="text-xs leading-6 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
                       <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">📐 گرامری:</b> {c.grammar}
@@ -942,6 +1092,35 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
                   {c.thinking && (
                     <div className="text-xs leading-6 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] p-2.5">
                       <b className="text-[#1f5fbf] dark:text-[#7fb0ff]">🇩🇪 تفکر آلمانی:</b> {c.thinking}
+                    </div>
+                  )}
+
+                  {/* باکس سبز: چیزهایی که درست نوشتی — ادغام از «تکمیل جمله» */}
+                  {(c.good?.length || 0) > 0 && (
+                    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 p-3 space-y-1.5">
+                      <div className="text-xs font-bold text-emerald-800 dark:text-emerald-200">✅ چیزهایی که درست نوشتی</div>
+                      {c.good!.map((g, i) => (
+                        <div key={i} className="text-xs leading-6 text-emerald-900 dark:text-emerald-100">
+                          <b>✓</b>{' '}{g.text && <b dir="ltr" className="font-sans"><ClickableWords text={g.text} onWord={t => tapTok(t, g.text)} /></b>}{g.text && g.why ? ' — ' : ''}{g.why}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* باکس قرمز: ایرادها آیتم‌به‌آیتم — ادغام از «تکمیل جمله» */}
+                  {(c.errors?.length || 0) > 0 && (
+                    <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-3 space-y-2">
+                      <div className="text-xs font-bold text-red-800 dark:text-red-200">❌ ایرادها</div>
+                      {c.errors!.map((er, i) => (
+                        <div key={i} className="text-xs leading-6 text-red-900 dark:text-red-100">
+                          <div>
+                            <b className="text-red-600 dark:text-red-300">✗</b>{' '}
+                            {er.bad && <b dir="ltr" className="font-sans line-through"><ClickableWords text={er.bad} onWord={t => tapTok(t, er.bad)} /></b>}
+                            {er.bad && er.fix ? <span> → </span> : null}
+                            {er.fix && <b dir="ltr" className="font-sans text-emerald-700 dark:text-emerald-300"><ClickableWords text={er.fix} onWord={t => tapTok(t, er.fix)} /></b>}
+                          </div>
+                          {er.why && <div className="text-red-800/90 dark:text-red-200/90">{er.why}</div>}
+                        </div>
+                      ))}
                     </div>
                   )}
 
