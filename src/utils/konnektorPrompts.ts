@@ -37,12 +37,17 @@ Format jeder Aufgabe:
   {"no":2,"connector":"daher","first":"Auf Dosen und Flaschen gibt es 25 Cent Pfand, daher"}
   {"no":3,"connector":"darauf / daran / darüber + dass","first":"Besonders die junge Generation hofft darauf,","hint":"dass …"}
 - „hint“: nur wenn der Lernende beim Ergänzen einen Startpunkt braucht (z. B. "dann" bei wenn-Sätzen, "dass …" nach Verb+Präposition). Sonst leerer String "".
+- „model“: eine MUSTER-Fortsetzung (NUR der zweite Teilsatz — der Konnektor wird NICHT wiederholt). Wortstellungs-Fokus ist der KERN dieser Übung:
+    · Adverb-Konnektoren (darum, deshalb, trotzdem, dennoch, allerdings …) → die Fortsetzung beginnt direkt mit dem Verb (Position 2).
+    · Nebensatz-Konnektoren (obwohl, weil, damit, sodass, bevor, nachdem …) → im Nebensatz steht das Verb am Ende; die Fortsetzung beginnt mit dem Subjekt.
+  Logisch sinnvoll, Niveau ${level}, natürliche Alltagssprache.
+- „fa“: روان‌ترین ترجمهٔ فارسی کل جمله (first + Konnektor + model) — فقط متن ترجمه، بدون توضیح.
 - Die Schwierigkeit der Ergänzung (zweiter Teilsatz) muss ${level} entsprechen.
 - Vermeide zwei Aufgaben mit demselben Konnektor. Mische Kategorien (kausal, konzessiv, final, temporal …).
 - Inhaltlich: logisch ergänzbare, interessante Sätze — keine Nonsens-Sätze.
 
 Antworte NUR mit einem JSON-Array in genau dieser Form:
-[{"no":1,"connector":"…","first":"…","hint":"…"}]`;
+[{"no":1,"connector":"…","first":"…","hint":"…","model":"…","fa":"…"}]`;
 }
 
 /** پراخت تصحیح: سه لایهٔ بازخورد — گرامری، مفهومی، تفکر آلمانی */
@@ -69,14 +74,17 @@ Prüfe für jede Antwort DREI Dinge und antworte pro Aufgabe:
 3) „thinking“ (auf Persisch, 1–2 Sätze): „Deutsches Denken“ — wie würde ein/e Muttersprachler/in das natürlich formulieren? Gib gern eine idiomatischere Alternative (deutsch). Wenn die Antwort schon natürlich ist: sage das und gib einen kleinen Zusatz-Tipp.
 4) „userFa“ (auf Persisch): die Übersetzung des Satzes DES LERNERS — erster Teilsatz + Konnektor + seine Ergänzung, GENAU so wie er geschrieben ist (auch wenn er fehlerhaft ist) — nur der Übersetzungstext, ohne Erklärung.
 5) „fa“ (auf Persisch): die Übersetzung des GESAMTEN korrigierten Satzes („corrected“) ins Persische — nur der Übersetzungstext, ohne Erklärung.
+6) „understanding“ (auf Persisch, 1–2 Sätze): was ein/e Muttersprachler/in beim Lesen DES LERNERSATZES tatsächlich versteht (auch wenn er fehlerhaft ist).
+7) „good“: die Dinge, die der Lerner RICHTIG gemacht hat (Konnektorwahl, Wortstellung/Jahresposition des Verbs, Kasus, Komma, Zeitform, Wortschatz …) — Liste von Objekten: „text“ = das korrekte Stück (auf Deutsch), „why“ = kurze Erklärung (auf Persisch). Wenn nichts: leeres Array.
+8) „errors“: die Fehler EINS NACH DEM ANDEREN — Liste von Objekten: „bad“ = das Falsche (auf Deutsch), „fix“ = die Korrektur (auf Deutsch), „why“ = kurze Erklärung (auf Persisch). Wenn es keinen Fehler gibt: leeres Array.
 
 Regeln:
 - „corrected“: der komplett korrigierte GESAMTSATZ (erster Teilsatz + korrigierte Ergänzung) auf Deutsch. Wenn die Antwort schon perfekt ist: exakt der Satz des Lerners.
 - „ok“: true nur, wenn Ergänzung inhaltlich und grammatisch akzeptabel ist (kleine Rechtschreibfehler: noch ok=true, aber im „grammar“ erwähnen).
-- Wenn die Antwort leer ist: ok=false, corrected="", userFa="", fa="", grammar="پاسخ ندادی", meaning="", thinking="گزینهٔ نمونه در فیلد corrected خالی است؛ در چت بخواه تا نمونه بدهم."
+- Wenn die Antwort leer ist: ok=false, corrected="", userFa="", fa="", understanding="", good=[], errors=[], grammar="پاسخ ندادی", meaning="", thinking="گزینهٔ نمونه در فیلد corrected خالی است؛ در چت بخواه تا نمونه بدهم."
 - Antworte auf Persisch, deutsche Beispiele auf Deutsch.
 - Antworte NUR mit JSON-Array:
-[{"no":1,"ok":true,"corrected":"…","userFa":"…","fa":"…","grammar":"…","meaning":"…","thinking":"…"}]`;
+[{"no":1,"ok":true,"corrected":"…","userFa":"…","fa":"…","grammar":"…","meaning":"…","thinking":"…","understanding":"…","good":[{"text":"…","why":"…"}],"errors":[{"bad":"…","fix":"…","why":"…"}]}]`;
 }
 
 /** پراخت ترجمهٔ واژه با کلیک (متن‌ها AI تولید کرده‌اند، پس واژه‌نامهٔ ثابت کافی نیست) */
