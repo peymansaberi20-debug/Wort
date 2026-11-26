@@ -31,6 +31,7 @@ import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrintPrevie
 import { Printer } from 'lucide-react';
 import { ClickableWords } from '../components/WordLookup';
 import { useVocabGate } from '../components/VocabDecisionDialog';
+import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank } from '../utils/aiBank';
 
 /* ─────────────────────────── پل هوش مصنوعی برنامه ───────────────────────────
  * کلید و مدل از تنظیمات برنامه (aiProvider — Gemini/Groq/OpenRouter) می‌آید.
@@ -119,6 +120,17 @@ interface Attempt {
 interface ChatMsg { role: 'user' | 'ai'; text: string; }
 
 const HKEY = 'wb_tstory_pro_history_v1';
+
+/* ── بانک مشترک ابری داستان‌های AI (درخواست: دسترس‌پذیری همه‌جا) ──
+ * فقط داستان‌های ساخته‌شده با هوش مصنوعی (src='ai') به کالکشن عمومی Firestore فرستاده
+ * می‌شوند؛ داستان‌های آمادهٔ آفلاین بانک به اشتراک گذاشته نمی‌شوند. پاسخ‌ها و نتایج خود
+ * کاربر فقط محلی می‌مانند. داستان‌های بانک که روی این دستگاه نیستند به آرشیو افزوده می‌شوند
+ * — با هر ایمیل یا حتی بدون ورود. */
+const BANK_SKILL = 'tstory';
+const toBank = (a: Attempt): Partial<Attempt> => ({
+  id: a.id, ts: a.ts, lvl: a.lvl, tense: a.tense, topic: a.topic,
+  title: a.title, titleFa: a.titleFa, src: 'ai', segs: a.segs, done: false
+});
 const TENSE_ORDER: Tense[] = ['prs', 'prt', 'perf', 'pq', 'f1', 'f2', 'mix'];
 const TOPIC_CHIPS = ['Alltag', 'Reise', 'Arbeit', 'Umwelt', 'Technik', 'Medien', 'Gesundheit'];
 const QUICK_QS = ['چرا این شکل درست است؟', 'زمان را ساده توضیح بده', 'یک مثال مشابه بده', 'با فعل دیگری هم می‌شود؟'];
@@ -339,6 +351,28 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
     setHistory(next);
   };
 
+  // همگام‌سازی آرشیو با بانک مشترک ابری — یک‌بار هنگام مونت؛ بی‌صدا در خطا
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const seen = aiBankSeenIds(BANK_SKILL);
+        const cloud = await fetchAiBank<Attempt>(BANK_SKILL);
+        if (!alive) return;
+        aiBankMarkSeen(BANK_SKILL, cloud.map((c) => c.id));
+        setHistory((prev) => {
+          const merged = mergeAiBank(prev, cloud, seen);
+          if (merged !== prev && merged.length > prev.length) { saveHist(merged); return merged; }
+          return prev;
+        });
+        const have = new Set(cloud.map((c) => c.id));
+        loadHist().filter((x) => x?.id && x.src === 'ai' && !have.has(x.id)).slice(0, 25)
+          .forEach((x) => pushAiBank(BANK_SKILL, x.id, toBank(x), { level: x.lvl, topic: x.topic, count: x.segs?.filter((s) => s.t === 'gap').length }));
+      } catch { /* بی‌صدا */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   /* ── ساخت تمرین با هوش مصنوعی ── */
   const generateAI = async () => {
     if (!aiReady()) {
@@ -370,6 +404,9 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         titleFa: String(j.titleFa || '').trim(),
         src: 'ai', segs
       };
+      // ☁️ ذخیرهٔ داستان تازه در بانک مشترک — با هر دستگاه/ایمیل/بدون ورود در دسترس همه
+      pushAiBank(BANK_SKILL, e.id, toBank({ id: e.id, ts: e.ts, lvl: e.lvl, tense: e.tense, topic: e.topic, title: e.title, titleFa: e.titleFa, src: 'ai', segs: e.segs, answers: {}, done: false }),
+        { level: lvl, topic: e.topic, count: no });
       startEx(e);
       onShowToast(`داستان ساخته شد — ${no} جای خالی`);
     } catch (err) {
