@@ -21,7 +21,8 @@ import {
   fullWord,
   clearReviewHistory,
   clearAllVocabulary,
-  auditWord
+  auditWord,
+  recordRecent
 } from './utils/storage';
 import { applyModeResult, promotionReady, activationReady } from './utils/wordStatus';
 import { stripHeadAnnotation } from './data/verbPrep';
@@ -563,6 +564,8 @@ export default function App() {
         if (targetIdx >= 0) {
           const clone = { ...nextWords[targetIdx] };
           const isFirstTime = sched(clone, grade, prev.set.ivlMod || 1.0, prev.set.leechN || 4);
+          // فاز ۵: ثبت پاسخ در پنجرهٔ اخیر + زنجیرهٔ موفقیت — پایهٔ خروج علمی از لیست واژهٔ سخت (🩸)
+          recordRecent(clone, grade > 0);
           // فاز ۲: آمار دوگانهٔ تسلط (تولیدی/شناختی) — از نتیجهٔ تمرین؛ ارتقای دریافتی → کاندید
           const ok = grade > 0;
           // وضعیت آمادگی «قبل از» اعمال نتیجه — برای تشخیص لحظهٔ گذار (toast فقط یک‌بار می‌آید)
@@ -894,6 +897,7 @@ export default function App() {
               {currentTab === 'lib' && (
                 <VocabularyView
                   words={state.words}
+                  leechN={state.set.leechN || 4}
                   editingWordId={editingWordId}
                   onSetEditingWordId={setEditingWordId}
                   onSaveWord={handleSaveWord}
@@ -1047,6 +1051,7 @@ export default function App() {
       <WordDetailModal
         word={selectedWord}
         words={state.words}
+        leechN={state.set.leechN || 4}
         onPatchWord={handlePatchWord}
         onClose={() => setSelectedWord(null)}
         onEdit={handleEditWord}
