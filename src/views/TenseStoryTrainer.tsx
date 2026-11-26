@@ -28,6 +28,7 @@ import { parseBlanks, parseSegments, lookupWord, explainBlank, isCorrect, normal
 import { TLvl, TLVL_ORDER, TLVL_INFO, LEVEL_VERBS, LEVEL_PREPS, bandOf } from '../data/tenseStoryVerbs';
 import { generateText, hasApiKey, describeAiError, getActiveProvider, getModel } from '../utils/aiProvider';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrintPreview, Section, SqBtn, TopicInput, prFa, prG, toFa, useConfirm } from '../components/trainerUI';
+import { Printer } from 'lucide-react';
 import { ClickableWords } from '../components/WordLookup';
 import { useVocabGate } from '../components/VocabDecisionDialog';
 
@@ -289,6 +290,8 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   const [chatDraft, setChatDraft] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
+  /** داستان هدف چاپ — از آرشیو (بدون باز کردن تمرین) یا null = داستان جاری */
+  const [printStory, setPrintStory] = useState<Exercise | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
   // گیت مرکزی افزودن به واژگان: تکراری / Partizip II فعل موجود / مترادف → دیالوگ تصمیم
   const gate = useVocabGate({
@@ -565,32 +568,35 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
 
     /* ───────── پورتال‌های مشترک: چاپ، کارت واژه، چت ───────── */
 
-  /* برگهٔ چاپ مشترک: صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامه (PrintPreview مشترک) */
-  const printMeta = ex
-    ? `${ex.lvl} · ${TENSE_INFO[ex.tense].de}${ex.topic ? ` · ${ex.topic}` : ''} · ${faDate(ex.ts)} · نام و تاریخ: ...........................`
+  /* برگهٔ چاپ مشترک: صفحهٔ ۱ سؤال‌ها با جای نوشتن، صفحهٔ ۲ پاسخنامهٔ مستقل (PrintPreview مشترک)
+     printStory: داستان هدف چاپ از آرشیو — null = داستان جاری */
+  const pEx = printStory || ex;
+  const pGaps = printStory ? gapList(printStory.segs) : gaps;
+  const printMeta = pEx
+    ? `${pEx.lvl} · ${TENSE_INFO[pEx.tense].de}${pEx.topic ? ` · ${pEx.topic}` : ''} · ${faDate(pEx.ts)} · نام و تاریخ: ...........................`
     : '';
 
-  const printQuestions = ex ? (
+  const printQuestions = pEx ? (
     <>
       <p style={prFa({ fontSize: 11, color: '#333', marginBottom: 8 })}>
         فعل داخل پرانتز به شکل مصدر است — شکل درستِ زمان را در جای خالی بنویس: <b>Ergänzen Sie die Verben!</b>
       </p>
       <p dir="ltr" style={prG({ fontSize: 12.5, lineHeight: 2.1, whiteSpace: 'pre-wrap' })}>
-        {ex.segs.map(s => (s.t === 'txt' ? s.x : ` ______( ${s.no} ) (${s.inf}) `)).join('')}
+        {pEx.segs.map(s => (s.t === 'txt' ? s.x : ` ______( ${s.no} ) (${s.inf}) `)).join('')}
       </p>
       <p style={prFa({ fontSize: 11, fontWeight: 700, margin: '16px 0 6px' })}>پاسخ‌های تو (با شمارهٔ جای خالی):</p>
       <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
-        {gaps.map(g => (
+        {pGaps.map(g => (
           <li key={g.no} style={{ fontSize: 12, borderBottom: '1.1px solid #999', height: 30, listStylePosition: 'inside', marginBottom: 6 }} />
         ))}
       </ol>
     </>
   ) : null;
 
-  const printSolutions = ex ? (
+  const printSolutions = pEx ? (
     <>
       <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
-        {gaps.map(g => {
+        {pGaps.map(g => {
           const chain = VERBS[g.inf];
           return (
             <li key={g.no} style={{ fontSize: 11.5, marginBottom: 7, lineHeight: 1.8, breakInside: 'avoid' }}>
@@ -604,16 +610,17 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         })}
       </ol>
       <p style={prFa({ fontWeight: 700, marginTop: 14, fontSize: 11 })}>متن کامل و درست:</p>
-      <p dir="ltr" style={prG({ fontSize: 11.5, lineHeight: 2, color: '#333', whiteSpace: 'pre-wrap' })}>{storyPlain(ex.segs, true)}</p>
+      <p dir="ltr" style={prG({ fontSize: 11.5, lineHeight: 2, color: '#333', whiteSpace: 'pre-wrap' })}>{storyPlain(pEx.segs, true)}</p>
     </>
   ) : null;
 
-  const printPreview = ex ? (
+  const printPreview = pEx ? (
     <PrintPreview
       open={printOpen}
-      onClose={() => setPrintOpen(false)}
-      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{ex.title}</span>}
-      meta={<>{ex.titleFa ? `${ex.titleFa} · ` : ''}{printMeta}</>}
+      onClose={() => { setPrintOpen(false); setPrintStory(null); }}
+      title={<span dir="ltr" style={{ fontFamily: 'Georgia, serif' }}>{pEx.title}</span>}
+      docTitle={`Zeitgeschichte — ${pEx.title}`}
+      meta={<>{pEx.titleFa ? `${pEx.titleFa} · ` : ''}{printMeta}</>}
       questions={printQuestions}
       solutions={printSolutions}
     />
@@ -737,6 +744,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
   if (screen === 'config') {
     return (
       <div dir="rtl" className="space-y-3">
+        {printPreview}
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
           {/* ۱. سطح — چیپ‌های قابل کلیک در یک خط */}
           <Section n="۱" label="سطح">
@@ -866,6 +874,9 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
               >
                 <SqBtn onClick={() => reopen(a)} title="بازگشایی این داستان">▶</SqBtn>
                 <SqBtn tone="green" onClick={() => retake(a)} title="آزمون دوباره (همان داستان، بدون پاسخ)">🔁</SqBtn>
+                <SqBtn onClick={() => { setPrintStory(a); setPrintOpen(true); }} title="برگهٔ A4 این داستان ذخیره‌شده — سؤال‌ها و پاسخنامه">
+                  <Printer size={15} />
+                </SqBtn>
                 <SqBtn
                   tone="red"
                   onClick={async () => {
@@ -1000,8 +1011,10 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
           >
             📋 پاسخنامهٔ کامل
           </button>
-          <button onClick={() => setPrintOpen(true)} className="py-3 rounded-xl text-[13px] font-extrabold border-2 border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] bg-white dark:bg-[#141923]">
-            🖨 چاپ / PDF
+          <button onClick={() => { setPrintStory(null); setPrintOpen(true); }}
+            title="برگهٔ A4 — سؤال‌ها + پاسخنامه" aria-label="برگهٔ A4"
+            className="w-12 py-3 rounded-xl text-[13px] font-extrabold border-2 border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] bg-white dark:bg-[#141923] flex items-center justify-center">
+            <Printer size={16} />
           </button>
         </div>
 
@@ -1082,7 +1095,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
             <p className="text-[#5d6676] dark:text-[#8b95a7]">{ex.lvl} · {TENSE_INFO[ex.tense].de} ({TENSE_INFO[ex.tense].fa}){ex.topic ? ` · ${ex.topic}` : ''}</p>
             <p className="text-[#5d6676] dark:text-[#8b95a7]">{okN === tot ? 'بی‌نقص! 🎉' : okN >= tot * 0.7 ? 'خوب بود — موارد قرمز را با معلم مرور کن.' : 'با حوصله موارد قرمز را بخوان و دوباره تمرین کن.'}</p>
           </div>
-          <button onClick={() => setPrintOpen(true)} className="mr-auto px-3 py-1.5 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] shrink-0">🖨 چاپ / PDF</button>
+          <button onClick={() => { setPrintStory(null); setPrintOpen(true); }} title="برگهٔ A4 — سؤال‌ها + پاسخنامه" aria-label="برگهٔ A4" className="mr-auto w-9 h-9 rounded-lg text-xs font-bold border border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#8b95a7] shrink-0 flex items-center justify-center"><Printer size={15} /></button>
         </div>
 
         <div className="space-y-2">

@@ -109,10 +109,10 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   dikt: { title: 'دیکته جمله', icon: '🎧', desc: 'جمله را بشنو و دقیق بنویس؛ تصحیح کلمه‌به‌کلمه' },
   errnb: { title: 'دفتر خطاها', icon: '📓', desc: 'جمله‌های غلطِ خودت (از تصحیح نوشتار) با مرور فاصله‌دار؛ خطاها تکرار نشوند' },
   vprep: { title: 'فعل + حرف اضافه (Verben mit Präpositionen)', icon: '🔗', desc: '۱۰۰+ فعل مهم با حرف اضافه و حالت دستوری؛ سه تمرین جدا: یادگیری با فیلتر و مثال لمس‌پذیر، تمرین فاصله‌دار و افزودن فعل جدید' },
-  konnektoren: { title: 'متن جای‌خالی (Konnektoren)', icon: '📝', desc: 'متن جای‌خالی با حروف ربط؛ سطح و تعداد جای خالی را انتخاب کن تا معلم هر بار متن تازه بسازد؛ کشیدن/کلیک کلمه‌ها، تصحیح فوری، چت با معلم، چاپ دو صفحه‌ای و تمرین‌های ذخیره‌شده' },
-  tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و چاپ' },
-  kpro: { title: 'حرف ربط انتخابی', icon: '🎓', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ حروف ربط را می‌توانی خودت انتخاب کنی (یکی یا چندتا از همهٔ سطوح)؛ تصحیح سه‌لایه، ترجمهٔ فارسی بعد از بررسی، گفتگو با معلم، آزمون دوباره و چاپ — سطح A1 تا C2' },
-  wsh: { title: 'جای‌خالی فعل + حرف اضافه (با معلم)', icon: '📄', desc: 'معلم هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، ترجمهٔ فارسی بعد از بررسی، چت با معلم، تولید جملهٔ آزاد و چاپ کل برگه' },
+  konnektoren: { title: 'متن جای‌خالی (Konnektoren)', icon: '📝', desc: 'متن جای‌خالی با حروف ربط؛ سطح و تعداد جای خالی را انتخاب کن تا معلم هر بار متن تازه بسازد؛ کشیدن/کلیک کلمه‌ها، تصحیح فوری، چت با معلم، برگهٔ A4 دوسطحی و تمرین‌های ذخیره‌شده' },
+  tstory: { title: 'داستان همهٔ زمان‌ها', icon: '📖', desc: 'مثل تمرین کتاب: داستان کوتاه با جاهای خالی فعل؛ سطح A1 تا C2 و همهٔ زمان‌ها + ذخیره و برگهٔ A4' },
+  kpro: { title: 'حرف ربط انتخابی', icon: '🎓', desc: 'شروع جمله و حرف ربط داده‌شده را کامل کن؛ حروف ربط را می‌توانی خودت انتخاب کنی (یکی یا چندتا از همهٔ سطوح)؛ تصحیح سه‌لایه، ترجمهٔ فارسی بعد از بررسی، گفتگو با معلم، آزمون دوباره و برگهٔ A4 — سطح A1 تا C2' },
+  wsh: { title: 'جای‌خالی فعل + حرف اضافه (با معلم)', icon: '📄', desc: 'معلم هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، ترجمهٔ فارسی بعد از بررسی، چت با معلم، تولید جملهٔ آزاد و برگهٔ A4' },
   wsh2: { title: 'تکمیل جمله', icon: '🧾', desc: 'طرف اول جمله + حرف ربطِ انتها را می‌بینی و ادامهٔ جمله را با جایگاه فعل درست می‌نویسی؛ تصحیح با معلم، ترجمهٔ فارسی بعد از بررسی، چت با معلم و آرشیو' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
@@ -2347,7 +2347,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-white dark:bg-[#1b2029] flex flex-col items-center justify-center gap-3 p-6 text-center cursor-pointer select-none" onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
                     {!isFaDir ? (
                       <>
-                        {/* درخواست کاربر: ایکون بلندگو و میکروفن زیر کلمه روی فلش‌کارت قرار داده شود */}
                         <div className="flex items-center justify-center gap-2 flex-wrap" dir="ltr">
                           {w.art && <span className={`px-3 py-1 rounded-xl font-bold text-xl ${artCls}`}>{w.art}</span>}
                           {(() => {
@@ -2360,8 +2359,6 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                               <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
                             );
                           })()}
-                        </div>
-                        <div className="flex items-center justify-center gap-2" dir="ltr">
                           <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
                           {/* درخواست کاربر: دکمهٔ تمرین تلفظ کنار بلندگو روی خود کارت (فقط وقتی سمت آلمانی دیده می‌شود) */}
                           <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={18} className="text-rose-600" /></button>
@@ -2382,27 +2379,20 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                     {!isFaDir ? (
                       <div className="font-fa-display text-3xl md:text-4xl text-slate-900 dark:text-slate-100 mb-3" dir="rtl">{w.fa}</div>
                     ) : (
-                      <>
-                        {/* درخواست کاربر: ایکون بلندگو و میکروفن زیر کلمه قرار داده شود */}
-                        <div className="flex flex-col items-center justify-center gap-2 mb-3" dir="ltr">
-                          <div className="flex items-center justify-center gap-2 flex-wrap">
-                            {w.art && <span className={`font-bold text-xl ${artCls}`}>{w.art}</span>}
-                            {(() => {
-                              const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
-                              return vp ? (
-                                // اندازهٔ واژه روی پشت کارت = اندازهٔ روی کارت
-                                <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
-                              ) : (
-                                <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
-                              );
-                            })()}
-                          </div>
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
-                            <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={16} className="text-rose-600" /></button>
-                          </div>
-                        </div>
-                      </>
+                      <div className="flex items-center justify-center gap-2 flex-wrap mb-3" dir="ltr">
+                        {w.art && <span className={`font-bold text-xl ${artCls}`}>{w.art}</span>}
+                        {(() => {
+                          const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                          return vp ? (
+                            // اندازهٔ واژه روی پشت کارت = اندازهٔ روی کارت
+                            <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
+                          ) : (
+                            <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
+                          );
+                        })()}
+                        <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
+                        <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={16} className="text-rose-600" /></button>
+                      </div>
                     )}
 
                     {/* روی پشت کارت فقط مثال دوم با ترجمه می‌آید؛ تعریف و مثال اول در «توضیحات بیشتر» هستند (درخواست #۳) */}
