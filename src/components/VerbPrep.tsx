@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Word } from '../types';
-import { LEVELS, PREPS, VERB_PREPS, VP, blankEx, daForm, levelOf, makeId, parseVP, splitEx, woForm } from '../data/verbPrep';
+import { LEVELS, PREPS, VERB_PREPS, VP, blankEx, daForm, deleteVerbPrep, levelOf, loadVPrepDeleted, loadVPrepEdits, makeId, parseVP, removeVPrepEdit, restoreVerbPrep, splitEx, upsertVPrepEdit, woForm } from '../data/verbPrep';
 import { speak } from '../utils/audio';
 import { addErrors } from '../utils/errorBook';
 import { generateWithGemini, parseAI } from '../utils/ai';
@@ -113,7 +113,7 @@ function sentenceParts(v: VP): { before: string; art: string | null; rest: strin
   return { before, art: null, rest: trimmed };
 }
 
-export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
+export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onQuickAddWord?: (w: Partial<Word>) => boolean; initialTab?: 'learn' | 'practice' | 'add'; showTabBar?: boolean; words?: Word[]; onViewWord?: (w: Word) => void }> = ({ onShowToast, onQuickAddWord, initialTab, showTabBar }) => {
   const [tab, setTab] = useState<'learn' | 'practice' | 'add'>(initialTab === 'add' ? 'learn' : (initialTab || 'practice'));
   // اگر از بیرون (نوار تب‌های دستهٔ گرامر) تب عوض شد، هم‌گام بمان؛ «افزودن» دیگر تب بالا نیست (درخواست کاربر) → پاپ‌آپ پایین صفحه
   const [addOpen, setAddOpen] = useState(initialTab === 'add');
@@ -122,8 +122,17 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     else if (initialTab) setTab(initialTab);
   }, [initialTab]);
   const [custom, setCustom] = useState<VP[]>(() => load<VP[]>(CUSTOM_KEY, []));
+  // ویرایش/حذف فعل‌ها (درخواست کاربر): ویرایشِ فعل پایه به‌صورت نسخهٔ جایگزین با همان شناسهٔ اصلی ذخیره می‌شود
+  const [edits, setEdits] = useState<Record<string, VP>>(() => loadVPrepEdits());
+  const [deletedIds, setDeletedIds] = useState<string[]>(() => loadVPrepDeleted());
+  // دیالوگ ویرایش فعل — editOrig non-null یعنی باز است
+  const [editOrig, setEditOrig] = useState<VP | null>(null);
+  const [editF, setEditF] = useState<{ verb: string; prep: string; kase: 'A' | 'D'; lvl: string; fa: string; ex: string }>({ verb: '', prep: 'an', kase: 'A', lvl: 'B1', fa: '', ex: '' });
   const [stats, setStats] = useState<Record<string, St>>(() => load(STATS_KEY, {}));
-  const all = useMemo(() => [...VERB_PREPS, ...custom], [custom]);
+  const delSet = useMemo(() => new Set(deletedIds), [deletedIds]);
+  const all = useMemo(() => [...VERB_PREPS.filter(v => !delSet.has(v.id)).map(v => edits[v.id] || v), ...custom], [custom, edits, delSet]);
+  // فعل‌های پایهٔ حذف‌شده (با نسخهٔ ویرایش‌شده‌شان اگر دارند) — برای بخش بازیابی در پاپ‌آپ افزودن
+  const deletedList = useMemo(() => VERB_PREPS.filter(v => delSet.has(v.id)).map(v => edits[v.id] || v), [delSet, edits]);
   const [fPrep, setFPrep] = useState('');
   const [fLvl, setFLvl] = useState<string>(() => load<string>('wb_vprep_lvl', ''));
   const setLvl = (x: string) => { setFLvl(x); save('wb_vprep_lvl', x); };
@@ -284,6 +293,62 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     const nc = [...custom, ...add.map(v => ({ ...v, custom: true }))]; setCustom(nc); save(CUSTOM_KEY, nc);
     onShowToast(`${add.length} فعل اضافه شد.`); return add.length;
   };
+
+  /* ── ویرایش و حذف فعل‌ها (درخواست کاربر) ──
+   * فعل سفارشی: مستقیم در لیست wb_vprep_custom ویرایش/حذف می‌شود.
+   * فعل پایه: ویرایش = نسخهٔ جایگزین با کلید شناسهٔ اصلی (آمار یادگیری حفظ می‌شود،
+   * نسخهٔ اصلی با «بازگردانی» برگشتنی است)؛ حذف = پنهان‌سازی قابل بازیابی. */
+  const openEdit = (v: VP) => {
+    setEditF({ verb: v.verb, prep: v.prep, kase: v.kase, lvl: levelOf(v), fa: v.fa, ex: v.ex });
+    setEditOrig(v);
+  };
+  const saveEdit = () => {
+    if (!editOrig) return;
+    const origId = editOrig.editOf || editOrig.id; // برای فعل پایه همیشه شناسهٔ اصلی دیتاست
+    const it = parseVP(`${editF.verb}|${editF.prep}|${editF.kase}|${editF.fa}|${editF.ex}`, true).filter(v => splitEx(v.ex, v.prep));
+    if (!it.length) { onShowToast('فعل، معنی و جملهٔ مثال (شامل همان حرف اضافه) لازم است.', true); return; }
+    const nv: VP = { ...it[0], lvl: editF.lvl };
+    // تداخل: فعل دیگری با همین شناسه نباید از قبل باشد (حتی در فهرست حذف‌شده‌ها — وگرنه پس از بازیابی دو تا می‌شد)
+    if (all.some(x => x.id === nv.id && x.id !== origId && x.id !== editOrig.id) || delSet.has(nv.id)) { onShowToast('این فعل با این حرف اضافه از قبل در فهرست هست.', true); return; }
+    if (editOrig.custom) {
+      // فعل افزودهٔ کاربر: همان ردیف به‌روزرسانی می‌شود (اگر فعل/حرف اضافه عوض شود شناسه هم عوض می‌شود)
+      const nc = custom.map(c => (c.id === editOrig.id ? { ...nv, custom: true } : c));
+      setCustom(nc); save(CUSTOM_KEY, nc);
+      onShowToast('فعل ویرایش شد.');
+    } else {
+      // فعل پایه: نسخهٔ جایگزین با کلید شناسهٔ اصلی — آمار مرور فاصله‌دار دست‌نخورده می‌ماند
+      setEdits(upsertVPrepEdit(origId, { ...nv, custom: false }));
+      onShowToast('فعل ویرایش شد — بازگشت به نسخهٔ اصلی از داخل همین پاپ‌آپ ممکن است.');
+    }
+    setEditOrig(null);
+  };
+  const resetEdit = (origId: string) => {
+    setEdits(removeVPrepEdit(origId));
+    onShowToast('نسخهٔ اصلی دیتاست بازگردانده شد.');
+  };
+  const delVerb = async (v: VP) => {
+    if (v.custom) {
+      if (await ask('حذف فعل', `«${v.verb} ${v.prep}» برای همیشه از فهرست فعل‌های تو حذف می‌شود. مطمئن هستی؟`)) {
+        const nc = custom.filter(c => c.id !== v.id); setCustom(nc); save(CUSTOM_KEY, nc);
+        onShowToast('فعل حذف شد.');
+      }
+    } else if (await ask('حذف فعل', `«${v.verb} ${v.prep}» از فهرست یادگیری و تمرین پنهان می‌شود؛ دیتاست پایه دست‌نخورده می‌ماند و هر وقت بخواهی از بخش «افزودن فعل جدید» می‌توانی بازیابی‌اش کنی. مطمئن هستی؟`)) {
+      setDeletedIds(deleteVerbPrep(v.editOf || v.id));
+      onShowToast('فعل حذف شد — از بخش «افزودن فعل جدید» قابل بازیابی است.');
+    }
+  };
+  const restoreDel = (id: string) => {
+    setDeletedIds(restoreVerbPrep(id));
+    onShowToast('فعل بازیابی شد.');
+  };
+  const restoreAllDeleted = () => {
+    let ids = deletedIds;
+    for (const v of deletedList) ids = restoreVerbPrep(v.editOf || v.id);
+    setDeletedIds(ids);
+    onShowToast('همهٔ فعل‌های حذف‌شده بازیابی شدند.');
+  };
+  /** شناسهٔ اصلی یک فعل (برای فعل پایهٔ ویرایش‌شده = editOf) */
+  const origIdOf = (v: VP): string => v.editOf || v.id;
   const askAi = async () => {
     if (aiBusy) return; setAiBusy(true);
     const have = all.filter(v => v.prep === aiPrep).map(v => v.verb).join(', ');
@@ -445,14 +510,20 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
             )}
             {learnList.map(v => (
               <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-1">
-                {/* فعل + حرف اضافه: سمت چپ و چپ‌به‌راست — چیپ حالت/سطح + بلندگو + چت: سمت راست روبه‌رویش (تصویر ۶) */}
+                {/* فعل + حرف اضافه: سمت چپ و چپ‌به‌راست — چیپ حالت/سطح + بلندگو + چت + ویرایش/حذف: سمت راست روبه‌رویش (تصویر ۶) */}
                 <div className="flex items-center justify-between gap-2">
                   <b dir="ltr" className="font-sans text-base text-left">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
                   <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink-0">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
+                    {/* نشان «ویرایش‌شده» برای فعل پایه‌ای که کاربر نسخهٔ جایگزینش را ثبت کرده */}
+                    {!v.custom && edits[origIdOf(v)] && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">ویرایش‌شده</span>}
+                    {v.custom && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">افزودهٔ من</span>}
                     <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
                     <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
+                    {/* ویرایش و حذف فعل (درخواست کاربر) — با تأییدیه برای حذف */}
+                    <button onClick={() => openEdit(v)} className="text-base opacity-80 hover:opacity-100" aria-label="ویرایش فعل" title="ویرایش فعل">✏️</button>
+                    <button onClick={() => delVerb(v)} className="text-base opacity-80 hover:opacity-100" aria-label="حذف فعل" title={v.custom ? 'حذف فعل (با تأییدیه)' : 'حذف فعل از فهرست (قابل بازیابی)'}>🗑️</button>
                     {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap">✓ یاد گرفته</span>}
                   </div>
                 </div>
@@ -707,19 +778,82 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
               {custom.map(v => (
                 <div key={v.id} className="flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-2">
                   <div className="min-w-0 text-sm"><b dir="ltr" className="font-sans">{v.verb} {v.prep}</b> <span className={`text-[10px] px-1.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span> <span className="text-[10px] text-slate-500">{levelOf(v)}</span><div className="truncate text-xs text-[#5d6676]">{v.fa}</div></div>
-                  <button
-                    onClick={async () => {
-                      if (await ask('حذف فعل', `«${v.verb} ${v.prep}» از فهرست فعل‌های افزودهٔ تو حذف می‌شود. مطمئن هستی؟`)) {
-                        const nc = custom.filter(c => c.id !== v.id); setCustom(nc); save(CUSTOM_KEY, nc);
-                      }
-                    }}
-                    className="text-red-500 text-xl px-1"
-                    title="حذف (با تأییدیه)"
-                  >✕</button>
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <button
+                      onClick={() => openEdit(v)}
+                      className="text-base px-1"
+                      title="ویرایش فعل"
+                      aria-label="ویرایش فعل"
+                    >✏️</button>
+                    <button
+                      onClick={async () => {
+                        if (await ask('حذف فعل', `«${v.verb} ${v.prep}» از فهرست فعل‌های افزودهٔ تو حذف می‌شود. مطمئن هستی؟`)) {
+                          const nc = custom.filter(c => c.id !== v.id); setCustom(nc); save(CUSTOM_KEY, nc);
+                        }
+                      }}
+                      className="text-red-500 text-xl px-1"
+                      title="حذف (با تأییدیه)"
+                    >✕</button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
+          {/* بازیابی فعل‌های پایهٔ حذف‌شده (درخواست ویرایش/حذف فعل‌ها) — دیتاست پایه دست‌نخورده می‌ماند */}
+          {deletedList.length > 0 && (
+            <div className={card}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-extrabold text-sm">فعل‌های حذف‌شده ({toFa(deletedList.length)})</div>
+                <button onClick={restoreAllDeleted} className="text-[11px] font-bold text-[#1f5fbf] dark:text-[#7fb0ff] px-2 py-1 rounded-lg border border-[#1f5fbf]/40">↺ بازیابی همه</button>
+              </div>
+              <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">این فعل‌ها از دیتاست پایه از فهرست یادگیری و تمرین حذف شده‌اند؛ آمار یادگیری‌شان محفوظ است و با «بازیابی» برمی‌گردند.</p>
+              {deletedList.map(v => (
+                <div key={origIdOf(v)} className="flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-2">
+                  <div className="min-w-0 text-sm"><b dir="ltr" className="font-sans">{v.verb} {v.prep}</b> <span className={`text-[10px] px-1.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>{edits[origIdOf(v)] && <span className="text-[10px] font-bold px-1.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">ویرایش‌شده</span>}<div className="truncate text-xs text-[#5d6676]">{v.fa}</div></div>
+                  <button
+                    onClick={() => restoreDel(origIdOf(v))}
+                    className="text-[#1f5fbf] dark:text-[#7fb0ff] font-bold text-xs px-2 py-1.5 rounded-lg border border-[#1f5fbf]/40 flex-shrink-0 active:scale-[.97] transition"
+                    title="بازیابی این فعل به فهرست"
+                  >↺ بازیابی</button>
+                </div>
+              ))}
+            </div>
+          )}
+          </div>
+        </PageOverlay>
+      )}
+
+      {/* ---------------- EDIT — پاپ‌آپ ویرایش فعل (درخواست کاربر) ---------------- */}
+      {editOrig && (
+        <PageOverlay icon="✏️" title="ویرایش فعل" subtitle="تغییرها فوراً در یادگیری، تمرین و چاپ اعمال می‌شود" onClose={() => setEditOrig(null)}>
+          <div className={card}>
+            <div className="font-extrabold text-sm">ویرایش «<span dir="ltr" className="font-sans">{editOrig.verb} {editOrig.prep}</span>»</div>
+            {editOrig.custom ? (
+              <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">این فعل جزو فعل‌های افزودهٔ خودت است و مستقیم ویرایش می‌شود.</p>
+            ) : (
+              <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">این فعل از دیتاست پایهٔ برنامه است؛ ویرایش به‌صورت نسخهٔ جایگزین ذخیره می‌شود و آمار یادگیری‌اش (مرور فاصله‌دار) حفظ می‌ماند. بازگشت به نسخهٔ اصلی از دکمهٔ پایین همین پاپ‌آپ ممکن است.</p>
+            )}
+            <input dir="ltr" className={inp} placeholder="Verb (z. B. sich freuen)" value={editF.verb} onChange={e => setEditF({ ...editF, verb: e.target.value })} />
+            <div className="grid grid-cols-3 gap-2">
+              {PrepSel(editF.prep, p => setEditF({ ...editF, prep: p }))}
+              <select className={inp} value={editF.kase} onChange={e => setEditF({ ...editF, kase: e.target.value as 'A' | 'D' })}><option value="A">Akkusativ</option><option value="D">Dativ</option></select>
+              <select className={inp} value={editF.lvl} onChange={e => setEditF({ ...editF, lvl: e.target.value })}>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
+            </div>
+            <input className={inp} placeholder="معنی فارسی" value={editF.fa} onChange={e => setEditF({ ...editF, fa: e.target.value })} />
+            <input dir="ltr" className={inp} placeholder="Beispielsatz (mit der Präposition)" value={editF.ex} onChange={e => setEditF({ ...editF, ex: e.target.value })} />
+            <p className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">جملهٔ مثال باید همان حرف اضافهٔ انتخاب‌شده را به‌صورت واژهٔ جدا داشته باشد (مثل قبل از ذخیرهٔ فعل جدید).</p>
+            <div className="flex gap-2">
+              <button onClick={saveEdit} className="flex-1 h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm active:scale-[.99] transition">💾 ذخیرهٔ تغییرها</button>
+              <button onClick={() => setEditOrig(null)} className="h-11 px-4 rounded-xl border border-slate-300 dark:border-slate-600 font-bold text-sm">انصراف</button>
+            </div>
+            {!editOrig.custom && (
+              <button
+                onClick={() => { resetEdit(origIdOf(editOrig)); setEditOrig(null); }}
+                disabled={!edits[origIdOf(editOrig)]}
+                className="w-full h-10 rounded-xl border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] text-xs font-bold disabled:opacity-40"
+                title={edits[origIdOf(editOrig)] ? 'لغو ویرایش و بازگشت به دادهٔ اصلی دیتاست' : 'این فعل هنوز ویرایش نشده'}
+              >↺ بازگردانی به نسخهٔ اصلی دیتاست</button>
+            )}
           </div>
         </PageOverlay>
       )}
