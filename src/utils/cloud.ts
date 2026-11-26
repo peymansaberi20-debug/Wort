@@ -28,6 +28,11 @@ function ensureInit() {
   if (!initialized) { initializeApp(firebaseConfig); initialized = true; }
 }
 
+/** راه‌اندازیِ یک‌بارهٔ Firebase برای ماژول‌های دیگر (مثل aiBank) — رفتار قبلی دست‌نخورده */
+export function ensureFirebase(): void {
+  ensureInit();
+}
+
 /** Subscribes to auth changes; returns an unsubscribe function. */
 export function onCloudUserChanged(cb: (u: User | null) => void): () => void {
   ensureInit();
