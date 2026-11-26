@@ -48,7 +48,7 @@ import { IrregularVerbsTrainer } from './views/IrregularVerbsTrainer';
 
 /** تمرین‌های خودگردان گرامر — بدنه‌شان در لایهٔ keep-alive زیر رندر می‌شود تا با
  *  جابجایی تب‌ها (اصلی یا زیرتب‌های گرامر) باز بمانند؛ بستن فقط با ضربدرِ خود تمرین. */
-const GRAM_SELF_MODES: string[] = ['vprep', 'wsh', 'wsh2', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
+const GRAM_SELF_MODES: string[] = ['vprep', 'wsh', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
 
 import { DashboardView } from './views/DashboardView';
 import { ExercisesView, ExerciseMode } from './views/ExercisesView';
@@ -963,9 +963,9 @@ export default function App() {
               <div className={activeExercise === 'wsh' ? '' : 'hidden'}>
                 <WorksheetTrainer key={`wsh-${gramResets.wsh || 0}`} kind="prep" onShowToast={showToast} words={state.words} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
-              <div className={activeExercise === 'wsh2' ? '' : 'hidden'}>
-                <WorksheetTrainer key={`wsh2-${gramResets.wsh2 || 0}`} kind="klasse" onShowToast={showToast} words={state.words} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
-              </div>
+              {/* تمرین «تکمیل جمله» (wsh2 / WorksheetTrainer kind=klasse) حذف شد — با «حرف ربط انتخابی»
+                  (kpro / KonnektorProTrainer) ادغام شد و حالا زیر دستهٔ حروف ربط با عنوان «تکمیل جمله» است
+                  (درخواست کاربر: حذف تکراری، نگه‌داشتن کامل‌ترین با همهٔ امکانات هر دو) */}
               <div className={activeExercise === 'konnektoren' ? '' : 'hidden'}>
                 <KonnektorTrainer key={`konn-${gramResets.konnektoren || 0}`} onClose={() => handleSelectExercise(null)} onShowToast={showToast} words={state.words} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
