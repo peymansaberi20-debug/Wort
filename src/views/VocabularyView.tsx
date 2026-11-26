@@ -8,7 +8,7 @@ import { bareHead, hasHeadAnnotation } from '../data/verbPrep';
 import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
-import { X, Save, HelpCircle } from 'lucide-react';
+import { X, Save, HelpCircle, Eye, EyeOff } from 'lucide-react';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -94,6 +94,8 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
 }) => {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  // تیک «در مترادف‌ها هم جستجو شود؟» — پیش‌فرض خاموش: جستجو فقط در آلمانی/فارسی/انگلیسی (درخواست کاربر)
+  const [searchSyn, setSearchSyn] = useState(false);
   const [filterArt, setFilterArt] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterWStatus, setFilterWStatus] = useState<'all' | WordStatus>('all'); // فاز ۱: فیلتر فعال/دریافتی/کاندید
@@ -116,6 +118,8 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const [collapsedInSearch, setCollapsedInSearch] = useState<Set<string>>(new Set());
 
   // Translation visibility map for compact word previews
+  // بازگردانی قابلیت قدیمی چشم: با زدن چشم، ترجمهٔ فارسی همان‌جا در ردیف دیده می‌شود (بدون باز کردن پروفایل واژه)
+  const [visFa, setVisFa] = useState<Record<string, boolean>>({});
 
   // Add / Edit form state
   const isEditing = !!editingWordId;
@@ -221,13 +225,12 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
     const n = Date.now();
     return words
       .filter(w => {
-        // جستجو در کلمهٔ آلمانی، معنی فارسی/انگلیسی، مترادف‌ها، متضادها و برچسب‌ها
-        const matchesQuery =
-          !searchQuery.trim() ||
-          [w.de, w.fa, w.en, w.syn, w.synFa, w.ant, w.antFa, w.tags]
-            .join(' ')
-            .toLowerCase()
-            .includes(searchQuery.trim().toLowerCase());
+        // جستجو فقط در واژهٔ آلمانی و معنی فارسی/انگلیسی (درخواست کاربر)
+        // مترادف‌ها (مترادف آلمانی/فارسی + خوشهٔ مترادف) فقط وقتی تیک «در مترادف‌ها هم جستجو شود؟» فعال باشد
+        const qLower = searchQuery.trim().toLowerCase();
+        const inBase = [w.de || '', w.fa || '', w.en || ''].join(' ').toLowerCase().includes(qLower);
+        const inSyn = [w.syn || '', w.synFa || '', w.synCluster || ''].join(' ').toLowerCase().includes(qLower);
+        const matchesQuery = !qLower || inBase || (searchSyn && inSyn);
         const matchesArt = !filterArt || w.art === filterArt;
         const matchesLvl = !filterLvl || String(w.lvl || '').trim().toUpperCase() === filterLvl;
         const matchesStatus =
@@ -254,7 +257,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
         if (sortBy === 'hard') return b.bad - a.bad;
         return a.due - b.due;
       });
-  }, [words, searchQuery, filterArt, filterStatus, filterWStatus, filterLvl, sortBy, leechN]);
+  }, [words, searchQuery, searchSyn, filterArt, filterStatus, filterWStatus, filterLvl, sortBy, leechN]);
   // فاز ۱: شمارندهٔ واژگان به تفکیک وضعیت (روی کل کتابخانه، مستقل از فیلترها)
   const wStatusCounts = useMemo(() => statusCounts(words), [words]);
   // Typo-tolerant suggestions from the user's own library
@@ -334,6 +337,12 @@ return words
       onShowToast(`نام دسته به «${newName}» تغییر کرد.`, false);
     }
     setRenamingCat(null);
+  };
+
+  // بازگردانی قابلیت چشم: نمایش/پنهان‌کردن ترجمه در خود ردیف — stopPropagation تا پروفایل واژه باز نشود
+  const toggleFaVisibility = (wordId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setVisFa(prev => ({ ...prev, [wordId]: !prev[wordId] }));
   };
 
   const resetForm = () => {
@@ -1506,18 +1515,30 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       */}
       {tab === 'list' && (
       <div className="space-y-2.5 bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 shadow-xs">
-        {/* Line 1: Search input by itself */}
-        <div>
+        {/* Line 1: Search input by itself — تیک «در مترادف‌ها هم جستجو شود؟» کنار جستجو (درخواست کاربر) */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           <input
             type="text"
-            placeholder="🔍 جستجو: کلمه، معنی فارسی/انگلیسی، مترادف، متضاد، برچسب..."
+            placeholder="🔍 جستجو: واژهٔ آلمانی، معنی فارسی/انگلیسی..."
             value={searchQuery}
             onChange={e => {
               setSearchQuery(e.target.value);
               setCollapsedInSearch(new Set());
             }}
-            className="w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-base outline-none focus:border-[#1f5fbf]"
+            className="w-full sm:flex-1 bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3.5 py-2.5 text-base outline-none focus:border-[#1f5fbf]"
           />
+          <label
+            className="flex items-center gap-2 text-xs md:text-sm font-bold cursor-pointer whitespace-nowrap flex-shrink-0 select-none text-[#5d6676] hover:text-slate-700 dark:text-[#a3adbd] dark:hover:text-slate-300"
+            title="اگر فعال باشد، مترادف‌های آلمانی/فارسی و خوشهٔ مترادف هر واژه هم در نتایج جستجو می‌آیند"
+          >
+            <input
+              type="checkbox"
+              checked={searchSyn}
+              onChange={e => setSearchSyn(e.target.checked)}
+              className="w-4 h-4 accent-[#1f5fbf]"
+            />
+            <span>در مترادف‌ها هم جستجو شود؟</span>
+          </label>
         </div>
 
         {/* Line 2: 5 search filters — همیشه در یک خط زیر جستجو (درخواست کاربر)؛ در موبایل فشرده می‌شوند */}
@@ -1891,13 +1912,14 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 {isOpen && (
                   <div className="p-3 divide-y divide-slate-100 dark:divide-slate-800 space-y-1">
                     {catWords.map(w => {
+                      const isShowFa = !!visFa[w.id];
                       return (
                         <div
                           key={w.id}
                           onClick={() => onSelectWord(w)}
                           className="py-2.5 px-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition flex items-center justify-between gap-3 text-xs md:text-sm"
                         >
-                          {/* Word + Article — فاز ۴: آیکن‌های بلندگو/چشم از ردیف حذف شدند (در هدر پروفایل موجودند) + حرف اضافهٔ خودکار فعل */}
+                          {/* Word + Article — فاز ۴: بلندگو از ردیف حذف شد (در هدر پروفایل موجود است)؛ آیکن چشم با درخواست کاربر به ردیف برگشت (ترجمهٔ درون‌خطی) + حرف اضافهٔ خودکار فعل */}
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="flex items-center gap-1.5" dir="ltr">
                               {w.art && (
@@ -1927,6 +1949,26 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                                 {STATUS_SHORT[statusOf(w)]}
                               </span>
                             </div>
+
+                            {/* بازگردانی قابلیت چشم (این قابلیت در فاز ۴ حذف شده بود): ترجمهٔ فارسی همان‌جا در ردیف، بدون باز کردن پروفایل واژه */}
+                            <button
+                              type="button"
+                              onClick={e => toggleFaVisibility(w.id, e)}
+                              className={`w-7 h-7 rounded-lg border flex items-center justify-center flex-shrink-0 transition ${
+                                isShowFa
+                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'
+                              }`}
+                              title={isShowFa ? 'پنهان‌کردن ترجمه' : 'نمایش ترجمه (همان‌جا، بدون باز کردن پروفایل)'}
+                              aria-label={isShowFa ? 'پنهان‌کردن ترجمه' : 'نمایش ترجمه'}
+                            >
+                              {isShowFa ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                            {isShowFa && (
+                              <span className="font-semibold text-[#1f5fbf] dark:text-blue-300 text-xs md:text-sm truncate min-w-0">
+                                {w.fa}
+                              </span>
+                            )}
                           </div>
 
                           {/* Quick indicators */}
