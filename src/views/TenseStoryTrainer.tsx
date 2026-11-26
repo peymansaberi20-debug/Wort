@@ -585,7 +585,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
         {pEx.segs.map(s => (s.t === 'txt' ? s.x : ` ______( ${s.no} ) (${s.inf}) `)).join('')}
       </p>
       <p style={prFa({ fontSize: 11, fontWeight: 700, margin: '16px 0 6px' })}>پاسخ‌های تو (با شمارهٔ جای خالی):</p>
-      <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
+      <ol dir="ltr" style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal', textAlign: 'left' }}>
         {pGaps.map(g => (
           <li key={g.no} style={{ fontSize: 12, borderBottom: '1.1px solid #999', height: 30, listStylePosition: 'inside', marginBottom: 6 }} />
         ))}
@@ -595,7 +595,7 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
 
   const printSolutions = pEx ? (
     <>
-      <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
+      <ol dir="ltr" style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal', textAlign: 'left' }}>
         {pGaps.map(g => {
           const chain = VERBS[g.inf];
           return (
