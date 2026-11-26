@@ -15,15 +15,15 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { AppSettings, Word } from '../types';
 import { speak } from '../utils/audio';
 import { IrrVerb, IrrLvl, IRR_LVL_ORDER, IRR_LVL_INFO, irrVerbsOf } from '../data/irregularVerbs';
 import { markForm, eqDe, normDe, answerDiff, AnsSeg } from '../utils/irrDiff';
 import { libIrregularVerbs } from '../utils/irrLibrary';
-import { LevelChips, MiniChip, toFa } from '../components/trainerUI';
+import { LevelChips, MiniChip, PrintPreview, toFa } from '../components/trainerUI';
 import { ClickableWords, WordLookupModal } from '../components/WordLookup';
 import { useVocabGate } from '../components/VocabDecisionDialog';
+import { Printer } from 'lucide-react';
 
 /* ───────────────────────── قطعهٔ قرمزشده ───────────────────────── */
 
@@ -286,7 +286,11 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     settle(false, 'shown');
   }, [current, verdict, settle]);
 
-  /* ── برگهٔ چاپ A4 (در نمایش پنهان، فقط هنگام پرینت — تکنیک visibility سازگار با سافاری) ── */
+  /* ── برگهٔ چاپ A4 — از پیش‌نمایش مشترک trainerUI استفاده می‌شود.
+     نسخهٔ قبلی یک برگهٔ پنهانِ همیشه‌مونت‌شده با CSS چاپ اختصاصی بود؛ قاعدهٔ
+     «هر چیز جز برگهٔ من را حذف کن»ِ آن با برگهٔ بقیهٔ تمرین‌ها تداخل داشت و
+     چاپِ آن‌ها را سفید می‌کرد — حالا فقط همین پیش‌نمایش مشترک وجود دارد. */
+  const [printOpen, setPrintOpen] = useState(false);
   const printDate = useMemo(() => {
     try { return new Date().toLocaleDateString('fa-IR'); } catch { return ''; }
   }, []);
@@ -296,31 +300,22 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     const n = s.trim().length;
     return n >= 16 ? '7.5pt' : n >= 13 ? '8.5pt' : n >= 11 ? '9.5pt' : '10.5pt';
   };
-  const printSheet = createPortal((
-    <div className="irr-print" dir="rtl">
-      <style>{`
-        @page { size: A4; margin: 14mm 12mm; }
-        .irr-print { display: none; }
-        @media print {
-          html, body { background: #fff !important; }
-          /* همهٔ فرزندان body جز برگهٔ چاپ حذف می‌شوند (ارتفاع صفر — صفحهٔ خالی نمی‌سازد) */
-          body > *:not(.irr-print) { display: none !important; }
-          .irr-print { display: block !important; position: static; width: 100%; color: #111 !important; background: #fff !important; }
-          .irr-print * { background: transparent !important; color: inherit !important; box-shadow: none !important; text-shadow: none !important; }
-          .irr-print .p-chg { color: #dc2626 !important; font-weight: 800 !important; text-decoration: underline !important; }
-          .irr-print .p-aux-sein { color: #0284c7 !important; font-weight: 800 !important; }
-          .irr-print .p-aux-haben { color: #d97706 !important; font-weight: 800 !important; }
-          .irr-print .p-dim { color: #555 !important; }
-          .irr-print tr { page-break-inside: avoid; break-inside: avoid; }
-          .irr-print thead { display: table-header-group; }
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        }
-      `}</style>
+  const irrPrintSheet = (
+    <style>{`
+      .irr-p-chg { color: #dc2626; font-weight: 800; text-decoration: underline; }
+      .irr-p-aux-sein { color: #0284c7; font-weight: 800; }
+      .irr-p-aux-haben { color: #d97706; font-weight: 800; }
+      .irr-p-dim { color: #555; }
+    `}</style>
+  );
+  const printSheetContent = (
+    <>
+      {irrPrintSheet}
       <div style={{ textAlign: 'center', marginBottom: '8pt' }}>
         <div style={{ fontSize: '15pt', fontWeight: 800 }}>فعل‌های بی‌قاعده در سه زمان — سطح {lvl}</div>
-        <div className="p-dim" style={{ fontSize: '9.5pt', marginTop: '3pt' }}>
-          {toFa(levelVerbs.length)} فعل • {printDate} • <span className="p-chg">قرمز</span> = تغییر نسبت به مصدر •
-          <span className="p-aux-sein"> ist </span>= sein • <span className="p-aux-haben"> hat </span>= haben
+        <div className="irr-p-dim" style={{ fontSize: '9.5pt', marginTop: '3pt' }}>
+          {toFa(levelVerbs.length)} فعل • {printDate} • <span className="irr-p-chg">قرمز</span> = تغییر نسبت به مصدر •
+          <span className="irr-p-aux-sein"> ist </span>= sein • <span className="irr-p-aux-haben"> hat </span>= haben
         </div>
       </div>
       {/* پهنای ستون‌ها ثابت (tableLayout fixed) تا در همهٔ سطح‌ها یکسان بماند؛ کلمهٔ بلند با fitPt کوچک می‌شود */}
@@ -346,11 +341,11 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
             return (
               <tr key={v.inf}>
                 <td style={{ ...ptd, fontSize: fitPt(v.inf + (v.src === 'lib' ? ' *' : '')) }} dir="ltr">{v.inf}{v.src === 'lib' ? ' *' : ''}</td>
-                <td style={{ ...ptd, fontSize: fitPt(v.prt) }} dir="ltr">{pSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}</td>
+                <td style={{ ...ptd, fontSize: fitPt(v.prt) }} dir="ltr">{pSegs.map((s, k) => <span key={k} className={s.changed ? 'irr-p-chg' : undefined}>{s.text}</span>)}</td>
                 <td style={{ ...ptd, fontSize: fitPt(`${v.aux === 'sein' ? 'ist' : 'hat'} ${v.pp}`) }} dir="ltr">
-                  <span className={v.aux === 'sein' ? 'p-aux-sein' : 'p-aux-haben'}>{v.aux === 'sein' ? 'ist' : 'hat'}</span>
+                  <span className={v.aux === 'sein' ? 'irr-p-aux-sein' : 'irr-p-aux-haben'}>{v.aux === 'sein' ? 'ist' : 'hat'}</span>
                   {' '}
-                  {ppSegs.map((s, k) => <span key={k} className={s.changed ? 'p-chg' : undefined}>{s.text}</span>)}
+                  {ppSegs.map((s, k) => <span key={k} className={s.changed ? 'irr-p-chg' : undefined}>{s.text}</span>)}
                 </td>
                 <td style={{ ...ptd, whiteSpace: 'normal', fontSize: '9.5pt' }} dir="rtl">{v.fa}</td>
               </tr>
@@ -359,16 +354,28 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
         </tbody>
       </table>
       {levelVerbs.some(v => v.src === 'lib') && (
-        <div className="p-dim" style={{ fontSize: '9pt', marginTop: '5pt' }}>* از کتاب واژگان تو</div>
+        <div className="irr-p-dim" style={{ fontSize: '9pt', marginTop: '5pt' }}>* از کتاب واژگان تو</div>
       )}
-      </div>
-    ), document.body);
+    </>
+  );
+
+  const irrPrintPreview = (
+    <PrintPreview
+      open={printOpen}
+      onClose={() => setPrintOpen(false)}
+      title={<span dir="ltr">Unregelmäßige Verben — {lvl}</span>}
+      docTitle={`Unregelmäßige Verben ${lvl}`}
+      meta={`فعل‌های بی‌قاعده در سه زمان • سطح ${lvl} • ${toFa(levelVerbs.length)} فعل • ${printDate}`}
+      hint="پیش‌نمایش برگهٔ A4 — جدول مرور سه‌زمانی با رنگ‌بندی بخش‌های تغییرکرده"
+      questions={printSheetContent}
+    />
+  );
 
   /* ── صفحهٔ انتخاب سطح ── */
   if (phase === 'setup') {
     return (
       <>
-        {printSheet}
+        {irrPrintPreview}
         <div className="space-y-4">
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-2.5">
           <p className="text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-6">
@@ -401,10 +408,12 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
               🗂 جدول مرور
             </button>
             <button
-              onClick={() => window.print()}
-              className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
+              onClick={() => setPrintOpen(true)}
+              title={`برگهٔ A4 فعل‌های بی‌قاعدهٔ سطح ${lvl}`}
+              aria-label="برگهٔ A4"
+              className="px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd] flex items-center justify-center"
             >
-              🖨 چاپ / PDF
+              <Printer size={14} />
             </button>
           </div>
         </div>
@@ -443,12 +452,12 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
   if (phase === 'table') {
     return (
       <>
-        {printSheet}
+        {irrPrintPreview}
         <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-1.5">
             <button onClick={() => setPhase('setup')} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold">→ انتخاب سطح</button>
-            <button onClick={() => window.print()} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold">🖨 چاپ / PDF</button>
+            <button onClick={() => setPrintOpen(true)} title={`برگهٔ A4 فعل‌های بی‌قاعدهٔ سطح ${lvl}`} aria-label="برگهٔ A4" className="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-[13px] font-bold flex items-center justify-center"><Printer size={15} /></button>
           </div>
           <b className="text-xs text-[#5d6676] dark:text-[#a3adbd]">🗂 فعل‌های بی‌قاعدهٔ سطح {lvl} — {toFa(levelVerbs.length)} فعل</b>
         </div>
@@ -505,7 +514,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
     const pct = max ? Math.round((score / max) * 100) : 0;
     return (
       <>
-        {printSheet}
+        {irrPrintPreview}
         <div className="space-y-4">
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 text-center space-y-1.5">
           <div className="text-3xl">{pct >= 90 ? '🏆' : pct >= 60 ? '👏' : '💪'}</div>
@@ -563,7 +572,7 @@ export const IrregularVerbsTrainer: React.FC<IrregularVerbsTrainerProps> = ({ wo
 
   return (
     <>
-      {printSheet}
+      {irrPrintPreview}
       <div className="space-y-3.5">
       {/* نوار وضعیت */}
       <div className="flex items-center gap-2 flex-wrap">
