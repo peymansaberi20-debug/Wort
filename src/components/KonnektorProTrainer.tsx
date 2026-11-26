@@ -437,10 +437,13 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
 
   const printQuestions = pEx ? (
     <>
-      <p style={prFa({ fontSize: 11, color: '#333', marginBottom: 10 })}>
-        Ergänzen Sie die Sätze sinnvoll und sprachlich richtig! — ادامهٔ هر جمله را طوری بنویسید که معنایی کامل و ساختار درست (جایگاه فعل، کاما) داشته باشد.
+      <p style={prG({ fontSize: 11.5, color: '#333', marginBottom: 4 })}>
+        Ergänzen Sie die Sätze sinnvoll und sprachlich richtig!
       </p>
-      <ol style={{ margin: '10px 0 0', paddingInlineStart: 20, listStyle: 'decimal' }}>
+      <p style={prFa({ fontSize: 11, color: '#333', marginBottom: 10 })}>
+        ادامهٔ هر جمله را طوری بنویسید که معنایی کامل و ساختار درست (جایگاه فعل، کاما) داشته باشد.
+      </p>
+      <ol dir="ltr" style={{ margin: '10px 0 0', paddingInlineStart: 20, listStyle: 'decimal', textAlign: 'left' }}>
         {pEx.items.map(it => (
           <li key={it.no} style={{ fontSize: 12.5, marginBottom: 18, lineHeight: 1.9, breakInside: 'avoid' }}>
             <span style={prG()}>
@@ -474,7 +477,7 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
       })}
     </>
   ) : pEx ? (
-    <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
+    <ol dir="ltr" style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal', textAlign: 'left' }}>
       {pEx.items.map(it => (
         <li key={it.no} style={{ fontSize: 11.5, marginBottom: 7, lineHeight: 1.8, breakInside: 'avoid' }}>
           <span style={prG()}>{it.no}. <b>{it.first}</b> — پاسخ تو: {(pEx.answers[it.no] || '').trim() || '(بدون پاسخ)'}</span>

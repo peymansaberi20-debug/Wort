@@ -456,7 +456,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
   );
   const printSolutions = (
     <>
-      <ol style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal' }}>
+      <ol dir="ltr" style={{ margin: 0, paddingInlineStart: 22, listStyle: 'decimal', textAlign: 'left' }}>
         {pEx.blanks.map(b => (
           <li key={b.id} style={{ fontSize: 12, marginBottom: 5 }}>
             <span style={prG({})}><b>({b.id})</b> {b.answer}</span>
@@ -466,7 +466,7 @@ export const KonnektorTrainer: React.FC<KonnektorTrainerProps> = ({ onShowToast,
       {pEx.fa && (
         <div style={prFa({ marginTop: 12, fontSize: 10, color: '#333' })}>🇮🇷 ترجمهٔ فارسی متن: {pEx.fa}</div>
       )}
-      <div style={prFa({ marginTop: 14, fontSize: 9, color: '#666', borderTop: '1px solid #ccc', paddingTop: 6 })}>WörterBuchMitPeyman — Konnektoren &amp; Präpositionen</div>
+      <div style={prG({ marginTop: 14, fontSize: 9, color: '#666', borderTop: '1px solid #ccc', paddingTop: 6 })}>WörterBuchMitPeyman — Konnektoren &amp; Präpositionen</div>
     </>
   );
   const printPreview = (

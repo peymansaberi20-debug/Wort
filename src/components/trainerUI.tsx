@@ -97,6 +97,10 @@ export const PRINT_PREVIEW_CSS = `
 .wpr-head { border-bottom: 2px solid #1f5fbf; padding-bottom: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .wpr-title { font-size: 15px; font-weight: 800; }
 .wpr-meta { font-size: 10.5px; color: #555; }
+/* عنوان/متا همیشه آلمانی-فارسی مخلوط‌اند: unicode-bidi: plaintext پایهٔ هر خط را از
+   اولین نویسهٔ قوی می‌گیرد — خطِ آلمانی‌محور LTR می‌شود (آلمانی از چپ) و خطِ فارسی‌محور
+   RTL می‌ماند؛ دیگر واژه‌های آلمانیِ عنوان در بستر RTL به سمت راستِ خط نمی‌روند */
+.wpr-title, .wpr-meta { unicode-bidi: plaintext; }
 .wpr-page li { break-inside: avoid; page-break-inside: avoid; }
 /* خط‌کشی نوشتن: روی صفحه ارتفاع ثابت، در چاپ تا انتهای صفحهٔ A4 پر می‌شود (فاصلهٔ خطوط ۹ میلی‌متر) */
 .wpr-write { background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--wpr-gap, 9mm) - 1px), #98a0ae calc(var(--wpr-gap, 9mm) - 1px), #98a0ae var(--wpr-gap, 9mm)); background-origin: content-box; }

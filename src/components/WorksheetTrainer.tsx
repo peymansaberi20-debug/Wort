@@ -743,7 +743,7 @@ export const WorksheetTrainer: React.FC<{
     : '';
 
   const printQuestions = pSess ? (
-    <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
+    <ol dir="ltr" style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal', textAlign: 'left' }}>
       {pSess.items.map((entry, i) => (
         <li key={i} style={{ fontSize: 12, marginBottom: 16, lineHeight: 1.9, breakInside: 'avoid' }}>
           {isOpen(entry) ? (
@@ -772,7 +772,7 @@ export const WorksheetTrainer: React.FC<{
   ) : null;
 
   const printSolutions = pSess ? (
-    <ol style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal' }}>
+    <ol dir="ltr" style={{ margin: 0, paddingInlineStart: 20, listStyle: 'decimal', textAlign: 'left' }}>
       {pSess.items.map((entry, i) => (
         <li key={i} style={{ fontSize: 11.5, marginBottom: 11, lineHeight: 1.8, breakInside: 'avoid' }}>
           {isOpen(entry) ? (
@@ -881,6 +881,8 @@ export const WorksheetTrainer: React.FC<{
         </ArchivePanel>
 
         {dialog}
+        {/* پیش‌نمایش چاپ باید در همهٔ فازها در دسترس باشد — چاپ برگهٔ ذخیره‌شده از همین صفحهٔ پیکربندی هم کار می‌کند */}
+        {printPreview}
       </div>
     );
   }
@@ -1225,6 +1227,7 @@ export const WorksheetTrainer: React.FC<{
         />
       )}
       {dialog}
+      {printPreview}
     </div>
   );
 };
