@@ -261,9 +261,11 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"...","distractors":["...",
   const next = () => { if (idx + 1 >= queue.length) setDone(true); else goto(queue, idx + 1); };
   /** بعدی بدون بررسی — درخواست کاربر: عبور بدون امتیاز پیش از بررسی */
   const skipNext = () => { if (idx + 1 >= queue.length) setDone(true); else goto(queue, idx + 1); };
-  const pick = (t: { id: number; text: string }) => { if (res !== null) return; setBank(b => b.filter(x => x.id !== t.id)); setAns(a => [...a, t]); };
-  const back = (t: { id: number; text: string }) => { if (res !== null) return; setAns(a => a.filter(x => x.id !== t.id)); setBank(b => [...b, t]); };
-  const check = () => { const ok = ans.map(t => t.text).join(' ') === split(cur.de).join(' '); setRes(ok); if (ok) setScore(s => s + 1); };
+  /* درخواست کاربر: بعد از بررسی، اگر درست بود قفل می‌کنیم؛ اگر اشتباه بود اجازه می‌دهیم
+   * کلمه‌ها را دوباره بچیند و دوباره روی «بررسی» بزند تا درست شود. */
+  const pick = (t: { id: number; text: string }) => { if (res === true) return; setBank(b => b.filter(x => x.id !== t.id)); setAns(a => [...a, t]); };
+  const back = (t: { id: number; text: string }) => { if (res === true) return; setAns(a => a.filter(x => x.id !== t.id)); setBank(b => [...b, t]); };
+  const check = () => { const ok = ans.map(t => t.text).join(' ') === split(cur.de).join(' '); setRes(ok); if (ok && res !== true) setScore(s => s + 1); };
   const say = () => speak(cur.de, { onErr: m => onShowToast(m, true) });
 
   /* ───────── HTML5 drag-and-drop ─────────
@@ -290,7 +292,7 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"...","distractors":["...",
   /** drop روی جعبهٔ پاسخ: اگر از بانک آمده → اضافه شود؛ اگر از داخل جعبه آمده → جابه‌جا شود */
   const onAnswerDrop = (e: React.DragEvent, targetTile?: { id: number; text: string }) => {
     e.preventDefault();
-    if (res !== null) return;
+    if (res === true) return; // فقط بعد از پاسخ درست قفل می‌شود
     const data = e.dataTransfer.getData('application/json');
     if (!data) { setDragId(null); return; }
     try {
@@ -319,7 +321,7 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"...","distractors":["...",
   /** drop روی بانک: کاشی از جعبهٔ پاسخ به بانک بازگردد */
   const onBankDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (res !== null) { setDragId(null); return; }
+    if (res === true) { setDragId(null); return; } // فقط بعد از پاسخ درست قفل
     const data = e.dataTransfer.getData('application/json');
     if (!data) { setDragId(null); return; }
     try {
@@ -487,15 +489,34 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"...","distractors":["...",
         {res === null ? (
           <div className="grid grid-cols-2 gap-2">
             <button onClick={skipNext} className="h-12 rounded-xl border border-slate-300 dark:border-slate-600 text-xs md:text-sm font-bold">بعدی (بدون بررسی)</button>
-            <button onClick={check} disabled={bank.length > 0} className="h-12 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ بررسی</button>
+            <button onClick={check} disabled={ans.length === 0} className="h-12 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ بررسی</button>
           </div>
-        ) : (
+        ) : res ? (
+          /* درست — پیام تایید + دکمهٔ بعدی */
           <div className="space-y-2">
-            <div className={`p-3 md:p-4 rounded-xl text-sm md:text-base font-bold leading-7 md:leading-8 ${res ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>{res ? '✅ درست!' : '❌ ترتیب درست:'}</div>
+            <div className="p-3 md:p-4 rounded-xl text-sm md:text-base font-bold leading-7 md:leading-8 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200">✅ درست!</div>
             <div dir="ltr" className="font-sans font-bold text-base md:text-lg leading-8 md:leading-9"><ClickableWords text={cur.de} onWord={setLookup} /></div>
             <div className="flex gap-2">
               <button onClick={say} className="px-4 h-11 rounded-xl bg-[#1f5fbf] text-white text-sm font-bold">🔊</button>
-              {!res && <button onClick={() => { setScore(s => s + 1); setRes(true); }} className="px-3 h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold">ترتیب من هم درست است</button>}
+              <button onClick={next} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">{idx + 1 >= queue.length ? 'پایان' : 'بعدی ←'}</button>
+            </div>
+          </div>
+        ) : (
+          /* اشتباه — درخواست کاربر: اخطار + اجازهٔ جابجایی و اصلاح + دکمهٔ «بررسی دوباره»
+           * کاربر می‌تواند کلمه‌ها را دوباره بچیند و دوباره روی «بررسی دوباره» بزند تا
+           * مقایسهٔ تازه انجام شود و درستی یا اشتباه جدید اعلام شود. */
+          <div className="space-y-2">
+            <div className="p-3 md:p-4 rounded-xl text-sm md:text-base font-bold leading-7 md:leading-8 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200">
+              ❌ هنوز درست نیست. کلمه‌ها را بچین و دوباره روی «بررسی دوباره» بزن.
+            </div>
+            <div dir="ltr" className="font-sans font-bold text-base md:text-lg leading-8 md:leading-9"><ClickableWords text={cur.de} onWord={setLookup} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={skipNext} className="h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold">بعدی (بدون امتیاز)</button>
+              <button onClick={check} disabled={ans.length === 0} className="h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ بررسی دوباره</button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={say} className="px-4 h-11 rounded-xl bg-[#1f5fbf] text-white text-sm font-bold">🔊</button>
+              <button onClick={() => { setScore(s => s + 1); setRes(true); }} className="flex-1 h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold">ترتیب من هم درست است</button>
               <button onClick={next} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">{idx + 1 >= queue.length ? 'پایان' : 'بعدی ←'}</button>
             </div>
           </div>
