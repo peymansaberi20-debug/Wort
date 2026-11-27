@@ -339,6 +339,7 @@ Line 1 — Word Family
 Always begin with:
 خانواده واژگانی:
 Identify genuine and useful related words from the same word family (e.g. اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | صفت مرتبط: siegreich (پیروزمند)).
+Mandatory: every related form MUST include a short Persian gloss in parentheses right after it, like "siegen (پیروز شدن)" — never list a bare German form without its Persian meaning.
 If no useful related form exists, write: خانواده واژگانی: شکل مرتبطِ رایج و مفیدی وجود ندارد.
 
 Line 2 — Prepositions and Grammatical Cases

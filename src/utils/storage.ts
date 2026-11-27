@@ -848,15 +848,29 @@ export function auditWord(w: Word): string[] {
 /**
  * Word family parsing (for the noun ↔ verb exercises).
  * Reads the line "خانواده واژگانی: اسم: der Sieg (پیروزی) | فعل مرتبط: siegen (پیروز شدن) | ..." from the notes.
+ *
+ * درخواست کاربر ۴: ترجمهٔ فارسی هر عضو (داخل پرانتز) هم استخراج می‌شود تا زیر کارت‌های
+ * «اعضای صوری» (ghost) در درخت خانواده نشان داده شود. ساختار جدید: list of { de, fa }.
  */
 export interface WordFamily {
   nouns: string[];
   verbs: string[];
   adjs: string[];
+  /** اعضا به‌همراه ترجمهٔ فارسی (درخواست کاربر ۴) */
+  nounsFa: { de: string; fa: string }[];
+  verbsFa: { de: string; fa: string }[];
+  adjsFa: { de: string; fa: string }[];
 }
 
+/** استخراج ترجمهٔ فارسی داخل پرانتز از یک رشتهٔ عضو */
+const extractFaGloss = (entry: string): { de: string; fa: string } => {
+  const m = entry.match(/^(.+?)\s*[（(]\s*([^)）]+?)\s*[)）]\s*$/);
+  if (m) return { de: m[1].trim(), fa: m[2].trim() };
+  return { de: entry.trim(), fa: '' };
+};
+
 export function parseFamily(notes: string): WordFamily {
-  const fam: WordFamily = { nouns: [], verbs: [], adjs: [] };
+  const fam: WordFamily = { nouns: [], verbs: [], adjs: [], nounsFa: [], verbsFa: [], adjsFa: [] };
   const line = String(notes || '')
     .split(/\r?\n/)
     .find(l => l.trim().startsWith('خانواده واژگانی'));
@@ -866,14 +880,21 @@ export function parseFamily(notes: string): WordFamily {
     const m = part.match(/^\s*(اسم|فعل|صفت)[^:：]*[:：]\s*(.+)$/);
     if (!m) return;
     const bucket = m[1] === 'اسم' ? fam.nouns : m[1] === 'فعل' ? fam.verbs : fam.adjs;
-    m[2]
-      .replace(/[（(][^)）]*[)）]/g, '') // remove Persian glosses in parentheses
+    const bucketFa = m[1] === 'اسم' ? fam.nounsFa : m[1] === 'فعل' ? fam.verbsFa : fam.adjsFa;
+    // درخواست کاربر ۴: اول پرانتزها را حفظ کن تا بتوانیم ترجمه را استخراج کنیم
+    // سپس برای buckets قدیمی (مطابق قبل) پرانتزها را حذف کن
+    const rawEntries = m[2]
       .split(/[,،;؛/]|\s+یا\s+/)
       .map(x => x.trim())
-      .filter(x => /[A-Za-zÄÖÜäöüß]/.test(x))
-      .forEach(x => {
-        if (!bucket.some(b => nz(b) === nz(x))) bucket.push(x);
-      });
+      .filter(x => /[A-Za-zÄÖÜäöüß]/.test(x));
+    for (const entry of rawEntries) {
+      const { de, fa } = extractFaGloss(entry);
+      // bucket قدیمی (مطابق قبلی) بدون پرانتز
+      const deOnly = de.replace(/^(der|die|das)\s+/i, '').trim();
+      if (deOnly && !bucket.some(b => nz(b) === nz(deOnly))) bucket.push(deOnly);
+      // bucket جدید با ترجمه
+      if (deOnly && !bucketFa.some(b => nz(b.de) === nz(deOnly))) bucketFa.push({ de: deOnly, fa });
+    }
   });
   return fam;
 }
