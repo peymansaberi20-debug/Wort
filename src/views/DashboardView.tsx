@@ -23,7 +23,6 @@ import { LatePracticesAccordion } from '../components/LatePracticesAccordion';
 import { JourneyMapPanel } from '../components/JourneyMapPanel';
 import { ForgettingCurvePanel } from '../components/ForgettingCurvePanel';
 import type { DailyQuest } from '../utils/dailyQuest';
-import type { Suggestion } from '../utils/suggestedPractices';
 
 interface DashboardViewProps {
   state: AppState;
@@ -59,6 +58,81 @@ const useMinuteTick = (): number => {
   return minute * 60000;
 };
 
+/* ─────────────── صحنهٔ پویای زمان روز (درخواست کاربر ۱۳) ───────────────
+ * ۵ عکس واقعی کاربر ارسال کرده که در public/scenes/ قرار دارند:
+ *   - morning.jpg  (۵ تا ۱۱ صبح)
+ *   - noon.jpg     (۱۱ تا ۱۲ قبل از ظهر)
+ *   - midday.jpg   (۱۲ تا ۱۶ ظهر)
+ *   - evening.jpg  (۱۶ تا ۲۱ بعد از ظهر)
+ *   - night.jpg    (۲۱ تا ۵ شب)
+ * عکس متناسب با ساعت روز انتخاب و در پس‌زمینهٔ باکس خوش‌آمدگویی قرار می‌گیرد.
+ */
+const TimeScene: React.FC<{ hour: number }> = ({ hour }) => {
+  const phase: 'morning' | 'noon' | 'midday' | 'evening' | 'night' =
+    hour < 5 ? 'night' :
+    hour < 11 ? 'morning' :
+    hour < 12 ? 'noon' :
+    hour < 16 ? 'midday' :
+    hour < 21 ? 'evening' : 'night';
+  const img = {
+    morning: '/scenes/morning.jpg',
+    noon: '/scenes/noon.jpg',
+    midday: '/scenes/midday.jpg',
+    evening: '/scenes/evening.jpg',
+    night: '/scenes/night.jpg'
+  }[phase];
+  // اگر در مخزن deploy شده روی /Wort/ است، مسیر را با /Wort/ پیشوند می‌کنیم
+  const base = typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL;
+  const prefix = base && base !== '/' ? base.replace(/\/$/, '') : '';
+  const src = `${prefix}${img}`;
+  return (
+    <div
+      className="relative w-full h-20 md:h-24 rounded-2xl overflow-hidden border border-purple-200/70 dark:border-purple-800/70 shadow-inner"
+      role="img"
+      aria-label={`صحنهٔ ${phase === 'night' ? 'شب' : phase === 'morning' ? 'صبح' : phase === 'noon' ? 'قبل از ظهر' : phase === 'midday' ? 'ظهر' : 'بعد از ظهر'}`}
+    >
+      <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      {/* لایهٔ نیمه‌شفاف پایین تا متن قابل‌خوانی روی عکس باشد */}
+      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
+    </div>
+  );
+};
+
+/* ─────────────── بخش جمع‌شوندهٔ داشبورد (درخواست کاربر ۳) ───────────────
+ * همهٔ بخش‌ها به‌جز دو تای اول (خوش‌آمدگویی و فعالیت ۷ روزه) زیر عنوانشان جمع می‌شوند.
+ * همیشه یا هیچ بخشی باز نیست یا فقط یکی. روی عنوان دیگری کلیک کنی قبلی بسته می‌شود. */
+const AccordionSection: React.FC<{
+  id: string;
+  icon: string;
+  title: string;
+  badge?: React.ReactNode;
+  openId: string | null;
+  setOpenId: (id: string | null) => void;
+  children: React.ReactNode;
+}> = ({ id, icon, title, badge, openId, setOpenId, children }) => {
+  const open = openId === id;
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setOpenId(open ? null : id)}
+        aria-expanded={open}
+        className="w-full px-4 md:px-5 py-3.5 flex items-center justify-between gap-2 text-right rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] shadow-xs hover:bg-slate-50 dark:hover:bg-slate-800/40 transition active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-xl flex-shrink-0">{icon}</span>
+          <span className="text-sm md:text-base font-bold text-slate-900 dark:text-slate-100 truncate">{title}</span>
+        </span>
+        <span className="flex items-center gap-2 flex-shrink-0">
+          {badge}
+          <span className={`text-slate-500 dark:text-slate-400 text-xs transition-transform duration-300 ${open ? 'rotate-180' : ''}`} aria-hidden="true">▼</span>
+        </span>
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+};
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   state,
   ignoredQualityIds,
@@ -73,6 +147,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [stageView, setStageView] = React.useState<string | null>(null);
   const [stageQuery, setStageQuery] = React.useState('');
   const [dueQuery, setDueQuery] = React.useState('');
+  /* درخواست کاربر ۳: بخش‌های داشبورد به‌جز دو تای اول زیر عنوانشان جمع می‌شوند.
+   * همیشه یا هیچ بخشی باز نیست یا فقط یکی. */
+  const [openSection, setOpenSection] = React.useState<string | null>(null);
   /* معنی واژه‌ها در فهرست مراحل تسلط — پیش‌فرض مخفی، با آیکن چشم نمایش داده می‌شود */
   const [revealedFa, setRevealedFa] = React.useState<Set<string>>(new Set());
   const toggleFa = (id: string) => {
@@ -90,7 +167,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const t0 = dayStart(0);
 
     const dailyToday = state.daily.d === today() ? state.daily : { d: today(), n: 0, r: 0, sn: 0, sr: 0 };
-    // هدف امروز فقط پیشرفت «جلسهٔ روزانه» (sn/sr) است؛ شمارنده‌های سراسری n/r با تمرین‌های دیگر هم پر می‌شوند
     const dailyNewDone = Math.max(0, dailyToday.sn || 0);
     const dailyReviewDone = Math.max(0, dailyToday.sr || 0);
 
@@ -100,7 +176,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       (state.set.leechAct !== 'suspend' || !isLeech(w, state.set.leechN || 4))
     );
 
-    // پاس واحد: مرحلهٔ تسلط، سطح CEFR، سررسید، عقب‌افتاده‌ها
     const stageOf = (w: Word): 'mastered' | 'familiar' | 'learning' | 'newWords' | 'weak' =>
       !w.last ? 'newWords' : isWeak(w) ? 'weak' : w.ivl >= 21 ? 'mastered' : w.ivl >= 3 ? 'familiar' : 'learning';
     const stageLists: Record<string, Word[]> = { mastered: [], familiar: [], learning: [], newWords: [], weak: [] };
@@ -158,7 +233,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
 
     const weakList = stageLists.weak;
-    // فاز ۵: آستانهٔ واژهٔ دشوار از تنظیمات (leechN) — به‌جای عدد ثابت ۳
     const leechN = state.set.leechN || 4;
     const hardMistakenWords = words
       .filter(w => (w.bad || 0) >= leechN)
@@ -202,11 +276,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const avgPerDay = Math.round(weekTotal / 7);
   const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}٪` : '—');
 
-  // هدف ترکیبی امروز برای حلقهٔ پیشرفت
+  // هدف ترکیبی امروز برای حلقه‌های پیشرفت
   const totalTarget = state.set.nw + state.set.rv;
   const totalDone = s.dailyNewDone + s.dailyReviewDone;
   const ringProgress = totalTarget > 0 ? Math.min(1, totalDone / totalTarget) : 0;
-  const RING_R = 30;
+  // دو حلقهٔ مجزا (درخواست کاربر ۳): کلمهٔ جدید و مرور
+  const newProgress = state.set.nw > 0 ? Math.min(1, s.dailyNewDone / state.set.nw) : 0;
+  const reviewProgress = state.set.rv > 0 ? Math.min(1, s.dailyReviewDone / state.set.rv) : 0;
+  const RING_R = 26;
   const RING_C = 2 * Math.PI * RING_R;
 
   // پیشنهاد هوشمند سهمیه
@@ -233,7 +310,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayGreg = formatGregorianNumeric(n);
   const todayWeekday = nowDate.toLocaleDateString('fa-IR', { weekday: 'long' });
 
-  // جست‌وجوی داخل فهرست مرور و فهرست مرحلهٔ تسلط
   const dueFiltered = dueQuery.trim()
     ? s.dueReviewWords.filter(w => {
         const q = dueQuery.trim().toLowerCase();
@@ -254,8 +330,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-4 text-right">
-      {/* ─────────── سربرگ خوش‌آمد: سلام، تاریخ، رشتهٔ استمرار و حلقهٔ پیشرفت امروز ─────────── */}
+      {/* ─────────── ۱) سربرگ خوش‌آمد (همیشه باز) ─────────── */}
       <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl p-5 text-purple-900 dark:text-purple-100 shadow-xs">
+        {/* عکس متناسب با ساعت روز (درخواست کاربر ۱۳) */}
+        <div className="mb-4">
+          <TimeScene hour={hour} />
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
@@ -280,52 +361,79 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-4">
-          <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`پیشرفت امروز: ${Math.round(ringProgress * 100)}٪`}>
-            <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
-              <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-purple-200 dark:stroke-purple-900" />
-              <circle
-                cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" strokeLinecap="round"
-                className="stroke-emerald-500 dark:stroke-emerald-300 transition-all duration-700"
-                strokeDasharray={RING_C}
-                strokeDashoffset={RING_C * (1 - ringProgress)}
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold">
-              {totalTarget > 0 ? `${Math.round(ringProgress * 100)}٪` : '—'}
-            </span>
+        {/* دو حلقهٔ پیشرفت کنار هم (درخواست کاربر ۳): کلمهٔ جدید + مرور */}
+        <div className="flex items-center justify-center gap-6 mt-4">
+          {/* حلقهٔ کلمهٔ جدید */}
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`کلمهٔ جدید: ${Math.round(newProgress * 100)}٪`}>
+              <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
+                <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-purple-200 dark:stroke-purple-900" />
+                <circle
+                  cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" strokeLinecap="round"
+                  className="stroke-[#1f5fbf] dark:stroke-[#7fb0ff] transition-all duration-700"
+                  strokeDasharray={RING_C}
+                  strokeDashoffset={RING_C * (1 - newProgress)}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-extrabold">
+                {state.set.nw > 0 ? `${Math.round(newProgress * 100)}٪` : '—'}
+              </span>
+            </div>
+            <div className="text-center">
+              <b className="text-[11px] font-bold block">🆕 کلمهٔ جدید</b>
+              <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">{s.dailyNewDone}/{state.set.nw}</span>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <b className="text-sm font-bold block">هدف امروز: {totalDone} از {totalTarget > 0 ? totalTarget : '—'} تمرین</b>
-            <p className="text-xs text-purple-800/80 dark:text-purple-300/80 mt-1">
-              {totalTarget > 0
-                ? `کلمهٔ جدید ${s.dailyNewDone}/${state.set.nw} • مرور ${s.dailyReviewDone}/${state.set.rv}`
-                : 'برای شروع، سهمیهٔ روزانه را در تنظیمات تعیین کن.'}
-            </p>
-            <p className="text-xs text-purple-800/70 dark:text-purple-400/80 mt-0.5">
-              {s.dailyComplete && totalTarget > 0
-                ? '✅ تمرین‌های امروز کامل شده — آفرین!'
-                : `⏳ حدود ${s.estimatedMins} دقیقه زمان می‌برد.`}
-            </p>
+          {/* حلقهٔ مرور */}
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`مرور: ${Math.round(reviewProgress * 100)}٪`}>
+              <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
+                <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-emerald-200 dark:stroke-emerald-900" />
+                <circle
+                  cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" strokeLinecap="round"
+                  className="stroke-emerald-500 dark:stroke-emerald-300 transition-all duration-700"
+                  strokeDasharray={RING_C}
+                  strokeDashoffset={RING_C * (1 - reviewProgress)}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-extrabold">
+                {state.set.rv > 0 ? `${Math.round(reviewProgress * 100)}٪` : '—'}
+              </span>
+            </div>
+            <div className="text-center">
+              <b className="text-[11px] font-bold block">🔁 مرور</b>
+              <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">{s.dailyReviewDone}/{state.set.rv}</span>
+            </div>
           </div>
         </div>
 
+        <p className="text-xs text-center text-purple-800/70 dark:text-purple-400/80 mt-2">
+          {totalTarget > 0
+            ? (ringProgress >= 1
+                ? '🎉 هدف امروز کامل شد — آفرین!'
+                : `${s.dailyTasksLeft} تمرین باقی‌مانده • حدود ${s.estimatedMins} دقیقه`)
+            : 'برای شروع، سهمیهٔ روزانه را در تنظیمات تعیین کن.'}
+        </p>
+
         {/* دکمه‌های دسترسی سریع (درخواست کاربر ۷/۸) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-          {/* توصیه‌گر روزانه — جایگزین «کتابخانهٔ واژگان» (درخواست کاربر ۷) */}
-          <SuggestionCard
-            state={state}
-            onAction={(action) => {
-              switch (action) {
-                case 'daily': onNavigate('daily'); break;
-                case 'review': if (s.dueReviewWords.length > 0) onPracticeWords(s.dueReviewWords.map(w => w.id), 'review'); else onNavigate('daily'); break;
-                case 'weak': if (s.weakList.length > 0) onPracticeWords(s.weakList.map(w => w.id), 'targeted'); else onNavigate('daily'); break;
-                case 'forgotten': onQuickAction?.('forgotten'); break;
-                case 'new': onNavigate('daily'); break;
-                default: break;
-              }
-            }}
-          />
+          {/* توصیه‌گر روزانه — جایگزین «کتابخانهٔ واژگان» (درخواست کاربر ۷)
+              درخواست کاربر ۵: فقط وقتی هدف روزانه به ۱۰۰٪ نرسیده نمایش داده شود */}
+          {ringProgress < 1 && (
+            <SuggestionCard
+              state={state}
+              onAction={(action) => {
+                switch (action) {
+                  case 'daily': onNavigate('daily'); break;
+                  case 'review': if (s.dueReviewWords.length > 0) onPracticeWords(s.dueReviewWords.map(w => w.id), 'review'); else onNavigate('daily'); break;
+                  case 'weak': if (s.weakList.length > 0) onPracticeWords(s.weakList.map(w => w.id), 'targeted'); else onNavigate('daily'); break;
+                  case 'forgotten': onQuickAction?.('forgotten'); break;
+                  case 'new': onNavigate('daily'); break;
+                  default: break;
+                }
+              }}
+            />
+          )}
           {/* چالش روزانه (درخواست کاربر ۸) */}
           <DailyChallengeCard
             state={state}
@@ -342,20 +450,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }
             }}
           />
+          {/* درخواست کاربر ۵: وقتی هدف ۱۰۰٪ شد، یک پیام تبریک نشان بده */}
+          {ringProgress >= 1 && totalTarget > 0 && (
+            <div className="rounded-2xl p-3 border-2 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 flex items-center gap-2">
+              <span className="text-2xl">🎉</span>
+              <div className="min-w-0">
+                <b className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 block">هدف امروز کامل شد!</b>
+                <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">آفرین — استراحت کن یا به‌صورت آزاد تمرین کن.</p>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* دکمه‌های ثانویه — مرور سررسید و نقاط ضعف */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-          <button
-            onClick={() => onNavigate('daily')}
-            className="bg-white text-purple-800 hover:bg-purple-100 px-3 py-2 rounded-xl text-xs font-extrabold shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5"
-          >
-            {s.dailyComplete && totalTarget > 0 ? '✅ جلسهٔ امروز کامل' : `🌟 شروع روزانه (${s.dailyTasksLeft})`}
-          </button>
+        {/* دکمه‌های ثانویه — مرور سررسید + نقاط ضعف + مرور ۶۰ ثانیه
+            (درخواست کاربر ۸: حذف تکرار «شروع روزانه») */}
+        <div className="grid grid-cols-3 gap-2 mt-2">
           {s.dueReviewWords.length > 0 && (
             <button
               onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
-              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-3 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
             >
               ⚡ مرور سررسید ({s.dueReviewWords.length})
             </button>
@@ -363,7 +476,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {s.weakList.length > 0 && (
             <button
               onClick={() => onPracticeWords(s.weakList.map(w => w.id), 'targeted')}
-              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-3 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
             >
               🎯 نقاط ضعف ({s.weakList.length})
             </button>
@@ -371,7 +484,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* دکمهٔ مرور سریع ۶۰ ثانیه‌ای (درخواست کاربر ۱۰) */}
           <button
             onClick={() => onQuickAction?.('quick-review')}
-            className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-3 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+            className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
             title="مرور سریع ۵ واژه در ۶۰ ثانیه"
           >
             ⚡ مرور ۶۰ ثانیه
@@ -379,13 +492,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* اکاردئون «تمرین‌های ۴ روز اخیر انجام‌نشده» (درخواست کاربر ۲) */}
+      {/* اکاردئون «تمرین‌های ۴ روز اخیر انجام‌نشده» (درخواست کاربر ۲/۹) */}
       <LatePracticesAccordion
         state={state}
         onStartExercise={(nav) => onQuickAction?.(nav)}
       />
 
-      {/* ─────────── فعالیت ۷ روز اخیر ─────────── */}
+      {/* ─────────── ۲) فعالیت ۷ روز اخیر (همیشه باز) ─────────── */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
@@ -425,11 +538,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <span className={`text-xs font-bold ${item.isToday ? 'text-[#1f5fbf] dark:text-[#7fb0ff]' : 'text-slate-800 dark:text-slate-200'}`}>
                     {item.isToday ? 'امروز' : item.weekdayFa}
                   </span>
-                  {/* تاریخ عددی شمسی، مثل 08/09 */}
                   <span className="text-[11px] text-[#1f5fbf] dark:text-[#7fb0ff] font-medium" dir="ltr">
                     {item.shamsiNumeric}
                   </span>
-                  {/* تاریخ عددی میلادی، مثل 10/31 */}
                   <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">
                     {item.gregNumeric}
                   </span>
@@ -440,119 +551,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* ─────────── نقشهٔ حرارتی نقاط ضعف + مسیر یادگیری تطبیقی ───────────
-          درخواست کاربر: تحلیل هوشمند آمار یادگیری + پیشنهاد برنامهٔ روزانه برای رسیدن به B2 */}
-      <WeaknessHeatmap state={state} onNavigate={onNavigate} />
+      {/* ─────────── اکاردئون‌های آبشاری (درخواست کاربر ۳) ───────────
+          همهٔ بخش‌ها به‌جز خوش‌آمدگویی و فعالیت ۷ روزه، زیر عنوانشان جمع می‌شوند.
+          همیشه یا هیچ بخشی باز نیست یا فقط یکی. */}
 
-      {/* ─────────── استمرار و نشان‌ها (گیمیفیکیشن) ───────────
-          درخواست کاربر ۸: streak freeze + achievements */}
-      <AchievementsPanel state={state} />
+      <AccordionSection id="weakness" icon="🎯" title="تحلیل نقاط ضعف و مسیر یادگیری" openId={openSection} setOpenId={setOpenSection}>
+        {/* درخواست کاربر ۱۰: دکمهٔ شروع تمرین پیشنهادی فعال شود */}
+        <WeaknessHeatmap
+          state={state}
+          onNavigate={onNavigate}
+          onStartExercise={(mode) => onQuickAction?.(mode)}
+        />
+      </AccordionSection>
 
-      {/* ─────────── مسیر سفر A1 → C2 (درخواست کاربر ۹) ─────────── */}
-      <JourneyMapPanel state={state} />
+      <AccordionSection id="achievements" icon="🏅" title="استمرار و نشان‌ها" openId={openSection} setOpenId={setOpenSection}>
+        <AchievementsPanel state={state} />
+      </AccordionSection>
 
-      {/* ─────────── منحنی فراموشی (درخواست کاربر ۱۳) ─────────── */}
-      <ForgettingCurvePanel state={state} onSelectWord={onSelectWord} />
+      <AccordionSection id="journey" icon="🗺️" title="مسیر سفر از A1 تا C2" openId={openSection} setOpenId={setOpenSection}>
+        <JourneyMapPanel state={state} />
+      </AccordionSection>
 
-      {/* ─────────── دکمهٔ گزارش هفتگی با AI (درخواست کاربر ۱۲) ─────────── */}
-      {onOpenWeeklyReport && (
-        <button
-          onClick={onOpenWeeklyReport}
-          className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white px-4 py-3 rounded-2xl text-sm font-bold shadow-xs transition flex items-center justify-center gap-2"
-        >
-          📊 گزارش هفتگی با معلم
-        </button>
-      )}
+      <AccordionSection id="forgetting" icon="📉" title="منحنی فراموشی" openId={openSection} setOpenId={setOpenSection}>
+        <ForgettingCurvePanel state={state} onSelectWord={onSelectWord} />
+      </AccordionSection>
 
-      {/* ─────────── هدف و پیشرفت امروز ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-        <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-          <span>🎯</span> هدف و پیشرفت امروز
-        </b>
+      <AccordionSection id="weekly-report" icon="📊" title="گزارش هفتگی با معلم" openId={openSection} setOpenId={setOpenSection}>
+        {onOpenWeeklyReport && (
+          <button
+            onClick={onOpenWeeklyReport}
+            className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white px-4 py-3 rounded-2xl text-sm font-bold shadow-xs transition flex items-center justify-center gap-2"
+          >
+            🚀 ساخت/مشاهدهٔ گزارش هفتگی
+          </button>
+        )}
+      </AccordionSection>
 
-        <div>
-          <div className="flex justify-between text-xs mb-1">
-            <span>کلمات جدید:</span>
-            <span>
-              {s.dailyNewDone} از {state.set.nw}
-              {remainingOf(state.set.nw, s.dailyNewDone) > 0 && (
-                <span className="text-[#5d6676] dark:text-[#a3adbd]"> • {remainingOf(state.set.nw, s.dailyNewDone)} باقی‌مانده</span>
-              )}
-            </span>
-          </div>
-          <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] h-full transition-all"
-              style={{ width: `${state.set.nw <= 0 ? 100 : Math.min(100, (s.dailyNewDone / state.set.nw) * 100)}%` }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <div className="flex justify-between text-xs mb-1">
-            <span>مرور:</span>
-            <span>
-              {s.dailyReviewDone} از {state.set.rv}
-              {remainingOf(state.set.rv, s.dailyReviewDone) > 0 && (
-                <span className="text-[#5d6676] dark:text-[#a3adbd]"> • {remainingOf(state.set.rv, s.dailyReviewDone)} باقی‌مانده</span>
-              )}
-            </span>
-          </div>
-          <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-            <div
-              className="bg-emerald-500 h-full transition-all"
-              style={{ width: `${state.set.rv <= 0 ? 100 : Math.min(100, (s.dailyReviewDone / state.set.rv) * 100)}%` }}
-            />
-          </div>
-        </div>
-
+      <AccordionSection id="analysis" icon="🧠" title="تحلیل هوشمند یادگیری و حافظه" badge={s.retentionRate !== null ? (
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+          نرخ ماندگاری: {s.retentionRate}٪
+        </span>
+      ) : undefined} openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-4">
         <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-          کل واژگان: {s.words.length} • آمادهٔ مرور: {s.dueReviewWords.length}
-          {!s.dueReviewWords.length && s.dailyDueAvailable > 0 && (
-            <span> • هر {s.dailyDueAvailable} سررسید امروز مرور شده ✅</span>
-          )}
-          {s.dueReviewWords.length === 0 && nextReviewWord && (
-            <span> • نزدیک‌ترین مرور: {dueText(nextReviewWord)}</span>
-          )}
+          ارزیابی مرحله به مرحلهٔ تسلط، راندمان تثبیت و برنامهٔ مرور لایتنر
         </p>
 
-        <div className="pt-1">
-          {s.dailyComplete ? (
-            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-3 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-              ✅ تمرین‌های امروز تمام شده‌اند. برای تمرین بیشتر، از بخش تمرین‌ها استفاده کنید.
-            </div>
-          ) : (
-            <button
-              onClick={() => onNavigate('daily')}
-              className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:opacity-95 transition"
-            >
-              🌟 شروع جلسهٔ روزانه ({s.dailyTasksLeft} تمرین باقی‌مانده)
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ─────────── تحلیل هوشمند یادگیری و حافظه ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🧠</span>
-            <div>
-              <b className="text-base text-slate-900 dark:text-slate-100">تحلیل هوشمند یادگیری و حافظه</b>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                ارزیابی مرحله به مرحلهٔ تسلط، راندمان تثبیت و برنامهٔ مرور لایتنر
-              </p>
-            </div>
-          </div>
-          {s.retentionRate !== null && (
-            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
-              <span>نرخ ماندگاری:</span>
-              <span className="text-sm font-extrabold">{s.retentionRate}٪</span>
-            </div>
-          )}
-        </div>
-
-        {/* باکس‌های مرحلهٔ تسلط — همیشه ۵ باکس در یک خط */}
+        {/* باکس‌های مرحلهٔ تسلط */}
         <div className="grid grid-cols-5 gap-1 sm:gap-1.5 text-center">
           {stageDefs.map(b => (
             <button key={b.key} type="button" onClick={() => { setStageView(b.key); setStageQuery(''); }}
@@ -592,16 +637,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
 
-        {s.weakList.length > 0 && (
-          <button
-            onClick={() => onPracticeWords(s.weakList.map(w => w.id), 'targeted')}
-            className="w-full bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
-          >
-            🎯 تمرین نقاط ضعف ({s.weakList.length})
-          </button>
-        )}
+        {/* درخواست کاربر ۱۲: حذف تکرار «تمرین نقاط ضعف» از اینجا — در بالا به‌صورت جداگانه هست */}
 
-        {/* پیشنهاد هوشمند سهمیه + کیفیت داده */}
+        {/* پیشنهاد هوشمند سهمیه */}
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           {suggestedNew !== state.set.nw ? (
             <div className="flex items-center gap-2 text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2 rounded-xl">
@@ -619,14 +657,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
           )}
         </div>
-      </div>
+        </div>
+      </AccordionSection>
 
-      {/* ─────────── آمار کلی تمرین‌ها ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-        <b className="text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-          <span>📊</span> آمار کلی تمرین‌ها
-        </b>
-
+      <AccordionSection id="stats" icon="📊" title="آمار کلی تمرین‌ها" openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
         <div className="grid grid-cols-5 gap-1 sm:gap-2 pt-1">
           {[
             { label: 'کل واژگان', value: s.words.length, cls: 'text-slate-800 dark:text-slate-200' },
@@ -641,10 +676,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           ))}
         </div>
-      </div>
+        </div>
+      </AccordionSection>
 
-      {/* ─────────── نکات مربی‌گری ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
+      <AccordionSection id="coach" icon="💡" title="نکات مربی‌گری" openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>
             مرورهای عقب‌افتاده: <b className="text-red-500">{s.overdueBacklog}</b> • سررسید همین حالا:{' '}
@@ -660,28 +696,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
           💡 طبق الگوریتم فاصله، واژه‌های جدید بعد از اتمام مرورهای سررسیدشده ارائه می‌شوند تا حافظه اشباع نشود.
         </p>
-      </div>
-
-      {/* ─────────── فهرست واژه‌های آمادهٔ مرور ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-base">📋</span>
-            <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100">
-              فهرست واژه‌های آماده برای مرور و مطالعه ({s.dueReviewWords.length} واژه)
-            </b>
-          </div>
-          {s.dueReviewWords.length > 0 && (
-            <button
-              onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
-              className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5"
-            >
-              <span>⚡ همین حالا مرور کن ({s.dueReviewWords.length} واژه)</span>
-            </button>
-          )}
         </div>
+      </AccordionSection>
 
-        {/* تفکیک سررسید امروز و عقب‌افتاده‌ها */}
+      <AccordionSection id="review-list" icon="📋" title="فهرست واژه‌های آماده برای مرور" badge={<span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">{s.dueReviewWords.length} واژه</span>} openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+        {s.dueReviewWords.length > 0 && (
+          <button
+            onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
+            className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 w-full sm:w-auto"
+          >
+            <span>⚡ همین حالا مرور کن ({s.dueReviewWords.length} واژه)</span>
+          </button>
+        )}
+
         {s.dueReviewWords.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold border border-blue-100 dark:border-blue-900">
@@ -709,7 +737,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="text-xs text-emerald-600 dark:text-emerald-400 py-3 text-center bg-emerald-50/70 dark:bg-emerald-950/20 rounded-xl">
             {s.dailyDueAvailable > 0
               ? `✅ همهٔ ${s.dailyDueAvailable} سررسید امروز مرور شده‌اند — جلسهٔ امروز کامل است!`
-              : '✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد؛ واژهٔ معوقه‌ای در این فهرست نیست.'}
+              : '✅ در فهرست فعلی واژهٔ سررسیدشده‌ای برای مرور وجود ندارد.'}
           </div>
         ) : (
           <div className="max-h-52 overflow-y-auto bg-white dark:bg-[#1b2029] rounded-xl border border-[#dde1ea] dark:border-[#333b4a]">
@@ -777,26 +805,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </table>
           </div>
         )}
-      </div>
-
-      {/* ─────────── واژه‌های پر اشتباه و سخت ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-950/60 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🩸</span>
-            <div>
-              <b className="text-base text-slate-900 dark:text-slate-100">واژه‌های پر اشتباه و سخت</b>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                واژگانی با بیش از ۳ بار خطا، مرتب‌شده بر اساس بیشترین تکرار اشتباه
-              </p>
-            </div>
-          </div>
-          {s.hardMistakenWords.length > 0 && (
-            <span className="px-3 py-1 rounded-xl bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 text-xs font-bold">
-              {s.hardMistakenWords.length} واژه دشوار
-            </span>
-          )}
         </div>
+      </AccordionSection>
+
+      <AccordionSection id="hard-words" icon="🩸" title="واژه‌های پر اشتباه و سخت" badge={s.hardMistakenWords.length > 0 ? (
+        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300">
+          {s.hardMistakenWords.length} واژه دشوار
+        </span>
+      ) : undefined} openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-950/60 rounded-2xl p-5 shadow-xs space-y-4">
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+          واژگانی با بیش از ۳ بار خطا، مرتب‌شده بر اساس بیشترین تکرار اشتباه
+        </p>
 
         {s.hardMistakenWords.length === 0 ? (
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#141923] text-center text-xs text-slate-600 dark:text-slate-400">
@@ -846,7 +866,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </>
         )}
-      </div>
+        </div>
+      </AccordionSection>
 
       {/* ─────────── لایهٔ فهرست واژه‌های هر مرحلهٔ تسلط (با جست‌وجو) ─────────── */}
       {activeStage && (() => {
@@ -909,7 +930,3 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
-
-/** باقی‌ماندهٔ هدف روزانه (هرگز منفی نمی‌شود) */
-const remainingOf = (target: number, done: number): number =>
-  target > 0 ? Math.max(0, target - done) : 0;
