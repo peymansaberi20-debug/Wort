@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState, Word } from '../types';
 import { fullWord } from '../utils/storage';
+// درخواست کاربر ۱۶: نمایش snapshotهای خودکار هفتگی + restore
+import { loadSnapshotsMeta, loadSnapshotData, deleteSnapshot, createSnapshot, snapshotsSummary, SnapshotMeta } from '../utils/autoBackup';
+// درخواست کاربر ۱۷: اشتراک‌گذاری دستهٔ واژگان
+import { createShareCode, parseShareCode, previewShareCode, estimateShareSize } from '../utils/shareCategory';
 
 const buildAnkiText = (ws: Word[]): string => {
   const rows = ws.map(w => {
@@ -179,6 +183,162 @@ export const BackupPanel: React.FC<{ state: AppState; words: Word[]; onShowToast
             <span className="text-[#1f5fbf] text-sm font-bold">دانلود</span>
           </button>
         ))}
+      </div>
+
+      {/* درخواست کاربر ۱۶: snapshotهای خودکار هفتگی — نمایش + بازیابی */}
+      <SnapshotsSection state={state} onRestore={onShowToast} />
+
+      {/* درخواست کاربر ۱۷: اشتراک‌گذاری دستهٔ واژگان */}
+      <ShareCategorySection words={words} onShowToast={onShowToast} />
+    </div>
+  );
+};
+
+/** بخش snapshotهای خودکار هفتگی — نمایش + بازیابی + حذف */
+const SnapshotsSection: React.FC<{ state: AppState; onRestore: (msg: string, isErr?: boolean) => void }> = ({ state, onRestore }) => {
+  const [snaps, setSnaps] = useState<SnapshotMeta[]>(() => loadSnapshotsMeta());
+  const [busy, setBusy] = useState(false);
+  const summary = snapshotsSummary();
+
+  const refresh = () => setSnaps(loadSnapshotsMeta());
+  useEffect(() => { refresh(); }, []);
+
+  const handleCreate = async () => {
+    if (busy) return;
+    setBusy(true);
+    const r = await createSnapshot(state, true);
+    if (r.ok) { onRestore(`📸 snapshot ساخته شد: ${r.meta?.label} (${r.meta?.wordsCount} واژه)`); refresh(); }
+    else onRestore(r.error || 'ساخت snapshot ناموفق بود.', true);
+    setBusy(false);
+  };
+  const handleRestore = async (id: string, label: string) => {
+    if (!window.confirm(`از snapshot «${label}» بازیابی شود؟ تغییرات از آن زمان به بعد از دست می‌رود (ولی می‌توانی دوباره از همین بخش به snapshot جدید برگردی).`)) return;
+    const data = await loadSnapshotData(id);
+    if (!data) { onRestore('بازیابی ناموفق بود — داده خراب است.', true); return; }
+    try {
+      // ذخیرهٔ state بازیابی‌شده در localStorage و reload
+      localStorage.setItem('deutschlab_pro_fa_v1', JSON.stringify(data));
+      onRestore('✅ بازیابی انجام شد — صفحه تازه می‌شود…');
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (e: any) {
+      onRestore('خطا در بازیابی: ' + (e?.message || ''), true);
+    }
+  };
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('این snapshot حذف شود؟')) return;
+    await deleteSnapshot(id); refresh();
+  };
+
+  return (
+    <div className={card + ' space-y-2.5'}>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="font-bold text-sm">📸 پشتیبان‌های خودکار هفتگی</div>
+          <div className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">هر ۷ روز یک snapshot کامل از state در IndexedDB ذخیره می‌شود (۴ عدد اخیر نگه داشته می‌شود)</div>
+        </div>
+        <button onClick={() => void handleCreate()} disabled={busy} className="px-3 py-1.5 rounded-xl bg-[#1f5fbf] text-white text-xs font-bold disabled:opacity-40">➕ ساخت دستی</button>
+      </div>
+      {snaps.length === 0 ? (
+        <p className="text-xs text-[#5d6676] py-2 text-center">هنوز snapshot خودکاری ساخته نشده — بعد از ۷ روز اولین ساخته می‌شود، یا دکمهٔ «ساخت دستی» را بزن.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {snaps.map(s => (
+            <div key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 dark:bg-[#141923] p-2.5 text-xs">
+              <div className="min-w-0">
+                <div className="font-bold text-slate-900 dark:text-slate-100 truncate">{s.label}</div>
+                <div className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]" dir="ltr">{s.wordsCount} واژه • {Math.round(s.sizeBytes / 1024)} KB</div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => void handleRestore(s.id, s.label)} className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold">↺ بازیابی</button>
+                <button onClick={() => void handleDelete(s.id)} className="w-7 h-7 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 flex items-center justify-center text-[10px]">🗑</button>
+              </div>
+            </div>
+          ))}
+          <div className="text-[10px] text-[#5d6676] dark:text-[#a3adbd] pt-1">
+            کل: {summary.count} snapshot • {Math.round(summary.totalSize / 1024)} KB
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** بخش اشتراک‌گذاری دستهٔ واژگان — ساخت کد + وارد کردن کد */
+const ShareCategorySection: React.FC<{ words: Word[]; onShowToast: (m: string, e?: boolean) => void }> = ({ words, onShowToast }) => {
+  const [cats] = useState<string[]>(() => Array.from(new Set(words.map(w => w.cat).filter(Boolean))));
+  const [selectedCat, setSelectedCat] = useState<string>(cats[0] || '');
+  const [shareCode, setShareCode] = useState('');
+  const [importCode, setImportCode] = useState('');
+  const [preview, setPreview] = useState<{ cat: string; count: number; from: string; valid: boolean; error?: string } | null>(null);
+
+  const handleGenerate = () => {
+    if (!selectedCat) { onShowToast('دسته‌ای انتخاب کن.', true); return; }
+    const code = createShareCode(selectedCat, words);
+    setShareCode(code);
+    const size = estimateShareSize(selectedCat, words);
+    onShowToast(`کد اشتراک ساخته شد — ${size} KB`);
+  };
+  const handleCopy = async () => {
+    if (!shareCode) return;
+    try { await navigator.clipboard.writeText(shareCode); onShowToast('📋 کد کپی شد — برای دوستت بفرست.'); }
+    catch { onShowToast('کپی نشد — دستی انتخاب و کپی کن.', true); }
+  };
+  const handlePreview = () => {
+    if (!importCode.trim()) return;
+    setPreview(previewShareCode(importCode.trim()));
+  };
+  const handleImport = () => {
+    if (!importCode.trim()) return;
+    try {
+      const payload = parseShareCode(importCode.trim());
+      const ev = new CustomEvent('wort-import-shared-category', { detail: payload });
+      window.dispatchEvent(ev);
+      onShowToast(`${payload.count} واژه از دستهٔ «${payload.cat}» آمادهٔ وارد شدن است — در صفحهٔ ورود واژگان تأیید کن.`);
+      setImportCode('');
+      setPreview(null);
+    } catch (e: any) {
+      onShowToast(e?.message || 'کد اشتراک نامعتبر است.', true);
+    }
+  };
+
+  return (
+    <div className={card + ' space-y-3'}>
+      <div>
+        <div className="font-bold text-sm">📤 اشتراک‌گذاری دستهٔ واژگان</div>
+        <div className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">یک دسته را به کد تبدیل کن و برای دوستت بفرست — او کد را در برنامه‌اش paste می‌کند و دسته وارد می‌شود</div>
+      </div>
+      {/* ساخت کد */}
+      <div className="space-y-1.5">
+        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">دسته برای اشتراک:</label>
+        <select value={selectedCat} onChange={e => { setSelectedCat(e.target.value); setShareCode(''); }}
+          className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold">
+          {cats.map(c => <option key={c} value={c}>{c} ({words.filter(w => w.cat === c).length} واژه)</option>)}
+        </select>
+        <button onClick={handleGenerate} disabled={!selectedCat} className="w-full h-10 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white text-xs font-bold disabled:opacity-40">🔗 ساخت کد اشتراک</button>
+        {shareCode && (
+          <div className="space-y-1">
+            <textarea readOnly value={shareCode} rows={3} dir="ltr"
+              className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1.5 text-[10px] font-mono outline-none break-all" />
+            <button onClick={() => void handleCopy()} className="w-full h-9 rounded-xl border border-[#1f5fbf] text-[#1f5fbf] dark:text-blue-300 text-xs font-bold">📋 کپی کد</button>
+          </div>
+        )}
+      </div>
+      {/* وارد کردن کد */}
+      <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-2">
+        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">یا کد دوستت را paste کن:</label>
+        <textarea value={importCode} onChange={e => { setImportCode(e.target.value); setPreview(null); }} rows={2} dir="ltr" placeholder="WORT:..."
+          className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1.5 text-[10px] font-mono outline-none break-all" />
+        <div className="flex gap-1.5">
+          <button onClick={handlePreview} disabled={!importCode.trim()} className="flex-1 h-9 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold disabled:opacity-40">👁 پیش‌نمایش</button>
+          <button onClick={handleImport} disabled={!importCode.trim()} className="flex-1 h-9 rounded-xl bg-emerald-600 text-white text-xs font-bold disabled:opacity-40">📥 وارد کردن</button>
+        </div>
+        {preview && (
+          <div className={`p-2 rounded-lg text-xs ${preview.valid ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300' : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300'}`}>
+            {preview.valid
+              ? `دستهٔ «${preview.cat}» — ${preview.count} واژه${preview.from ? ` از ${preview.from}` : ''}`
+              : `❌ ${preview.error || 'کد نامعتبر'}`}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -11,8 +11,9 @@ const speakSafe = (text: string) => { try { audioAny.speak?.(text); } catch { /*
 const stopSpeakingSafe = () => { try { audioAny.stopSpeaking?.(); } catch { /* ignore */ } };
 const getTtsBaseSafe = (): string => { try { return String(audioAny.getTtsWorkerBase?.() || ''); } catch { return ''; } };
 import { generateWithGemini, parseAI } from '../utils/ai';
+import { isSpeechRecognitionSupported, recognizeOnce, scorePronunciation, PronunciationResult } from '../utils/pronunciationScore';
 import { IconBtn } from './IconBtn';
-import { X, Mic, Square, Play, Trash2, Volume2, Wand2 } from 'lucide-react';
+import { X, Mic, Square, Play, Trash2, Volume2, Wand2, Gauge } from 'lucide-react';
 
 interface ShadowingModalProps {
   /** Optional when freeText is given (e.g. from Schreiben correction). */
@@ -57,6 +58,11 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
   const [report, setReport] = useState<ShadowReport | null>(null);
   const [analysis, setAnalysis] = useState<{ frames: number; eSample: number[]; eMine: number[]; offset: number; minePeak: number; samplePeak: number; mineRms: number; sampleRms: number; hints: string[] } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // درخواست کاربر ۷: امتیازدهی تلفظ با Web Speech Recognition
+  const [scoreBusy, setScoreBusy] = useState(false);
+  const [scoreResult, setScoreResult] = useState<PronunciationResult | null>(null);
+  const [scoreErr, setScoreErr] = useState('');
+  const speechSupported = isSpeechRecognitionSupported();
 
   /** Extracts RMS-energy contour (32 buckets). */
   const analyzeAudio = async (src: string): Promise<number[]> => {
@@ -162,8 +168,26 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
 
   useEffect(() => {
     setReport(null); setErr(''); setRecUrl(null); setRecDur(null); setAnalysis(null);
+    setScoreResult(null); setScoreErr('');
     setPart(freeText ? 'free' : 'de');
   }, [word?.id, freeText]);
+
+  // درخواست کاربر ۷: امتیازدهی تلفظ — باز کردن میکروفون، تشخیص گفتار، مقایسه با متن هدف
+  const runScore = async () => {
+    if (scoreBusy || !text) return;
+    if (!speechSupported) { setScoreErr('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند. Chrome یا Edge را امتحان کن.'); return; }
+    setScoreBusy(true); setScoreErr(''); setScoreResult(null);
+    stopSpeakingSafe();
+    try {
+      const heard = await recognizeOnce({ lang: 'de-DE', maxSec: 10 });
+      const res = scorePronunciation(text, heard);
+      setScoreResult(res);
+    } catch (e: any) {
+      setScoreErr(e?.message || 'تشخیص تلفظ ناموفق بود.');
+    } finally {
+      setScoreBusy(false);
+    }
+  };
 
   // sample duration from cloud mp3 metadata (if worker configured)
   useEffect(() => {
@@ -346,6 +370,36 @@ export const ShadowingModal: React.FC<ShadowingModalProps> = ({ word, onClose, f
                   {analysis.hints.map((h, i) => <li key={i} className="flex gap-2"><span className="text-[#1f5fbf]">•</span><span>{h}</span></li>)}
                 </ul>
               )}
+            </div>
+          )}
+
+          {/* درخواست کاربر ۷: امتیازدهی تلفظ با تشخیص گفتار */}
+          <button onClick={() => void runScore()} disabled={scoreBusy || !text || !speechSupported}
+            className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50">
+            {scoreBusy ? <><span className="inline-block animate-pulse">🎙</span><span>در حال شنیدن… متن را بخوان</span></>
+              : <><Gauge size={17} /><span>🎯 امتیاز تلفظ (بخوان تا بشنوم)</span></>}
+          </button>
+          {!speechSupported && (
+            <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg">⚠️ مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند (مثل Firefox). از Chrome یا Edge استفاده کن.</div>
+          )}
+          {scoreErr && <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{scoreErr}</div>}
+          {scoreResult && (
+            <div className="rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-slate-50 dark:bg-[#141923] p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🎯 امتیاز تلفظ</span>
+                <span className={`text-2xl font-extrabold ${scoreResult.score >= 80 ? 'text-emerald-600' : scoreResult.score >= 60 ? 'text-amber-600' : 'text-rose-600'}`} dir="ltr">{scoreResult.score}/100</span>
+              </div>
+              <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className={`h-full transition-all ${scoreResult.score >= 80 ? 'bg-emerald-500' : scoreResult.score >= 60 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${scoreResult.score}%` }} />
+              </div>
+              {scoreResult.recognizedText && (
+                <div dir="ltr" className="text-xs italic text-slate-600 dark:text-slate-300 bg-white dark:bg-[#0f131c] p-2 rounded-lg font-sans">
+                  <b className="not-italic">شنیده‌شده: </b>{scoreResult.recognizedText}
+                </div>
+              )}
+              <ul className="space-y-1 text-[11px] leading-5 text-slate-700 dark:text-slate-200">
+                {scoreResult.notes.map((n, i) => <li key={i} className="flex gap-1.5"><span className="text-[#1f5fbf]">•</span><span>{n}</span></li>)}
+              </ul>
             </div>
           )}
 

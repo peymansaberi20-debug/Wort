@@ -869,13 +869,13 @@ export const WorksheetTrainer: React.FC<{
             </div>
 
             {hint && !checked && (
-              <div className="rounded-xl px-3 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              <div className="rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                 راهنما — حرف اول پاسخ‌ها: <b dir="ltr">{it.answers.map((a) => a[0] + '…').join(' + ')}</b>
               </div>
             )}
 
             {checked && (
-              <div className={`rounded-xl px-3 py-2 text-sm space-y-1 ${itemOk ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200'}`}>
+              <div className={`rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base space-y-1 ${itemOk ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200'}`}>
                 <div>{itemOk ? '✅ درست بود!' : <>❌ نادرست — پاسخ درست: <b dir="ltr"><ClickableWords text={it.answers.join(' + ')} onWord={setLookup} /></b></>}</div>
                 <div>💡 {it.note}</div>
               </div>
@@ -883,12 +883,12 @@ export const WorksheetTrainer: React.FC<{
 
             {/* ترجمهٔ فارسی — فقط بعد از بررسی */}
             {checked && it.fa && (
-              <div className="rounded-xl px-3 py-2 text-sm bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7">
+              <div className="rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 leading-7 md:leading-8">
                 🇮🇷 ترجمهٔ فارسی: {it.fa}
               </div>
             )}
 
-            {why.err && <div className="rounded-xl px-3 py-2 text-sm bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">{why.err}</div>}
+            {why.err && <div className="rounded-xl px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">{why.err}</div>}
             {why.text && why.idx === sess.idx && (
               <div className="rounded-xl px-3 py-2 text-sm bg-[#f6f7fb] dark:bg-[#12151c] leading-7 whitespace-pre-wrap">{why.text}</div>
             )}

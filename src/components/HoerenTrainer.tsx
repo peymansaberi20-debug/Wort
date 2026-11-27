@@ -322,7 +322,10 @@ export const HoerenTrainer: React.FC<{
   const playsRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const bTok = useRef(0);
-  const [rate, setRate] = useState(1);
+  const [rate, setRate] = useState(() => {
+    // درخواست کاربر ۶: حفظ سرعت انتخابی در localStorage تا در تمرین‌های بعدی هم همین سرعت باشد
+    try { const v = JSON.parse(localStorage.getItem('wb_hoeren_rate_v1') || ''); return typeof v === 'number' && v >= 0.5 && v <= 2 ? v : 1; } catch { return 1; }
+  });
   const [curT, setCurT] = useState(0);
   const [dur, setDur] = useState(0);
 
@@ -674,7 +677,14 @@ ${numbered}`,
     a.play().then(() => setIsPlayingAudio(true)).catch(() => setIsPlayingAudio(false));
   };
   const skip = (d: number) => { const a = audioRef.current; if (!a || !dur) return; a.currentTime = Math.max(0, Math.min(dur, a.currentTime + d)); setCurT(a.currentTime); };
-  const changeRate = (r: number) => { setRate(r); if (audioRef.current) audioRef.current.playbackRate = r; };
+  // درخواست کاربر ۶: حفظ سرعت انتخابی + چیپ‌های از پیش تنظیم‌شده (۰.۷x/۰.۸۵x/۱x/۱.۱۵x)
+  const changeRate = (r: number) => {
+    const clamped = Math.max(0.5, Math.min(2, Math.round(r * 100) / 100));
+    setRate(clamped);
+    if (audioRef.current) audioRef.current.playbackRate = clamped;
+    try { localStorage.setItem('wb_hoeren_rate_v1', JSON.stringify(clamped)); } catch { /* ignore */ }
+  };
+  const SPEED_PRESETS = [0.7, 0.85, 1, 1.15];
 
   /** Browser voice: no generation needed; plays the transcript sentence by sentence. */
   const browserLocked = limited && !browserPlaying && playsRef.current >= MAX_PLAYS;
@@ -908,11 +918,21 @@ ${numbered}`,
                   onChange={e => { const v = Number(e.target.value); if (audioRef.current) audioRef.current.currentTime = v; setCurT(v); }} />
                 <span className="font-mono text-[11px] w-10 text-center">{dur ? fmt(Math.floor(dur)) : '--:--'}</span>
                 <button onClick={() => skip(10)} className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold">10 ⏩</button>
-                <input key={rate} type="number" inputMode="decimal" step="0.01" min="0.25" max="3" defaultValue={rate}
-                  onBlur={e => { const v = Number(String(e.target.value).replace(',', '.')); changeRate(v >= 0.25 && v <= 3 ? Math.round(v * 100) / 100 : 1); }}
-                  onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                  title="سرعت (مثلاً 0.9 یا 1.03)"
-                  className="w-14 bg-slate-100 dark:bg-slate-800 rounded-lg px-1.5 py-1 text-[11px] font-bold text-center outline-none" />
+                {/* درخواست کاربر ۶: چیپ‌های سرعت از پیش تنظیم‌شده — ۰.۷x/۰.۸۵x/۱x/۱.۱۵x — برای تمرین Hören B2 */}
+                <div className="flex items-center gap-0.5 px-1 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                  {SPEED_PRESETS.map(p => (
+                    <button key={p} onClick={() => changeRate(p)} title={`سرعت ${p}x`}
+                      className={`px-1.5 py-1 rounded text-[10px] font-bold transition ${Math.abs(rate - p) < 0.01 ? 'bg-[#1f5fbf] text-white' : 'text-[#5d6676] dark:text-[#a3adbd] hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+                      {p}x
+                    </button>
+                  ))}
+                  {/* عدد سفارشی هم باقی می‌ماند — هیچ قابلیتی حذف نشد */}
+                  <input key={rate} type="number" inputMode="decimal" step="0.01" min="0.25" max="3" defaultValue={rate}
+                    onBlur={e => { const v = Number(String(e.target.value).replace(',', '.')); changeRate(v >= 0.25 && v <= 3 ? v : 1); }}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    title="سرعت دلخواه (مثلاً 0.9 یا 1.03)"
+                    className="w-12 bg-transparent rounded px-1 py-0.5 text-[10px] font-bold text-center outline-none" />
+                </div>
               </div>
             )}
             {limited && (playUrl || transcript) && <div className="text-[11px] text-[#5d6676]">طبق قانون آزمون فقط {MAX_PLAYS} بار پخش مجاز است — باقی‌مانده: {playsLeft}</div>}

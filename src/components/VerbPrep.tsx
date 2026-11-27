@@ -8,18 +8,57 @@ import { generateWithGemini, parseAI } from '../utils/ai';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
 import { CountChips, LevelChips, PrimaryBtn, PrintPreview, Section, toFa, useConfirm } from './trainerUI';
 import { PageOverlay } from './PageOverlay';
-import { Printer } from 'lucide-react';
+import { Printer, Eye, EyeOff } from 'lucide-react';
 
 const STATS_KEY = 'wb_vprep_stats';
 const CUSTOM_KEY = 'wb_vprep_custom';
 const DAY = 86400000;
 const GAPS = [0, 1, 2, 4, 8, 16, 32];
+
+/* ───────── درخواست کاربر: SRS اختصاصی فعل + حرف اضافه ─────────
+ * کلید wb_vprep_srs_v1 — برای هر فعل یک رکورد: { streak, lastReviewed, due, graduated }
+ * بعد از ۳ پاسخ درست پیاپی، فعل «دانش‌آموخته» (graduated) می‌شود و از صف تمرین خارج
+ * می‌شود تا کاربر دستی آن را بازنشانی نکند. */
+const SRS_KEY = 'wb_vprep_srs_v1';
+interface Srs { streak: number; lastReviewed: number; due: number; graduated: boolean }
+const SRS_IVLS = [DAY, 3 * DAY, 7 * DAY, 14 * DAY]; // ۱ روز، ۳ روز، ۷ روز، ۱۴ روز
+const srsNow = (): number => Date.now();
+const loadSrs = (): Record<string, Srs> => load<Record<string, Srs>>(SRS_KEY, {});
+const saveSrs = (m: Record<string, Srs>) => save(SRS_KEY, m);
+/** ثبت نتیجهٔ پاسخ در SRS فعل: درست → streak++ و زمان مرور بعدی؛ غلط → streak = ۰، مرور فوری */
+const recordSrs = (id: string, ok: boolean): { srs: Record<string, Srs>; graduated: boolean } => {
+  const m = loadSrs();
+  const cur = m[id] || { streak: 0, lastReviewed: 0, due: 0, graduated: false };
+  let streak: number; let due: number; let graduated = cur.graduated;
+  if (ok) {
+    streak = cur.streak + 1;
+    const ivlIdx = Math.min(streak - 1, SRS_IVLS.length - 1);
+    due = srsNow() + SRS_IVLS[ivlIdx];
+    // بعد از ۳ پاسخ درست پیاپی، فعل دانش‌آموخته می‌شود
+    if (streak >= 3 && !cur.graduated) { graduated = true; }
+  } else {
+    streak = 0;
+    due = srsNow() + 10 * 60 * 1000; // ۱۰ دقیقه بعد
+    graduated = false;
+  }
+  m[id] = { streak, lastReviewed: srsNow(), due, graduated };
+  saveSrs(m);
+  return { srs: m, graduated };
+};
+/** بازنشانی دستی یک فعل از حالت دانش‌آموخته به صف تمرین */
+const resetSrs = (id: string): Record<string, Srs> => {
+  const m = loadSrs();
+  m[id] = { streak: 0, lastReviewed: 0, due: 0, graduated: false };
+  saveSrs(m);
+  return m;
+};
+
 interface St { box: number; due: number; ok: number; bad: number }
 const card = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3';
 const inp = 'w-full bg-slate-50 dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl px-3 py-2 text-sm outline-none focus:border-[#1f5fbf]';
-const kName = (k: string) => (k === 'A' ? 'Akkusativ' : 'Dativ');
-/* حالت اکوزاتیو: نارنجی کمرنگ (درخواست کاربر) — داتیو: سبز کمرنگ */
-const kCol = (k: string) => (k === 'A' ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300');
+const kName = (k: string) => k === 'A' ? 'Akkusativ' : k === 'D' ? 'Dativ' : k === 'G' ? 'Genitiv' : k === 'A/D' ? 'Akkusativ/Dativ' : String(k || '');
+/* حالت اکوزاتیو: نارنجی کمرنگ (درخواست کاربر) — داتیو: سبز کمرنگ — گنتیو: آبی فیروزه‌ای */
+const kCol = (k: string) => (k === 'A' ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300' : k === 'D' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : k === 'G' ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300' : 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300');
 const shuffle = <T,>(a: T[]): T[] => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const load = <T,>(k: string, d: T): T => { try { const v = JSON.parse(localStorage.getItem(k) || ''); return v ?? d; } catch { return d; } };
 const save = (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
@@ -127,8 +166,10 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [deletedIds, setDeletedIds] = useState<string[]>(() => loadVPrepDeleted());
   // دیالوگ ویرایش فعل — editOrig non-null یعنی باز است
   const [editOrig, setEditOrig] = useState<VP | null>(null);
-  const [editF, setEditF] = useState<{ verb: string; prep: string; kase: 'A' | 'D'; lvl: string; fa: string; ex: string }>({ verb: '', prep: 'an', kase: 'A', lvl: 'B1', fa: '', ex: '' });
+  const [editF, setEditF] = useState<{ verb: string; prep: string; kase: 'A' | 'D' | 'G' | 'A/D'; lvl: string; fa: string; ex: string }>({ verb: '', prep: 'an', kase: 'A', lvl: 'B1', fa: '', ex: '' });
   const [stats, setStats] = useState<Record<string, St>>(() => load(STATS_KEY, {}));
+  // درخواست کاربر: SRS اختصاصی فعل+حرف اضافه (wb_vprep_srs_v1) — جدا از stats قدیمی
+  const [srsMap, setSrsMap] = useState<Record<string, Srs>>(() => loadSrs());
   const delSet = useMemo(() => new Set(deletedIds), [deletedIds]);
   const all = useMemo(() => [...VERB_PREPS.filter(v => !delSet.has(v.id)).map(v => edits[v.id] || v), ...custom], [custom, edits, delSet]);
   // فعل‌های پایهٔ حذف‌شده (با نسخهٔ ویرایش‌شده‌شان اگر دارند) — برای بخش بازیابی در پاپ‌آپ افزودن
@@ -139,6 +180,44 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [addLvl, setAddLvl] = useState('B1');
   // جستجوی یادگیری (آلمانی + فارسی)
   const [search, setSearch] = useState('');
+  // درخواست کاربر: ۳ کارت بالای تب یادگیری (همه/یادگرفته‌ها/نوبت مرور) + نمایش/پنهان per-row
+  const [learnView, setLearnView] = useState<'all' | 'learned' | 'due'>('all');
+  const [revealedRows, setRevealedRows] = useState<Set<string>>(new Set());
+  const toggleRowReveal = (id: string) => setRevealedRows(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  /** درخواست کاربر: سه دستهٔ فعل — همه / یادگرفته‌ها (graduated) / نوبت مرور (due یا streak<3) */
+  const learnedVerbs = useMemo(() => {
+    return all.filter(v => !!(srsMap[v.id]?.graduated));
+  }, [all, srsMap]);
+  const dueVerbs = useMemo(() => {
+    const now = Date.now();
+    return all.filter(v => {
+      const s = srsMap[v.id];
+      if (!s) return true; // هرگز تمرین نشده
+      if (s.graduated) return false; // دانش‌آموخته
+      return s.due <= now || s.streak < 3; // سررسیده یا زنجیرهٔ کافی ندارد
+    });
+  }, [all, srsMap]);
+  /** فهرست نمایشی تب یادگیری بر اساس کارت انتخابی (همه/یادگرفته‌ها/نوبت مرور) + فیلتر/جستجوی فعلی */
+  const displayLearnList = useMemo(() => {
+    const baseSet = learnView === 'learned' ? new Set(learnedVerbs.map(v => v.id)) : learnView === 'due' ? new Set(dueVerbs.map(v => v.id)) : null;
+    const q = search.trim().toLowerCase();
+    const matches = all.filter(v => {
+      if (baseSet && !baseSet.has(v.id)) return false;
+      if (fPrep && v.prep !== fPrep) return false;
+      if (fLvl && levelOf(v) !== fLvl) return false;
+      if (!q) return true;
+      return v.verb.toLowerCase().includes(q)
+        || v.prep.toLowerCase() === q
+        || (v.fa || '').includes(search.trim())
+        || v.ex.toLowerCase().includes(q);
+    });
+    // معنی‌های نزدیک به هم کنار هم، بعد الفبای آلمانی (درخواست کاربر)
+    return [...matches].sort((a, b) => (a.fa || '').localeCompare(b.fa || '', 'fa') || a.verb.localeCompare(b.verb, 'de'));
+  }, [all, learnView, learnedVerbs, dueVerbs, fPrep, fLvl, search]);
   // practice session
   const [count, setCount] = useState(10);
   const [pMode, setPMode] = useState<'sentence' | 'classic'>('sentence');
@@ -146,7 +225,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   const [phase, setPhase] = useState<'prep' | 'art' | 'case' | 'res'>('prep');
   const [pick, setPick] = useState(''); const [typed, setTyped] = useState('');
   const [artPick, setArtPick] = useState('');
-  const [kase, setKase] = useState<'' | 'A' | 'D'>(''); const [good, setGood] = useState<boolean | null>(null);
+  const [kase, setKase] = useState<'' | 'A' | 'D' | 'G' | 'A/D'>(''); const [good, setGood] = useState<boolean | null>(null);
   // add
   const [f, setF] = useState({ verb: '', prep: 'an', kase: 'A', fa: '', ex: '' });
   const [bulk, setBulk] = useState(''); const [aiPrep, setAiPrep] = useState('an'); const [aiBusy, setAiBusy] = useState(false);
@@ -213,11 +292,21 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     const now = Date.now();
     const base = pool.filter(v => pMode === 'classic' || splitEx(v.ex, v.prep));
     if (!base.length) { onShowToast('برای این فیلتر فعلِ مناسب پیدا نشد.', true); return; }
-    const dueList = base.filter(v => stats[v.id] && stats[v.id].due <= now).sort((a, b) => stats[a.id].box - stats[b.id].box);
-    const fresh = shuffle(base.filter(v => !stats[v.id]));
-    const later = base.filter(v => stats[v.id] && stats[v.id].due > now).sort((a, b) => stats[a.id].due - stats[b.id].due);
-    const chosen = [...dueList, ...fresh, ...later].slice(0, count);
-    if (!chosen.length) { onShowToast('فعلی برای تمرین نیست.', true); return; }
+    // درخواست کاربر: صف تمرین بر اساس SRS — دانش‌آموخته‌ها حذف، اولیت: هرگز تمرین‌نشده → سررسیده → بقیه
+    const fresh = shuffle(base.filter(v => !srsMap[v.id]));
+    const due = base.filter(v => {
+      const s = srsMap[v.id];
+      return s && !s.graduated && s.due <= now;
+    }).sort((a, b) => (srsMap[a.id]?.due || 0) - (srsMap[b.id]?.due || 0));
+    const later = base.filter(v => {
+      const s = srsMap[v.id];
+      return s && !s.graduated && s.due > now;
+    }).sort((a, b) => (srsMap[a.id]?.due || 0) - (srsMap[b.id]?.due || 0));
+    const chosen = [...fresh, ...due, ...later].slice(0, count);
+    if (!chosen.length) {
+      onShowToast('فعلی برای تمرین نیست — همهٔ فعل‌ها دانش‌آموخته‌اند (با کلیک روی «یادگرفته‌ها» یک فعل را بازنشانی کن).', true);
+      return;
+    }
     // آرتیکل جاخالی‌شوندهٔ هر جمله (تمرین جمله‌ای: حرف اضافه + حالت کلمهٔ بعد)
     const arts: Record<string, string | null> = {};
     chosen.forEach(v => { arts[v.id] = pMode === 'sentence' ? (sentenceParts(v)?.art ?? null) : null; });
@@ -235,11 +324,17 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     return shuffle([correct, ...shuffle(ART_POOL.filter(a => a !== correct)).slice(0, 3)]);
   }, [cur?.id, sess?.i, sess, pMode]);
 
-  /** ثبت نتیجه در سیستم مرور فاصله‌دار + دفتر خطاها */
+  /** ثبت نتیجه در سیستم مرور فاصله‌دار + دفتر خطاها — و درخواست کاربر: SRS اختصاصی (۳ درست = دانش‌آموخته) */
   const gradeAnswer = (v: VP, ok: boolean, prepOk: boolean, wrongPrep: string, artAns: string | null, wrongArt: string) => {
     const s = { ...(stats[v.id] || { box: 0, due: 0, ok: 0, bad: 0 }) };
     if (ok) { s.ok++; s.box = Math.min(6, s.box + 1); s.due = Date.now() + GAPS[s.box] * DAY; } else { s.bad++; s.box = 0; s.due = Date.now(); }
     const ns = { ...stats, [v.id]: s }; setStats(ns); save(STATS_KEY, ns);
+    // درخواست کاربر: SRS جدا — ۳ درست پیاپی = دانش‌آموخته
+    const r = recordSrs(v.id, ok);
+    setSrsMap(r.srs);
+    if (r.graduated) {
+      onShowToast(`🎓 فعل «${v.verb} ${v.prep}» با ۳ پاسخ درست پیاپی دانش‌آموخته شد — از صف تمرین خارج شد. از تب «یادگرفته‌ها» می‌توانی آن را بازنشانی کنی.`);
+    }
     setSess(prev => prev ? { ...prev, ok: prev.ok + (ok ? 1 : 0), bad: prev.bad + (ok ? 0 : 1), goodIds: ok ? [...prev.goodIds, v.id] : prev.goodIds, badIds: ok ? prev.badIds : [...prev.badIds, v.id] } : prev);
     if (!ok) {
       const wrongEx = prepOk
@@ -255,14 +350,21 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
     else if (pMode === 'sentence') setPhase('res'), finishSentence(p.trim().toLowerCase(), '');
     else setPhase('case');
   };
-  const chooseCase = (k: 'A' | 'D') => {
+  const chooseCase = (k: 'A' | 'D' | 'G') => {
     if (!cur || !sess) return;
     setKase(k);
-    const prepOk = pick === cur.prep; const ok = prepOk && k === cur.kase;
+    // اگر حالت فعل «A/D» است (یعنی هر دو حالت می‌گیرد)، هر کدام از A یا D درست است
+    const prepOk = pick === cur.prep;
+    const kaseOk = cur.kase === 'A/D' ? (k === 'A' || k === 'D') : k === cur.kase;
+    const ok = prepOk && kaseOk;
     setGood(ok); setPhase('res');
     const s = { ...(stats[cur.id] || { box: 0, due: 0, ok: 0, bad: 0 }) };
     if (ok) { s.ok++; s.box = Math.min(6, s.box + 1); s.due = Date.now() + GAPS[s.box] * DAY; } else { s.bad++; s.box = 0; s.due = Date.now(); }
     const ns = { ...stats, [cur.id]: s }; setStats(ns); save(STATS_KEY, ns);
+    // درخواست کاربر: SRS جدا
+    const r = recordSrs(cur.id, ok);
+    setSrsMap(r.srs);
+    if (r.graduated) onShowToast(`🎓 فعل «${cur.verb} ${cur.prep}» دانش‌آموخته شد!`);
     setSess({ ...sess, ok: sess.ok + (ok ? 1 : 0), bad: sess.bad + (ok ? 0 : 1), goodIds: ok ? [...sess.goodIds, cur.id] : sess.goodIds, badIds: ok ? sess.badIds : [...sess.badIds, cur.id] });
     if (!ok) {
       const wrongEx = prepOk ? cur.ex : cur.ex.replace(new RegExp('(^|\\s)' + cur.prep + '(?=[\\s.,!?]|$)', 'i'), `$1${pick || '___'}`);
@@ -363,7 +465,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
   };
 
   /* ── چرا؟ توضیح معلم برای پاسخ نادرست (سه‌لایه در یک پاسخ کوتاه) ── */
-  const askWhy = async (v: VP, pickP: string, kaseK: '' | 'A' | 'D') => {
+  const askWhy = async (v: VP, pickP: string, kaseK: '' | 'A' | 'D' | 'G' | 'A/D') => {
     if (aiExpl[v.id] || whyBusy) return;
     if (!aiReadyFn()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
     setWhyBusy(v.id);
@@ -466,6 +568,24 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
       {/* ---------------- LEARN ---------------- */}
       {tab === 'learn' && (
         <div className="space-y-3">
+          {/* درخواست کاربر: ۳ کارت بالای تب یادگیری (همه/یادگرفته‌ها/نوبت مرور) با badge تعد */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { id: 'all' as const, label: 'همه فعل‌ها', icon: '📚', count: all.length },
+              { id: 'learned' as const, label: 'یادگرفته‌ها', icon: '🎓', count: learnedVerbs.length },
+              { id: 'due' as const, label: 'نوبت مرور', icon: '🔁', count: dueVerbs.length }
+            ]).map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setLearnView(opt.id)}
+                className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition flex flex-col items-center gap-0.5 ${learnView === opt.id ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white border-transparent shadow' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a] text-[#5d6676] dark:text-[#a3adbd]'}`}
+              >
+                <span className="text-base leading-none">{opt.icon}</span>
+                <span>{opt.label}</span>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${learnView === opt.id ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]'}`}>{toFa(opt.count)}</span>
+              </button>
+            ))}
+          </div>
           {/* جستجو: هم آلمانی هم فارسی (درخواست کاربر) */}
           <div className="relative">
             <input
@@ -492,47 +612,73 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
 
           <div className={card + ' !p-3'}>
             <div className="flex items-center justify-between flex-wrap gap-1">
-              <b className="text-base font-sans" dir="ltr">{fPrep || 'همهٔ حرف‌های اضافه'} <span className="text-xs font-normal text-[#5d6676]">({toFa(learnList.length)})</span></b>
+              <b className="text-base font-sans" dir="ltr">{fPrep || 'همهٔ حرف‌های اضافه'} <span className="text-xs font-normal text-[#5d6676]">({toFa(displayLearnList.length)})</span></b>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">مرتب بر اساس معنی‌های نزدیک، سپس الفبای آلمانی</span>
+                <span className="text-[11px] text-[#5d6676] dark:text-[#a3adbd]">
+                  {learnView === 'learned' ? 'فعل‌های دانش‌آموخته — حرف اضافه/ترجمه با چشم باز می‌شود' : learnView === 'due' ? 'نوبت مرور — حرف اضافه/ترجمه با چشم باز می‌شود' : 'مرتب بر اساس معنی‌های نزدیک، سپس الفبای آلمانی'}
+                </span>
                 {/* برگهٔ A4 فهرست فعل‌ها با معنی و مثال — همان فیلتر/جستجویی که دیده می‌شود، چاپ می‌شود */}
                 <button
                   onClick={() => setPrintOpen(true)}
-                  disabled={!learnList.length}
+                  disabled={!displayLearnList.length}
                   title="برگهٔ A4 فهرست فعل‌ها با معنی فارسی و جملهٔ مثال"
                   aria-label="برگهٔ A4 فهرست فعل‌ها"
                   className="w-9 h-9 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 active:scale-[.97] transition disabled:opacity-40"
                 ><Printer size={15} /></button>
               </div>
             </div>
-            {learnList.length === 0 && (
-              <div className="text-sm text-[#5d6676] py-3 text-center">ففعلی با این فیلتر/جستجو پیدا نشد.</div>
-            )}
-            {learnList.map(v => (
-              <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-1">
-                {/* فعل + حرف اضافه: سمت چپ و چپ‌به‌راست — چیپ حالت/سطح + بلندگو + چت + ویرایش/حذف: سمت راست روبه‌رویش (تصویر ۶) */}
-                <div className="flex items-center justify-between gap-2">
-                  <b dir="ltr" className="font-sans text-base text-left">{v.verb} <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span></b>
-                  <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink-0">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
-                    {/* نشان «ویرایش‌شده» برای فعل پایه‌ای که کاربر نسخهٔ جایگزینش را ثبت کرده */}
-                    {!v.custom && edits[origIdOf(v)] && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">ویرایش‌شده</span>}
-                    {v.custom && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">افزودهٔ من</span>}
-                    <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
-                    <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
-                    {/* ویرایش و حذف فعل (درخواست کاربر) — با تأییدیه برای حذف */}
-                    <button onClick={() => openEdit(v)} className="text-base opacity-80 hover:opacity-100" aria-label="ویرایش فعل" title="ویرایش فعل">✏️</button>
-                    <button onClick={() => delVerb(v)} className="text-base opacity-80 hover:opacity-100" aria-label="حذف فعل" title={v.custom ? 'حذف فعل (با تأییدیه)' : 'حذف فعل از فهرست (قابل بازیابی)'}>🗑️</button>
-                    {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap">✓ یاد گرفته</span>}
-                  </div>
-                </div>
-                {/* ترجمهٔ فارسی: راست‌به‌چپ، راست‌چین */}
-                <div className="text-sm text-right">{v.fa}</div>
-                {/* مثال آلمانی: چپ‌به‌راست، چپ‌چین */}
-                <div dir="ltr" className="text-sm leading-7 text-left"><Ex v={v} onTap={w => tapWord(w, v.ex)} /></div>
+            {displayLearnList.length === 0 && (
+              <div className="text-sm text-[#5d6676] py-3 text-center">
+                {learnView === 'learned' ? 'هنوز فعلی دانش‌آموخته نشده — با ۳ پاسخ درست پیاپی در تمرین، فعل به اینجا می‌آید.' : learnView === 'due' ? 'فعلی برای مرور نیست — همهٔ فعل‌ها یا دانش‌آموخته‌اند یا هنوز نوبتشان نشده.' : 'فعلی با این فیلتر/جستجو پیدا نشد.'}
               </div>
-            ))}
+            )}
+            {displayLearnList.map(v => {
+              const revealed = revealedRows.has(v.id);
+              const isGraduated = !!(srsMap[v.id]?.graduated);
+              return (
+                <div key={v.id} className="border-t border-slate-100 dark:border-slate-800 pt-2 space-y-1">
+                  {/* فعل + چیپ حالت/سطح + بلندگو + چت + ویرایش/حذف + چشم (درخواست کاربر) */}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* درخواست کاربر: در حالت «یادگرفته‌ها/نوبت مرور» حرف اضافه و ترجمه پنهان است؛ با چشم باز می‌شود */}
+                    <b dir="ltr" className="font-sans text-base text-left">
+                      {v.verb}{' '}
+                      {(learnView === 'all' || revealed)
+                        ? <span className="text-[#1f5fbf] dark:text-[#7fb0ff]">{v.prep}</span>
+                        : <span className="text-slate-400">____</span>}
+                    </b>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink-0">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kCol(v.kase)}`}>{kName(v.kase)}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">{levelOf(v)}</span>
+                      {/* نشان دانش‌آموخته (graduated) — درخواست کاربر */}
+                      {isGraduated && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">🎓 دانش‌آموخته</span>}
+                      {/* نشان «ویرایش‌شده» برای فعل پایه‌ای که کاربر نسخهٔ جایگزینش را ثبت کرده */}
+                      {!v.custom && edits[origIdOf(v)] && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300">ویرایش‌شده</span>}
+                      {v.custom && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">افزودهٔ من</span>}
+                      {/* درخواست کاربر: چشم برای نمایش/پنهان حرف اضافه و ترجمه در حالت یادگرفته‌ها/نوبت مرور */}
+                      {learnView !== 'all' && (
+                        <button onClick={() => toggleRowReveal(v.id)} title={revealed ? 'پنهان‌کردن' : 'نمایش حرف اضافه و ترجمه'} aria-label={revealed ? 'پنهان‌کردن' : 'نمایش'} className="w-7 h-7 rounded-lg border border-[#dde1ea] dark:border-[#333b4a] bg-slate-50 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 transition">
+                          {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      )}
+                      {/* درخواست کاربر: بازنشانی دستی فعل دانش‌آموخته به صف تمرین */}
+                      {isGraduated && (
+                        <button onClick={() => { setSrsMap(resetSrs(v.id)); onShowToast(`فعل «${v.verb} ${v.prep}» به صف تمرین بازگردانده شد.`); }} title="بازنشانی به صف تمرین" aria-label="بازنشانی به صف تمرین" className="text-[10px] font-bold px-2 py-1 rounded-lg border border-[#1f5fbf]/40 text-[#1f5fbf] dark:text-[#7fb0ff] flex-shrink-0">↺ مرور دوباره</button>
+                      )}
+                      <button onClick={() => speak(v.ex)} className="text-base" aria-label="پخش">🔊</button>
+                      <button onClick={() => setChatId(v.id)} className="text-base" aria-label="گفتگو با معلم">💬</button>
+                      {/* ویرایش و حذف فعل (درخواست کاربر) — با تأییدیه برای حذف */}
+                      <button onClick={() => openEdit(v)} className="text-base opacity-80 hover:opacity-100" aria-label="ویرایش فعل" title="ویرایش فعل">✏️</button>
+                      <button onClick={() => delVerb(v)} className="text-base opacity-80 hover:opacity-100" aria-label="حذف فعل" title={v.custom ? 'حذف فعل (با تأییدیه)' : 'حذف فعل از فهرست (قابل بازیابی)'}>🗑️</button>
+                      {stats[v.id] && stats[v.id].box >= 3 && <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap">✓ یاد گرفته</span>}
+                    </div>
+                  </div>
+                  {/* ترجمهٔ فارسی: راست‌به‌چپ، راست‌چین — در حالت all یا revealed دیده می‌شود */}
+                  {(learnView === 'all' || revealed) && <div className="text-sm text-right">{v.fa}</div>}
+                  {/* مثال آلمانی: چپ‌به‌راست، چپ‌چین */}
+                  {(learnView === 'all' || revealed) && <div dir="ltr" className="text-sm leading-7 text-left"><Ex v={v} onTap={w => tapWord(w, v.ex)} /></div>}
+                </div>
+              );
+            })}
           </div>
 
           {/* افزودن فعل — دکمهٔ پایین فهرست؛ باز کردن پاپ‌آپ (درخواست کاربر، تصویر ۱) */}
@@ -551,8 +697,8 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-4 shadow-xs">
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 py-2"><div className="font-extrabold text-lg" dir="ltr">{toFa(pool.length)}</div><div className="text-[11px]">فعل در این فیلتر</div></div>
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 py-2"><div className="font-extrabold text-lg text-emerald-700 dark:text-emerald-300" dir="ltr">{toFa(learned)}</div><div className="text-[11px]">یاد گرفته</div></div>
-            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 py-2"><div className="font-extrabold text-lg text-amber-700 dark:text-amber-300" dir="ltr">{toFa(all.filter(v => stats[v.id] && stats[v.id].due <= Date.now()).length)}</div><div className="text-[11px]">نوبت مرور</div></div>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 py-2"><div className="font-extrabold text-lg text-emerald-700 dark:text-emerald-300" dir="ltr">{toFa(learnedVerbs.length)}</div><div className="text-[11px]">یاد گرفته</div></div>
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 py-2"><div className="font-extrabold text-lg text-amber-700 dark:text-amber-300" dir="ltr">{toFa(dueVerbs.length)}</div><div className="text-[11px]">نوبت مرور</div></div>
           </div>
 
           <Section n="۱" label="سطح">
@@ -646,7 +792,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
 
                 {phase === 'res' && (
                   <div className="space-y-2.5">
-                    <div className={`p-3 rounded-xl text-sm font-bold leading-7 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
+                    <div className={`p-3 md:p-4 rounded-xl text-sm md:text-base font-bold leading-7 md:leading-8 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
                       {good ? '✅ درست!' : (
                         <>
                           ❌ {pick !== cur.prep ? `حرف اضافه «${pick}» نبود. ` : ''}
@@ -661,7 +807,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
                     {!good && (
                       <div className="space-y-1.5">
                         {(aiExpl[cur.id] || whyBusy === cur.id) ? (
-                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[12px] leading-6 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
+                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm leading-6 md:leading-7 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
                             {whyBusy === cur.id ? '🤖 معلم در حال توضیح…' : aiExpl[cur.id]}
                           </div>
                         ) : (
@@ -702,17 +848,20 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
                 {phase === 'case' && (
                   <div className="space-y-2">
                     <div className="text-center text-sm font-bold">حالت دستوری بعد از «<span dir="ltr" className="font-sans">{pick}</span>» در این فعل؟</div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className={cur.kase === 'G' ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
                       <button onClick={() => chooseCase('A')} className="h-12 rounded-xl bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 font-bold">Akkusativ</button>
                       <button onClick={() => chooseCase('D')} className="h-12 rounded-xl bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold">Dativ</button>
+                      {cur.kase === 'G' && (
+                        <button onClick={() => chooseCase('G')} className="h-12 rounded-xl bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200 font-bold">Genitiv</button>
+                      )}
                     </div>
                   </div>
                 )}
 
                 {phase === 'res' && (
                   <div className="space-y-2.5">
-                    <div className={`p-3 rounded-xl text-sm font-bold leading-7 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
-                      {good ? '✅ درست!' : `❌ ${pick !== cur.prep ? `حرف اضافه «${pick}» نبود. ` : ''}${kase !== cur.kase ? `حالت دستوری ${kName(cur.kase)} است. ` : ''}`}
+                    <div className={`p-3 md:p-4 rounded-xl text-sm md:text-base font-bold leading-7 md:leading-8 ${good ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>
+                      {good ? '✅ درست!' : `❌ ${pick !== cur.prep ? `حرف اضافه «${pick}» نبود. ` : ''}${cur.kase === 'A/D' ? '' : (kase !== cur.kase ? `حالت دستوری ${kName(cur.kase)} است. ` : '')}`}
                       <div dir="ltr" className="font-sans text-base mt-1">{cur.verb} <u>{cur.prep}</u> + {kName(cur.kase)}</div>
                     </div>
 
@@ -720,7 +869,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
                     {!good && (
                       <div className="space-y-1.5">
                         {(aiExpl[cur.id] || whyBusy === cur.id) ? (
-                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 py-2 text-[12px] leading-6 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
+                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-[#dde1ea] dark:border-[#333b4a] px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm leading-6 md:leading-7 text-[#1f2a3d] dark:text-[#e7ecf5] whitespace-pre-wrap">
                             {whyBusy === cur.id ? '🤖 معلم در حال توضیح…' : aiExpl[cur.id]}
                           </div>
                         ) : (
@@ -761,7 +910,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
           <div className={card}>
             <div className="font-extrabold text-sm">✍️ افزودن یک فعل</div>
             <input dir="ltr" className={inp} placeholder="Verb (z. B. sich freuen)" value={f.verb} onChange={e => setF({ ...f, verb: e.target.value })} />
-            <div className="grid grid-cols-2 gap-2">{PrepSel(f.prep, p => setF({ ...f, prep: p }))}<select className={inp} value={f.kase} onChange={e => setF({ ...f, kase: e.target.value })}><option value="A">Akkusativ</option><option value="D">Dativ</option></select></div>
+            <div className="grid grid-cols-2 gap-2">{PrepSel(f.prep, p => setF({ ...f, prep: p }))}<select className={inp} value={f.kase} onChange={e => setF({ ...f, kase: e.target.value as 'A' | 'D' | 'G' | 'A/D' })}><option value="A">Akkusativ</option><option value="D">Dativ</option><option value="G">Genitiv</option><option value="A/D">Akkusativ/Dativ</option></select></div>
             <input className={inp} placeholder="معنی فارسی" value={f.fa} onChange={e => setF({ ...f, fa: e.target.value })} />
             <input dir="ltr" className={inp} placeholder="Beispielsatz (mit der Präposition)" value={f.ex} onChange={e => setF({ ...f, ex: e.target.value })} />
             <button onClick={() => { const it = parseVP(`${f.verb}|${f.prep}|${f.kase}|${f.fa}|${f.ex}`, true).filter(v => splitEx(v.ex, v.prep)).map(v => ({ ...v, lvl: addLvl })); if (!it.length) { onShowToast('فعل، معنی و جملهٔ مثال (شامل همان حرف اضافه) لازم است.', true); return; } if (addCustom(it)) setF({ ...f, verb: '', fa: '', ex: '' }); }} className="w-full h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm">افزودن</button>
@@ -836,7 +985,7 @@ export const VerbPrep: React.FC<{ onShowToast: (m: string, e?: boolean) => void;
             <input dir="ltr" className={inp} placeholder="Verb (z. B. sich freuen)" value={editF.verb} onChange={e => setEditF({ ...editF, verb: e.target.value })} />
             <div className="grid grid-cols-3 gap-2">
               {PrepSel(editF.prep, p => setEditF({ ...editF, prep: p }))}
-              <select className={inp} value={editF.kase} onChange={e => setEditF({ ...editF, kase: e.target.value as 'A' | 'D' })}><option value="A">Akkusativ</option><option value="D">Dativ</option></select>
+              <select className={inp} value={editF.kase} onChange={e => setEditF({ ...editF, kase: e.target.value as 'A' | 'D' | 'G' | 'A/D' })}><option value="A">Akkusativ</option><option value="D">Dativ</option><option value="G">Genitiv</option><option value="A/D">Akkusativ/Dativ</option></select>
               <select className={inp} value={editF.lvl} onChange={e => setEditF({ ...editF, lvl: e.target.value })}>{LEVELS.map(l => <option key={l} value={l}>{l}</option>)}</select>
             </div>
             <input className={inp} placeholder="معنی فارسی" value={editF.fa} onChange={e => setEditF({ ...editF, fa: e.target.value })} />

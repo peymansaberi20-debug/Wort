@@ -232,49 +232,49 @@ JSON REQUIREMENTS
               {report.issues.length > 0 && (
                 <div className="space-y-2">
                   {report.issues.map((it, i) => (
-                    <div key={i} className="p-3 rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold ${ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>
+                    <div key={i} className="p-3 md:p-4 rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] space-y-1.5">
+                      <span className={`inline-block px-2 py-0.5 rounded-lg text-[11px] md:text-xs font-bold ${ISSUE_BADGE[it.type] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>
                         {it.type}
                       </span>
                       {(it.wrong || it.correct) && (
-                        <div className="flex flex-wrap items-baseline gap-2 text-sm" dir="ltr">
+                        <div className="flex flex-wrap items-baseline gap-2 text-sm md:text-base" dir="ltr">
                           {it.wrong && <span className="font-sans font-bold text-red-600 dark:text-red-400 line-through">{it.wrong}</span>}
                           {it.wrong && it.correct && <span className="text-slate-400">→</span>}
                           {it.correct && <span className="font-sans font-bold text-emerald-700 dark:text-emerald-300">{it.correct}</span>}
                         </div>
                       )}
-                      {it.why_fa && <div className="text-xs leading-6 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
+                      {it.why_fa && <div className="text-xs md:text-sm leading-6 md:leading-7 text-[#5d6676] dark:text-[#a3adbd]">{it.why_fa}</div>}
                     </div>
                   ))}
                 </div>
               )}
 
               {report.preposition_case_fa && (
-                <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 text-sm leading-7">
+                <div className="p-3 md:p-4 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 text-sm md:text-base leading-7">
                   <b className="text-violet-700 dark:text-violet-300">🧩 حرف اضافه و حالت دستوری: </b>
                   {report.preposition_case_fa}
                 </div>
               )}
 
               {report.spelling_fa && (
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-sm leading-7">
+                <div className="p-3 md:p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-sm md:text-base leading-7">
                   <b className="text-amber-700 dark:text-amber-300">🔤 املا (Rechtschreibung): </b>
                   {report.spelling_fa}
                 </div>
               )}
 
-              <div className="text-xs font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
+              <div className="text-xs md:text-sm font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">🧾 جمع بندی</div>
               {report.tip_fa && (
-                <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm leading-7">
+                <div className="p-3 md:p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900 text-sm md:text-base leading-7">
                   <b className="text-indigo-700 dark:text-indigo-300">💡 نکته: </b>
                   {report.tip_fa}
                 </div>
               )}
 
               {report.corrected_de && (
-                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
-                  <div className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی جمله:</div>
-                  <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
+                <div className="p-3 md:p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
+                  <div className="text-xs md:text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی جمله:</div>
+                  <div dir="ltr" className="font-sans font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">{report.corrected_de}</div>
                   <button
                     onClick={() => setShadowOpen(true)}
                     className="mt-2 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5"

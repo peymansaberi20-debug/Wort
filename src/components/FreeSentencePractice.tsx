@@ -137,7 +137,7 @@ export const FreeSentencePractice: React.FC<{
       </div>
 
       {errMsg && (
-        <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">{errMsg}</div>
+        <div className="p-3 md:p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-sm md:text-base text-red-700 dark:text-red-300">{errMsg}</div>
       )}
 
       {report && (
@@ -163,7 +163,7 @@ export const FreeSentencePractice: React.FC<{
           )}
           {/* ۳) باکس سبز: چیزهایی که درست نوشتی (همیشه حداقل یکی) */}
           {report.good.length > 0 && (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 space-y-1.5">
+            <div className="p-3 md:p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 space-y-1.5">
               <div className="text-sm font-bold text-emerald-800 dark:text-emerald-200">✅ چیزهایی که درست نوشتی</div>
               {report.good.map((g, i) => (
                 <div key={i} className="text-xs leading-6 text-emerald-900 dark:text-emerald-100">
@@ -174,7 +174,7 @@ export const FreeSentencePractice: React.FC<{
           )}
           {/* ۴) باکس قرمز: ایرادها یکی‌یکی با ضربدر */}
           {report.issues.length > 0 && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 space-y-2.5">
+            <div className="p-3 md:p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 space-y-2.5">
               <div className="text-sm font-bold text-red-800 dark:text-red-200">❌ ایرادها ({toFa(report.issues.length)})</div>
               {report.issues.map((it, i) => (
                 <div key={i} className="rounded-xl bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a] p-2.5 space-y-1.5">
@@ -203,7 +203,7 @@ export const FreeSentencePractice: React.FC<{
           )}
 
           {report.corrected_de && (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
+            <div className="p-3 md:p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
               <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-1">✅ شکل درست و طبیعی:</div>
               <div dir="ltr" className="font-sans font-bold text-base text-slate-900 dark:text-slate-100"><ClickableWords text={report.corrected_de} onWord={setLookup} /></div>
               <button

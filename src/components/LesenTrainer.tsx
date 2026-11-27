@@ -97,6 +97,8 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuick
 
   const [examOrg, setExamOrg] = useState<'ÖSD' | 'Goethe' | 'telc' | 'EPD'>(run ? run.org : 'ÖSD');
   const [examLevel, setExamLevel] = useState<'A1' | 'A2' | 'B1' | 'B2' | 'C1'>(run ? (run.level as any) : 'B2');
+  // درخواست کاربر ۴: متون اصیل Lesen با موضوعات واقعی آزمون B2 (DW-Langsam-style)
+  const [lesenTopic, setLesenTopic] = useState<string>('');
 
   const [archiveExams, setArchiveExams] = useState<ReadingExam[]>(() => loadList<ReadingExam>(ARCHIVE_LESEN));
   const [examResults, setExamResults] = useState<ExamResultRecord[]>(() => loadList<ExamResultRecord>(RESULTS_LESEN));
@@ -277,11 +279,18 @@ export const LesenTrainer: React.FC<LesenTrainerProps> = ({ onShowToast, onQuick
       examLevel === 'A1' ? '80-120 words per part' : examLevel === 'A2' ? '130-180 words per part' :
       examLevel === 'B1' ? '220-300 words per part' : '320-450 words per part (authentic journalistic/academic style)';
 
+    // درخواست کاربر ۴: موضوع و سبک اصیل (DW-Langsam-style) به پرامپت اضافه شد
+    const topicHint = lesenTopic
+      ? `\n- THEMATIC FOCUS: The texts should be about "${lesenTopic}". Use authentic, real-world examples and current vocabulary from this domain.`
+      : '';
+    const authenticStyle = examLevel === 'B2' || examLevel === 'C1'
+      ? `\n- AUTHENTICITY: Write in the style of Deutsche Welle (Langsam Nachrichten), Zeit Online, or Spiegel Online — journalistic, multi-paragraph, with quotes, statistics and real-world context. Avoid generic "AI-textbook" topics; choose concrete scenarios (a specific city, a real study, an actual current debate in DACH region).`
+      : '';
     const prompt = `You are an official German exam developer for ${examOrg}. Create an authentic, rigorous Reading Comprehension test (Leseverstehen) calibrated to CEFR Level ${examLevel}.
 - Organization: ${examOrg}
 - Level: ${examLevel}
 - Structure: ${spec.structure}
-- Length: ${wordCountTarget}.
+- Length: ${wordCountTarget}.${topicHint}${authenticStyle}
 
 Create 3 distinct exam parts (Teile) with 4 questions each (total 12 questions numbered sequentially 1 to 12).
 Each question has exactly 3 options and "correct" must be the EXACT text of one option.
@@ -382,6 +391,19 @@ Return ONLY a valid JSON object (no markdown, no extra text):
               <label className="block text-[13px] font-bold mb-1.5">انتخاب سطح:</label>
               <LevelChips value={examLevel} onChange={l => setExamLevel(l as any)} levels={availableLevels as unknown as string[]} />
             </div>
+          </div>
+          {/* درخواست کاربر ۴: انتخاب موضوع اصیل Lesen — موضوعات واقعی آزمون B2 */}
+          <div>
+            <label className="block text-[13px] font-bold mb-1.5">موضوع متن (اختیاری — برای متون اصیل):</label>
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => setLesenTopic('')} className={`text-[11px] rounded-full px-2.5 py-1 border transition ${!lesenTopic ? 'bg-[#1f5fbf] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>موضوع آزاد</button>
+              {['Alltag & Familie', 'Beruf & Arbeit', 'Umwelt & Klima', 'Migration & Integration', 'Gesundheit & Ernährung', 'Bildung & Schule', 'Medien & Internet', 'Reise & Kultur', 'Konsum & Wirtschaft', 'Technik & Digitalisierung'].map(t => (
+                <button key={t} onClick={() => setLesenTopic(t)} dir="ltr" className={`text-[11px] rounded-full px-2.5 py-1 border transition ${lesenTopic === t ? 'bg-[#1f5fbf] text-white border-transparent' : 'bg-slate-50 dark:bg-[#141923] border-[#dde1ea] dark:border-[#333b4a]'}`}>{t}</button>
+              ))}
+            </div>
+            {(examLevel === 'B2' || examLevel === 'C1') && (
+              <p className="text-[11px] text-[#5d6676] mt-1.5">📝 سبک اصیل: متن‌ها به سبک Deutsche Welle / Zeit Online / Spiegel ساخته می‌شوند — چندپاراگرافی، با نقل‌قول، آمار و زمینهٔ واقعی.</p>
+            )}
           </div>
           <div className="flex items-center justify-between gap-2">
             <button onClick={() => setNoHelp(!noHelp)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${noHelp ? 'bg-rose-600 text-white border-rose-600' : 'bg-white dark:bg-[#1b2029] border-[#dde1ea] dark:border-[#333b4a]'}`}>🚫 حالت بدون کمک {noHelp ? '(روشن)' : ''}</button>

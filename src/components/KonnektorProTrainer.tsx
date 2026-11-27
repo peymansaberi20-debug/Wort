@@ -865,19 +865,19 @@ export const KonnektorProTrainer: React.FC<KonnektorProTrainerProps> = ({ settin
 
                 {/* بازخورد فوری همان‌جا — بعد از بررسی */}
                 {c && !c.failed && (
-                  <div className={`rounded-xl p-3 space-y-2 border ${c.ok ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800'}`}>
+                  <div className={`rounded-xl p-3 md:p-4 space-y-2 border ${c.ok ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800'}`}>
                     <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${c.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{c.ok ? '✓ قابل قبول' : '✗ نیاز به اصلاح'}</span>
+                      <span className={`text-xs md:text-sm font-bold ${c.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-400'}`}>{c.ok ? '✓ قابل قبول' : '✗ نیاز به اصلاح'}</span>
                       <button onClick={() => doSpeak(c.corrected || it.first + ' ' + ans)} className="text-base" title="تلفظ جملهٔ درست">🔊</button>
                     </div>
                     {!c.ok && ans.trim() && (
-                      <div dir="ltr" className="text-sm leading-7" style={{ textAlign: 'left' }}>
+                      <div dir="ltr" className="text-sm md:text-base leading-7 md:leading-8" style={{ textAlign: 'left' }}>
                         <span className="text-[#5d6676] font-sans"><ClickableWords text={it.first} onWord={t => tapTok(t, it.first)} /> </span>
                         <b className="text-red-500 line-through decoration-1 font-sans">{ans}</b>
                       </div>
                     )}
                     {c.corrected && (
-                      <div dir="ltr" className="text-sm leading-7 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}><ClickableWords text={c.corrected} onWord={t => tapTok(t, c.corrected || '')} /></div>
+                      <div dir="ltr" className="text-sm md:text-base leading-7 md:leading-8 font-sans font-bold text-emerald-900 dark:text-emerald-200" style={{ textAlign: 'left' }}><ClickableWords text={c.corrected} onWord={t => tapTok(t, c.corrected || '')} /></div>
                     )}
                     {/* برداشت یک آلمانی از جملهٔ کاربر — ادغام از «تکمیل جمله» */}
                     {c.understanding && (

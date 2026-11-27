@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Word } from '../types';
 import { speak } from '../utils/audio';
 import { generateText, hasApiKey, describeAiError } from '../utils/aiProvider';
+import { generateWithGemini } from '../utils/ai';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, Section, SqBtn, TopicInput, faDate, toFa, useConfirm } from './trainerUI';
 import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank } from '../utils/aiBank';
@@ -59,6 +60,17 @@ const saveSatzArch = (a: SatzArch[]): void => { try { localStorage.setItem(SATZ_
  * چیدن جمله (Satzbau) — با پیکربندی یکدست مثل بقیهٔ تمرین‌ها (درخواست کاربر):
  *  - «جمله‌های خودت»: از مثال‌های واژگان کاربر (مثل قبل)
  *  - «ساخت با هوش مصنوعی»: انتخاب سطح + تعداد جمله → AI جمله‌های تازهٔ هم‌سطح می‌سازد
+ *
+ * درخواست کاربر (درخواست ۷ SatzPuzzle بهبود):
+ *  - همیشه ۳ کلمهٔ اضافی (distractor) به بانک کلمه‌ها افزوده می‌شود.
+ *  - اندازهٔ بانک کلمه‌ها = تعداد واژه‌های جمله + ۳.
+ *  - جعبهٔ پاسخ با ابعاد ثابت (نه با اضافه‌شدن کلمه‌ها بزرگ‌نمایی نمی‌شود) و جای خالی N تا (N = تعداد واژه‌های جمله).
+ *  - پیام «۳ کلمه اضافی برای آزمایش شما اضافه شده» بالای هر تمرین.
+ *  - چت با معلم پایین هر تمرین.
+ *  - دکمهٔ «بعدی (بدون بررسی)» پیش از بررسی برای عبور بدون امتیاز.
+ *  - پشتیبانی از HTML5 drag-and-drop (به‌علاوهٔ کلیک برای جای‌گذاری).
+ *  - رنگ‌های روشن‌تر کاشی‌های بانک کلمه‌ها و دکمهٔ بلندگو از قرمز به آبی تغییر کرد.
+ *  - سطح‌بندی AI: در سطوح بالاتر جمله‌ها پیچیده‌تر (حرف اضافه، فعل بازتابی، جملهٔ پیرو).
  */
 export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast, onQuickAddWord, onViewWord }) => {
   const ownPool = useMemo(() => collect(words), [words]);
@@ -72,12 +84,26 @@ export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast, onQuickAd
   const [queue, setQueue] = useState<Item[]>([]);
   const [idx, setIdx] = useState(0);
   const split = (s: string) => s.split(/\s+/);
-  const scramble = (s: string) => { const t = split(s); let b = shuffle(t); for (let k = 0; k < 6 && b.join(' ') === t.join(' '); k++) b = shuffle(t); return b.map((text, id) => ({ id, text })); };
+  const scramble = (s: string) => {
+    const t = split(s);
+    let b = shuffle(t);
+    for (let k = 0; k < 6 && b.join(' ') === t.join(' '); k++) b = shuffle(t);
+    return b.map((text, id) => ({ id, text }));
+  };
   const [bank, setBank] = useState<{ id: number; text: string }[]>([]);
   const [ans, setAns] = useState<{ id: number; text: string }[]>([]);
   const [res, setRes] = useState<null | boolean>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
+  /** شمارهٔ کلمه‌ای که در حال drag است — null یعنی هیچ کلمه‌ای در حال drag نیست */
+  const [dragId, setDragId] = useState<number | null>(null);
+
+  // چت با معلم — مینیمال، فقط برای همین جمله
+  const [chatMsgs, setChatMsgs] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (chatEndRef.current) chatEndRef.current.scrollIntoView({ block: 'end' }); }, [chatMsgs, chatBusy]);
 
   // آرشیو تمرین‌های ساخته‌شدهٔ AI + بانک مشترک ابری
   const [arch, setArch] = useState<SatzArch[]>(loadSatzArch);
@@ -105,27 +131,79 @@ export const SatzPuzzle: React.FC<DrillProps> = ({ words, onShowToast, onQuickAd
     return () => { alive = false; };
   }, []);
 
+  /* ───────── درخواست کاربر: ۳ کلمهٔ اضافی (distractor) ─────────
+   * بانک کلمه‌های هر جمله = کلمه‌های خودِ جمله + ۳ کلمهٔ اضافی گمراه‌کننده.
+   * در حالت own: از یک فهرست کوتاه واژه‌های رایج آلمانی انتخاب تصادفی می‌شوند.
+   * در حالت ai: AI در فیلد distractors سه کلمه پیشنهاد می‌دهد؛ اگر نداد، از همان فهرست انتخاب می‌شود. */
+  const DISTRACTOR_POOL: string[] = useMemo(() => [
+    'aber', 'und', 'oder', 'deshalb', 'trotzdem', 'weil', 'dass', 'wenn', 'als', 'ob',
+    'heute', 'morgen', 'gestern', 'später', 'früh', 'jetzt', 'immer', 'nie', 'oft', 'selten',
+    'schnell', 'langsam', 'schön', 'groß', 'klein', 'gut', 'schlecht', 'neu', 'alt', 'viel',
+    'der', 'die', 'das', 'ein', 'eine', 'mein', 'dein', 'sein', 'ihr', 'unser',
+    'Haus', 'Schule', 'Arbeit', 'Freund', 'Familie', 'Wetter', 'Zeit', 'Stadt', 'Land', 'Kind',
+    'gehen', 'kommen', 'machen', 'sehen', 'sagen', 'wissen', 'können', 'wollen', 'müssen', 'sollen',
+    'sich', 'man', 'doch', 'ja', 'nein', 'schon', 'noch', 'nur', 'auch', 'sehr'
+  ], []);
+
+  const pickDistractors = (sentence: string, n = 3, aiList?: string[]): string[] => {
+    const used = new Set(sentence.split(/\s+/).map(s => s.toLowerCase().replace(/[^\wäöüß]/gi, '')));
+    const out: string[] = [];
+    const fromAi = Array.isArray(aiList) ? aiList.map(s => String(s || '').trim()).filter(Boolean) : [];
+    for (const cand of fromAi) {
+      const k = cand.toLowerCase().replace(/[^\wäöüß]/gi, '');
+      if (k && !used.has(k) && !out.some(x => x.toLowerCase().replace(/[^\wäöüß]/gi, '') === k)) out.push(cand);
+      if (out.length >= n) break;
+    }
+    const pool = shuffle(DISTRACTOR_POOL);
+    for (const cand of pool) {
+      if (out.length >= n) break;
+      const k = cand.toLowerCase().replace(/[^\wäöüß]/gi, '');
+      if (k && !used.has(k) && !out.some(x => x.toLowerCase().replace(/[^\wäöüß]/gi, '') === k)) out.push(cand);
+    }
+    return out.slice(0, n);
+  };
+
+  /** ساخت بانک کلمه‌ها برای یک جمله — جمله + ۳ کلمهٔ اضافی، همه با هم به‌هم‌ریخته */
+  const buildBank = (de: string, distractors: string[]): { id: number; text: string }[] => {
+    const ws = split(de).map(t => t.trim()).filter(Boolean);
+    const extra = distractors.filter(Boolean);
+    const all = shuffle([...ws, ...extra]);
+    return all.map((text, id) => ({ id, text }));
+  };
+
   /** شروع با جمله‌های خودت */
   const startOwn = () => {
     const q = shuffle(ownPool).slice(0, 10);
+    if (!q.length) { onShowToast('جمله‌ای برای تمرین پیدا نشد.', true); return; }
     setQueue(q); setScore(0); setDone(false); setIdx(0);
-    setBank(q[0] ? scramble(q[0].de) : []); setAns([]); setRes(null);
+    setBank(buildBank(q[0].de, pickDistractors(q[0].de))); setAns([]); setRes(null);
+    setChatMsgs([]); setChatDraft('');
     setScreen('run');
   };
 
-  /** ساخت جمله‌های هم‌سطح با هوش مصنوعی (سطح + تعداد از پیکربندی) */
+  /** ساخت جمله‌های هم‌سطح با هوش مصنوعی (سطح + تعداد از پیکربندی) — درخواست کاربر: سطح‌بندی پیچیدگی */
   const startAi = async () => {
     if (!hasApiKey()) { onShowToast('معلم در تنظیمات برنامه فعال نیست — از صفحهٔ تنظیمات فعالش کن.', true); return; }
     setBusy(true);
     try {
+      // درخواست کاربر: در سطح بالاتر جمله‌ها پیچیده‌تر — حرف اضافه، فعل بازتابی، جملهٔ پیرو
+      const lvlHint = level === 'A1' || level === 'A2'
+        ? 'einfache Hauptsätze, 5–8 Wörter, häufiger Wortschatz'
+        : level === 'B1'
+          ? 'mit Präpositionen, reflexiven Verben (sich …), gelegentlich Nebensatz mit weil/dass/wenn, 6–10 Wörter'
+          : level === 'B2'
+            ? 'komplexere Sätze mit Nebensatz, reflexiven Verben mit Akkusativ/Dativ, Präpositionen, 7–12 Wörter'
+            : 'anspruchsvolle Sätze mit Konjunktiv, erweitertem Infinitiv, komplexen Präpositionalgefügen, 8–14 Wörter';
       const prompt = `Du bist ein erfahrener Deutschlehrer (Niveau ${level}).
-Erstelle GENAU ${count} vollständige, einfache deutsche Beispielsätze für einen Lückentext-Übungstyp «Satzbau»: der Lerner sieht die Wörter durcheinander und ordnet sie.
+Erstelle GENAU ${count} vollständige deutsche Beispielsätze für einen Satzbau-Übungstyp: der Lerner sieht die Wörter durcheinander und ordnet sie.
+Schwierigkeit für Niveau ${level}: ${lvlHint}.
 Regeln:
-- Jeder Satz hat 5–10 Wörter, ist grammatisch korrekt und typisch für Niveau ${level}.
-- Themen: Alltag, Familie, Arbeit, Schule, Reisen, Wetter, Einkommen — abwechslungsreich, jeder Satz ein anderes Thema.
+- Jeder Satz ist grammatisch korrekt und typisch für Niveau ${level}.
+- Themen: Alltag, Familie, Arbeit, Schule, Reisen, Wetter — abwechslungsreich, jeder Satz ein anderes Thema.
 - "de": der vollständige Satz (mit Endpunkt). "fa": natürliche persische Übersetzung des Satzes.
+- "distractors": ein JSON-Array mit GENAU 3 kurzen deutschen Wörtern oder Phrasen, die plausible, aber falsche Alternativen sind (andere Präpositionen, andere Pronomen, Verneinungswörter etc.), NICHT im Satz vorkommend.
 - Keine Satzzeichen im Satzinneren außer Kommas; keine Anführungszeichen.
-Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
+Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"...","distractors":["...","...","..."]}]`;
       const raw = await generateText(prompt, { json: true, timeoutMs: 90000, retries: 1 });
       let arr: any[] = [];
       try {
@@ -138,13 +216,16 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
         .map((x: any) => ({ de: String(x.de).trim(), fa: String(x.fa || '').trim(), src: 'ai' as const }))
         .slice(0, count);
       if (!items.length) throw new Error('پاسخ معلم ساختار معتبر نداشت — دوباره تلاش کن.');
+      // ذخیرهٔ distractorهای AI برای استفاده در buildBank اولین جمله
+      const firstDistractors = arr && arr[0] && Array.isArray(arr[0].distractors) ? arr[0].distractors as string[] : undefined;
       // ☁️ ذخیرهٔ مجموعهٔ ساخته‌شده در آرشیو محلی + بانک مشترک (همهٔ دستگاه‌ها/کاربران)
       const entry: SatzArch = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, ts: Date.now(), level, count: items.length, items: items.map(i => ({ de: i.de, fa: i.fa })) };
       const nextArch = [entry, ...loadSatzArch()];
       saveSatzArch(nextArch); setArch(nextArch);
       pushAiBank(SATZ_BANK, entry.id, entry, { level, count: entry.count });
       setQueue(items); setScore(0); setDone(false); setIdx(0);
-      setBank(scramble(items[0].de)); setAns([]); setRes(null);
+      setBank(buildBank(items[0].de, pickDistractors(items[0].de, 3, firstDistractors))); setAns([]); setRes(null);
+      setChatMsgs([]); setChatDraft('');
       setScreen('run');
       onShowToast(`${items.length} جمله ساخته شد ✓ ☁️`);
     } catch (e) {
@@ -155,14 +236,20 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
   };
 
   const cur = queue[idx];
-  const goto = (q: Item[], i: number) => { setIdx(i); setBank(scramble(q[i].de)); setAns([]); setRes(null); };
+  const goto = (q: Item[], i: number) => {
+    setIdx(i);
+    setBank(buildBank(q[i].de, pickDistractors(q[i].de)));
+    setAns([]); setRes(null);
+    setChatMsgs([]); setChatDraft('');
+  };
   const restart = () => { setScreen('config'); setDone(false); };
   /** اجرای یک تمرین ذخیره‌شدهٔ آرشیو (محلی یا دریافتی از بانک مشترک) */
   const runArch = (a: SatzArch) => {
     const q: Item[] = (a.items || []).map(i => ({ de: String(i?.de || ''), fa: String(i?.fa || ''), src: 'ai' as const })).filter(i => i.de);
     if (!q.length) return;
     setQueue(q); setScore(0); setDone(false); setIdx(0);
-    setBank(scramble(q[0].de)); setAns([]); setRes(null);
+    setBank(buildBank(q[0].de, pickDistractors(q[0].de))); setAns([]); setRes(null);
+    setChatMsgs([]); setChatDraft('');
     setScreen('run');
   };
   /** حذف از آرشیو محلی (با تأییدیه) — نسخهٔ بانک مشترک برای دستگاه‌های دیگر می‌ماند */
@@ -172,10 +259,100 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
     saveSatzArch(next); setArch(next);
   };
   const next = () => { if (idx + 1 >= queue.length) setDone(true); else goto(queue, idx + 1); };
+  /** بعدی بدون بررسی — درخواست کاربر: عبور بدون امتیاز پیش از بررسی */
+  const skipNext = () => { if (idx + 1 >= queue.length) setDone(true); else goto(queue, idx + 1); };
   const pick = (t: { id: number; text: string }) => { if (res !== null) return; setBank(b => b.filter(x => x.id !== t.id)); setAns(a => [...a, t]); };
   const back = (t: { id: number; text: string }) => { if (res !== null) return; setAns(a => a.filter(x => x.id !== t.id)); setBank(b => [...b, t]); };
   const check = () => { const ok = ans.map(t => t.text).join(' ') === split(cur.de).join(' '); setRes(ok); if (ok) setScore(s => s + 1); };
   const say = () => speak(cur.de, { onErr: m => onShowToast(m, true) });
+
+  /* ───────── HTML5 drag-and-drop ─────────
+   * هر کلمه draggable است؛ می‌توان آن را از بانک به جعبهٔ پاسخ کشید، یا بین دو کلمهٔ
+   * درون جعبهٔ پاسخ جابه‌جا کرد. جای‌گذاری روی placeholderهای خالی هم پشتیبانی می‌شود. */
+  const onTileDragStart = (e: React.DragEvent, tile: { id: number; text: string }, fromBank: boolean) => {
+    setDragId(tile.id);
+    e.dataTransfer.setData('application/json', JSON.stringify({ id: tile.id, text: tile.text, fromBank }));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const onTileDragEnd = () => setDragId(null);
+  /** جابه‌جایی داخل جعبهٔ پاسخ: یک کاشی به‌جای کاشی دیگر */
+  const reorderAns = (draggedId: number, targetId: number) => {
+    setAns(prev => {
+      const dIdx = prev.findIndex(x => x.id === draggedId);
+      const tIdx = prev.findIndex(x => x.id === targetId);
+      if (dIdx < 0 || tIdx < 0 || dIdx === tIdx) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(dIdx, 1);
+      next.splice(tIdx, 0, moved);
+      return next;
+    });
+  };
+  /** drop روی جعبهٔ پاسخ: اگر از بانک آمده → اضافه شود؛ اگر از داخل جعبه آمده → جابه‌جا شود */
+  const onAnswerDrop = (e: React.DragEvent, targetTile?: { id: number; text: string }) => {
+    e.preventDefault();
+    if (res !== null) return;
+    const data = e.dataTransfer.getData('application/json');
+    if (!data) { setDragId(null); return; }
+    try {
+      const parsed = JSON.parse(data) as { id: number; text: string; fromBank: boolean };
+      if (parsed.fromBank) {
+        // بانک → جعبه: اگر targetTile هست، در همان جایگاه درج شود
+        if (targetTile) {
+          setBank(b => b.filter(x => x.id !== parsed.id));
+          setAns(a => {
+            const tIdx = a.findIndex(x => x.id === targetTile.id);
+            if (tIdx < 0) return [...a, parsed];
+            const next = [...a];
+            next.splice(tIdx, 0, parsed);
+            return next;
+          });
+        } else {
+          pick(parsed);
+        }
+      } else {
+        // داخل جعبه → جابه‌جایی
+        if (targetTile && targetTile.id !== parsed.id) reorderAns(parsed.id, targetTile.id);
+      }
+    } catch { /* ignore */ }
+    setDragId(null);
+  };
+  /** drop روی بانک: کاشی از جعبهٔ پاسخ به بانک بازگردد */
+  const onBankDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (res !== null) { setDragId(null); return; }
+    const data = e.dataTransfer.getData('application/json');
+    if (!data) { setDragId(null); return; }
+    try {
+      const parsed = JSON.parse(data) as { id: number; text: string; fromBank: boolean };
+      if (!parsed.fromBank) {
+        setAns(a => a.filter(x => x.id !== parsed.id));
+        setBank(b => [...b, { id: parsed.id, text: parsed.text }]);
+      }
+    } catch { /* ignore */ }
+    setDragId(null);
+  };
+
+  /* ───────── چت با معلم (مینیمال) — درخواست کاربر: چت پایین هر تمرین ───────── */
+  const sendChat = async (override?: string) => {
+    if (!cur || chatBusy) return;
+    const q = (override || chatDraft).trim();
+    if (!q) return;
+    if (!hasApiKey()) { onShowToast('هوش مصنوعی در تنظیمات برنامه فعال نیست.', true); return; }
+    setChatMsgs(m => [...m, { role: 'user', text: q }]);
+    setChatDraft('');
+    setChatBusy(true);
+    try {
+      const sys = `تو معلم صبور آلمانی برای فارسی‌زبانان هستی. در تمرین «چیدن جمله» دانش‌آموز جملهٔ آلمانیِ
+«${cur.de}» (ترجمهٔ فارسی: ${cur.fa || '—'}) را می‌چیند. دربارهٔ ترتیب کلمه‌ها، جایگاه فعل، قواعد آلمانی پاسخ بده.
+پاسخ‌ها: فارسی، کوتاه (۲–۵ جمله)، با مثال آلمانی وقتی کمک می‌کند.`;
+      const out = await generateWithGemini(`${sys}\n\nپرسش دانش‌آموز: ${q}`, { timeoutMs: 60000, retries: 1 });
+      setChatMsgs(m => [...m, { role: 'ai', text: String(out || '').trim() }]);
+    } catch (e) {
+      setChatMsgs(m => [...m, { role: 'ai', text: '⚠️ ' + (describeAiError(e) || String(e)) }]);
+    } finally {
+      setChatBusy(false);
+    }
+  };
 
   /* ── پیکربندی یکدست: نوع جمله‌ها + (سطح و تعداد برای AI) ── */
   if (screen === 'config') {
@@ -245,33 +422,116 @@ Antworte NUR mit einem JSON-Array: [{"de":"...","fa":"..."}]`;
 
   if (done) return <Done score={score} total={queue.length} onAgain={restart} />;
   if (!cur) return null;
+  /** تعداد جای خالی = تعداد واژه‌های جمله (درخواست کاربر) */
+  const blanks = split(cur.de).length;
   return (
     <div className="space-y-3 text-right max-w-xl mx-auto">
       <div className="flex justify-between text-xs font-bold text-[#5d6676] dark:text-[#a3adbd]"><span>جمله {toFa(idx + 1)} از {toFa(queue.length)}</span><span>امتیاز: {toFa(score)}</span></div>
       <div className={card}>
+        {/* بنر بالای هر تمرین: «۳ کلمه اضافی برای آزمایش شما اضافه شده» (درخواست کاربر) */}
+        <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs md:text-sm font-bold text-amber-800 dark:text-amber-300">
+          ⚠️ {toFa(3)} کلمهٔ اضافی برای آزمایش شما اضافه شده — مجموع کلمه‌های پایین: {toFa(blanks + 3)} ({toFa(blanks)} اصلی + {toFa(3)} گمراه‌کننده)
+        </div>
         <div className="text-xs font-bold text-[#1f5fbf] dark:text-[#7fb0ff]">🧩 کلمه‌ها را به ترتیب درست آلمانی بچین</div>
         {cur.fa && <div className="text-base font-bold leading-8">{cur.fa}</div>}
-        <div dir="ltr" className="min-h-[64px] p-2 rounded-xl border-2 border-dashed border-[#1f5fbf]/50 flex flex-wrap gap-2 items-start">
-          {ans.length === 0 && <span className="text-xs text-slate-400 p-1">کلمه‌ها را اینجا بگذار…</span>}
-          {ans.map(t => <button key={t.id} onClick={() => back(t)} className="px-3 py-2 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 font-bold text-base font-sans">{t.text}</button>)}
+        {/* جعبهٔ پاسخ با ابعاد ثابت — درخواست کاربر: با اضافه‌شدن کلمه‌ها بزرگ‌نمایی نمی‌شود
+            N جای خالی نقطه‌چین نشان می‌دهد تا کاربر بداند چند کلمه باید بچیند */}
+        <div
+          dir="ltr"
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => onAnswerDrop(e)}
+          className="min-h-[88px] min-w-[260px] p-2 rounded-xl border-2 border-dashed border-[#1f5fbf]/50 flex flex-wrap gap-2 items-start bg-slate-50/40 dark:bg-slate-800/20"
+        >
+          {ans.length === 0 && (
+            <span className="text-xs text-slate-400 p-1">{toFa(blanks)} جای خالی — کلمه‌ها را اینجا بگذار…</span>
+          )}
+          {ans.map(t => (
+            <button
+              key={t.id}
+              onClick={() => back(t)}
+              draggable
+              onDragStart={e => onTileDragStart(e, t, false)}
+              onDragEnd={onTileDragEnd}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.stopPropagation(); onAnswerDrop(e, t); }}
+              className={`px-3 py-2 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/60 dark:to-indigo-900/60 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-800 font-bold text-base font-sans ${dragId === t.id ? 'opacity-50' : ''}`}
+            >{t.text}</button>
+          ))}
         </div>
-        <div dir="ltr" className="flex flex-wrap gap-2">
-          {bank.map(t => <button key={t.id} onClick={() => pick(t)} className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 font-bold text-base font-sans active:scale-95">{t.text}</button>)}
+        {/* جای‌خالی‌های نقطه‌چین (درخواست کاربر: N جای خالی خالی نشان می‌دهد) — فقط وقتی ans ناقص است */}
+        {ans.length < blanks && (
+          <div dir="ltr" className="flex flex-wrap gap-2">
+            {Array.from({ length: blanks - ans.length }).map((_, i) => (
+              <span key={i} className="inline-block min-w-[56px] h-9 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-transparent" />
+            ))}
+          </div>
+        )}
+        {/* بانک کلمه‌ها — رنگ روشن‌تر (درخواست کاربر) */}
+        <div
+          dir="ltr"
+          onDragOver={e => e.preventDefault()}
+          onDrop={onBankDrop}
+          className="flex flex-wrap gap-2"
+        >
+          {bank.map(t => (
+            <button
+              key={t.id}
+              onClick={() => pick(t)}
+              draggable
+              onDragStart={e => onTileDragStart(e, t, true)}
+              onDragEnd={onTileDragEnd}
+              className={`px-3 py-2 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/60 dark:to-indigo-900/60 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-800 font-bold text-base font-sans active:scale-95 ${dragId === t.id ? 'opacity-50' : ''}`}
+            >{t.text}</button>
+          ))}
         </div>
         {res === null ? (
-          <button onClick={check} disabled={bank.length > 0} className="w-full h-12 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ بررسی</button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={skipNext} className="h-12 rounded-xl border border-slate-300 dark:border-slate-600 text-xs md:text-sm font-bold">بعدی (بدون بررسی)</button>
+            <button onClick={check} disabled={bank.length > 0} className="h-12 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ بررسی</button>
+          </div>
         ) : (
           <div className="space-y-2">
-            <div className={`p-3 rounded-xl text-sm font-bold ${res ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>{res ? '✅ درست!' : '❌ ترتیب درست:'}</div>
-            <div dir="ltr" className="font-sans font-bold text-base leading-8"><ClickableWords text={cur.de} onWord={setLookup} /></div>
+            <div className={`p-3 md:p-4 rounded-xl text-sm md:text-base font-bold leading-7 md:leading-8 ${res ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200'}`}>{res ? '✅ درست!' : '❌ ترتیب درست:'}</div>
+            <div dir="ltr" className="font-sans font-bold text-base md:text-lg leading-8 md:leading-9"><ClickableWords text={cur.de} onWord={setLookup} /></div>
             <div className="flex gap-2">
-              <button onClick={say} className="px-4 h-11 rounded-xl bg-rose-600 text-white text-sm font-bold">🔊</button>
+              <button onClick={say} className="px-4 h-11 rounded-xl bg-[#1f5fbf] text-white text-sm font-bold">🔊</button>
               {!res && <button onClick={() => { setScore(s => s + 1); setRes(true); }} className="px-3 h-11 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold">ترتیب من هم درست است</button>}
               <button onClick={next} className="flex-1 h-11 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">{idx + 1 >= queue.length ? 'پایان' : 'بعدی ←'}</button>
             </div>
           </div>
         )}
       </div>
+
+      {/* چت با معلم (مینیمال) — پایین هر تمرین (درخواست کاربر) */}
+      <div className="rounded-xl border border-[#1f5fbf]/40 bg-blue-50/40 dark:bg-blue-950/20 dark:border-[#7fb0ff]/30 p-2.5 space-y-2" dir="rtl">
+        <div className="flex items-center justify-between text-[11px] font-bold text-[#5d6676]">
+          <span>💬 گفتگو با معلم دربارهٔ همین جمله</span>
+        </div>
+        <div className="max-h-48 overflow-y-auto space-y-2">
+          {chatMsgs.length === 0 && <p className="text-[11px] text-[#5d6676]">دربارهٔ ترتیب کلمه‌ها یا قواعد این جمله بپرس.</p>}
+          {chatMsgs.map((m, i) => (
+            <div key={i} className={`text-xs leading-6 rounded-lg px-2.5 py-1.5 max-w-[88%] whitespace-pre-wrap ${m.role === 'user' ? 'bg-[#1f5fbf] text-white ml-auto' : 'bg-white dark:bg-[#141923] border border-[#dde1ea] dark:border-[#333b4a]'}`}>{m.text}</div>
+          ))}
+          {chatBusy && <div className="text-[11px] text-[#5d6676] animate-pulse">معلم دارد می‌نویسد…</div>}
+          <div ref={chatEndRef} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <input
+            value={chatDraft}
+            onChange={e => setChatDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') sendChat(); }}
+            placeholder="پرسشت را بنویس…"
+            className="flex-1 min-w-0 border-2 border-[#1f5fbf]/50 dark:border-[#7fb0ff]/40 rounded-lg px-3 py-2 text-base bg-white dark:bg-[#141923] outline-none"
+          />
+          <button
+            onClick={() => sendChat()}
+            disabled={chatBusy || !chatDraft.trim()}
+            className="w-10 h-10 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+            aria-label="ارسال"
+          >↑</button>
+        </div>
+      </div>
+
       {/* پاپ‌آپ واژهٔ لمس‌شده — جملهٔ درست بعد از بررسی */}
       {lookup && (
         <WordLookupModal
@@ -342,12 +602,12 @@ export const Diktat: React.FC<DrillProps> = ({ words, onShowToast, onQuickAddWor
           <button onClick={check} disabled={!text.trim()} className="w-full h-12 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ بررسی</button>
         ) : (
           <div className="space-y-2">
-            <div className="font-extrabold text-sm">دقت: <span className={res.pct >= 80 ? 'text-emerald-600' : res.pct >= 50 ? 'text-amber-600' : 'text-rose-600'} dir="ltr">{res.pct}%</span></div>
-            <div dir="ltr" className="font-sans text-base leading-9 flex flex-wrap gap-x-1.5">
+            <div className="font-extrabold text-sm md:text-base">دقت: <span className={res.pct >= 80 ? 'text-emerald-600' : res.pct >= 50 ? 'text-amber-600' : 'text-rose-600'} dir="ltr">{res.pct}%</span></div>
+            <div dir="ltr" className="font-sans text-base md:text-lg leading-9 md:leading-10 flex flex-wrap gap-x-1.5">
               {res.cells.map((c, i) => <span key={i} onClick={() => setLookup(clean(c.t) || c.t)} className={`cursor-pointer rounded px-0.5 hover:bg-amber-200/80 dark:hover:bg-amber-700/50 transition ${c.ok ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold underline decoration-wavy'}`}>{c.t}</span>)}
             </div>
-            {res.extra.length > 0 && <div className="text-xs text-rose-600 dark:text-rose-400" dir="ltr">✗ {res.extra.join(' · ')}</div>}
-            {cur.fa && <div className="text-sm leading-7 text-[#5d6676] dark:text-[#a3adbd]">{cur.fa}</div>}
+            {res.extra.length > 0 && <div className="text-xs md:text-sm text-rose-600 dark:text-rose-400" dir="ltr">✗ {res.extra.join(' · ')}</div>}
+            {cur.fa && <div className="text-sm md:text-base leading-7 md:leading-8 text-[#5d6676] dark:text-[#a3adbd]">{cur.fa}</div>}
             <button onClick={next} className="w-full h-11 rounded-xl bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white font-bold text-sm">{idx + 1 >= queue.length ? 'پایان' : 'بعدی ←'}</button>
           </div>
         )}
