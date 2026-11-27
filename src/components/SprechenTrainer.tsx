@@ -230,6 +230,13 @@ export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onSho
   const [listening, setListening] = useState(false);
   const [examType, setExamType] = useState<ExamType>(exam ? ETYPE[exam.org] : 'Goethe');
   const [examLevel, setExamLevel] = useState<Level>(exam ? (exam.level as Level) : 'B1');
+
+  // درخواست کاربر ۴: شروع مستقیم آزمون شفاهی از داشبورد — گوش‌دادن به رویداد window
+  useEffect(() => {
+    const handler = () => setScreen('exam_setup');
+    window.addEventListener('wb-start-oral-exam', handler);
+    return () => window.removeEventListener('wb-start-oral-exam', handler);
+  }, []);
   const [parts, setParts] = useState<Part[]>([]);
   const [partIdx, setPartIdx] = useState(0);
   const [report, setReport] = useState<Report | null>(null);

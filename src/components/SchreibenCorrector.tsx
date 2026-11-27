@@ -60,11 +60,21 @@ const SCHREIBEN_TOPICS = [
   { id: 'doctor', title: 'ایمیل به پزشک / وقت گرفتن', level: 'A2/B1', desc: 'دریافت نوبت معاینه، پرسش درباره نسخه یا گواهی استعلاجی' },
   { id: 'opinion', title: 'نظر و استدلال (Meinung)', level: 'B1/B2', desc: 'نوشتن دیدگاه درباره یک موضوع اجتماعی یا کاری با استدلال' },
   { id: 'friend', title: 'پیام غیررسمی به دوست', level: 'A2', desc: 'دعوت به مهمانی، برنامه‌ریزی آخر هفته یا احوالپرسی' },
-  { id: 'report', title: 'گزارش از یک تجربه', level: 'B1', desc: 'تعریف یک اتفاق، سفر، دوره آموزشی یا خرید' }
+  { id: 'report', title: 'گزارش از یک تجربه', level: 'B1', desc: 'تعریف یک اتفاق، سفر، دوره آموزشی یا خرید' },
+  // درخواست کاربر ۵: موضوعات بیشتر برای پوشش گسترده‌تر
+  { id: 'school', title: 'مدرسه و تحصیل (Schule)', level: 'A2/B1', desc: 'مکاتبه با معلم، مدیر یا دبیرستان درباره نمره، حضور یا پروژه' },
+  { id: 'travel', title: 'سفر و رزرو (Reisen)', level: 'A2/B1', desc: 'رزرو هتل، تغییر پرواز، شکایت از خدمات یا درخواست اطلاعات گردشگری' },
+  { id: 'complaint', title: 'شکایت از خدمات (Beschwerde)', level: 'B1/B2', desc: 'گزارش مشکل کالا، خدمات یا فروشگاه با لحن رسمی و استدلالی' },
+  { id: 'shopping', title: 'خرید و سفارش (Bestellung)', level: 'A2', desc: 'سفارش آنلاین، درخواست بازگشت وجه یا تغییر آدرس' },
+  { id: 'rent', title: 'گزارش تعمیرات یا مشکلات ساختمان (Mängel)', level: 'B1/B2', desc: 'گزارش خرابی‌های فنی، درخواست تعمیر یا اعتراض به هزینه' },
+  { id: 'apology', title: 'عذرخواهی رسمی (Entschuldigung)', level: 'A2/B1', desc: 'عذرخواهی از همکار، استاد یا دوست با دلیل موجه و پیشنهاد جبران' },
+  { id: 'invitation', title: 'دعوت‌نامه رسمی (Einladung)', level: 'A2/B1', desc: 'دعوت به مراسم، جلسه یا جشن با ذکر جزئیات' },
+  { id: 'thesis', title: 'مقاله کوتاه علمی (Hausarbeit)', level: 'B2/C1', desc: 'نوشتن یک پاراگراف آغازین یا نتیجه‌گیری برای مقاله/تکلیف دانشگاهی' }
 ];
 const EXAM_TOPICS: Record<string, string[]> = {
-  A1: ['friend', 'doctor'], A2: ['friend', 'haus', 'doctor'], B1: ['work', 'bewerbung', 'insurance', 'opinion'],
-  B2: ['opinion', 'work', 'zus'], C1: ['opinion', 'zus']
+  A1: ['friend', 'doctor', 'shopping'], A2: ['friend', 'haus', 'doctor', 'travel', 'apology', 'shopping'],
+  B1: ['work', 'bewerbung', 'insurance', 'opinion', 'complaint', 'rent', 'invitation', 'school'],
+  B2: ['opinion', 'work', 'zus', 'complaint', 'rent', 'thesis'], C1: ['opinion', 'zus', 'thesis']
 };
 
 /** زاویه‌های موضوعی برای تنوع — هر بار ۲تای تصادفی به پرامت می‌رود تا سناریو تکراری نشود (باگ «همش تکراری») */
@@ -817,14 +827,32 @@ Return ONLY a valid JSON array with one object:
               </select>
               {examType === 'free' ? (
                 <>
-                  {/* تمرین آزاد: انتخاب موضوع — بدون ساخت خودکار (رفع ایراد ۲) */}
-                  <select value={selectedTopic} onChange={e => setSelectedTopic(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-[#141923] border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none">
-                    <option value="">-- موضوع آزمون را انتخاب کنید --</option>
-                    {SCHREIBEN_TOPICS.map(t => <option key={t.id} value={t.id}>{t.title} ({t.level})</option>)}
-                  </select>
+                  {/* درخواست کاربر ۵: ارتقای بانک موضوعات — به‌جای کشویی ساده، کارت‌های بصری با توضیح */}
+                  <div className="text-xs font-bold text-slate-600 dark:text-slate-300 pt-1">📂 بانک موضوعات — روی یک موضوع کلیک کن:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto p-1">
+                    {SCHREIBEN_TOPICS.map(t => {
+                      const active = selectedTopic === t.id;
+                      const lvl = t.level.split('/')[0].trim(); // اولین سطح
+                      const lvlMatch = lvl === targetLevel;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => setSelectedTopic(t.id)}
+                          className={`text-right p-3 rounded-xl border-2 transition flex flex-col gap-1 ${active
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-700 ring-2 ring-indigo-300 dark:ring-indigo-700'
+                            : 'bg-white dark:bg-[#141923] border-slate-200 dark:border-slate-700 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <b className="text-sm font-bold text-slate-800 dark:text-slate-100">{t.title}</b>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${lvlMatch ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`} dir="ltr">{t.level}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-5 line-clamp-2">{t.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
                   {savedListBlock(savedForPick, '📚 تمرین‌های قبلی — همین سطح و موضوع',
-                    !selectedTopic ? 'اول سطح و موضوع را انتخاب کن تا تمرین‌های قبلی‌اش اینجا لیست شود.' : 'هنوز برای این سطح و موضوع تمرینی ذخیره نشده — با «🔄 ساخت سناریوی تازه» اولین را بساز.',
+                    !selectedTopic ? 'اول یک موضوع را انتخاب کن تا تمرین‌های قبلی‌اش اینجا لیست شود.' : 'هنوز برای این سطح و موضوع تمرینی ذخیره نشده — با «🔄 ساخت سناریوی تازه» اولین را بساز.',
                     savedLabelFree)}
                 </>
               ) : teilList.length ? (
