@@ -1,5 +1,23 @@
 import { Word } from '../types';
 import { findDuplicateWord } from './duplicates';
+import { annotatedHeadword, isVerbHead, hasHeadAnnotation } from '../data/verbPrep';
+
+/**
+ * درخواست کاربر (تکمیل سریع): هر مسیر واردات/ادغام باید سرِ واژهٔ فعل را با
+ * annotatedHeadword بیرون بکشد تا sich + حرف اضافه + حالت دستوری کنار فعل بنشیند.
+ * این تابع idempotent است و غیرفعل‌ها دست‌نخورده می‌مانند.
+ */
+function applyHeadAnnotation(w: Word): Word {
+  const de = String(w?.de || '').trim();
+  if (!de) return w;
+  // از قبل پسوند دارد → دست نمی‌زنیم
+  if (hasHeadAnnotation(de)) return w;
+  const pos = String(w.pos || '');
+  const opts = { pos, art: w.art, conj: w.conj, notes: w.notes };
+  if (!isVerbHead(de, opts)) return w;
+  const ann = annotatedHeadword(de, opts);
+  return ann && ann !== de ? { ...w, de: ann } : w;
+}
 
 /**
  * Safe merging of imported vocabulary into existing records.
@@ -41,6 +59,11 @@ export function mergeWordUpdate(old: Word, incoming: Partial<Word>, opts: MergeO
     const v = (incoming as any)[f];
     if (!isEmptyValue(v)) out[f] = typeof v === 'string' ? v.trim() : v;
   });
+  // درخواست کاربر: وقتی de جایگزین می‌شود، اگر فعل است پسوند دستوری‌اش را بیفزا
+  if (!isEmptyValue(incoming.de)) {
+    const ann = applyHeadAnnotation(out as Word);
+    if (ann.de !== out.de) out.de = ann.de;
+  }
   if (Array.isArray(incoming.acc) && incoming.acc.length) {
     out.acc = Array.from(new Set([...(old.acc || []), ...incoming.acc.filter(a => !isEmptyValue(a))]));
   }
@@ -157,7 +180,9 @@ export function applyImportPlan(
     let id = w.id;
     if (!id || ids.has(id)) id = `w${now.toString(36)}${i}${Math.random().toString(36).slice(2, 6)}`;
     ids.add(id);
-    words.push({ ...w, id, added: w.added || now });
+    // درخواست کاربر: سرِ واژهٔ فعل پسونددار شود (sich + prep + +A/+D/+G)
+    const ann = applyHeadAnnotation({ ...w, id } as Word);
+    words.push({ ...w, id, de: ann.de, added: w.added || now });
     added++;
   });
 

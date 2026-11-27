@@ -4,6 +4,7 @@ import { dayStart, today, dstr } from './dates';
 import { parseStatus, suggestStatus } from './wordStatus';
 import { imgDbBroken, imgPutMany } from './imageStore';
 import { stripHeadAnnotation, hasHeadAnnotation, annotatedHeadword } from '../data/verbPrep';
+import { migrateState, logMigration, CURRENT_SCHEMA_VERSION } from './migrations';
 
 export const KEY = 'deutschlab_pro_fa_v1';
 export const EXT_KEY = 'wb_ext';
@@ -134,7 +135,14 @@ export function loadState(): AppState {
     if (raw) {
       const o = JSON.parse(raw);
       if (o && Array.isArray(o.words)) {
-        const ws = o.words.map(norm).filter(Boolean) as Word[];
+        // درخواست کاربر ۱۱: مهاجرت schema با نسخه‌بندی — state ذخیره‌شده از نسخهٔ قدیمی به CURRENT ارتقا می‌یابد
+        const migrationResult = migrateState(o);
+        logMigration(migrationResult);
+        const migrated = migrationResult.state;
+        const ws = (Array.isArray(migrated.words) ? migrated.words : [])
+          .map(norm).filter(Boolean) as Word[];
+        // فقط اگر schema قدیمی‌تر از ۴ بوده (و migration تا ۴ نرسیده)، seed را پر کن
+        // در غیر این صورت، migration در sv=4+ همان کار را انجام داده
         if ((o.sv || 0) < 4) {
           INITIAL_SEED.forEach(sd => {
             const e = ws.find(x => x.id === sd.id);
@@ -150,11 +158,11 @@ export function loadState(): AppState {
         }
         return {
           v: 1,
-          sv: 4,
+          sv: CURRENT_SCHEMA_VERSION,
           words: ws,
-          hist: Array.isArray(o.hist) ? o.hist : [],
-          set: Object.assign({}, DEFAULT_SETTINGS, o.set || {}),
-          daily: o.daily || { d: today(), n: 0, r: 0 }
+          hist: Array.isArray(migrated.hist) ? migrated.hist : [],
+          set: Object.assign({}, DEFAULT_SETTINGS, migrated.set || {}),
+          daily: migrated.daily || { d: today(), n: 0, r: 0, sn: 0, sr: 0 }
         };
       }
     }
@@ -164,7 +172,7 @@ export function loadState(): AppState {
 
   return {
     v: 1,
-    sv: 4,
+    sv: CURRENT_SCHEMA_VERSION,
     words: INITIAL_SEED.map(norm).filter(Boolean) as Word[],
     hist: [],
     set: { ...DEFAULT_SETTINGS },
