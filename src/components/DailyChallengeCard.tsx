@@ -31,35 +31,23 @@ export const DailyChallengeCard: React.FC<Props> = ({ state, onStart }) => {
   const completed = quest.completed;
 
   return (
-    <div className={`relative rounded-2xl p-3 border-2 transition-all overflow-hidden ${completed ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700' : 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800'}`}>
-      {completed && (
-        <div className="absolute top-1 right-1 text-2xl animate-bounce" aria-hidden="true">✓</div>
-      )}
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-2xl">{completed ? '🎉' : quest.icon}</span>
-        <div className="min-w-0">
-          <b className="text-sm font-extrabold text-slate-900 dark:text-slate-100 block truncate">{completed ? 'چالش امروز کامل شد!' : quest.title}</b>
-          <p className="text-[11px] text-[#5d6676] dark:text-[#a3adbd] truncate">{quest.desc}</p>
-        </div>
-      </div>
-      {!completed && (
-        <div className="mb-1.5">
-          <div className="flex items-center justify-between text-[10px] text-[#5d6676] dark:text-[#a3adbd] mb-0.5">
-            <span>پیشرفت: {quest.progress}/{quest.target}</span>
-            <span>{progress}٪</span>
-          </div>
-          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-500" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      )}
-      {!completed && (
-        <button
-          onClick={() => onStart?.(quest)}
-          className="w-full text-xs font-bold py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white transition flex items-center justify-center gap-1"
-        >
-          {quest.startedAt ? 'ادامه بده' : 'شروع چالش'} →
-        </button>
+    <div className={`relative rounded-xl p-2 border-2 transition-all overflow-hidden h-9 flex items-center gap-1.5 ${completed ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700' : 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800'}`}>
+      {/* درخواست کاربر ۱: ارتفاع نصف، حذف نوشته‌های غیرضروری — فقط آیکن + عنوان + پیشرفت */}
+      {completed ? (
+        <>
+          <span className="text-base">🎉</span>
+          <b className="text-xs font-extrabold text-emerald-900 dark:text-emerald-100 truncate flex-1">چالش کامل شد!</b>
+        </>
+      ) : (
+        <>
+          <span className="text-base flex-shrink-0">{quest.icon}</span>
+          <b className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate flex-1">{quest.title}</b>
+          <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd] flex-shrink-0">{quest.progress}/{quest.target}</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onStart?.(quest); }}
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-600 text-white hover:bg-amber-700 flex-shrink-0"
+          >▶</button>
+        </>
       )}
     </div>
   );

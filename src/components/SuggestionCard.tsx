@@ -63,23 +63,19 @@ export const SuggestionCard: React.FC<Props> = ({ state, onAction }) => {
       onClick={handleClick}
       disabled={suggestion.action === 'none'}
       ref={cardRef}
-      className={`relative w-full text-right p-3.5 rounded-2xl border-2 transition-all duration-300 ${colorClass} ${animClass} ${suggestion.action === 'none' ? 'opacity-95 cursor-default' : 'hover:shadow-lg active:scale-95'}`}
+      className={`relative w-full text-right px-2 h-9 rounded-xl border-2 transition-all duration-300 ${colorClass} ${animClass} ${suggestion.action === 'none' ? 'opacity-95 cursor-default' : 'hover:shadow-lg active:scale-95'} flex items-center gap-1.5 overflow-hidden`}
       aria-label={suggestion.title}
     >
-      <div className="flex items-center gap-2.5">
-        <span className={`text-3xl ${urgent ? 'animate-bounce' : ''}`}>{suggestion.icon}</span>
-        <div className="min-w-0 flex-1">
-          <b className={`text-sm font-extrabold block truncate ${urgent ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>{suggestion.title}</b>
-          <p className={`text-[11px] leading-5 ${urgent ? 'text-white/90' : 'text-[#5d6676] dark:text-[#a3adbd]'}`}>{suggestion.desc}</p>
-        </div>
-        {suggestion.action !== 'none' && (
-          <span className={`text-xs font-bold flex-shrink-0 ${urgent ? 'text-white' : 'text-[#1f5fbf] dark:text-[#7fb0ff]'}`}>→</span>
-        )}
-      </div>
+      {/* درخواست کاربر ۱: ارتفاع نصف، حذف توضیحات غیرضروری — فقط آیکن + عنوان */}
+      <span className={`text-base flex-shrink-0 ${urgent ? 'animate-bounce' : ''}`}>{suggestion.icon}</span>
+      <b className={`text-[11px] font-bold truncate flex-1 ${urgent ? 'text-white' : 'text-slate-900 dark:text-slate-100'}`}>{suggestion.title}</b>
+      {suggestion.action !== 'none' && (
+        <span className={`text-[10px] font-bold flex-shrink-0 ${urgent ? 'text-white' : 'text-[#1f5fbf] dark:text-[#7fb0ff]'}`}>→</span>
+      )}
       {urgent && (
-        <div className="absolute -top-1.5 -right-1.5 px-2 py-0.5 rounded-full bg-rose-700 text-white text-[9px] font-extrabold animate-pulse">
+        <span className="px-1 py-0.5 rounded bg-rose-700 text-white text-[9px] font-extrabold animate-pulse flex-shrink-0">
           🚨 فوری
-        </div>
+        </span>
       )}
     </button>
   );

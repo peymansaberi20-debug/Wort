@@ -16,13 +16,15 @@
  * قرمز: هیچ قابلیت دیگری حذف نشده — فقط یک تمرین جدید اضافه شده.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { describeAiError, generateText, hasApiKey } from '../utils/aiProvider';
 import { generateWithGemini } from '../utils/ai';
 import { Lvl, LVL_ORDER } from '../data/konnektorenData';
 import { ArchivePanel, ArchiveRow, CountChips, LevelChips, MiniChip, PrimaryBtn, PrintPreview, Section, SqBtn, faDate, prFa, prG, toFa, useConfirm } from './trainerUI';
 import { pushAiBank, fetchAiBank, aiBankMarkSeen, aiBankSeenIds, mergeAiBank } from '../utils/aiBank';
-import { X, Printer } from 'lucide-react';
+import { X, Printer, Mic, MicOff } from 'lucide-react';
+// درخواست کاربر ۳: پشتیبانی صوتی — پخش TTS و تشخیص گفتار
+import { speak, stopSpeaking } from '../utils/audio';
 
 interface DialogTurn {
   role: 'A' | 'B';
@@ -91,6 +93,79 @@ export const DialogTrainer: React.FC<Props> = ({ onShowToast }) => {
   const [chatBusy, setChatBusy] = useState(false);
   const { ask: askDel, dialog: delDialog } = useConfirm();
   const card = 'bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 space-y-3';
+
+  // درخواست کاربر ۳: حالت صوتی — تشخیص گفتار کاربر + پخش خودکار جمله‌های A
+  const [listening, setListening] = useState(false);
+  const [recSupported, setRecSupported] = useState(false);
+  const recRef = useRef<any>(null);
+  const interimRef = useRef('');
+  const spokenThisTurnRef = useRef<Set<string>>(new Set()); // جلوگیری از پخش تکراری هر نوبت A
+
+  // مقادیر مشتق‌شده — قبل از useEffect چون از آن‌ها استفاده می‌شود
+  const bTurnIndices = curItem ? curItem.turns.map((t, i) => t.role === 'B' ? i : -1).filter(i => i >= 0) : [];
+  const curBTurnIdx = bTurnIndices.indexOf(turnIdx);
+  const curTurn = curItem?.turns[turnIdx];
+
+  useEffect(() => {
+    const SR: any = (typeof window !== 'undefined') ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
+    setRecSupported(!!SR);
+  }, []);
+
+  // پخش خودکار جملهٔ A وقتی وارد نوبت می‌شویم
+  useEffect(() => {
+    if (!curItem || !curTurn || curTurn.role !== 'A') return;
+    // فقط اگر این نوبت قبلاً پخش نشده
+    const key = `${curItem.id}-${turnIdx}`;
+    if (spokenThisTurnRef.current.has(key)) return;
+    spokenThisTurnRef.current.add(key);
+    // پخش صوتی جملهٔ A — طرف مقابل صحبت می‌کند
+    void speak(curTurn.text, { rate: 1, vreg: 'de-DE', onErr: () => { /* بی‌صدا */ } });
+  }, [curItem, turnIdx]);
+
+  // stop listening و speaking در unmount
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      try { recRef.current?.abort?.(); } catch { /* ignore */ }
+    };
+  }, []);
+
+  const startListening = () => {
+    const SR: any = (typeof window !== 'undefined') ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
+    if (!SR) { onShowToast('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند.', true); return; }
+    try { recRef.current?.abort?.(); } catch { /* ignore */ }
+    const rec = new SR();
+    rec.lang = 'de-DE';
+    rec.interimResults = true;
+    rec.continuous = false;
+    interimRef.current = '';
+    rec.onresult = (e: any) => {
+      let finalText = '';
+      let interimText = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interimText += r[0].transcript;
+      }
+      interimRef.current = interimText;
+      if (finalText) setTyped(t => (t ? t + ' ' : '') + finalText.trim());
+    };
+    rec.onerror = (e: any) => {
+      setListening(false);
+      if (e?.error !== 'aborted' && e?.error !== 'no-speech') {
+        onShowToast('خطای تشخیص گفتار: ' + (e?.error || ''), true);
+      }
+    };
+    rec.onend = () => { setListening(false); interimRef.current = ''; };
+    recRef.current = rec;
+    rec.start();
+    setListening(true);
+  };
+
+  const stopListening = () => {
+    try { recRef.current?.abort?.(); } catch { /* ignore */ }
+    setListening(false);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -165,10 +240,7 @@ Antworte NUR mit einem JSON-Array:
     save(ARCH_KEY, next); setArch(next);
   };
 
-  // حرکت روی turnهای نقش B
-  const bTurnIndices = curItem ? curItem.turns.map((t, i) => t.role === 'B' ? i : -1).filter(i => i >= 0) : [];
-  const curBTurnIdx = bTurnIndices.indexOf(turnIdx);
-  const curTurn = curItem?.turns[turnIdx];
+  // (bTurnIndices/curBTurnIdx/curTurn قبلاً در بالا تعریف شده‌اند)
 
   const evalAnswer = async () => {
     if (!curItem || !curTurn || evalBusy) return;
@@ -341,13 +413,20 @@ Antworte NUR mit JSON: {"score":0,"feedbackFa":"…","correctedDe":"…"}`;
         <span>دیالوگ {toFa(items.indexOf(curItem) + 1)} از {toFa(items.length)} • نوبت B {toFa(curBTurnIdx + 1)}/{toFa(bTurnIndices.length)}</span>
       </div>
       <div className={card}>
-        {/* نمایش دیالوگ تا اینجا */}
+        {/* نمایش دیالوگ تا اینجا — درخواست کاربر ۳: دکمهٔ پخش صوتی روی هر جملهٔ A */}
         <div className="space-y-2 max-h-[280px] overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-[#141923]">
           {aTurnsShown.map((t, i) => (
             <div key={i} className={`text-sm leading-7 ${t.role === 'A' ? 'text-right' : 'text-left'}`}>
               {t.role === 'A' ? (
-                <div dir="ltr" className="inline-block max-w-[85%] px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100">
-                  <b className="text-[10px] text-slate-500 block">A:</b> {i === turnIdx && curTurn.role === 'B' ? t.text : t.text}
+                <div dir="ltr" className="inline-flex items-end gap-1.5 max-w-[90%]">
+                  <div className="inline-block px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100">
+                    <b className="text-[10px] text-slate-500 block">A:</b> {t.text}
+                  </div>
+                  <button
+                    onClick={() => speak(t.text, { rate: 1, vreg: 'de-DE', onErr: () => {} })}
+                    className="flex-shrink-0 w-7 h-7 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[#1f5fbf] dark:text-[#7fb0ff] flex items-center justify-center hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
+                    title="پخش این جمله"
+                  >🔊</button>
                 </div>
               ) : (
                 <div dir="ltr" className="inline-block max-w-[85%] px-3 py-1.5 rounded-xl bg-[#1f5fbf] text-white">
@@ -361,9 +440,24 @@ Antworte NUR mit JSON: {"score":0,"feedbackFa":"…","correctedDe":"…"}`;
         {curTurn.hint && !evalRes && (
           <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg">💡 {curTurn.hint}</div>
         )}
-        {/* پاسخ کاربر */}
-        <input dir="ltr" value={typed} onChange={e => setTyped(e.target.value)} disabled={evalRes !== null || evalBusy} onKeyDown={e => { if (e.key === 'Enter') void evalAnswer(); }}
-          placeholder="پاسخت را به آلمانی بنویس…" className="w-full bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3 py-2.5 font-sans text-base outline-none" />
+        {/* پاسخ کاربر — درخواست کاربر ۳: دکمهٔ میکروفون کنار فیلد */}
+        <div className="flex gap-1.5 items-stretch">
+          <input dir="ltr" value={typed} onChange={e => setTyped(e.target.value)} disabled={evalRes !== null || evalBusy} onKeyDown={e => { if (e.key === 'Enter') void evalAnswer(); }}
+            placeholder="پاسخت را به آلمانی بنویس یا بگو…" className="flex-1 bg-white dark:bg-[#141923] border-2 border-[#1f5fbf] dark:border-[#7fb0ff] rounded-xl px-3 py-2.5 font-sans text-base outline-none disabled:opacity-60" />
+          {recSupported && (
+            <button
+              onClick={listening ? stopListening : startListening}
+              disabled={evalRes !== null || evalBusy}
+              className={`w-12 flex-shrink-0 rounded-xl flex items-center justify-center transition disabled:opacity-40 ${listening ? 'bg-rose-600 text-white animate-pulse' : 'bg-[#1f5fbf] text-white hover:bg-[#1557a0]'}`}
+              title={listening ? 'توقف ضبط' : 'پاسخت را بگو (میکروفون)'}
+            >
+              {listening ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+          )}
+        </div>
+        {listening && (
+          <p className="text-[11px] text-rose-600 dark:text-rose-300 text-center animate-pulse">🎙 در حال شنیدن…</p>
+        )}
         {evalRes === null && !evalBusy && (
           <div className="flex gap-2">
             <button onClick={() => void evalAnswer()} disabled={!typed.trim()} className="flex-1 h-12 rounded-xl bg-emerald-600 text-white font-bold text-sm disabled:opacity-40">✅ تصحیح با معلم</button>
