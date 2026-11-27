@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { onCloudUserChanged, uploadStateToCloud } from './utils/cloud';
 import { shrinkImageForStorage } from './utils/image';
 import { imgGetAll, imgDel, imgDelNotIn } from './utils/imageStore';
@@ -26,25 +26,43 @@ import {
 } from './utils/storage';
 import { applyModeResult, promotionReady, activationReady } from './utils/wordStatus';
 import { stripHeadAnnotation } from './data/verbPrep';
+// درخواست کاربر ۱۶: پشتیبان‌گیری خودکار هفتگی
+import { maybeAutoSnapshot } from './utils/autoBackup';
+// درخواست کاربر ۱۸: یادآور روزانه با PWA Notifications
+import { startNotificationWatcher } from './utils/notifications';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
 import { PageOverlay } from './components/PageOverlay';
 import { BackupPanel, RestorePanel } from './components/BackupModal';
 import { Toast } from './components/Toast';
 import { WordDetailModal } from './components/WordDetailModal';
-import { QualityControlModal } from './components/QualityControlModal';
-import { WordManagerModal } from './components/WordManagerModal';
-import { HelpModal } from './components/HelpModal';
-import { ImageExtractModal } from './components/ImageExtractModal';
-import { AboutModal } from './components/AboutModal';
-import { DuplicateDetectorModal } from './components/DuplicateDetectorModal';
+// درخواست کاربر ۹: Code splitting — مودال‌های کم‌استفاده با React.lazy بارگذاری می‌شوند
+const QualityControlModal = lazy(() => import('./components/QualityControlModal').then(m => ({ default: m.QualityControlModal })));
+const WordManagerModal = lazy(() => import('./components/WordManagerModal').then(m => ({ default: m.WordManagerModal })));
+const HelpModal = lazy(() => import('./components/HelpModal').then(m => ({ default: m.HelpModal })));
+const ImageExtractModal = lazy(() => import('./components/ImageExtractModal').then(m => ({ default: m.ImageExtractModal })));
+const AboutModal = lazy(() => import('./components/AboutModal').then(m => ({ default: m.AboutModal })));
+const DuplicateDetectorModal = lazy(() => import('./components/DuplicateDetectorModal').then(m => ({ default: m.DuplicateDetectorModal })));
 import { VerbPrep } from './components/VerbPrep';
+import { IdiomTrainer } from './components/IdiomTrainer';
+import { B2GrammarHub } from './components/B2GrammarHub';
+import { DialogTrainer } from './components/DialogTrainer';
 import { WorksheetTrainer } from './components/WorksheetTrainer';
 import { KonnektorTrainer } from './components/KonnektorTrainer';
 import { KonnektorProTrainer } from './components/KonnektorProTrainer';
 import { SatzPuzzle } from './components/SentenceDrills';
 import { TenseStoryTrainer } from './views/TenseStoryTrainer';
 import { IrregularVerbsTrainer } from './views/IrregularVerbsTrainer';
+
+/** fallback یکدست برای همهٔ Suspenseها در App */
+const AppLazyFallback: React.FC = () => (
+  <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40">
+    <div className="bg-white dark:bg-[#1b2029] rounded-2xl px-6 py-4 text-sm text-[#5d6676] dark:text-[#a3adbd] flex items-center gap-2">
+      <span className="inline-block animate-pulse">⏳</span>
+      <span>در حال بارگذاری…</span>
+    </div>
+  </div>
+);
 
 /** تمرین‌های خودگردان گرامر — بدنه‌شان در لایهٔ keep-alive زیر رندر می‌شود تا با
  *  جابجایی تب‌ها (اصلی یا زیرتب‌های گرامر) باز بمانند؛ بستن فقط با ضربدرِ خود تمرین. */
@@ -90,6 +108,23 @@ export default function App() {
       void imgDelNotIn(known);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // درخواست کاربر ۱۶: پشتیبان‌گیری خودکار هفتگی — هنگام mount بررسی می‌کند
+  // اگر ۷ روز از آخرین snapshot گذشته، یک snapshot جدید می‌سازد (silent)
+  const stateRef = useRef<AppState>(state);
+  stateRef.current = state;
+  useEffect(() => {
+    // کمی تأخیر تا state اولیه بارگذاری شود
+    const t = setTimeout(() => { void maybeAutoSnapshot(stateRef.current); }, 5000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // درخواست کاربر ۱۸: یادآور روزانه — watcher هر ۶۰ ثانیه چک می‌کند
+  useEffect(() => {
+    const cleanup = startNotificationWatcher();
+    return cleanup;
   }, []);
 
   // Active exercise mode if inside practice
@@ -552,6 +587,10 @@ export default function App() {
     source?: 'daily'
   ) => {
     const isWord = !('cs' in item);
+    // درخواست کاربر: تمرین صرف صفت (adjdecl) مستقل از هدف روزانه است — شمارندهٔ روزانه
+    // (n/r و sn/sr) و پنجرهٔ اخیر (recordRecent) برای این مود به‌روز نمی‌شود تا آمار روزانه
+    // تحت تأثیر تمرین گرامر صرف صفت قرار نگیرد. سایر تمرین‌ها مانند قبل رفتار می‌کنند.
+    const isAdjDecl = mode === 'adjdecl';
     setState(prev => {
       let nextWords = prev.words;
       let nextDaily = prev.daily.d === today()
@@ -565,7 +604,8 @@ export default function App() {
           const clone = { ...nextWords[targetIdx] };
           const isFirstTime = sched(clone, grade, prev.set.ivlMod || 1.0, prev.set.leechN || 4);
           // فاز ۵: ثبت پاسخ در پنجرهٔ اخیر + زنجیرهٔ موفقیت — پایهٔ خروج علمی از لیست واژهٔ سخت (🩸)
-          recordRecent(clone, grade > 0);
+          // درخواست کاربر: برای adjdecl این فراخوانی skip می‌شود تا مستقل از هدف روزانه باشد
+          if (!isAdjDecl) recordRecent(clone, grade > 0);
           // فاز ۲: آمار دوگانهٔ تسلط (تولیدی/شناختی) — از نتیجهٔ تمرین؛ ارتقای دریافتی → کاندید
           const ok = grade > 0;
           // وضعیت آمادگی «قبل از» اعمال نتیجه — برای تشخیص لحظهٔ گذار (toast فقط یک‌بار می‌آید)
@@ -578,7 +618,7 @@ export default function App() {
           const actNow = ok && !activationReady(prePatch) && activationReady(clone);
           nextWords[targetIdx] = clone;
 
-          if (!isRetry) {
+          if (!isRetry && !isAdjDecl) {
             if (isFirstTime) nextDaily.n = (nextDaily.n || 0) + 1;
             else nextDaily.r = (nextDaily.r || 0) + 1;
             // هدف امروز داشبورد فقط پیشرفت «جلسهٔ روزانه» (sn/sr) را می‌شمارد؛
@@ -981,6 +1021,25 @@ export default function App() {
               <div className={activeExercise === 'puzzle' ? '' : 'hidden'}>
                 <SatzPuzzle key={`puzzle-${gramResets.puzzle || 0}`} words={state.words} onShowToast={showToast} onQuickAddWord={handleQuickAddWord} onViewWord={setSelectedWord} />
               </div>
+              {/* B2 Spezifisch: اصطلاحات + Konjunktiv II + Passiv + Trennbare Verben — هدف: آمادگی آزمون B2 */}
+              <div className={activeExercise === 'idioms' ? '' : 'hidden'}>
+                <IdiomTrainer key={`idioms-${gramResets.idioms || 0}`} vTab="learn" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'idioms_p' ? '' : 'hidden'}>
+                <IdiomTrainer key={`idioms_p-${gramResets.idioms_p || 0}`} vTab="practice" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'konjunktiv' ? '' : 'hidden'}>
+                <B2GrammarHub key={`konj-${gramResets.konjunktiv || 0}`} mode="konjunktiv" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'passiv' ? '' : 'hidden'}>
+                <B2GrammarHub key={`passiv-${gramResets.passiv || 0}`} mode="passiv" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'trennbar' ? '' : 'hidden'}>
+                <B2GrammarHub key={`trenn-${gramResets.trennbar || 0}`} mode="trennbar" onShowToast={showToast} />
+              </div>
+              <div className={activeExercise === 'dialog' ? '' : 'hidden'}>
+                <DialogTrainer key={`dialog-${gramResets.dialog || 0}`} onShowToast={showToast} />
+              </div>
             </div>
           </div>
         </main>
@@ -1075,6 +1134,7 @@ export default function App() {
         )}
 
         {isQualityModalOpen && (
+          <Suspense fallback={<AppLazyFallback />}>
           <QualityControlModal
             words={state.words}
             ignoredIds={extData.ok || {}}
@@ -1083,10 +1143,12 @@ export default function App() {
             onIgnoreWord={handleIgnoreQualityWord}
             onDeleteWord={handleDeleteWord}
           />
+          </Suspense>
         )}
       </div>
 
       {isDuplicateModalOpen && (
+        <Suspense fallback={<AppLazyFallback />}>
         <DuplicateDetectorModal
           words={state.words}
           onClose={() => setIsDuplicateModalOpen(false)}
@@ -1098,9 +1160,11 @@ export default function App() {
           hidden={!!editingWordId}
           onShowToast={showToast}
         />
+        </Suspense>
       )}
 
       {isImageExtractOpen && (
+        <Suspense fallback={<AppLazyFallback />}>
         <ImageExtractModal
           words={state.words}
           onClose={() => setIsImageExtractOpen(false)}
@@ -1110,22 +1174,27 @@ export default function App() {
           onApplyImportPlan={(fresh, decisions) => handleApplyImportPlan(fresh, decisions)}
           onShowToast={showToast}
         />
+        </Suspense>
       )}
 
       {isAboutModalOpen && (
+        <Suspense fallback={<AppLazyFallback />}>
         <AboutModal onClose={() => setIsAboutModalOpen(false)} />
+        </Suspense>
       )}
 
       {activeHelpTopic && (
+        <Suspense fallback={<AppLazyFallback />}>
         <HelpModal
           topicKey={activeHelpTopic}
           onClose={() => setActiveHelpTopic(null)}
         />
+        </Suspense>
       )}
 
       {pendingDeletion && (
         <div
-          className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+          className="fixed inset-0 z-[1105] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
           role="presentation"
           onClick={e => { if (e.target === e.currentTarget && !isDeletionInProgress) setPendingDeletion(null); }}
         >
