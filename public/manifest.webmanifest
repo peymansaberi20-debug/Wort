@@ -1,8 +1,7 @@
-
 {
   "id": "/Wort/",
   "name": "WörterBuchMitPeyman",
-  "short_name": "WörterBuchMitPeyman",
+  "short_name": "WörterBuch",
   "description": "واژه‌نامه آلمانی، فلش‌کارت و تمرین واژگان آلمانی",
   "lang": "fa",
   "dir": "rtl",
@@ -12,6 +11,7 @@
   "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
+  "categories": ["education", "productivity", "language"],
   "icons": [
     {
       "src": "./IMG_9115.png",
@@ -24,6 +24,42 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "./IMG_9113.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "⚡ مرور سریع ۶۰ ثانیه",
+      "short_name": "مرور سریع",
+      "description": "مرور ۵ واژه در ۶۰ ثانیه",
+      "url": "./?action=quick-review",
+      "icons": [{ "src": "./IMG_9115.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "🌟 جلسه روزانه",
+      "short_name": "روزانه",
+      "description": "شروع جلسه روزانه فلش‌کارت",
+      "url": "./?action=daily",
+      "icons": [{ "src": "./IMG_9115.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "🎓 آزمون شفاهی",
+      "short_name": "آزمون شفاهی",
+      "description": "شبیه‌ساز آزمون شفاهی با معلم هوش مصنوعی",
+      "url": "./?action=oral-exam",
+      "icons": [{ "src": "./IMG_9115.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "📊 گزارش هفتگی",
+      "short_name": "گزارش",
+      "description": "گزارش هفتگی پیشرفت با AI",
+      "url": "./?action=weekly-report",
+      "icons": [{ "src": "./IMG_9115.png", "sizes": "192x192" }]
     }
   ]
 }
