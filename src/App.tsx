@@ -142,15 +142,26 @@ export default function App() {
   }, [state.words]);
 
   // درخواست کاربر ۱۱: مدیریت ?action=... از URL (PWA Shortcuts)
+  // درخواست کاربر ۶: اکشن view-word برای باز کردن پروفایل واژهٔ Widget
   useEffect(() => {
     const url = new URL(window.location.href);
     const action = url.searchParams.get('action');
     if (!action) return;
+    const wordId = url.searchParams.get('wordId');
     // حذف پارامتر از URL (تکرار نشود)
     url.searchParams.delete('action');
+    url.searchParams.delete('wordId');
     window.history.replaceState({}, '', url.toString());
     // اجرای اکشن با کمی تأخیر برای mount شدن
-    const t = setTimeout(() => handleQuickActionRef.current(action), 600);
+    const t = setTimeout(() => {
+      if (action === 'view-word' && wordId) {
+        const w = state.words.find(x => x.id === wordId);
+        if (w) setSelectedWord(w);
+        else showToast('واژهٔ مربوط به یادآور پیدا نشد — شاید حذف شده.', true);
+        return;
+      }
+      handleQuickActionRef.current(action);
+    }, 600);
     return () => clearTimeout(t);
   }, []);
 
@@ -274,9 +285,12 @@ export default function App() {
       'vprep', 'konnektoren', 'schreiben', 'schreiben_exam', 'freesent', 'dikt', 'hoeren', 'hoeren_new', 'hoeren_archive',
       'idioms', 'idioms_p', 'konjunktiv', 'passiv', 'trennbar', 'dialog', 'puzzle', 'kpro', 'tstory', 'irrverb', 'wsh'];
     if (validModes.includes(exMode)) {
-      setExerciseHidden(false);
-      setActiveExercise(exMode);
+      // درخواست کاربر ۹: ترتیب مهم است — اول به تب prac برو، سپس تمرین را باز کن
+      // (navigateToTab در شاخه «بدون activeExercise» قبلی، setActiveExercise(null) را صدا می‌زد
+      //  که تمرین جدید ما را override می‌کرد)
       navigateToTab('prac');
+      setActiveExercise(exMode);
+      setExerciseHidden(false);
     } else {
       showToast(`عملیات «${action}» پشتیبانی نمی‌شود.`, true);
     }
@@ -760,9 +774,10 @@ export default function App() {
     });
 
     // درخواست کاربر ۲/۸: ثبت تمرین در tracker + پیشرفت چالش روزانه
+    // درخواست کاربر ۴: فقط تمرین‌های مرتبط با نوع چالش پیشرفت می‌دهند
     if (!isRetry) {
       recordPractice(1);
-      advanceDailyQuest(1);
+      advanceDailyQuest(1, mode);
     }
   };
 
