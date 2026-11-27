@@ -6,6 +6,8 @@ import { GeminiKeyCard } from '../components/GeminiKeyCard';
 import { PROVIDERS, describeAiError, getActiveProvider, getApiKey, getModel, testConnection } from '../utils/aiProvider';
 // درخواست کاربر ۱۸: یادآور روزانه با PWA Notifications
 import { loadNotificationSettings, enableNotifications, disableNotifications, updateNotificationTime, notificationsSupported, notificationPermission, nextReminderText, formatTime } from '../utils/notifications';
+// نسخهٔ schema برای نمایش در فوتر تنظیمات
+import { CURRENT_SCHEMA_VERSION } from '../utils/migrations';
 
 interface SettingsViewProps {
   section?: string;
@@ -168,11 +170,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </label>
               <select
                 value={settings.theme || 'light'}
-                onChange={e => onUpdateSettings({ theme: e.target.value as 'light' | 'dark' })}
+                onChange={e => onUpdateSettings({ theme: e.target.value as 'light' | 'dark' | 'green' })}
                 className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs md:text-sm outline-none font-medium transition focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="light">☀️ روشن (پیش‌فرض)</option>
                 <option value="dark">🌙 تیره (Dark Mode)</option>
+                <option value="green">🌿 مطالعهٔ سبز (تیره + ته سبز — آرامش چشم در شب)</option>
               </select>
             </div>
 
@@ -357,14 +360,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center gap-3.5 border-b border-slate-100 dark:border-slate-800 pb-4">
               <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shadow-inner">⏱️</div>
               <div>
-                <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">تایمر تمرین‌ها</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">راهنمای تنظیم زمان‌سنج اختصاصی هر بخش</p>
+                <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">تایمر تمرین‌ها و نمایش خودکار</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">راهنمای زمان‌سنج اختصاصی هر بخش + تنظیمات نمایش خودکار</p>
               </div>
             </div>
 
             <p className="text-xs md:text-sm leading-8 text-slate-600 dark:text-slate-300 bg-slate-50/80 dark:bg-[#141923]/70 p-4.5 rounded-2xl border border-slate-100 dark:border-slate-800">
               تایمر هر تمرین جداگانه تنظیم می‌شود: داخل هر تمرین، آیکن ⏱ را در نوار بالا (قبل از آیکن شناسنامهٔ واژه) بزنید، تایمر را روشن یا خاموش کنید و مدت آن را تعیین کنید. تنظیم هر تمرین ذخیره می‌ماند. «تمرین ترکیبی واژه‌های سخت» از تایمر همان تمرین اصلی هر سؤال پیروی می‌کند.
             </p>
+
+            {/* نمایش خودکار ترجمه پس از X ثانیه (revealSec) */}
+            <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-2">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                نمایش خودکار ترجمه پس از: {(settings.revealSec ?? 0) === 0 ? 'غیرفعال' : `${settings.revealSec ?? 0} ثانیه`}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={120}
+                step={5}
+                value={settings.revealSec ?? 0}
+                onChange={e => onUpdateSettings({ revealSec: parseInt(e.target.value) || 0 })}
+                className="w-full accent-emerald-600 cursor-pointer pt-2"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>۰ (غیرفعال)</span>
+                <span>۳۰s</span>
+                <span>۶۰s</span>
+                <span>۱۲۰s</span>
+              </div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block text-center mt-1">در فلش‌کارت، پس از این مدت ترجمه خودکار نمایش داده می‌شود (۰ = فقط با کلیک)</span>
+            </div>
+
+            {/* نمایش تایمر به‌صورت پیش‌فرض در تمرین‌ها */}
+            <label className="flex items-center gap-3 cursor-pointer text-xs md:text-sm font-semibold select-none p-3.5 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition">
+              <input
+                type="checkbox"
+                checked={!!settings.showTimer}
+                onChange={e => onUpdateSettings({ showTimer: e.target.checked })}
+                className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer"
+              />
+              <span className="text-slate-800 dark:text-slate-200">نمایش تایمر به‌صورت پیش‌فرض در تمرین‌ها (می‌توانی داخل هر تمرین جداگانه خاموش/روشن کنی)</span>
+            </label>
           </div>
         </>
       )}
@@ -573,6 +610,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </select>
             </div>
           </div>
+
+          {/* تنظیمات «تولید جملهٔ آزاد» — freeCat / freeDir / freeRnd (در AppSettings موجود ولی در UI نبود) */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+            <div>
+              <label className="block text-xs md:text-sm font-bold text-slate-800 dark:text-slate-200">
+                ⚙️ تنظیمات پیش‌فرض «تولید جملهٔ آزاد»:
+              </label>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                این تنظیمات روی تمرین «تولید جملهٔ آزاد» (در بخش Wortschatz) اعمال می‌شود.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">دستهٔ پیش‌فرض برای جملهٔ آزاد:</label>
+                <select
+                  value={settings.freeCat ?? ''}
+                  onChange={e => onUpdateSettings({ freeCat: e.target.value })}
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2 text-xs outline-none font-medium"
+                >
+                  <option value="">خودکار (واژهٔ روز)</option>
+                  {categories.map(([catName]) => (
+                    <option key={catName} value={catName}>{catName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="p-3 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">جهت پیش‌فرض:</label>
+                <select
+                  value={settings.freeDir ?? 'de'}
+                  onChange={e => onUpdateSettings({ freeDir: e.target.value as 'de' | 'fa' })}
+                  className="w-full bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-2 text-xs outline-none font-medium"
+                >
+                  <option value="de">🇩🇪 آلمانی ← فارسی</option>
+                  <option value="fa">🇮🇷 فارسی ← آلمانی</option>
+                </select>
+              </div>
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer text-xs font-semibold select-none p-3 rounded-xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800">
+              <input
+                type="checkbox"
+                checked={!!settings.freeRnd}
+                onChange={e => onUpdateSettings({ freeRnd: e.target.checked })}
+                className="w-4 h-4 rounded text-purple-600 accent-purple-600 cursor-pointer"
+              />
+              <span className="text-slate-800 dark:text-slate-200">انتخاب تصادفی واژه برای جملهٔ آزاد (هر بار یک واژهٔ متفاوت)</span>
+            </label>
+          </div>
         </div>
       )}
 
@@ -678,8 +762,93 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* درخواست کاربر: ارتقای تنظیمات — نمایش فضای ذخیره‌سازی + بازنشانی تنظیمات به حالت پیش‌فرض */}
+          <StorageInfoAndReset onShowToast={onShowToast} onResetSettings={() => onUpdateSettings({})} />
         </div>
       )}
+
+      {/* فوتر اطلاعات نسخه و راهنمای سریع */}
+      <div className="bg-white dark:bg-[#1b2029] border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-2 text-center">
+        <div className="text-xs text-slate-500 dark:text-slate-400">
+          <b className="text-slate-700 dark:text-slate-200">WörterBuch</b> — پلتفرم هوشمند یادگیری آلمانی · نسخهٔ {CURRENT_SCHEMA_VERSION}.۰
+        </div>
+        <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-5">
+          تمام داده‌ها روی مرورگر شما ذخیره می‌شود · کلیدهای هوش مصنوعی فقط روی دستگاه · طراحی: پیمان صابری
+        </div>
+        <div className="text-[10px] text-slate-400 dark:text-slate-500 pt-1">
+          برای دسترسی سریع به بخش‌های تنظیمات، از منوی ⚙️ در هدر استفاده کن: ظاهر · یادگیری · صدا · هدف · هوش مصنوعی · داده‌ها
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** کارت اطلاعات فضای ذخیره‌سازی + بازنشانی تنظیمات به حالت پیش‌فرض */
+const StorageInfoAndReset: React.FC<{ onShowToast: (m: string, e?: boolean) => void; onResetSettings: () => void }> = ({ onShowToast, onResetSettings }) => {
+  const [usage, setUsage] = useState<{ bytes: number; percent: number; quotaMB?: number } | null>(null);
+  useEffect(() => {
+    const calc = () => {
+      try {
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k) total += (localStorage.getItem(k) || '').length + k.length;
+        }
+        const bytes = total * 2; // هر کاراکتر UTF-16 ≈ ۲ بایت
+        // تخمین سهمیه: معمولاً ۵MB در iOS Safari، ۱۰MB در Chrome
+        const quotaMB = (navigator as any).storage?.estimate ? undefined : 5;
+        setUsage({ bytes, percent: quotaMB ? Math.min(100, (bytes / (quotaMB * 1024 * 1024)) * 100) : 0, quotaMB });
+      } catch { setUsage(null); }
+    };
+    calc();
+    // اگر navigator.storage.estimate در دسترس باشد، سهمیهٔ واقعی را بگیر
+    if ((navigator as any).storage?.estimate) {
+      (navigator as any).storage.estimate().then((est: any) => {
+        setUsage(prev => prev ? { ...prev, quotaMB: est.quota ? Math.round(est.quota / (1024 * 1024)) : undefined, percent: est.quota ? Math.min(100, (prev.bytes / est.quota) * 100) : 0 } : prev);
+      }).catch(() => { /* ignore */ });
+    }
+  }, []);
+  const handleReset = () => {
+    if (!window.confirm('⚠️ همهٔ تنظیمات به حالت پیش‌فرض برگردانده شود؟ واژگان و تاریخچه دست‌نخورده می‌مانند، فقط تنظیمات (پوسته، صدا، سهمیه، …) ریست می‌شوند.')) return;
+    onResetSettings();
+    onShowToast('✅ تنظیمات به حالت پیش‌فرض برگردانده شد — صفحه تازه می‌شود…');
+    setTimeout(() => window.location.reload(), 1000);
+  };
+  return (
+    <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+      {/* فضای ذخیره‌سازی */}
+      <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-[#141923]/70 border border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between">
+          <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100">💾 فضای ذخیره‌سازی مرورگر</b>
+          {usage && (
+            <span className="text-[11px] text-slate-500 dark:text-slate-400" dir="ltr">
+              {(usage.bytes / 1024).toFixed(1)} KB{usage.quotaMB ? ` / ${usage.quotaMB} MB` : ''}
+            </span>
+          )}
+        </div>
+        {usage && usage.percent > 0 && (
+          <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mt-2">
+            <div className={`h-full transition-all ${usage.percent > 80 ? 'bg-red-500' : usage.percent > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${usage.percent}%` }} />
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 leading-5">
+          {usage && usage.percent > 80
+            ? '⚠️ فضای ذخیره‌سازی نزدیک به پر شده — یک پشتیبان بگیر و تاریخچه‌های قدیمی را پاک کن.'
+            : 'این شامل همهٔ داده‌های localStorage است: واژگان، تاریخچه، تنظیمات، کلیدهای AI.'}
+        </p>
+      </div>
+
+      {/* بازنشانی تنظیمات */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/90 dark:border-amber-900/40">
+        <div>
+          <b className="text-xs md:text-sm text-amber-900 dark:text-amber-200 block">🔄 بازنشانی تنظیمات به حالت پیش‌فرض</b>
+          <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 block">فقط تنظیمات ریست می‌شوند — واژگان و تاریخچهٔ مرور دست‌نخورده می‌مانند</span>
+        </div>
+        <button onClick={handleReset} className="bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 px-4 py-2.5 rounded-xl text-xs font-bold transition flex-shrink-0 shadow-xs">
+          🔄 بازنشانی تنظیمات
+        </button>
+      </div>
     </div>
   );
 };
