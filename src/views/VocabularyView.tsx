@@ -2106,7 +2106,18 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       {tab === 'quality' && renderQuality && renderEmbedTab('✅', 'کنترل کیفیت', 'quality', renderQuality(() => setTab('list')))}
       {/* درخواست کاربر ۳: تب خانواده واژگان */}
       {tab === 'families' && renderEmbedTab('🌐', 'خانواده واژگان', 'families', (
-        <WordFamiliesView words={words} onSelectWord={onSelectWord} />
+        <WordFamiliesView
+          words={words}
+          onSelectWord={onSelectWord}
+          onAddWord={(de, art) => {
+            // درخواست کاربر ۲: باز کردن فرم افزودن واژه با de و art از پیش پر شده
+            onSetEditingWordId(null);
+            setFormDe(de);
+            setFormArt(art || '');
+            setFormFa('');
+            setTab('add');
+          }}
+        />
       ))}
       {aiChoicePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
