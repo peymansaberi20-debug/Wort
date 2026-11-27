@@ -17,6 +17,8 @@ const splitConjColumns = (forms: string[]): [string[], string[]] =>
 
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
+// درخواست کاربر ۶: پنل واژگان فراموش‌شده زیر تب Lernkarten
+import { ForgottenWordsPanel } from '../components/ForgottenWordsPanel';
 // درخواست کاربر ۹: Code splitting — تمرین‌های سنگین کم‌استفاده با React.lazy بارگذاری می‌شوند
 // تا باندل اولیه نصف شود و صفحه اول سریع‌تر باز شود
 const SchreibenCorrector = lazy(() => import('../components/SchreibenCorrector').then(m => ({ default: m.SchreibenCorrector })));
@@ -1783,6 +1785,13 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
         
   const [mainTab, setMainTab] = useState<MainTab>(() => (sessionStorage.getItem('wb_main_tab') as MainTab) || 'flash');
   useEffect(() => { try { sessionStorage.setItem('wb_main_tab', mainTab); } catch { /* ignore */ } }, [mainTab]);
+
+  // درخواست کاربر ۴: شروع مستقیم آزمون شفاهی از داشبورد — وقتی رویداد می‌آید، تب sprechen باز می‌شود
+  useEffect(() => {
+    const handler = () => setMainTab('sprechen');
+    window.addEventListener('wb-start-oral-exam', handler);
+    return () => window.removeEventListener('wb-start-oral-exam', handler);
+  }, []);
   const [showHard, setShowHard] = useState(false);
   /** پنجرهٔ «تولید جملهٔ آزاد» در تمرین جای‌خالی فعل+حرف اضافه (کنار آیکن راهنما) */
   const [freeOpen, setFreeOpen] = useState(false);
@@ -1999,6 +2008,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               </button>
             </div>
+
+            {/* درخواست کاربر ۶: بخش «واژگان فراموش‌شده» زیر تب Lernkarten */}
+            {onStartHard && (
+              <ForgottenWordsPanel
+                words={allWords}
+                onSelectWord={w => onViewWord?.(w)}
+                onRecover={ids => onStartHard(ids)}
+              />
+            )}
           </div>
         )}
 

@@ -10,6 +10,8 @@ import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
 import { X, Save, HelpCircle, Eye, EyeOff, Printer } from 'lucide-react';
 import { PrintPreview, prG, prFa, toFa } from '../components/trainerUI';
+// درخواست کاربر ۳: تب خانواده واژگان
+import { WordFamiliesView } from '../components/WordFamiliesView';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -196,8 +198,9 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   // Add / Edit form state
   const isEditing = !!editingWordId;
   const editingWord = isEditing ? words.find(w => w.id === editingWordId) : null;
-  // Tabs: list / add (also edit) / group import / compare / manage / quality — all shown inline, no popups
-  const [tab, setTab] = useState<'list' | 'add' | 'group' | 'compare' | 'manage' | 'quality'>(isEditing ? 'add' : 'list');
+  // Tabs: list / add (also edit) / group import / compare / manage / quality / families — all shown inline, no popups
+  // درخواست کاربر ۳: تب جدید «خانواده واژگان»
+  const [tab, setTab] = useState<'list' | 'add' | 'group' | 'compare' | 'manage' | 'quality' | 'families'>(isEditing ? 'add' : 'list');
   const isFormOpen = tab === 'add';
   const setIsFormOpen = (v: boolean) => setTab(v ? 'add' : 'list');
 
@@ -1013,14 +1016,15 @@ FILE SIZE
     <div className="space-y-4 text-right">
       {/* Tab bar (same look as the exercises tabs) */}
       <div className="sticky top-16 md:top-[4.5rem] z-10 -mx-1 px-1 py-2 bg-[#f6f7fb] dark:bg-[#12151c]">
-        <div className="grid grid-cols-6 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a]">
+        <div className="grid grid-cols-7 gap-1 p-1 bg-slate-100 dark:bg-[#141923] rounded-2xl border border-[#dde1ea] dark:border-[#333b4a]">
           {([
             { id: 'list', icon: '📚', label: 'لیست واژگان' },
             { id: 'add', icon: isEditing ? '✏️' : '➕', label: isEditing ? 'ویرایش واژه' : 'افزودن تکی' },
             { id: 'group', icon: '📦', label: 'افزودن گروهی' },
             { id: 'compare', icon: '⚖️', label: 'مقایسه لغت‌ها' },
             { id: 'manage', icon: '🗂', label: 'مدیریت گروهی' },
-            { id: 'quality', icon: '✅', label: 'کنترل کیفیت' }
+            { id: 'quality', icon: '✅', label: 'کنترل کیفیت' },
+            { id: 'families', icon: '🌐', label: 'خانواده واژگان' }
           ] as const).map(t => (
             <button
               key={t.id}
@@ -2100,6 +2104,10 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       ))}
       {tab === 'manage' && renderManager && renderEmbedTab('🗂', 'مدیریت گروهی', 'manager', renderManager(() => setTab('list')))}
       {tab === 'quality' && renderQuality && renderEmbedTab('✅', 'کنترل کیفیت', 'quality', renderQuality(() => setTab('list')))}
+      {/* درخواست کاربر ۳: تب خانواده واژگان */}
+      {tab === 'families' && renderEmbedTab('🌐', 'خانواده واژگان', 'families', (
+        <WordFamiliesView words={words} onSelectWord={onSelectWord} />
+      ))}
       {aiChoicePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="ai-choice-title">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1b2029] p-5 shadow-2xl space-y-4">
