@@ -1066,15 +1066,15 @@ export const TenseStoryTrainer: React.FC<TenseStoryTrainerProps> = ({ settings, 
               return (
                 <div
                   key={g.no}
-                  className={`rounded-xl border px-3 py-2.5 ${r.ok ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30' : 'border-red-200 dark:border-red-900 bg-red-50/60 dark:bg-red-950/30'}`}
+                  className={`rounded-xl border px-3 md:px-4 py-2.5 md:py-3 ${r.ok ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30' : 'border-red-200 dark:border-red-900 bg-red-50/60 dark:bg-red-950/30'}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-[13px] font-bold flex items-center gap-1.5 flex-wrap">
+                    <div className="text-[13px] md:text-sm font-bold flex items-center gap-1.5 flex-wrap">
                       <span className={r.ok ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}>{r.ok ? '✓' : '✗'} جای خالی {g.no}</span>
                       <span dir="ltr" className="font-extrabold text-[#1f2a3d] dark:text-[#e7ecf5]">{g.inf}</span>
                       <span className="text-[#5d6676] dark:text-[#8b95a7] font-medium">→</span>
                       <span dir="ltr" className="font-extrabold text-[#1f5fbf] dark:text-[#7fb0ff]">{shown}</span>
-                      {!r.ok && r.given && <span className="text-[11px] text-[#b91c1c] dark:text-red-400">(پاسخ تو: {r.given})</span>}
+                      {!r.ok && r.given && <span className="text-[11px] md:text-xs text-[#b91c1c] dark:text-red-400">(پاسخ تو: {r.given})</span>}
                     </div>
                     <button
                       onClick={() => { setChatGap(g.no); }}

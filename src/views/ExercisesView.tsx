@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useLayoutEffect, lazy, Suspense } from 'react';
 import { AppSettings, CaseQuestion, ExerciseTimerCfg, Word } from '../types';
 import { CASEQ, P6 } from '../data/seed';
 import { checkSynAnt, checkWord, familyCands, fullWord, getCategories, intervalPreview, isAdjPos, isLeech, isNounPos, isVerbPos, nz, nz2, getTimerCfg } from '../utils/storage';
@@ -17,7 +17,9 @@ const splitConjColumns = (forms: string[]): [string[], string[]] =>
 
 import { WordDetailModal } from '../components/WordDetailModal';
 import { SentenceBuilderModal } from '../components/SentenceBuilderModal';
-import { SchreibenCorrector } from '../components/SchreibenCorrector';
+// درخواست کاربر ۹: Code splitting — تمرین‌های سنگین کم‌استفاده با React.lazy بارگذاری می‌شوند
+// تا باندل اولیه نصف شود و صفحه اول سریع‌تر باز شود
+const SchreibenCorrector = lazy(() => import('../components/SchreibenCorrector').then(m => ({ default: m.SchreibenCorrector })));
 import { Diktat } from '../components/SentenceDrills';
 import { ErrorNotebook } from '../components/ErrorNotebook';
 import { FreeSentencePractice, FREE_SENT_WORD } from '../components/FreeSentencePractice';
@@ -29,9 +31,21 @@ import { IconBtn } from '../components/IconBtn';
 import { X, BookOpen, PencilLine, HelpCircle, Timer as TimerIcon, Mic, Sparkles, MessageSquarePlus } from 'lucide-react';
 import { ConjugatedForm } from '../components/ConjugatedForm';
 import { generateWithGemini, parseAI } from '../utils/ai';
-import { HoerenTrainer } from '../components/HoerenTrainer';
-import { SprechenTrainer } from '../components/SprechenTrainer';
-import { LesenTrainer } from '../components/LesenTrainer';
+const HoerenTrainer = lazy(() => import('../components/HoerenTrainer').then(m => ({ default: m.HoerenTrainer })));
+const SprechenTrainer = lazy(() => import('../components/SprechenTrainer').then(m => ({ default: m.SprechenTrainer })));
+const LesenTrainer = lazy(() => import('../components/LesenTrainer').then(m => ({ default: m.LesenTrainer })));
+const ComprehensiveExam = lazy(() => import('../components/ComprehensiveExam').then(m => ({ default: m.ComprehensiveExam })));
+import { IdiomTrainer } from '../components/IdiomTrainer';
+import { B2GrammarHub } from '../components/B2GrammarHub';
+import { DialogTrainer } from '../components/DialogTrainer';
+
+/** fallback یکدست برای همهٔ Suspenseها — نشانگر بارگذاری ساده */
+const LazyFallback: React.FC<{ label?: string }> = ({ label }) => (
+  <div className="flex items-center justify-center p-12 text-[#5d6676] dark:text-[#a3adbd] text-sm">
+    <span className="inline-block animate-pulse mr-2">⏳</span>
+    <span>{label || 'در حال بارگذاری…'}</span>
+  </div>
+);
 
 // فاز ۴ #۵: PratText مشترک با هایلایت قرمزِ بخش تغییرکرده (بدون تعریف محلی)
 import { PratText } from '../components/PratText';
@@ -76,7 +90,13 @@ export type ExerciseMode =
   | 'wsh'
   | 'hoeren'
   | 'hoeren_new'
-  | 'hoeren_archive';
+  | 'hoeren_archive'
+  | 'idioms'
+  | 'idioms_p'
+  | 'konjunktiv'
+  | 'passiv'
+  | 'trennbar'
+  | 'dialog';
 
 export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string; desc: string }> = {
   flash: { title: 'فلش‌کارت', icon: '🃏', desc: 'کارت واژه با الگوریتم تکرار فاصله‌دار لایتنر' },
@@ -114,7 +134,13 @@ export const EXERCISE_NAMES: Record<ExerciseMode, { title: string; icon: string;
   wsh: { title: 'جای‌خالی فعل + حرف اضافه (با معلم)', icon: '📄', desc: 'معلم هر بار با سطح و تعدادِ انتخابیِ تو یک برگهٔ جای‌خالی فعل+حرف اضافه می‌سازد؛ بررسی فوری، «چرا این جواب؟»، ترجمهٔ فارسی بعد از بررسی، چت با معلم، تولید جملهٔ آزاد و برگهٔ A4' },
   hoeren: { title: 'Hörverstehen', icon: '🎧', desc: 'Hörtexte, Richtig/Falsch und Lückentexte' },
   hoeren_new: { title: 'ساخت تمرین جدید', icon: '✨', desc: 'متن را وارد کن؛ تمرین شنیداری، سؤال‌ها و فایل صوتی ساخته می‌شود' },
-  hoeren_archive: { title: 'تمرین‌های ذخیره‌شده', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' }
+  hoeren_archive: { title: 'تمرین‌های ذخیره‌شده', icon: '📂', desc: 'تمرین‌های ذخیره‌شده را دوباره انجام بده' },
+  idioms: { title: 'اصطلاحات آلمانی (Redewendungen) — یادگیری', icon: '💬', desc: 'فهرست اصطلاحات B2 با چشم نمایش/پنهان معنی، مثال، چاپ و چت با معلم — مهم برای آزمون B2' },
+  idioms_p: { title: 'اصطلاحات آلمانی — تمرین', icon: '🎯', desc: 'تمرین اصطلاحات با انتخاب از ۴ گزینه یا تایپ معنی فارسی — SRS اختصاصی با ۳ پاسخ درست = دانش‌آموخته' },
+  konjunktiv: { title: 'Konjunktiv II', icon: '🌟', desc: 'تبدیل Indikativ به Konjunktiv II (hätte/wäre/würde) — مهم برای Schreiben و Sprechen B2' },
+  passiv: { title: 'Passiv', icon: '🔄', desc: 'تبدیل Aktiv ↔ Passiv (werden + Partizip II) — مهم برای متن‌های رسمی و Lesen B2' },
+  trennbar: { title: 'Trennbare Verben', icon: '✂️', desc: 'تشخیص پیشوند جداشدنی و جایگاه آن در جملهٔ اصلی/پیرو' },
+  dialog: { title: 'دیالوگ و مکالمه', icon: '🎭', desc: 'AI سناریوی واقعی می‌سازد (رستوران، دکتر، مصاحبه…)؛ نقش B را تایپ کن و معلم در بافت دیالوگ تصحیح می‌کند — مهم برای Sprechen B2' }
 };
 
 const WORTSCHATZ_MODES: ExerciseMode[] = ['flash', 'vmix', 'act', 'review', 'daily', 'free', 'sent', 'cloze', 'prod', 'n2v', 'v2n', 'synant', 'plural'];
@@ -158,10 +184,22 @@ const GRAMMATIK_CATS: GramCat[] = [
       { id: 'puzzle', label: 'چیدن جمله', mode: 'puzzle' },
     ],
   },
+  {
+    // B2 Spezifisch: اصطلاحات + Konjunktiv II + Passiv + Trennbare Verben — هدف: آمادگی آزمون B2
+    icon: '🎯', label: 'B2 Spezifisch', desc: 'اصطلاحات، Konjunktiv II، Passiv و فعل‌های جداشدنی — مهم‌ترین مباحث گرامر B2',
+    tabs: [
+      { id: 'idioms', label: 'اصطلاحات (یادگیری)', mode: 'idioms' },
+      { id: 'idioms_p', label: 'اصطلاحات (تمرین)', mode: 'idioms_p' },
+      { id: 'konjunktiv', label: 'Konjunktiv II', mode: 'konjunktiv' },
+      { id: 'passiv', label: 'Passiv', mode: 'passiv' },
+      { id: 'trennbar', label: 'Trennbare Verben', mode: 'trennbar' },
+      { id: 'dialog', label: 'دیالوگ و مکالمه', mode: 'dialog' },
+    ],
+  },
 ];
 const SCHREIBEN_MODES: ExerciseMode[] = ['schreiben', 'schreiben_exam', 'freesent', 'errnb'];
 const HOEREN_MODES: ExerciseMode[] = ['hoeren_new', 'hoeren_archive', 'dict', 'dikt'];
-type MainTab = 'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen';
+type MainTab = 'flash' | 'wortschatz' | 'grammatik' | 'schreiben' | 'hoeren' | 'sprechen' | 'lesen' | 'comp_exam';
 
 const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
   { id: 'flash', icon: '🃏', label: 'Lernkarten' },
@@ -170,16 +208,54 @@ const MAIN_TABS: { id: MainTab; icon: string; label: string }[] = [
   { id: 'schreiben', icon: '✍️', label: 'Schreiben' },
   { id: 'hoeren', icon: '🎧', label: 'Hören' },
   { id: 'sprechen', icon: '🗣️', label: 'Sprechen' },
-  { id: 'lesen', icon: '📖', label: 'Lesen' }
+  { id: 'lesen', icon: '📖', label: 'Lesen' },
+  // درخواست کاربر ۱۳: تب «آزمون جامع» بعد از تب Lesen — آزمون چندبخشی ساخته‌شده از تمرین‌های موجود
+  { id: 'comp_exam', icon: '🏁', label: 'آزمون جامع' }
 ];
 
 const isSelfContainedMode = (m: ExerciseMode | null): boolean =>
-  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'irrverb';
+  m === 'freesent' || m === 'schreiben' || m === 'schreiben_exam' || m === 'puzzle' || m === 'dikt' || m === 'errnb' || m === 'vprep' || m === 'hoeren' || m === 'konnektoren' || m === 'tstory' || m === 'kpro' || m === 'wsh' || m === 'irrverb' || m === 'idioms' || m === 'idioms_p' || m === 'konjunktiv' || m === 'passiv' || m === 'trennbar' || m === 'dialog';
 
 /** تمرین‌های خودگردان گرامر — بدنهٔ آن‌ها در لایهٔ keep-alive در App.tsx رندر می‌شود
  *  تا با جابجایی تب‌ها باز بمانند (تا وقتی کاربر ضربدر را نزده). */
-const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb'];
+const GRAM_SELF_MODES: ExerciseMode[] = ['vprep', 'wsh', 'konnektoren', 'kpro', 'tstory', 'puzzle', 'irrverb', 'idioms', 'idioms_p', 'konjunktiv', 'passiv', 'trennbar', 'dialog'];
 const isGramSelfMode = (m: ExerciseMode | null): boolean => !!m && GRAM_SELF_MODES.includes(m);
+
+/**
+ * FlashWordText — متن واژهٔ فلش‌کارت با autoshrink: عرض اندازه‌گیری می‌شود و فونت از ۴۸px
+ * تا کمینهٔ ۱۸px کم می‌شود تا واژهٔ طولانی در یک خط جا شود (درخواست کاربر). الگو برداشته از
+ * WordDetailModal heroWordRef. کلمه‌ها قابل لمس (روی هر واژهٔ آلمانی کلیک → WordLookupModal).
+ */
+const FlashWordText: React.FC<{ text: string; className?: string; onWord?: (w: string) => void }> = ({ text, className, onWord }) => {
+  const spanRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const sp = spanRef.current;
+    if (!sp) return;
+    const parent = sp.parentElement;
+    if (!parent) return;
+    const fit = () => {
+      const max = parent.clientWidth - 24;
+      if (max <= 0) return;
+      sp.style.whiteSpace = 'nowrap';
+      let s = 48;
+      sp.style.fontSize = s + 'px';
+      let guard = 0;
+      while (s > 18 && sp.scrollWidth > max && guard++ < 60) {
+        s -= 1;
+        sp.style.fontSize = s + 'px';
+      }
+      if (s <= 18) sp.style.whiteSpace = '';
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [text]);
+  return (
+    <span ref={spanRef} className={className} dir="ltr">
+      {onWord ? <ClickableWords text={text} onWord={onWord} /> : text}
+    </span>
+  );
+};
 
 export const HighlightedVerbForm: React.FC<{
   verb: string;
@@ -1789,7 +1865,9 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
-        <SprechenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
+        <Suspense fallback={<LazyFallback label="در حال بارگذاری Sprechen…" />}>
+          <SprechenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
+        </Suspense>
       </div>
     );
   }
@@ -1798,7 +1876,25 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
     return (
       <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
         {renderTabHeader()}
-        <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
+        <Suspense fallback={<LazyFallback label="در حال بارگذاری Lesen…" />}>
+          <LesenTrainer onClose={() => setMainTab('flash')} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} words={allWords} onViewWord={onViewWord} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // درخواست کاربر ۱۳: تب «آزمون جامع» — آزمون چندبخشی از ۵ نوع تمرین موجود (cloze/case/vprep/adjdecl/art)
+  if (showMenu && mainTab === 'comp_exam') {
+    return (
+      <div ref={topRef} className="relative z-0 space-y-4 text-right max-w-2xl mx-auto pb-10">
+        {renderTabHeader()}
+        <Suspense fallback={<LazyFallback label="در حال بارگذاری آزمون جامع…" />}>
+          <ComprehensiveExam
+            words={allWords}
+            onShowToast={onShowToast}
+            onExit={() => setMainTab('flash')}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -2178,6 +2274,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
   if (activeMode === 'hoeren' || activeMode === 'hoeren_new' || activeMode === 'hoeren_archive') {
     return (
       <div className="relative z-0">
+        <Suspense fallback={<LazyFallback label="در حال بارگذاری Hören…" />}>
         <HoerenTrainer
           initialView={activeMode === 'hoeren_archive' ? 'archive' : activeMode === 'hoeren_new' ? 'creator' : 'menu'}
           onClose={() => onSelectMode(null)}
@@ -2185,6 +2282,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           words={allWords}
           onViewWord={onViewWord}
         />
+        </Suspense>
       </div>
     );
   }
@@ -2349,21 +2447,27 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <div className="fc-face rounded-3xl border border-[#dde1ea] dark:border-[#333b4a] shadow-md bg-white dark:bg-[#1b2029] flex flex-col items-center justify-center gap-3 p-6 text-center cursor-pointer select-none" onClick={() => { if (!isCardRevealed) handleRevealCard(); }}>
                     {!isFaDir ? (
                       <>
-                        <div className="flex items-center justify-center gap-2 flex-wrap" dir="ltr">
-                          {w.art && <span className={`px-3 py-1 rounded-xl font-bold text-xl ${artCls}`}>{w.art}</span>}
-                          {(() => {
-                            // درخواست کاربر: فعل با حرف اضافه/حالت دستوری (+A/+D رنگی) روی فلش‌کارت هم دیده شود
-                            const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
-                            return vp ? (
-                              // درخواست کاربر: اندازهٔ واژهٔ آلمانی با/بدون حرف اضافه یکسان — همین اندازه روی پشت کارت هم هست
-                              <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
-                            ) : (
-                              <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
-                            );
-                          })()}
-                          <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
-                          {/* درخواست کاربر: دکمهٔ تمرین تلفظ کنار بلندگو روی خود کارت (فقط وقتی سمت آلمانی دیده می‌شود) */}
-                          <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={18} className="text-rose-600" /></button>
+                        {/* درخواست کاربر: واژهٔ آلمانی با autoshrink در یک خط جا می‌شود؛ بلندگو و میکروفون زیر واژه */}
+                        <div className="flex flex-col items-center justify-center gap-2 w-full" dir="ltr">
+                          <div className="flex items-center justify-center gap-2 flex-wrap">
+                            {w.art && <span className={`px-3 py-1 rounded-xl font-bold text-xl ${artCls}`}>{w.art}</span>}
+                            {(() => {
+                              // درخواست کاربر: فعل با حرف اضافه/حالت دستوری (+A/+D رنگی) روی فلش‌کارت هم دیده شود
+                              const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                              return vp ? (
+                                // درخواست کاربر: اندازهٔ واژهٔ آلمانی با/بدون حرف اضافه یکسان — همین اندازه روی پشت کارت هم هست
+                                <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
+                              ) : (
+                                <FlashWordText text={w.de} className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100 break-words" onWord={t => openWordLookup(t, w.lvl, w.cat)} />
+                              );
+                            })()}
+                          </div>
+                          {/* درخواست کاربر: بلندگو و میکروفون زیر واژه در یک ردیف افقی */}
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={speakWord} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-lg flex items-center justify-center transition active:scale-90">🔊</button>
+                            {/* درخواست کاربر: دکمهٔ تمرین تلفظ زیر واژه (فقط وقتی سمت آلمانی دیده می‌شود) */}
+                            <button onClick={(e) => { e.stopPropagation(); setShadowWord(w); }} title="تمرین تلفظ" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center transition active:scale-90"><Mic size={18} className="text-rose-600" /></button>
+                          </div>
                         </div>
                         {w.pos && <span className="text-sm text-[#5d6676] bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{w.pos}</span>}
                       </>
@@ -2389,7 +2493,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                             // اندازهٔ واژه روی پشت کارت = اندازهٔ روی کارت
                             <VerbPhrase vp={vp} className="text-4xl md:text-5xl text-slate-900 dark:text-slate-100 flex-wrap" />
                           ) : (
-                            <span className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100"><ClickableWords text={w.de} onWord={t => openWordLookup(t, w.lvl, w.cat)} /></span>
+                            <FlashWordText text={w.de} className="text-4xl md:text-5xl font-extrabold font-sans text-slate-900 dark:text-slate-100" onWord={t => openWordLookup(t, w.lvl, w.cat)} />
                           );
                         })()}
                         <button onClick={speakWord} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-sm flex items-center justify-center">🔊</button>
@@ -2479,7 +2583,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3 pt-2">
-                  <div className={`p-3 rounded-xl text-base font-bold leading-relaxed ${
+                  <div className={`p-3 md:p-4 rounded-xl text-base md:text-lg font-bold leading-relaxed md:leading-8 ${
                     answerResult.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                   }`}>
                     {answerResult.ok ? '✔ آفرین! درست بود.' : `✘ ${answerResult.msg}`}
@@ -2820,6 +2924,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 />
               )}
               {qMode === 'schreiben' && (
+                <Suspense fallback={<LazyFallback label="در حال بارگذاری Schreiben…" />}>
                 <SchreibenCorrector
                   key={currentKey}
                   variant="pruefen"
@@ -2828,8 +2933,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   words={allWords}
                   onViewWord={onViewWord}
                 />
+                </Suspense>
               )}
               {qMode === 'schreiben_exam' && (
+                <Suspense fallback={<LazyFallback label="در حال بارگذاری Schreiben…" />}>
                 <SchreibenCorrector
                   key={currentKey}
                   variant="pruefung"
@@ -2838,6 +2945,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   words={allWords}
                   onViewWord={onViewWord}
                 />
+                </Suspense>
               )}
               {qMode === 'dikt' && <Diktat key={currentKey} words={words} onShowToast={onShowToast} onQuickAddWord={onQuickAddWord} onViewWord={onViewWord} />}
               {qMode === 'errnb' && <ErrorNotebook key={currentKey} onShowToast={onShowToast} />}
@@ -2910,14 +3018,14 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3 pt-2">
-                  <div className={`p-3 rounded-xl text-base font-bold leading-relaxed ${
+                  <div className={`p-3 md:p-4 rounded-xl text-base md:text-lg font-bold leading-relaxed md:leading-8 ${
                     answerResult.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                   }`}>
                     {answerResult.ok ? '✔ درست است! آفرین.' : `✘ ${answerResult.msg || 'پاسخ نادرست است.'}`}
                   </div>
 
                   {qMode === 'adjdecl' && adjInfo && (
-                    <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 text-sm md:text-base text-violet-900 dark:text-violet-200 text-right leading-relaxed">
+                    <div className="p-3 md:p-4 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 text-sm md:text-base text-violet-900 dark:text-violet-200 text-right leading-relaxed">
                       <div dir="ltr" className="font-bold font-sans mb-1">{adjInfo.item.full}</div>
                       {adjInfo.item.explanation}
                     </div>

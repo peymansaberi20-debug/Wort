@@ -4,6 +4,8 @@ import { getCategories, fullWord } from '../utils/storage';
 import { getGermanVoices, speak, stopSpeaking, getTtsWorkerBase, setTtsWorkerBase, prewarmTts } from '../utils/audio';
 import { GeminiKeyCard } from '../components/GeminiKeyCard';
 import { PROVIDERS, describeAiError, getActiveProvider, getApiKey, getModel, testConnection } from '../utils/aiProvider';
+// درخواست کاربر ۱۸: یادآور روزانه با PWA Notifications
+import { loadNotificationSettings, enableNotifications, disableNotifications, updateNotificationTime, notificationsSupported, notificationPermission, nextReminderText, formatTime } from '../utils/notifications';
 
 interface SettingsViewProps {
   section?: string;
@@ -601,6 +603,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
+      {/* درخواست کاربر ۱۸: یادآور روزانه با PWA Notifications */}
+      {show('goal') && (
+        <div className="bg-white dark:bg-[#1b2029] border border-amber-200/90 dark:border-amber-900/50 rounded-3xl p-6 shadow-sm space-y-5 transition-all">
+          <div className="flex items-center gap-3.5 border-b border-amber-100 dark:border-amber-950 pb-4">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner">🔔</div>
+            <div>
+              <h3 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-slate-100">یادآور روزانه</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">هر روز در ساعت مشخص، یادت می‌آید که تمرین کنی</p>
+            </div>
+          </div>
+          <NotificationsSettingsCard onShowToast={onShowToast} />
+        </div>
+      )}
+
       {show('ai') && <GeminiKeyCard />}
 
       {show('data') && (
@@ -664,6 +680,96 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/** کارت تنظیمات یادآور روزانه (درخواست کاربر ۱۸) */
+const NotificationsSettingsCard: React.FC<{ onShowToast: (m: string, e?: boolean) => void }> = ({ onShowToast }) => {
+  const [settings, setSettings] = useState(loadNotificationSettings());
+  const [perm, setPerm] = useState(notificationPermission());
+  const [nextText, setNextText] = useState(nextReminderText());
+  const supported = notificationsSupported();
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setPerm(notificationPermission());
+      setNextText(nextReminderText());
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleToggle = async () => {
+    if (settings.enabled) {
+      disableNotifications();
+      setSettings(loadNotificationSettings());
+      onShowToast('یادآور روزانه غیرفعال شد.');
+    } else {
+      const r = await enableNotifications(settings.hour, settings.minute);
+      if (r.ok) {
+        setSettings(loadNotificationSettings());
+        setPerm(notificationPermission());
+        onShowToast('🔔 یادآور روزانه فعال شد — هر روز ساعت ' + formatTime(settings.hour, settings.minute) + ' یادت می‌آیم.');
+      } else {
+        onShowToast(r.error || 'فعال‌سازی یادآور ناموفق بود.', true);
+      }
+    }
+  };
+
+  const handleTime = (h: number, m: number) => {
+    updateNotificationTime(h, m);
+    setSettings(loadNotificationSettings());
+    setNextText(nextReminderText());
+  };
+
+  if (!supported) {
+    return (
+      <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 text-xs text-amber-700 dark:text-amber-300 leading-6">
+        ⚠️ مرورگر شما از Notification پشتیبانی نمی‌کند. برای یادآور روزانه از Chrome، Edge یا Safari ۱۶.۴+ استفاده کن.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* toggle اصلی */}
+      <label className="flex items-center gap-3 cursor-pointer select-none">
+        <input type="checkbox" checked={settings.enabled} onChange={() => void handleToggle()} className="w-5 h-5 accent-amber-600" />
+        <div className="flex-1">
+          <div className="text-sm font-bold text-slate-900 dark:text-slate-100">یادآور روزانه فعال</div>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">هر روز در ساعت زیر، یک نوتیفیکیشن نشان داده می‌شود</div>
+        </div>
+        {perm === 'denied' && (
+          <span className="text-[11px] text-red-600 dark:text-red-400 font-bold">اجازه داده نشد</span>
+        )}
+      </label>
+
+      {/* ساعت */}
+      <div className="flex items-center gap-2">
+        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">ساعت یادآور:</label>
+        <select value={settings.hour} onChange={e => handleTime(Number(e.target.value), settings.minute)} disabled={!settings.enabled}
+          className="bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-bold">
+          {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}</option>)}
+        </select>
+        <span>:</span>
+        <select value={settings.minute} onChange={e => handleTime(settings.hour, Number(e.target.value))} disabled={!settings.enabled}
+          className="bg-white dark:bg-[#1b2029] border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs font-bold">
+          {[0, 15, 30, 45].map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
+        </select>
+        <span className="text-xs text-slate-500 dark:text-slate-400">({formatTime(settings.hour, settings.minute)})</span>
+      </div>
+
+      {/* متن یادآور بعدی */}
+      {settings.enabled && nextText && (
+        <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg flex items-center gap-1.5">
+          <span>⏰</span><span>{nextText}</span>
+        </div>
+      )}
+
+      {/* توضیح */}
+      <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-5">
+        نوتیفیکیشن فقط وقتی برنامه باز است یا در background tab فعال است نشان داده می‌شود. برای یادآور همیشگی (حتی وقتی برنامه بسته)، باید برنامه را به‌عنوان PWA نصب کنی.
+      </p>
     </div>
   );
 };

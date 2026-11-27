@@ -14,6 +14,8 @@ import {
 } from '../utils/dates';
 import { isLeech, isWeak, streakCount, auditWord, fullWord } from '../utils/storage';
 import { PageOverlay } from '../components/PageOverlay';
+import { WeaknessHeatmap } from '../components/WeaknessHeatmap';
+import { AchievementsPanel } from '../components/AchievementsPanel';
 
 interface DashboardViewProps {
   state: AppState;
@@ -381,6 +383,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* ─────────── نقشهٔ حرارتی نقاط ضعف + مسیر یادگیری تطبیقی ───────────
+          درخواست کاربر: تحلیل هوشمند آمار یادگیری + پیشنهاد برنامهٔ روزانه برای رسیدن به B2 */}
+      <WeaknessHeatmap state={state} onNavigate={onNavigate} />
+
+      {/* ─────────── استمرار و نشان‌ها (گیمیفیکیشن) ───────────
+          درخواست کاربر ۸: streak freeze + achievements */}
+      <AchievementsPanel state={state} />
 
       {/* ─────────── هدف و پیشرفت امروز ─────────── */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">

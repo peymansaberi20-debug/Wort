@@ -8,7 +8,8 @@ import { bareHead, hasHeadAnnotation } from '../data/verbPrep';
 import { copyText } from '../utils/clipboard';
 import { IconBtn } from '../components/IconBtn';
 import { WordCompareModal } from '../components/WordCompareModal';
-import { X, Save, HelpCircle, Eye, EyeOff } from 'lucide-react';
+import { X, Save, HelpCircle, Eye, EyeOff, Printer } from 'lucide-react';
+import { PrintPreview, prG, prFa, toFa } from '../components/trainerUI';
 
 // Match a vocabulary entry after Unicode normalization, whitespace cleanup, and case folding.
 const duplicateKey = (value: string) =>
@@ -120,6 +121,77 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   // Translation visibility map for compact word previews
   // بازگردانی قابلیت قدیمی چشم: با زدن چشم، ترجمهٔ فارسی همان‌جا در ردیف دیده می‌شود (بدون باز کردن پروفایل واژه)
   const [visFa, setVisFa] = useState<Record<string, boolean>>({});
+
+  // درخواست کاربر: چاپ هر دسته با پرینت‌پیش‌نمایش مشترک — عنوان = نام دسته، صفحهٔ پرسش با واژه/حالت/ترجمه/مثال کوتاه، صفحهٔ پاسخنامه با ترجمهٔ هر دو مثال
+  const [printCat, setPrintCat] = useState<{ cat: string; words: Word[] } | null>(null);
+  /** کوتاه‌ترین مثال از دو مثال واژه را انتخاب می‌کند (درخواست کاربر: مثال کوتاه‌تر در برگهٔ پرسش) */
+  const shorterExample = (w: Word): { de: string; fa: string } => {
+    const a = (w.ex || '').trim();
+    const b = (w.ex2 || '').trim();
+    if (a && b) return a.length <= b.length ? { de: a, fa: (w.exFa || '').trim() } : { de: b, fa: (w.ex2Fa || '').trim() };
+    if (a) return { de: a, fa: (w.exFa || '').trim() };
+    if (b) return { de: b, fa: (w.ex2Fa || '').trim() };
+    return { de: '', fa: '' };
+  };
+  /** رندر یک واژه در برگهٔ پرسش: واژهٔ آلمانی (+ حرف اضافه/حالت برای فعل) + ترجمهٔ فارسی + مثال کوتاه‌تر */
+  const renderPrintWord = (w: Word, i: number) => {
+    const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+    const short = shorterExample(w);
+    return (
+      <li key={w.id} className="leading-7">
+        <div style={prG()} className="font-bold">
+          <span className="text-slate-500">{i + 1}. </span>
+          {w.art ? <span className="text-slate-700">{w.art} </span> : null}
+          {vp ? (
+            <span className="font-sans">
+              {vp.verb} <span className="text-[#1f5fbf]">{vp.prep}</span> <span className="text-[#b45309]">+{vp.kase}</span>
+            </span>
+          ) : (
+            <span className="font-sans">{w.de}</span>
+          )}
+        </div>
+        {w.fa && <div style={prFa()} className="text-[12px] text-slate-600">{w.fa}</div>}
+        {short.de && (
+          <div style={prG()} className="text-[12px] italic text-slate-700 mt-0.5">
+            {short.de}
+            {short.fa && <span style={prFa()} className="text-slate-500 not-italic"> — {short.fa}</span>}
+          </div>
+        )}
+      </li>
+    );
+  };
+  /** رندر یک واژه در صفحهٔ پاسخنامه: هر دو مثال با ترجمهٔ فارسیشان */
+  const renderPrintWordSol = (w: Word, i: number) => {
+    const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+    return (
+      <li key={w.id} className="leading-7">
+        <div style={prG()} className="font-bold">
+          <span className="text-slate-500">{i + 1}. </span>
+          {w.art ? <span className="text-slate-700">{w.art} </span> : null}
+          {vp ? (
+            <span className="font-sans">
+              {vp.verb} <span className="text-[#1f5fbf]">{vp.prep}</span> <span className="text-[#b45309]">+{vp.kase}</span>
+            </span>
+          ) : (
+            <span className="font-sans">{w.de}</span>
+          )}
+          {w.fa && <span style={prFa()} className="text-[12px] text-slate-600 font-normal"> — {w.fa}</span>}
+        </div>
+        {w.ex && (
+          <div style={prG()} className="text-[12px] italic text-slate-700 mt-0.5">
+            {w.ex}
+            {w.exFa && <span style={prFa()} className="text-slate-500 not-italic"> — {w.exFa}</span>}
+          </div>
+        )}
+        {w.ex2 && (
+          <div style={prG()} className="text-[12px] italic text-slate-700 mt-0.5">
+            {w.ex2}
+            {w.ex2Fa && <span style={prFa()} className="text-slate-500 not-italic"> — {w.ex2Fa}</span>}
+          </div>
+        )}
+      </li>
+    );
+  };
 
   // Add / Edit form state
   const isEditing = !!editingWordId;
@@ -1881,27 +1953,41 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                 className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden shadow-xs"
               >
                 {/* Category Header */}
-                <button
-                  onClick={() => {
-                    if (searchQuery.trim()) {
-                      setCollapsedInSearch(prev => {
-                        const next = new Set(prev);
-                        if (next.has(cat)) next.delete(cat);
-                        else next.add(cat);
-                        return next;
-                      });
-                    } else {
-                      setOpenCat(openCat === cat ? null : cat);
-                    }
-                  }}
-                  className={`${flatView ? 'hidden ' : ''}w-full px-4 py-3 flex items-center justify-between text-right font-bold text-sm bg-slate-50/70 hover:bg-slate-100/70 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 transition`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span>📁 {cat}</span>
-                    <span className="text-xs text-[#5d6676] font-normal">({catWords.length} واژه)</span>
-                  </span>
-                  <span className="text-xs text-[#5d6676]">{isOpen ? '▲' : '▼'}</span>
-                </button>
+                <div className={`${flatView ? 'hidden ' : ''}w-full px-4 py-3 flex items-center justify-between text-right font-bold text-sm bg-slate-50/70 hover:bg-slate-100/70 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 transition`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (searchQuery.trim()) {
+                        setCollapsedInSearch(prev => {
+                          const next = new Set(prev);
+                          if (next.has(cat)) next.delete(cat);
+                          else next.add(cat);
+                          return next;
+                        });
+                      } else {
+                        setOpenCat(openCat === cat ? null : cat);
+                      }
+                    }}
+                    className="flex-1 flex items-center gap-2 text-right min-w-0"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>📁 {cat}</span>
+                      <span className="text-xs text-[#5d6676] font-normal">({catWords.length} واژه)</span>
+                    </span>
+                    <span className="text-xs text-[#5d6676]">{isOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {/* درخواست کاربر: آیکون چاپ برای هر دسته — برگهٔ A4 با واژه/حالت/ترجمه و پاسخنامهٔ مستقل */}
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setPrintCat({ cat, words: catWords }); }}
+                    disabled={!catWords.length}
+                    title="برگهٔ A4 واژه‌های این دسته"
+                    aria-label="برگهٔ A4 واژه‌های این دسته"
+                    className="w-8 h-8 rounded-lg bg-[#1f5fbf] text-white flex items-center justify-center flex-shrink-0 active:scale-[.97] transition disabled:opacity-40 mr-1"
+                  >
+                    <Printer size={15} />
+                  </button>
+                </div>
 
                 {/*
                   Fulfills User Request #4:
@@ -1919,55 +2005,58 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
                           onClick={() => onSelectWord(w)}
                           className="py-2.5 px-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition flex items-center justify-between gap-3 text-xs md:text-sm"
                         >
-                          {/* Word + Article — فاز ۴: بلندگو از ردیف حذف شد (در هدر پروفایل موجود است)؛ آیکن چشم با درخواست کاربر به ردیف برگشت (ترجمهٔ درون‌خطی) + حرف اضافهٔ خودکار فعل */}
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="flex items-center gap-1.5" dir="ltr">
-                              {w.art && (
-                                <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${
-                                  w.art === 'der' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
-                                  w.art === 'die' ? 'bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300' :
-                                  'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                }`}>
-                                  {w.art}
-                                </span>
-                              )}
-                              {(() => {
-                                const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
-                                return vp ? (
-                                  <VerbPhrase vp={vp} className="text-lg md:text-xl text-slate-900 dark:text-slate-100" />
-                                ) : (
-                                  <span className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 font-sans">
-                                    {w.de}
+                          {/* ردیف واژه: روی موبایل به‌صورت ستونی چیده می‌شود تا ترجمه زیر واژه بیاید (درخواست کاربر)؛ روی دسکتاپ همان ردیف افقی قبلی */}
+                          <div className="flex flex-col gap-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+                              <div className="flex items-center gap-1.5" dir="ltr">
+                                {w.art && (
+                                  <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${
+                                    w.art === 'der' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
+                                    w.art === 'die' ? 'bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-300' :
+                                    'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  }`}>
+                                    {w.art}
                                   </span>
-                                );
-                              })()}
-                              {/* فاز ۱: نشان وضعیت واژگانی (فعال/دریافتی/کاندید) */}
-                              <span
-                                className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${STATUS_BADGE[statusOf(w)]}`}
-                                title={`تسلط: ${STATUS_SHORT[statusOf(w)]}`}
-                              >
-                                {STATUS_SHORT[statusOf(w)]}
-                              </span>
-                            </div>
+                                )}
+                                {(() => {
+                                  const vp = isVerbPos(w.pos) || hasHeadAnnotation(w.de) ? verbPrepFor(w.de) : null;
+                                  return vp ? (
+                                    <VerbPhrase vp={vp} className="text-lg md:text-xl text-slate-900 dark:text-slate-100" />
+                                  ) : (
+                                    <span className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 font-sans">
+                                      {w.de}
+                                    </span>
+                                  );
+                                })()}
+                                {/* فاز ۱: نشان وضعیت واژگانی (فعال/دریافتی/کاندید) */}
+                                <span
+                                  className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${STATUS_BADGE[statusOf(w)]}`}
+                                  title={`تسلط: ${STATUS_SHORT[statusOf(w)]}`}
+                                >
+                                  {STATUS_SHORT[statusOf(w)]}
+                                </span>
+                              </div>
 
-                            {/* بازگردانی قابلیت چشم (این قابلیت در فاز ۴ حذف شده بود): ترجمهٔ فارسی همان‌جا در ردیف، بدون باز کردن پروفایل واژه */}
-                            <button
-                              type="button"
-                              onClick={e => toggleFaVisibility(w.id, e)}
-                              className={`w-7 h-7 rounded-lg border flex items-center justify-center flex-shrink-0 transition ${
-                                isShowFa
-                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60'
-                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'
-                              }`}
-                              title={isShowFa ? 'پنهان‌کردن ترجمه' : 'نمایش ترجمه (همان‌جا، بدون باز کردن پروفایل)'}
-                              aria-label={isShowFa ? 'پنهان‌کردن ترجمه' : 'نمایش ترجمه'}
-                            >
-                              {isShowFa ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
+                              {/* بازگردانی قابلیت چشم (این قابلیت در فاز ۴ حذف شده بود): درخواست کاربر: ترجمه به‌جای ردیفِ کنار واژه، زیر واژه نمایش داده شود */}
+                              <button
+                                type="button"
+                                onClick={e => toggleFaVisibility(w.id, e)}
+                                className={`w-7 h-7 rounded-lg border flex items-center justify-center flex-shrink-0 transition ${
+                                  isShowFa
+                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900 dark:hover:bg-amber-900/60'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-transparent dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300'
+                                }`}
+                                title={isShowFa ? 'پنهان‌کردن ترجمه' : 'نمایش ترجمه (همان‌جا، بدون باز کردن پروفایل)'}
+                                aria-label={isShowFa ? 'پنهان‌کردن ترجمه' : 'نمایش ترجمه'}
+                              >
+                                {isShowFa ? <EyeOff size={15} /> : <Eye size={15} />}
+                              </button>
+                            </div>
+                            {/* ترجمهٔ فارسی: بلوک جداگانه زیر واژه (درخواست کاربر) — روی موبایل جا می‌شود */}
                             {isShowFa && (
-                              <span className="font-semibold text-[#1f5fbf] dark:text-blue-300 text-xs md:text-sm truncate min-w-0">
+                              <div dir="rtl" className="font-semibold text-[#1f5fbf] dark:text-blue-300 text-xs md:text-sm w-full pr-1">
                                 {w.fa}
-                              </span>
+                              </div>
                             )}
                           </div>
 
@@ -2026,6 +2115,29 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             <button type="button" onClick={() => setAiChoicePrompt(null)} className="w-full rounded-xl border border-slate-300 dark:border-slate-600 px-4 py-2 text-sm font-semibold">انصراف</button>
           </div>
         </div>
+      )}
+
+      {/* چاپ دستهٔ واژگان — برگهٔ A4 با عنوان دسته + صفحهٔ پرسش (واژه/حالت/ترجمه/مثال کوتاه) + صفحهٔ پاسخنامه (هر دو مثال با ترجمه) */}
+      {printCat && (
+        <PrintPreview
+          open
+          onClose={() => setPrintCat(null)}
+          title={<span>Wortschatz — {printCat.cat}</span>}
+          docTitle={`Wortschatz — ${printCat.cat}`}
+          meta={<>{toFa(printCat.words.length)} واژه • {printCat.cat}</>}
+          hint="برگهٔ A4 — واژه‌ها با مثال کوتاه‌تر در صفحهٔ پرسش؛ پاسخنامه با هر دو مثال و ترجمهٔ فارسی در صفحهٔ مستقل"
+          questions={
+            <ol className="space-y-3">
+              {printCat.words.map((w, i) => renderPrintWord(w, i))}
+            </ol>
+          }
+          solutions={
+            <ol className="space-y-3">
+              {printCat.words.map((w, i) => renderPrintWordSol(w, i))}
+            </ol>
+          }
+          solutionsMeta={<>{toFa(printCat.words.length)} واژه — پاسخ‌نامه با هر دو مثال</>}
+        />
       )}
     </div>
   );
