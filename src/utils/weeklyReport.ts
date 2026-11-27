@@ -23,6 +23,35 @@ import { analyzeWeaknesses } from './weaknessAnalysis';
 import { streakCount } from './storage';
 
 const ARCHIVE_KEY = 'wb_weekly_report_arch_v1';
+// درخواست کاربر ۱۱: روز هفته برای ساخت گزارش (پیش‌فرض جمعه)
+const REPORT_DAY_KEY = 'wb_weekly_report_day_v1';
+
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=یکشنبه، 1=دوشنبه، ...، 5=جمعه، 6=شنبه
+
+export const WEEKDAY_LABELS: Record<Weekday, string> = {
+  0: 'یکشنبه',
+  1: 'دوشنبه',
+  2: 'سه‌شنبه',
+  3: 'چهارشنبه',
+  4: 'پنجشنبه',
+  5: 'جمعه',
+  6: 'شنبه'
+};
+
+/** روز هفتهٔ انتخاب‌شده برای ساخت گزارش (پیش‌فرض جمعه = 5) */
+export const getReportWeekday = (): Weekday => {
+  try {
+    const v = parseInt(localStorage.getItem(REPORT_DAY_KEY) || '5', 10);
+    return (v >= 0 && v <= 6 ? v : 5) as Weekday;
+  } catch { return 5; }
+};
+
+export const setReportWeekday = (d: Weekday): void => {
+  try { localStorage.setItem(REPORT_DAY_KEY, String(d)); } catch { /* ignore */ }
+};
+
+/** آیا امروز روز ساخت گزارش است؟ */
+export const isReportDay = (): boolean => new Date().getDay() === getReportWeekday();
 
 export interface WeeklyStats {
   totalExercises: number;

@@ -124,16 +124,38 @@ export const getOrCreateDailyQuest = (state: AppState): DailyQuest => {
   return generateDailyQuest(state);
 };
 
-/** افزودن به پیشرفت چالش امروز. completed=true وقتی progress به target برسد. */
-export const advanceDailyQuest = (delta: number): DailyQuest | null => {
+/** افزودن به پیشرفت چالش امروز. completed=true وقتی progress به target برسد.
+ *  پارامتر `practiceMode` برای فیلتر کردن — فقط تمرین‌های مرتبط با نوع چالش پیشرفت می‌دهند (درخواست کاربر ۴).
+ */
+export const advanceDailyQuest = (delta: number, practiceMode?: string): DailyQuest | null => {
   const q = loadDailyQuest();
   if (!q) return null;
   if (q.completed) return q;
+  // درخواست کاربر ۴: چالش فقط با تمرین‌های مرتبط پیشرفت می‌کند، نه با هر تمرین
+  if (!isModeRelevant(q.kind, practiceMode)) return q;
   const np = Math.max(0, Math.min(q.target, q.progress + delta));
   const nc = np >= q.target;
   const nq: DailyQuest = { ...q, progress: np, completed: nc, completedAt: nc ? Date.now() : undefined, startedAt: q.startedAt ?? Date.now() };
   save(nq);
   return nq;
+};
+
+/**
+ * درخواست کاربر ۴: تشخیص اینکه آیا یک mode تمرین به نوع چالش فعلی مرتبط است.
+ * بدون این فیلتر، باز/بستن تب مکالمه یا انجام یک تمرین نامرتبط چالش را اشتباهاً کامل می‌کرد.
+ */
+const isModeRelevant = (kind: QuestKind, mode?: string): boolean => {
+  if (!mode) return false;
+  switch (kind) {
+    case 'review': return ['review', 'daily', 'flash', 'free', 'cloze', 'dict', 'prod', 'act', 'art', 'plural', 'conj', 'tense', 'sent'].includes(mode);
+    case 'new': return ['daily', 'new', 'flash'].includes(mode);
+    case 'weak': return ['hard', 'review', 'targeted'].includes(mode) || mode.startsWith('hard') || mode.startsWith('targeted');
+    case 'writing': return ['schreiben', 'schreiben_exam', 'freesent', 'puzzle', 'dikt'].includes(mode);
+    case 'listening': return ['hoeren', 'hoeren_new', 'hoeren_archive', 'dikt', 'dict'].includes(mode);
+    case 'speaking': return ['sprechen', 'oral-exam', 'dialog'].includes(mode);
+    case 'consecutive': return true; // هر تمرین موفق زنجیره را حفظ می‌کند
+    default: return false;
+  }
 };
 
 /** علامت‌گذاری کامل چالش (برای موارد qualitative مثل نوشتن/شنیداری/گفتار). */

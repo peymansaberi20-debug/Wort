@@ -123,17 +123,20 @@ export function maybeShowNotification(): void {
   if (nowMinutes < targetMinutes) return; // هنوز نرسیده
   // نشان بده
   try {
-    const n = new Notification('🎓 وقت تمرین آلمانی!', {
-      body: `هر روز ${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')} یادت می‌آیم. بیا تمرین کنیم!`,
+    // درخواست کاربر ۷: متن یادآور تغییر یافت
+    const n = Notification !== undefined ? new Notification('😉 بیا یکم آلمانی تمرین کن', {
+      body: `بیا یکم آلمانی تمرین کن حتی شده چند دقیقه 😉`,
       icon: '/favicon.ico',
       tag: 'wort-daily-reminder',
       silent: false
-    });
-    n.onclick = () => {
-      try { window.focus(); n.close(); } catch { /* ignore */ }
-    };
-    // Auto-close پس از ۱۰ ثانیه
-    setTimeout(() => { try { n.close(); } catch { /* ignore */ } }, 10000);
+    }) : null;
+    if (n) {
+      n.onclick = () => {
+        try { window.focus(); n.close(); } catch { /* ignore */ }
+      };
+      // Auto-close پس از ۱۰ ثانیه
+      setTimeout(() => { try { n.close(); } catch { /* ignore */ } }, 10000);
+    }
   } catch { /* ignore */ }
   // ثبت نشان داده‌شدن امروز
   saveNotificationSettings({ ...s, lastShown: todayStr() });

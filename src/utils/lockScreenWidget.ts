@@ -121,17 +121,23 @@ export const notifyCurrentSlot = async (words: Word[]): Promise<boolean> => {
   }
   const w = entry.word;
   const title = `${SLOT_INFO[slot].faLabel} — واژهٔ ${SLOT_INFO[slot].label}`;
-  const body = `${w.art ? w.art + ' ' : ''}${w.de}\n${w.fa || ''}\n\nکلیک کن تا مستقیم وارد مرور بشی.`;
+  const body = `${w.art ? w.art + ' ' : ''}${w.de}\n${w.fa || ''}\n\nکلیک کن تا پروفایل همین واژه باز شود.`;
   try {
+    // درخواست کاربر ۶: کلیک روی Notification → پروفایل همان واژه باز شود
+    const base = typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL;
+    const prefix = base && base !== '/' ? base.replace(/\/$/, '') : '';
+    const url = `${prefix}/?action=view-word&wordId=${encodeURIComponent(w.id)}`;
     const n = new Notification(title, {
       body,
-      icon: '/Wort/IMG_9115.png',
-      badge: '/Wort/IMG_9115.png',
+      icon: `${prefix}/IMG_9115.png`,
+      badge: `${prefix}/IMG_9115.png`,
       tag: `wb-${slot}-${s.date}`,
-      data: { url: '/Wort/?action=quick-review' } as any
+      data: { url } as any
     });
     n.onclick = () => {
       window.focus();
+      // ناوبری به URL با اکشن view-word
+      try { window.location.href = url; } catch { /* ignore */ }
       n.close();
     };
     entry.shownAt = Date.now();
