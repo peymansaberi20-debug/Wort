@@ -24,7 +24,7 @@ export const LatePracticesAccordion: React.FC<Props> = ({ state, onStartExercise
   }
 
   return (
-    <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 shadow-xs">
+    <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 shadow-xs">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xl">⏰</span>

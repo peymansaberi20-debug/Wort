@@ -2028,16 +2028,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div
                   key={mode}
                   onClick={() => onSelectMode(mode)}
-                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center justify-between gap-2.5 cursor-pointer shadow-xs"
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center gap-2.5 cursor-pointer shadow-xs"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
-                    <div className="min-w-0">
-                      <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
-                      <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
-                    </div>
+                  <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
+                    <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
                   </div>
-                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex-shrink-0">شروع ▶</span>
+                  {/* درخواست کاربر ۶: حذف «شروع ▶» از همهٔ کارت‌ها برای یکنواختی */}
+                  <span className="text-slate-400 text-base flex-shrink-0">›</span>
                 </div>
               );
             })}
@@ -2051,29 +2050,32 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <p className="text-sm text-[#5d6676] dark:text-[#a3adbd] leading-7">
                   گرامر در ۴ دستهٔ اصلی چیده شده — یک دسته را باز کن؛ تمرین‌هایش را به شکل تب بالا می‌بینی.
                 </p>
-                {GRAMMATIK_CATS.map((sec, si) => (
-                  <div
-                    key={sec.label}
-                    onClick={() => setGramCat(si)}
-                    className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-4 hover:border-[#1f5fbf] transition cursor-pointer shadow-xs space-y-2"
-                  >
-                    <div className="flex items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">{sec.icon}</span>
-                        <div className="min-w-0">
-                          <b className="text-[14px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{sec.label}</b>
-                          <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{sec.desc}</span>
+                {/* درخواست کاربر ۶: کارت‌های دستهٔ گرامر هم‌اندازه و حرفه‌ای‌تر */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {GRAMMATIK_CATS.map((sec, si) => (
+                    <button
+                      key={sec.label}
+                      onClick={() => setGramCat(si)}
+                      className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-3.5 hover:border-[#1f5fbf] transition cursor-pointer shadow-xs space-y-2 text-right h-full flex flex-col"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1f5fbf] to-[#6b4fd8] text-white flex items-center justify-center text-xl flex-shrink-0">{sec.icon}</span>
+                          <div className="min-w-0">
+                            <b className="text-sm font-bold text-slate-900 dark:text-slate-100 block leading-snug">{sec.label}</b>
+                            <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{sec.desc}</span>
+                          </div>
                         </div>
+                        <span className="text-slate-400 text-base flex-shrink-0">›</span>
                       </div>
-                      <span className="text-[#5d6676] dark:text-[#a3adbd] font-bold text-lg">‹</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {sec.tabs.map(t => (
-                        <span key={t.id} className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-[#5d6676] dark:text-[#a3adbd]">{t.label}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                      <div className="flex flex-wrap gap-1 mt-auto">
+                        {sec.tabs.map(t => (
+                          <span key={t.id} className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-[#5d6676] dark:text-[#a3adbd]">{t.label}</span>
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </>
             ) : (
               <>
@@ -2081,14 +2083,20 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                   <button onClick={() => setGramCat(null)} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">→ همهٔ دسته‌ها</button>
                   <b className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{gramSec.icon} {gramSec.label}</b>
                 </div>
-                <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-2 flex gap-1.5 overflow-x-auto">
-                  {gramSec.tabs.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => openGramTab(t)}
-                      className="px-3.5 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd]"
-                    >{t.label}</button>
-                  ))}
+                {/* درخواست کاربر ۶: نوار تب‌های گرامر هم‌اندازه و یکدست */}
+                <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-1.5 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {gramSec.tabs.map(t => {
+                    const isActive = activeGramTabId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => openGramTab(t)}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-bold transition text-center ${isActive
+                          ? 'bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white shadow-md'
+                          : 'bg-slate-100 dark:bg-slate-800 text-[#5d6676] dark:text-[#a3adbd] hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                      >{t.label}</button>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -2103,16 +2111,15 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
                 <div
                   key={mode}
                   onClick={() => onSelectMode(mode)}
-                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center justify-between gap-2.5 cursor-pointer shadow-xs"
+                  className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-xl p-3 hover:border-[#1f5fbf] transition flex items-center gap-2.5 cursor-pointer shadow-xs"
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
-                    <div className="min-w-0">
-                      <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
-                      <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
-                    </div>
+                  <span className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0">{info.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <b className="text-[13px] font-bold text-slate-900 dark:text-slate-100 block leading-snug">{info.title}</b>
+                    <span className="text-[11px] leading-5 text-[#5d6676] dark:text-[#a3adbd] block mt-0.5">{info.desc}</span>
                   </div>
-                  <span className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex-shrink-0">شروع ▶</span>
+                  {/* درخواست کاربر ۶: حذف «شروع ▶» برای یکنواختی با سایر تمرین‌ها */}
+                  <span className="text-slate-400 text-base flex-shrink-0">›</span>
                 </div>
               );
             })}
@@ -2130,10 +2137,10 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
               ) : (
                 <div className="space-y-3 text-right">
                   <button
-                    onClick={() => { setShowHard(false); if (onStartHard) onStartHard(hardWords.map(w => w.id)); else onShowToast('شروع تمرین ممکن نشد.', true); }}
+                    onClick={() => { setShowHard(false); if (onStartHard) onStartHard(hardWords.map(w => w.id)); else onShowToast('تمرین اختصاصی ممکن نشد.', true); }}
                     className="w-full h-12 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold text-sm shadow-md"
                   >
-                    🎯 شروع تمرین اختصاصی واژه‌های سخت ({hardWords.length})
+                    🎯 تمرین اختصاصی واژه‌های سخت ({hardWords.length})
                   </button>
                   <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden">
                     {hardWords.map(w => (
@@ -2267,7 +2274,7 @@ export const ExercisesView: React.FC<ExercisesViewProps> = ({
           setRevealedCardId(null);
           setIsFreeStarted(true);
         }} className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] disabled:opacity-40 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md">
-          {selectedCount ? `شروع مرور (${selectedCount} واژه) ▶` : 'این دسته واژه‌ای ندارد'}
+          {selectedCount ? `مرور (${selectedCount} واژه) ▶` : 'این دسته واژه‌ای ندارد'}
         </button>
         {selectedCount === 0 && <p className="text-sm text-amber-700 dark:text-amber-300">این دسته واژه‌ای ندارد. دستهٔ دیگری انتخاب کنید.</p>}
       </div>

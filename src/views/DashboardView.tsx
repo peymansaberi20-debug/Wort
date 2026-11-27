@@ -58,16 +58,11 @@ const useMinuteTick = (): number => {
   return minute * 60000;
 };
 
-/* ─────────────── صحنهٔ پویای زمان روز (درخواست کاربر ۱۳) ───────────────
- * ۵ عکس واقعی کاربر ارسال کرده که در public/scenes/ قرار دارند:
- *   - morning.jpg  (۵ تا ۱۱ صبح)
- *   - noon.jpg     (۱۱ تا ۱۲ قبل از ظهر)
- *   - midday.jpg   (۱۲ تا ۱۶ ظهر)
- *   - evening.jpg  (۱۶ تا ۲۱ بعد از ظهر)
- *   - night.jpg    (۲۱ تا ۵ شب)
- * عکس متناسب با ساعت روز انتخاب و در پس‌زمینهٔ باکس خوش‌آمدگویی قرار می‌گیرد.
+/* ─────────────── صحنهٔ پویای زمان روز (درخواست کاربر ۱۳، اصلاح‌شده ۲) ───────────────
+ * ۵ عکس واقعی کاربر ارسال کرده که در public/scenes/ قرار دارند.
+ * عکس بزرگ‌تر شده، متن سلام روی آن overlay می‌شود با لایهٔ گرادیان که همیشه خوانا باشد.
  */
-const TimeScene: React.FC<{ hour: number }> = ({ hour }) => {
+const TimeScene: React.FC<{ hour: number; greeting: string }> = ({ hour, greeting }) => {
   const phase: 'morning' | 'noon' | 'midday' | 'evening' | 'night' =
     hour < 5 ? 'night' :
     hour < 11 ? 'morning' :
@@ -81,19 +76,24 @@ const TimeScene: React.FC<{ hour: number }> = ({ hour }) => {
     evening: '/scenes/evening.jpg',
     night: '/scenes/night.jpg'
   }[phase];
-  // اگر در مخزن deploy شده روی /Wort/ است، مسیر را با /Wort/ پیشوند می‌کنیم
   const base = typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL;
   const prefix = base && base !== '/' ? base.replace(/\/$/, '') : '';
   const src = `${prefix}${img}`;
   return (
     <div
-      className="relative w-full h-20 md:h-24 rounded-2xl overflow-hidden border border-purple-200/70 dark:border-purple-800/70 shadow-inner"
+      className="relative w-full h-28 md:h-32 rounded-2xl overflow-hidden border border-purple-200/70 dark:border-purple-800/70 shadow-inner"
       role="img"
       aria-label={`صحنهٔ ${phase === 'night' ? 'شب' : phase === 'morning' ? 'صبح' : phase === 'noon' ? 'قبل از ظهر' : phase === 'midday' ? 'ظهر' : 'بعد از ظهر'}`}
     >
       <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />
-      {/* لایهٔ نیمه‌شفاف پایین تا متن قابل‌خوانی روی عکس باشد */}
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/40 to-transparent" />
+      {/* لایهٔ گرادیان تیره برای خوانایی متن — روی همهٔ عکس‌ها نتیجهٔ خوب */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black/55 via-black/30 to-black/55" />
+      {/* متن سلام روی عکس — همیشه سفید با سایه */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <b className="text-2xl md:text-3xl font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)] tracking-wide">
+          {greeting} 👋
+        </b>
+      </div>
     </div>
   );
 };
@@ -330,42 +330,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-4 text-right">
-      {/* ─────────── ۱) سربرگ خوش‌آمد (همیشه باز) ─────────── */}
-      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl p-5 text-purple-900 dark:text-purple-100 shadow-xs">
-        {/* عکس متناسب با ساعت روز (درخواست کاربر ۱۳) */}
-        <div className="mb-4">
-          <TimeScene hour={hour} />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
-            <p className="text-xs text-purple-800/80 dark:text-purple-300/80 mt-0.5" dir="ltr">
-              {todayWeekday} • {todayShamsi} • {todayGreg}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className="bg-white/70 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-3.5 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5"
-              title="روزهای پیاپی تمرین"
-              aria-label="رشتهٔ استمرار مطالعه"
-            >
+      {/* ─────────── ۱) سربرگ خوش‌آمد فشرده (درخواست کاربر ۲) ─────────── */}
+      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl p-3 md:p-4 text-purple-900 dark:text-purple-100 shadow-xs">
+        {/* ردیف اول: تاریخ بالا، استمرار و واژه سمت چپ */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[11px] md:text-xs text-purple-800/80 dark:text-purple-300/80" dir="ltr">
+            {todayWeekday} • {todayShamsi} • {todayGreg}
+          </p>
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="bg-white/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-center gap-1" title="روزهای پیاپی تمرین">
               🔥 {streakCount(state.hist)} روز استمرار
             </span>
-            <span
-              className="bg-white/70 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-3.5 py-2 rounded-xl text-sm font-bold"
-              title="کل واژگان کتابخانه"
-            >
+            <span className="bg-white/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded-lg text-[11px] font-bold" title="کل واژگان کتابخانه">
               📚 {s.words.length} واژه
             </span>
           </div>
         </div>
 
-        {/* دو حلقهٔ پیشرفت کنار هم (درخواست کاربر ۳): کلمهٔ جدید + مرور */}
-        <div className="flex items-center justify-center gap-6 mt-4">
+        {/* عکس با overlay سلام روی آن — بزرگ‌تر و خوانا */}
+        <TimeScene hour={hour} greeting={greeting} />
+
+        {/* دو حلقهٔ پیشرفت زیر عکس (درخواست کاربر ۲/۳) */}
+        <div className="flex items-center justify-around mt-3">
           {/* حلقهٔ کلمهٔ جدید */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`کلمهٔ جدید: ${Math.round(newProgress * 100)}٪`}>
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative w-[64px] h-[64px] flex-shrink-0" role="img" aria-label={`کلمهٔ جدید: ${Math.round(newProgress * 100)}٪`}>
               <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
                 <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-purple-200 dark:stroke-purple-900" />
                 <circle
@@ -379,14 +368,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {state.set.nw > 0 ? `${Math.round(newProgress * 100)}٪` : '—'}
               </span>
             </div>
-            <div className="text-center">
-              <b className="text-[11px] font-bold block">🆕 کلمهٔ جدید</b>
-              <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">{s.dailyNewDone}/{state.set.nw}</span>
-            </div>
+            <b className="text-[11px] font-bold">🆕 کلمهٔ جدید</b>
+            <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">{s.dailyNewDone}/{state.set.nw}</span>
           </div>
           {/* حلقهٔ مرور */}
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="relative w-[72px] h-[72px] flex-shrink-0" role="img" aria-label={`مرور: ${Math.round(reviewProgress * 100)}٪`}>
+          <div className="flex flex-col items-center gap-1">
+            <div className="relative w-[64px] h-[64px] flex-shrink-0" role="img" aria-label={`مرور: ${Math.round(reviewProgress * 100)}٪`}>
               <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
                 <circle cx="36" cy="36" r={RING_R} fill="none" strokeWidth="8" className="stroke-emerald-200 dark:stroke-emerald-900" />
                 <circle
@@ -400,23 +387,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {state.set.rv > 0 ? `${Math.round(reviewProgress * 100)}٪` : '—'}
               </span>
             </div>
-            <div className="text-center">
-              <b className="text-[11px] font-bold block">🔁 مرور</b>
-              <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">{s.dailyReviewDone}/{state.set.rv}</span>
-            </div>
+            <b className="text-[11px] font-bold">🔁 مرور</b>
+            <span className="text-[10px] text-[#5d6676] dark:text-[#a3adbd]">{s.dailyReviewDone}/{state.set.rv}</span>
           </div>
         </div>
 
-        <p className="text-xs text-center text-purple-800/70 dark:text-purple-400/80 mt-2">
-          {totalTarget > 0
-            ? (ringProgress >= 1
-                ? '🎉 هدف امروز کامل شد — آفرین!'
-                : `${s.dailyTasksLeft} تمرین باقی‌مانده • حدود ${s.estimatedMins} دقیقه`)
-            : 'برای شروع، سهمیهٔ روزانه را در تنظیمات تعیین کن.'}
-        </p>
-
-        {/* دکمه‌های دسترسی سریع (درخواست کاربر ۷/۸) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+        {/* دو دکمهٔ هم‌اندازه و کوتاه (درخواست کاربر ۲): جلسه روزانه + چالش امروز */}
+        <div className="grid grid-cols-2 gap-2 mt-3">
           {/* توصیه‌گر روزانه — جایگزین «کتابخانهٔ واژگان» (درخواست کاربر ۷)
               درخواست کاربر ۵: فقط وقتی هدف روزانه به ۱۰۰٪ نرسیده نمایش داده شود */}
           {ringProgress < 1 && (
@@ -452,23 +429,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           />
           {/* درخواست کاربر ۵: وقتی هدف ۱۰۰٪ شد، یک پیام تبریک نشان بده */}
           {ringProgress >= 1 && totalTarget > 0 && (
-            <div className="rounded-2xl p-3 border-2 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 flex items-center gap-2">
-              <span className="text-2xl">🎉</span>
+            <div className="rounded-xl p-2 border-2 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 flex items-center gap-2">
+              <span className="text-xl">🎉</span>
               <div className="min-w-0">
-                <b className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 block">هدف امروز کامل شد!</b>
-                <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">آفرین — استراحت کن یا به‌صورت آزاد تمرین کن.</p>
+                <b className="text-xs font-extrabold text-emerald-900 dark:text-emerald-100 block">هدف امروز کامل شد!</b>
+                <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">آفرین — استراحت کن یا آزاد تمرین کن.</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* دکمه‌های ثانویه — مرور سررسید + نقاط ضعف + مرور ۶۰ ثانیه
-            (درخواست کاربر ۸: حذف تکرار «شروع روزانه») */}
-        <div className="grid grid-cols-3 gap-2 mt-2">
+        {/* سه دکمهٔ ثانویه هم‌اندازه کوچک: مرور سررسید + نقاط ضعف + مرور ۶۰ ثانیه */}
+        <div className="grid grid-cols-3 gap-1.5 mt-2">
           {s.dueReviewWords.length > 0 && (
             <button
               onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
-              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-1.5 py-1.5 h-9 rounded-lg text-[11px] font-bold transition active:scale-95 flex items-center justify-center gap-1"
             >
               ⚡ مرور سررسید ({s.dueReviewWords.length})
             </button>
@@ -476,27 +452,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {s.weakList.length > 0 && (
             <button
               onClick={() => onPracticeWords(s.weakList.map(w => w.id), 'targeted')}
-              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+              className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-1.5 py-1.5 h-9 rounded-lg text-[11px] font-bold transition active:scale-95 flex items-center justify-center gap-1"
             >
               🎯 نقاط ضعف ({s.weakList.length})
             </button>
           )}
-          {/* دکمهٔ مرور سریع ۶۰ ثانیه‌ای (درخواست کاربر ۱۰) */}
           <button
             onClick={() => onQuickAction?.('quick-review')}
-            className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 flex items-center justify-center gap-1.5"
+            className="bg-white/70 border border-purple-200 hover:bg-white text-purple-900 dark:bg-purple-900/40 dark:border-purple-800 dark:hover:bg-purple-900/60 dark:text-purple-100 px-1.5 py-1.5 h-9 rounded-lg text-[11px] font-bold transition active:scale-95 flex items-center justify-center gap-1"
             title="مرور سریع ۵ واژه در ۶۰ ثانیه"
           >
             ⚡ مرور ۶۰ ثانیه
           </button>
         </div>
       </div>
-
-      {/* اکاردئون «تمرین‌های ۴ روز اخیر انجام‌نشده» (درخواست کاربر ۲/۹) */}
-      <LatePracticesAccordion
-        state={state}
-        onStartExercise={(nav) => onQuickAction?.(nav)}
-      />
 
       {/* ─────────── ۲) فعالیت ۷ روز اخیر (همیشه باز) ─────────── */}
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-4 md:p-5 shadow-xs">
@@ -554,6 +523,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ─────────── اکاردئون‌های آبشاری (درخواست کاربر ۳) ───────────
           همهٔ بخش‌ها به‌جز خوش‌آمدگویی و فعالیت ۷ روزه، زیر عنوانشان جمع می‌شوند.
           همیشه یا هیچ بخشی باز نیست یا فقط یکی. */}
+
+      {/* درخواست کاربر ۳: تمرین‌های ۴ روز اخیر انجام‌نشده — به‌صورت اکاردئونی */}
+      <AccordionSection id="late-practices" icon="⏰" title="تمرین‌های ۴ روز اخیر انجام‌نشده" openId={openSection} setOpenId={setOpenSection}>
+        <LatePracticesAccordion
+          state={state}
+          onStartExercise={(nav) => onQuickAction?.(nav)}
+        />
+      </AccordionSection>
 
       <AccordionSection id="weakness" icon="🎯" title="تحلیل نقاط ضعف و مسیر یادگیری" openId={openSection} setOpenId={setOpenSection}>
         {/* درخواست کاربر ۱۰: دکمهٔ شروع تمرین پیشنهادی فعال شود */}

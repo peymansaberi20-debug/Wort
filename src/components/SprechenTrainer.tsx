@@ -27,6 +27,8 @@ import { ExamRun, S, askJson, useNoHelp } from '../utils/trainerKit';
 import { LevelChips } from './trainerUI';
 import { ClickableWords, WordLookupModal } from './WordLookup';
 import type { Word } from '../types';
+// درخواست کاربر ۵: ادغام DialogTrainer — استفاده از همان کامپوننت موجود
+import { DialogTrainer } from './DialogTrainer';
 
 interface SprechenTrainerProps {
   onClose: () => void;
@@ -215,8 +217,21 @@ const reportCheck = S.obj({
   corrections: S.arr(S.obj({ original: S.req, corrected: S.req, why_fa: S.str() })), model_answer_de: S.str()
 });
 
+/* درخواست کاربر ۵: کامپوننت نمایش DialogTrainer داخل SprechenTrainer */
+const DialogSetupScreen: React.FC<{ onBack: () => void; onShowToast: (m: string, isErr?: boolean) => void }> = ({ onBack, onShowToast }) => {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-extrabold text-base">🎭 مکالمهٔ سناریویی (Dialog-Simulation)</h3>
+        <button onClick={onBack} className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold">↩ بازگشت</button>
+      </div>
+      <DialogTrainer onShowToast={onShowToast} />
+    </div>
+  );
+};
+
 export const SprechenTrainer: React.FC<SprechenTrainerProps> = ({ onClose, onShowToast, onQuickAddWord, words, onViewWord, exam }) => {
-  const [screen, setScreen] = useState<'hub' | 'free_setup' | 'free' | 'exam_setup' | 'exam' | 'report'>(exam ? 'exam' : 'hub');
+  const [screen, setScreen] = useState<'hub' | 'free_setup' | 'free' | 'exam_setup' | 'exam' | 'report' | 'dialog_setup'>(exam ? 'exam' : 'hub');
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
   const [personaId, setPersonaId] = useState<string>(loadPersona);
   const [topic, setTopic] = useState(FREE_TOPICS[0]);
@@ -672,8 +687,17 @@ Return ONLY JSON: {"level_estimate":"B1","criteria":{"task":0,"interaction":0,"v
             <div className="flex items-center gap-3"><span className="text-3xl">🎓</span><div><h3 className="font-extrabold text-base">Prüfungsmodus (شبیه‌ساز آزمون Goethe / telc)</h3><p className="text-[13px] text-[#5d6676]">۳ بخش آزمون واقعی، تایمر و ارزیابی استاندارد</p></div></div>
             <button onClick={() => setScreen('exam_setup')} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm">تنظیم ▶</button>
           </div>
+          {/* درخواست کاربر ۵: ادغام DialogTrainer در SprechenTrainer — مکالمهٔ مبتنی بر سناریو */}
+          <div className={card + ' flex items-center justify-between gap-3'}>
+            <div className="flex items-center gap-3"><span className="text-3xl">🎭</span><div><h3 className="font-extrabold text-base">Dialog-Simulation (مکالمهٔ سناریویی)</h3><p className="text-[13px] text-[#5d6676]">سناریوهای واقعی B2 — رستوران، پزشک، مصاحبه شغلی، ... — نقش A از پیش، نقش B را تو تایپ می‌کنی، تصحیح با معلم</p></div></div>
+            <button onClick={() => setScreen('dialog_setup')} className="bg-amber-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm">شروع ▶</button>
+          </div>
           <button onClick={() => { goHub(); onClose(); }} className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-bold">↩ بازگشت</button>
         </div>
+      )}
+
+      {screen === 'dialog_setup' && (
+        <DialogSetupScreen onBack={goHub} onShowToast={onShowToast} />
       )}
 
       {screen === 'free_setup' && (
