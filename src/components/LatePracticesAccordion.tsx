@@ -37,17 +37,18 @@ export const LatePracticesAccordion: React.FC<Props> = ({ state, onStartExercise
           {late.length} تمرین
         </span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      {/* درخواست کاربر ۹: دکمه‌ها هم‌اندازه، ۲تایی هر خط، ارتفاع کمتر */}
+      <div className="grid grid-cols-2 gap-1.5">
         {late.map(p => (
           <button
             key={p.type}
             onClick={() => onStartExercise?.(p.nav)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-[#1b2029] border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition text-right"
+            className="flex items-center gap-2 px-2.5 py-1.5 h-10 rounded-xl bg-white dark:bg-[#1b2029] border border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition text-right text-xs font-bold text-slate-900 dark:text-slate-100 overflow-hidden"
             title={`شروع: ${p.title}`}
           >
-            <span className="text-base">{p.icon}</span>
-            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{p.title}</span>
-            <span className="text-[10px] text-amber-700 dark:text-amber-300">→</span>
+            <span className="text-base flex-shrink-0">{p.icon}</span>
+            <span className="flex-1 truncate">{p.title}</span>
+            <span className="text-[10px] text-amber-700 dark:text-amber-300 flex-shrink-0">→</span>
           </button>
         ))}
       </div>

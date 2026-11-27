@@ -12,7 +12,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AppState } from '../types';
-import { generateWeeklyReport, loadWeeklyReports, hasThisWeekReport, WeeklyReport } from '../utils/weeklyReport';
+import { generateWeeklyReport, loadWeeklyReports, hasThisWeekReport, WeeklyReport, getReportWeekday, setReportWeekday, isReportDay, WEEKDAY_LABELS, Weekday } from '../utils/weeklyReport';
 import { IconBtn } from './IconBtn';
 import { X, BarChart3 } from 'lucide-react';
 
@@ -30,22 +30,33 @@ export const WeeklyReportModal: React.FC<Props> = ({ open, state, onClose, onSho
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<WeeklyReport | null>(null);
   const [err, setErr] = useState('');
+  // درخواست کاربر ۱۱: انتخاب روز هفته برای ساخت گزارش
+  const [reportDay, setReportDay] = useState<Weekday>(5);
 
   useEffect(() => {
     if (open) {
       const arch = loadWeeklyReports();
+      // مرتب‌سازی: جدید بالاتر
+      arch.sort((a, b) => b.generatedAt - a.generatedAt);
       setReports(arch);
       setSelected(arch[0] || null);
+      setReportDay(getReportWeekday());
     }
   }, [open]);
 
   if (!open) return null;
 
   const handleGenerate = async () => {
+    // درخواست کاربر ۱۱: فقط در روز انتخاب‌شده اجازه ساخت گزارش
+    if (!isReportDay()) {
+      onShowToast?.(`ساخت گزارش فقط در روز ${WEEKDAY_LABELS[reportDay]} مجاز است.`, true);
+      return;
+    }
     setBusy(true); setErr('');
     try {
       const r = await generateWeeklyReport(state);
       const arch = loadWeeklyReports();
+      arch.sort((a, b) => b.generatedAt - a.generatedAt);
       setReports(arch);
       setSelected(r);
       onShowToast?.('گزارش هفتگی ساخته شد ✓');
@@ -58,6 +69,7 @@ export const WeeklyReportModal: React.FC<Props> = ({ open, state, onClose, onSho
   };
 
   const alreadyThisWeek = hasThisWeekReport();
+  const todayIsReportDay = isReportDay();
 
   return createPortal(
     <div
@@ -71,11 +83,38 @@ export const WeeklyReportModal: React.FC<Props> = ({ open, state, onClose, onSho
         </div>
 
         <div className="p-4 md:p-5 space-y-4">
+          {/* درخواست کاربر ۱۱: انتخاب روز هفته برای ساخت گزارش — پیش‌فرض جمعه */}
+          <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-2">
+            <label className="block text-xs font-bold text-amber-900 dark:text-amber-200">
+              📅 کدام روز هفته می‌خواهی گزارش بگیری؟
+            </label>
+            <select
+              value={reportDay}
+              onChange={e => { const v = parseInt(e.target.value, 10) as Weekday; setReportDay(v); setReportWeekday(v); }}
+              className="w-full bg-white dark:bg-[#141923] border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-sm font-bold outline-none"
+            >
+              {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map(d => (
+                <option key={d} value={d}>{WEEKDAY_LABELS[d]}</option>
+              ))}
+            </select>
+            {!todayIsReportDay && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                امروز {WEEKDAY_LABELS[new Date().getDay() as Weekday]} است — ساخت گزارش فقط در {WEEKDAY_LABELS[reportDay]} مجاز است.
+              </p>
+            )}
+            {todayIsReportDay && (
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                ✅ امروز روز گزارش است — می‌توانی گزارش هفته را بسازی.
+              </p>
+            )}
+          </div>
+
           {/* دکمهٔ تولید گزارش */}
           <button
             onClick={() => void handleGenerate()}
-            disabled={busy}
-            className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-3 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-50 transition flex items-center justify-center gap-2"
+            disabled={busy || !todayIsReportDay}
+            className="w-full bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-3 rounded-xl text-sm font-bold shadow-xs hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+            title={!todayIsReportDay ? `ساخت گزارش فقط در ${WEEKDAY_LABELS[reportDay]} مجاز است` : ''}
           >
             <BarChart3 size={16} />
             {busy ? '⏳ در حال ساخت با معلم…' : alreadyThisWeek ? '🔄 ساخت دوبارهٔ گزارش این هفته' : '🚀 ساخت گزارش هفتگی جدید'}
@@ -87,14 +126,15 @@ export const WeeklyReportModal: React.FC<Props> = ({ open, state, onClose, onSho
             </div>
           )}
 
-          {/* لیست گزارش‌های قبلی */}
+          {/* درخواست کاربر ۱۱: لیست گزارش‌های قبلی — جدیدتر بالاتر */}
           {reports.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="space-y-3">
+              <b className="text-xs font-bold text-slate-700 dark:text-slate-300 block">📚 گزارش‌های قبلی (جدیدتر بالاتر):</b>
               {reports.map(r => (
                 <button
                   key={r.id}
                   onClick={() => setSelected(r)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${selected?.id === r.id
+                  className={`w-full text-right px-3 py-2 rounded-lg text-xs font-bold border transition ${selected?.id === r.id
                     ? 'bg-[#1f5fbf] text-white border-transparent'
                     : 'bg-slate-50 dark:bg-[#141923] border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                 >
