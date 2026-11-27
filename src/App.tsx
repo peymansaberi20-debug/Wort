@@ -24,12 +24,17 @@ import {
   auditWord,
   recordRecent
 } from './utils/storage';
+// درخواست کاربر ۲/۸: tracker تمرین‌های روزانه + چالش روزانه
+import { recordPractice } from './utils/practiceTracker';
+import { advanceDailyQuest } from './utils/dailyQuest';
 import { applyModeResult, promotionReady, activationReady } from './utils/wordStatus';
 import { stripHeadAnnotation } from './data/verbPrep';
 // درخواست کاربر ۱۶: پشتیبان‌گیری خودکار هفتگی
 import { maybeAutoSnapshot } from './utils/autoBackup';
 // درخواست کاربر ۱۸: یادآور روزانه با PWA Notifications
 import { startNotificationWatcher } from './utils/notifications';
+// درخواست کاربر ۱۱: Widget صفحهٔ قفل گوشی
+import { startLockWidgetWatcher } from './utils/lockScreenWidget';
 import { Header } from './components/Header';
 import { Navigation, NavTab } from './components/Navigation';
 import { PageOverlay } from './components/PageOverlay';
@@ -43,6 +48,9 @@ const HelpModal = lazy(() => import('./components/HelpModal').then(m => ({ defau
 const ImageExtractModal = lazy(() => import('./components/ImageExtractModal').then(m => ({ default: m.ImageExtractModal })));
 const AboutModal = lazy(() => import('./components/AboutModal').then(m => ({ default: m.AboutModal })));
 const DuplicateDetectorModal = lazy(() => import('./components/DuplicateDetectorModal').then(m => ({ default: m.DuplicateDetectorModal })));
+// درخواست‌های کاربر جدید (دورهٔ دوم): مرور سریع ۶۰ ثانیه‌ای، گزارش هفتگی، آزمون شفاهی
+const QuickReview60 = lazy(() => import('./components/QuickReview60').then(m => ({ default: m.QuickReview60 })));
+const WeeklyReportModal = lazy(() => import('./components/WeeklyReportModal').then(m => ({ default: m.WeeklyReportModal })));
 import { VerbPrep } from './components/VerbPrep';
 import { IdiomTrainer } from './components/IdiomTrainer';
 import { B2GrammarHub } from './components/B2GrammarHub';
@@ -127,6 +135,25 @@ export default function App() {
     return cleanup;
   }, []);
 
+  // درخواست کاربر ۱۱: Widget صفحهٔ قفل — ارسال Notification هر بازه با ۳ واژهٔ روزانه
+  useEffect(() => {
+    const cleanup = startLockWidgetWatcher(() => state.words);
+    return cleanup;
+  }, [state.words]);
+
+  // درخواست کاربر ۱۱: مدیریت ?action=... از URL (PWA Shortcuts)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const action = url.searchParams.get('action');
+    if (!action) return;
+    // حذف پارامتر از URL (تکرار نشود)
+    url.searchParams.delete('action');
+    window.history.replaceState({}, '', url.toString());
+    // اجرای اکشن با کمی تأخیر برای mount شدن
+    const t = setTimeout(() => handleQuickActionRef.current(action), 600);
+    return () => clearTimeout(t);
+  }, []);
+
   // Active exercise mode if inside practice
   const [activeExercise, setActiveExercise] = useState<ExerciseMode | null>(null);
   const [practiceWordIds, setPracticeWordIds] = useState<string[] | null>(null);
@@ -138,6 +165,26 @@ export default function App() {
   const [vprepTab, setVprepTab] = useState<'learn' | 'practice' | 'add'>('practice');
   /** شمارندهٔ ریست هر تمرین گرامر — با ضربدر، همان تمرین از نو (config) شروع می‌شود */
   const [gramResets, setGramResets] = useState<Record<string, number>>({});
+  // درخواست‌های کاربر ۱۰/۱۲/۴ — مودال‌های جدید
+  const [quickReviewOpen, setQuickReviewOpen] = useState(false);
+  const [weeklyReportOpen, setWeeklyReportOpen] = useState(false);
+  /** intent برای تمرین واژگان فراموش‌شده (درخواست کاربر ۶) */
+  const [forgottenWordIds, setForgottenWordIds] = useState<string[] | null>(null);
+
+  /**
+   * عملگر یکپارچهٔ اکشن‌های سریع داشبورد (درخواست کاربر ۷/۸/۱۰/۴/۶/۲)
+   * نوع‌های پشتیبانی‌شده:
+   *   - 'quick-review' → باز کردن مودال مرور ۶۰ ثانیه‌ای
+   *   - 'schreiben' / 'hoeren' / 'konnektoren' / 'cloze' / 'art' / 'conj' / 'tense' / 'plural' /
+   *     'synant' / 'prod' / 'flash' / 'case' / 'adjdecl' / 'vprep' / 'hoeren_new'
+   *     → شروع مستقیم همان تمرین در ExercisesView
+   *   - 'oral-exam' → باز کردن SprechenTrainer با mainTab sprechen
+   *   - 'forgotten' → باز کردن تمرین مرور فقط با واژه‌های فراموش‌شده
+   */
+  const handleQuickActionRef = useRef<(action: string) => void>(() => {});
+  const handleQuickAction = useCallback((action: string) => {
+    handleQuickActionRef.current(action);
+  }, []);
 
   // Active Modals
   const [selectedWord, setSelectedWord] = useState<Word | null>(null);
@@ -185,6 +232,55 @@ export default function App() {
       setToastMsg('');
     }, 4000);
   }, []);
+
+  /**
+   * عملکرد واقعی handleQuickAction — بعد از showToast تعریف می‌شود چون به آن وابسته است.
+   * یک ref به این پیاده‌سازی نگه‌داری می‌شود تا handleQuickAction بدون وابستگی در همان ابتدا تعریف شود.
+   */
+  handleQuickActionRef.current = (action: string) => {
+    if (action === 'quick-review') {
+      setQuickReviewOpen(true);
+      return;
+    }
+    if (action === 'forgotten') {
+      const now = Date.now();
+      const ids = state.words
+        .filter(w => w.last && (now - w.last) > 60 * 86400000)
+        .sort((a, b) => (b.last || 0) - (a.last || 0))
+        .slice(0, 30)
+        .map(w => w.id);
+      if (ids.length === 0) {
+        showToast('هیچ واژهٔ فراموش‌شده‌ای وجود ندارد — عالی!');
+        return;
+      }
+      setForgottenWordIds(ids);
+      setPracticeWordIds(ids);
+      setExerciseHidden(false);
+      setActiveExercise('review');
+      return;
+    }
+    if (action === 'oral-exam') {
+      // شروع آزمون شفاهی: رفتن به تب تمرین‌ها و سپس dispatch event برای ExercisesView
+      navigateToTab('prac');
+      setTimeout(() => {
+        const ev = new CustomEvent('wb-start-oral-exam');
+        window.dispatchEvent(ev);
+      }, 100);
+      return;
+    }
+    // تمرین‌های معمول ExercisesView
+    const exMode = action as ExerciseMode;
+    const validModes: ExerciseMode[] = ['flash', 'cloze', 'art', 'conj', 'tense', 'plural', 'synant', 'prod', 'case', 'adjdecl',
+      'vprep', 'konnektoren', 'schreiben', 'schreiben_exam', 'freesent', 'dikt', 'hoeren', 'hoeren_new', 'hoeren_archive',
+      'idioms', 'idioms_p', 'konjunktiv', 'passiv', 'trennbar', 'dialog', 'puzzle', 'kpro', 'tstory', 'irrverb', 'wsh'];
+    if (validModes.includes(exMode)) {
+      setExerciseHidden(false);
+      setActiveExercise(exMode);
+      navigateToTab('prac');
+    } else {
+      showToast(`عملیات «${action}» پشتیبانی نمی‌شود.`, true);
+    }
+  };
 
   // Sync state to localStorage on state changes
   useEffect(() => {
@@ -662,6 +758,12 @@ export default function App() {
         daily: nextDaily
       };
     });
+
+    // درخواست کاربر ۲/۸: ثبت تمرین در tracker + پیشرفت چالش روزانه
+    if (!isRetry) {
+      recordPractice(1);
+      advanceDailyQuest(1);
+    }
   };
 
   // Import operations
@@ -910,6 +1012,8 @@ export default function App() {
                     showToast(`سهمیه جدید روزانه (${target} واژه) اعمال شد.`);
                   }}
                   onSelectWord={setSelectedWord}
+                  onQuickAction={handleQuickAction}
+                  onOpenWeeklyReport={() => setWeeklyReportOpen(true)}
                 />
               )}
 
@@ -1225,6 +1329,26 @@ export default function App() {
 
       {/* Floating Notification Toast */}
       <Toast message={toastMsg} isError={toastIsError} />
+
+      {/* درخواست کاربر ۱۰: مرور سریع ۶۰ ثانیه‌ای */}
+      <Suspense fallback={<AppLazyFallback />}>
+        <QuickReview60
+          open={quickReviewOpen}
+          words={state.words}
+          onClose={() => setQuickReviewOpen(false)}
+          onShowToast={showToast}
+        />
+      </Suspense>
+
+      {/* درخواست کاربر ۱۲: گزارش هفتگی با AI */}
+      <Suspense fallback={<AppLazyFallback />}>
+        <WeeklyReportModal
+          open={weeklyReportOpen}
+          state={state}
+          onClose={() => setWeeklyReportOpen(false)}
+          onShowToast={showToast}
+        />
+      </Suspense>
     </div>
   );
 }
