@@ -47,6 +47,215 @@ const useMinuteTick = (): number => {
   return minute * 60000;
 };
 
+/* ─────────────── صحنهٔ پویای زمان روز (درخواست کاربر ۳) ───────────────
+ * یک نمای انیمیشنی از خط افق و خورشید/ماه که با ساعت روز هماهنگ است:
+ *  - صبح (۵ تا ۱۱): خورشید از افق شرق بالا می‌آید — رنگ‌های صورتی و کهربایی
+ *  - ظهر (۱۱ تا ۱۶): خورشید در بالای آسمان — آبی روشن
+ *  - عصر (۱۶ تا ۲۱): خورشید در افق غرب غروب می‌کند — نارنجی و بنفش
+ *  - شب (۲۱ تا ۵): ماه و ستاره‌ها — نیلوی تیره
+ * صحنه خط افق همیشه دیده می‌شود و خورشید/ماه با انیمیشن روی آن حرکت می‌کنند.
+ */
+const TimeScene: React.FC<{ hour: number; minute: number }> = ({ hour, minute }) => {
+  const totalMin = hour * 60 + minute;
+  // خورشید از ساعت ۶ تا ۱۸ روی آسمان است.
+  const dayProg = Math.max(0, Math.min(1, (totalMin - 6 * 60) / (12 * 60)));
+  const isDay = hour >= 6 && hour < 18; // خورشید در این ساعت‌ها روی آسمان است
+
+  // موقعیت خورشید روی قوس افقی: ۰٪ شرق، ۱۰۰٪ غرب؛ ارتفاع قوس سینوسی.
+  const sunX = 8 + dayProg * 84;
+  const sunY = 85 - Math.sin(dayProg * Math.PI) * 65;
+
+  // فازها بر اساس ساعت روز هماهنگ با خوش‌آمدگویی فارسی:
+  //  - ۰ تا ۵ و ۲۱ به بعد: شب (ماه و ستاره)
+  //  - ۵ تا ۱۲: صبح (طلوع و قبل از ظهر — خورشید قبل از ۶ هنوز پشت افق)
+  //  - ۱۲ تا ۱۷: ظهر (خورشید در اوج)
+  //  - ۱۷ تا ۲۱: عصر (غروب — خورشید قبل از ۱۸ هنوز پایین افق غرب)
+  const phase: 'morning' | 'noon' | 'evening' | 'night' =
+    hour < 5 || hour >= 21 ? 'night' :
+    hour < 12 ? 'morning' :
+    hour < 17 ? 'noon' :
+    'evening';
+
+  const skyGrad: Record<string, string> = {
+    morning: 'from-amber-100 via-sky-200 to-sky-100',
+    noon: 'from-sky-300 via-sky-200 to-blue-100',
+    evening: 'from-orange-200 via-rose-300 to-purple-200',
+    night: 'from-indigo-900 via-indigo-800 to-slate-800'
+  };
+
+  // ستاره‌ها — موقعیت ثابت، چشمک‌زن
+  const stars = React.useMemo(() => Array.from({ length: 22 }).map((_, i) => ({
+    id: i,
+    x: (i * 17 + 7) % 100,
+    y: (i * 11 + 3) % 55,
+    size: i % 4 === 0 ? 2 : 1.5,
+    delay: (i % 7) * 0.3,
+    dur: 1.8 + (i % 4) * 0.5
+  })), []);
+
+  // ابرها — برای حالت روز (با درفت آرام)
+  const clouds = React.useMemo(() => [
+    { y: 28, w: 36, dur: 28, delay: 0 },
+    { y: 50, w: 28, dur: 34, delay: -8 },
+    { y: 18, w: 32, dur: 30, delay: -14 }
+  ], []);
+
+  const phaseFa = phase === 'night' ? 'شب' : phase === 'morning' ? 'صبح' : phase === 'noon' ? 'ظهر' : 'عصر';
+
+  return (
+    <div
+      className="relative h-full w-full overflow-hidden rounded-xl border border-purple-200/70 dark:border-purple-800/70"
+      role="img"
+      aria-label={`آسمان ${phaseFa}`}
+    >
+      <style>{`
+        @keyframes wort-twinkle { 0%, 100% { opacity: 0.25; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
+        @keyframes wort-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+        @keyframes wort-cloud-drift { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+        @keyframes wort-sun-glow { 0%, 100% { box-shadow: 0 0 24px 6px rgba(253, 224, 71, 0.55); } 50% { box-shadow: 0 0 32px 10px rgba(253, 224, 71, 0.75); } }
+      `}</style>
+
+      {/* آسمان — گرادیان بر اساس فاز */}
+      <div className={`absolute inset-0 bg-gradient-to-b ${skyGrad[phase]} transition-all duration-1000`} />
+
+      {/* هالهٔ رنگی افق در غروب/طلوع */}
+      {(phase === 'morning' || phase === 'evening') && (
+        <div
+          className="absolute inset-x-0 bottom-6 h-14"
+          style={{
+            background: phase === 'morning'
+              ? 'linear-gradient(to top, rgba(251,146,60,0.35), rgba(251,146,60,0))'
+              : 'linear-gradient(to top, rgba(244,114,182,0.4), rgba(244,114,182,0))'
+          }}
+        />
+      )}
+
+      {/* ستاره‌ها — شب */}
+      {phase === 'night' && stars.map(s => (
+        <div
+          key={s.id}
+          className="absolute rounded-full bg-white"
+          style={{
+            left: `${s.x}%`,
+            top: `${s.y}%`,
+            width: `${s.size}px`,
+            height: `${s.size}px`,
+            animation: `wort-twinkle ${s.dur}s ease-in-out infinite`,
+            animationDelay: `${s.delay}s`
+          }}
+        />
+      ))}
+
+      {/* خورشید — روز */}
+      {isDay && (
+        <div
+          className="absolute"
+          style={{
+            left: `${sunX}%`,
+            top: `${sunY}%`,
+            transform: 'translate(-50%, -50%)',
+            animation: 'wort-float 5s ease-in-out infinite'
+          }}
+        >
+          <div
+            className="w-9 h-9 md:w-11 md:h-11 rounded-full"
+            style={{
+              animation: 'wort-sun-glow 3s ease-in-out infinite',
+              background: phase === 'morning' || phase === 'evening'
+                ? 'radial-gradient(circle at 40% 40%, #fef9c3, #fbbf24 70%, #f97316)'
+                : 'radial-gradient(circle at 40% 40%, #fef9c3, #fde047 60%, #facc15)'
+            }}
+          />
+        </div>
+      )}
+
+      {/* ماه — شب */}
+      {phase === 'night' && (
+        <div
+          className="absolute"
+          style={{
+            left: '72%',
+            top: '24%',
+            transform: 'translate(-50%, -50%)',
+            animation: 'wort-float 6s ease-in-out infinite'
+          }}
+        >
+          <div
+            className="relative w-9 h-9 md:w-10 md:h-10 rounded-full bg-slate-100"
+            style={{ boxShadow: '0 0 22px 6px rgba(241, 245, 249, 0.5)' }}
+          >
+            <div className="absolute top-1 left-2 w-1.5 h-1.5 rounded-full bg-slate-300/60" aria-hidden="true" />
+            <div className="absolute bottom-2 right-1.5 w-1 h-1 rounded-full bg-slate-300/60" aria-hidden="true" />
+          </div>
+        </div>
+      )}
+
+      {/* ابرها — روز */}
+      {isDay && clouds.map((c, i) => (
+        <div
+          key={i}
+          className="absolute"
+          style={{
+            top: `${c.y}%`,
+            left: 0,
+            width: `${c.w}%`,
+            animation: `wort-cloud-drift ${c.dur}s linear infinite`,
+            animationDelay: `${c.delay}s`
+          }}
+        >
+          <svg viewBox="0 0 100 40" className="w-full" preserveAspectRatio="none" aria-hidden="true">
+            <path
+              d="M 15 30 Q 5 30 5 22 Q 5 12 18 14 Q 22 5 35 8 Q 50 0 60 10 Q 75 5 80 18 Q 95 18 95 28 Q 95 35 85 35 L 20 35 Q 10 35 15 30 Z"
+              fill={phase === 'evening' ? 'rgba(254, 215, 170, 0.85)' : 'rgba(255, 255, 255, 0.85)'}
+            />
+          </svg>
+        </div>
+      ))}
+
+      {/* خط افق — زمین و خط */}
+      <div className="absolute bottom-0 inset-x-0 h-6 bg-gradient-to-t from-emerald-700/40 to-transparent" />
+      <div className="absolute bottom-5 inset-x-0 h-px bg-emerald-800/25" />
+    </div>
+  );
+};
+
+/* ─────────────── بخش جمع‌شوندهٔ داشبورد (درخواست کاربر ۲) ───────────────
+ * همهٔ بخش‌ها به‌جز دو تای اول زیر عنوانشان جمع می‌شوند.
+ * فقط یک بخش در هر لحظه باز است (یا هیچ‌کدام).
+ * روی عنوان کلیک می‌کنی → باز می‌شود؛ روی عنوان دیگری کلیک می‌کنی →
+ * قبلی بسته می‌شود و این یکی باز می‌شود. */
+const AccordionSection: React.FC<{
+  id: string;
+  icon: string;
+  title: string;
+  badge?: React.ReactNode;
+  openId: string | null;
+  setOpenId: (id: string | null) => void;
+  children: React.ReactNode;
+}> = ({ id, icon, title, badge, openId, setOpenId, children }) => {
+  const open = openId === id;
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setOpenId(open ? null : id)}
+        aria-expanded={open}
+        className="w-full px-4 md:px-5 py-3.5 flex items-center justify-between gap-2 text-right rounded-2xl bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] shadow-xs hover:bg-slate-50 dark:hover:bg-slate-800/40 transition active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-xl flex-shrink-0">{icon}</span>
+          <span className="text-sm md:text-base font-bold text-slate-900 dark:text-slate-100 truncate">{title}</span>
+        </span>
+        <span className="flex items-center gap-2 flex-shrink-0">
+          {badge}
+          <span className={`text-slate-500 dark:text-slate-400 text-xs transition-transform duration-300 ${open ? 'rotate-180' : ''}`} aria-hidden="true">▼</span>
+        </span>
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+};
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   state,
   ignoredQualityIds,
@@ -59,6 +268,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [stageView, setStageView] = React.useState<string | null>(null);
   const [stageQuery, setStageQuery] = React.useState('');
   const [dueQuery, setDueQuery] = React.useState('');
+  /* درخواست کاربر ۲: بخش‌های داشبورد (به‌جز دو تای اول) زیر عنوانشان جمع می‌شوند.
+   * همیشه یا هیچ بخشی باز نیست یا فقط یکی. */
+  const [openSection, setOpenSection] = React.useState<string | null>(null);
   /* معنی واژه‌ها در فهرست مراحل تسلط — پیش‌فرض مخفی، با آیکن چشم نمایش داده می‌شود */
   const [revealedFa, setRevealedFa] = React.useState<Set<string>>(new Set());
   const toggleFa = (id: string) => {
@@ -214,6 +426,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // خوش‌آمدگویی بر اساس ساعت روز + تاریخ امروز (شمسی و میلادی)
   const nowDate = new Date(n);
   const hour = nowDate.getHours();
+  const minute = nowDate.getMinutes(); // برای صحنهٔ پویای زمان روز
   const greeting = hour < 5 ? 'شب‌بخیر' : hour < 12 ? 'صبح‌بخیر' : hour < 17 ? 'ظهر بخیر' : hour < 21 ? 'عصر بخیر' : 'شب‌بخیر';
   const todayShamsi = formatShamsiFullNumeric(n);
   const todayGreg = formatGregorianNumeric(n);
@@ -243,11 +456,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* ─────────── سربرگ خوش‌آمد: سلام، تاریخ، رشتهٔ استمرار و حلقهٔ پیشرفت امروز ─────────── */}
       <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl p-5 text-purple-900 dark:text-purple-100 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
-            <p className="text-xs text-purple-800/80 dark:text-purple-300/80 mt-0.5" dir="ltr">
-              {todayWeekday} • {todayShamsi} • {todayGreg}
-            </p>
+          <div className="flex items-center gap-3 min-w-0">
+            {/* درخواست کاربر ۳: نمای انیمیشنی زمان روز جلوی خوش‌آمدگویی */}
+            <div className="w-24 h-16 md:w-32 md:h-20 flex-shrink-0">
+              <TimeScene hour={hour} minute={minute} />
+            </div>
+            <div className="min-w-0">
+              <b className="text-lg md:text-xl font-extrabold block">{greeting} 👋</b>
+              <p className="text-xs text-purple-800/80 dark:text-purple-300/80 mt-0.5" dir="ltr">
+                {todayWeekday} • {todayShamsi} • {todayGreg}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -385,19 +604,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ─────────── نقشهٔ حرارتی نقاط ضعف + مسیر یادگیری تطبیقی ───────────
-          درخواست کاربر: تحلیل هوشمند آمار یادگیری + پیشنهاد برنامهٔ روزانه برای رسیدن به B2 */}
-      <WeaknessHeatmap state={state} onNavigate={onNavigate} />
+          درخواست کاربر: تحلیل هوشمند آمار یادگیری + پیشنهاد برنامهٔ روزانه برای رسیدن به B2
+          درخواست کاربر ۲: زیر عنوانش جمع می‌شود */}
+      <AccordionSection id="weakness" icon="🎯" title="تحلیل نقاط ضعف و مسیر یادگیری" openId={openSection} setOpenId={setOpenSection}>
+        <WeaknessHeatmap state={state} onNavigate={onNavigate} />
+      </AccordionSection>
 
       {/* ─────────── استمرار و نشان‌ها (گیمیفیکیشن) ───────────
-          درخواست کاربر ۸: streak freeze + achievements */}
-      <AchievementsPanel state={state} />
+          درخواست کاربر ۸: streak freeze + achievements
+          درخواست کاربر ۲: زیر عنوانش جمع می‌شود */}
+      <AccordionSection id="achievements" icon="🏅" title="استمرار و نشان‌ها" openId={openSection} setOpenId={setOpenSection}>
+        <AchievementsPanel state={state} />
+      </AccordionSection>
 
-      {/* ─────────── هدف و پیشرفت امروز ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-        <b className="text-base text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-          <span>🎯</span> هدف و پیشرفت امروز
-        </b>
-
+      {/* ─────────── هدف و پیشرفت امروز (درخواست کاربر ۲: زیر عنوانش جمع می‌شود) ─────────── */}
+      <AccordionSection id="goal" icon="🎯" title="هدف و پیشرفت امروز" openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
         <div>
           <div className="flex justify-between text-xs mb-1">
             <span>کلمات جدید:</span>
@@ -458,27 +680,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           )}
         </div>
-      </div>
-
-      {/* ─────────── تحلیل هوشمند یادگیری و حافظه ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🧠</span>
-            <div>
-              <b className="text-base text-slate-900 dark:text-slate-100">تحلیل هوشمند یادگیری و حافظه</b>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                ارزیابی مرحله به مرحلهٔ تسلط، راندمان تثبیت و برنامهٔ مرور لایتنر
-              </p>
-            </div>
-          </div>
-          {s.retentionRate !== null && (
-            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
-              <span>نرخ ماندگاری:</span>
-              <span className="text-sm font-extrabold">{s.retentionRate}٪</span>
-            </div>
-          )}
         </div>
+      </AccordionSection>
+
+      {/* ─────────── تحلیل هوشمند یادگیری و حافظه (درخواست کاربر ۲: زیر عنوانش جمع می‌شود) ─────────── */}
+      <AccordionSection
+        id="analysis"
+        icon="🧠"
+        title="تحلیل هوشمند یادگیری و حافظه"
+        badge={s.retentionRate !== null ? (
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+            نرخ ماندگاری: {s.retentionRate}٪
+          </span>
+        ) : undefined}
+        openId={openSection}
+        setOpenId={setOpenSection}
+      >
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-4">
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+          ارزیابی مرحله به مرحلهٔ تسلط، راندمان تثبیت و برنامهٔ مرور لایتنر
+        </p>
 
         {/* باکس‌های مرحلهٔ تسلط — همیشه ۵ باکس در یک خط */}
         <div className="grid grid-cols-5 gap-1 sm:gap-1.5 text-center">
@@ -547,14 +768,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-xs text-[#5d6676]">سهمیه روزانه شما ({state.set.nw} واژه) متناسب با عملکرد فعلی است.</div>
           )}
         </div>
-      </div>
+        </div>
+      </AccordionSection>
 
-      {/* ─────────── آمار کلی تمرین‌ها ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-        <b className="text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-          <span>📊</span> آمار کلی تمرین‌ها
-        </b>
-
+      {/* ─────────── آمار کلی تمرین‌ها (درخواست کاربر ۲: زیر عنوانش جمع می‌شود) ─────────── */}
+      <AccordionSection id="stats" icon="📊" title="آمار کلی تمرین‌ها" openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
         <div className="grid grid-cols-5 gap-1 sm:gap-2 pt-1">
           {[
             { label: 'کل واژگان', value: s.words.length, cls: 'text-slate-800 dark:text-slate-200' },
@@ -569,10 +788,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           ))}
         </div>
-      </div>
+        </div>
+      </AccordionSection>
 
-      {/* ─────────── نکات مربی‌گری ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
+      {/* ─────────── نکات مربی‌گری (درخواست کاربر ۲: زیر عنوانش جمع می‌شود) ─────────── */}
+      <AccordionSection id="coach" icon="💡" title="نکات مربی‌گری" openId={openSection} setOpenId={setOpenSection}>
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl shadow-xs p-3.5 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>
             مرورهای عقب‌افتاده: <b className="text-red-500">{s.overdueBacklog}</b> • سررسید همین حالا:{' '}
@@ -588,26 +809,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
           💡 طبق الگوریتم فاصله، واژه‌های جدید بعد از اتمام مرورهای سررسیدشده ارائه می‌شوند تا حافظه اشباع نشود.
         </p>
-      </div>
-
-      {/* ─────────── فهرست واژه‌های آمادهٔ مرور ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-base">📋</span>
-            <b className="text-xs md:text-sm text-slate-900 dark:text-slate-100">
-              فهرست واژه‌های آماده برای مرور و مطالعه ({s.dueReviewWords.length} واژه)
-            </b>
-          </div>
-          {s.dueReviewWords.length > 0 && (
-            <button
-              onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
-              className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5"
-            >
-              <span>⚡ همین حالا مرور کن ({s.dueReviewWords.length} واژه)</span>
-            </button>
-          )}
         </div>
+      </AccordionSection>
+
+      {/* ─────────── فهرست واژه‌های آمادهٔ مرور (درخواست کاربر ۲: زیر عنوانش جمع می‌شود) ─────────── */}
+      <AccordionSection
+        id="review-list"
+        icon="📋"
+        title="فهرست واژه‌های آماده برای مرور و مطالعه"
+        badge={<span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">{s.dueReviewWords.length} واژه</span>}
+        openId={openSection}
+        setOpenId={setOpenSection}
+      >
+        <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl p-5 shadow-xs space-y-3">
+        {s.dueReviewWords.length > 0 && (
+          <button
+            onClick={() => onPracticeWords(s.dueReviewWords.map(w => w.id), 'review')}
+            className="bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 w-full sm:w-auto"
+          >
+            <span>⚡ همین حالا مرور کن ({s.dueReviewWords.length} واژه)</span>
+          </button>
+        )}
 
         {/* تفکیک سررسید امروز و عقب‌افتاده‌ها */}
         {s.dueReviewWords.length > 0 && (
@@ -705,26 +927,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </table>
           </div>
         )}
-      </div>
-
-      {/* ─────────── واژه‌های پر اشتباه و سخت ─────────── */}
-      <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-950/60 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🩸</span>
-            <div>
-              <b className="text-base text-slate-900 dark:text-slate-100">واژه‌های پر اشتباه و سخت</b>
-              <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
-                واژگانی با بیش از ۳ بار خطا، مرتب‌شده بر اساس بیشترین تکرار اشتباه
-              </p>
-            </div>
-          </div>
-          {s.hardMistakenWords.length > 0 && (
-            <span className="px-3 py-1 rounded-xl bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 text-xs font-bold">
-              {s.hardMistakenWords.length} واژه دشوار
-            </span>
-          )}
         </div>
+      </AccordionSection>
+
+      {/* ─────────── واژه‌های پر اشتباه و سخت (درخواست کاربر ۲: زیر عنوانش جمع می‌شود) ─────────── */}
+      <AccordionSection
+        id="hard-words"
+        icon="🩸"
+        title="واژه‌های پر اشتباه و سخت"
+        badge={s.hardMistakenWords.length > 0 ? (
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300">
+            {s.hardMistakenWords.length} واژه دشوار
+          </span>
+        ) : undefined}
+        openId={openSection}
+        setOpenId={setOpenSection}
+      >
+        <div className="bg-white dark:bg-[#1b2029] border border-red-200 dark:border-red-950/60 rounded-2xl p-5 shadow-xs space-y-4">
+        <p className="text-xs text-[#5d6676] dark:text-[#a3adbd]">
+          واژگانی با بیش از ۳ بار خطا، مرتب‌شده بر اساس بیشترین تکرار اشتباه
+        </p>
 
         {s.hardMistakenWords.length === 0 ? (
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#141923] text-center text-xs text-slate-600 dark:text-slate-400">
@@ -774,7 +996,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </>
         )}
-      </div>
+        </div>
+      </AccordionSection>
 
       {/* ─────────── لایهٔ فهرست واژه‌های هر مرحلهٔ تسلط (با جست‌وجو) ─────────── */}
       {activeStage && (() => {
