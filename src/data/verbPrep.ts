@@ -1,7 +1,7 @@
-/** Verben mit Präpositionen: verb | preposition | case (A = Akkusativ, D = Dativ) | Persian | example (preposition appears as its own word). */
+/** Verben mit Präpositionen: verb | preposition | case (A = Akkusativ, D = Dativ, G = Genitiv) | Persian | example (preposition appears as its own word). */
 import { splitConj, stripHeadAnnotation } from '../utils/conjugation';
 
-export interface VP { id: string; verb: string; prep: string; kase: 'A' | 'D'; fa: string; ex: string; custom?: boolean; lvl?: string; editOf?: string }
+export interface VP { id: string; verb: string; prep: string; kase: 'A' | 'D' | 'G' | 'A/D'; fa: string; ex: string; custom?: boolean; lvl?: string; editOf?: string }
 /* editOf: وقتی این VP نسخهٔ ویرایش‌شدهٔ یک فعلِ پایه است، شناسهٔ اصلی فعل در دیتاست را نگه می‌دارد
  * (درخواست ویرایش/حذف فعل‌ها) — آمار مرور فاصله‌دار با شناسهٔ اصلی حفظ می‌شود. */
 
@@ -145,14 +145,24 @@ neigen|zu|D|تمایل داشتن به|Er neigt zu Übertreibungen.
 raten|zu|D|توصیه کردن به|Der Arzt rät zu mehr Bewegung.
 sich entschließen|zu|D|تصمیم گرفتن به|Ich habe mich zu einem Umzug entschlossen.
 zwingen|zu|D|مجبور کردن به|Niemand kann dich zu etwas zwingen.
+bedürfen|G|G|نیاز داشتن به (رسمی)|Die Kinder bedürfen der Hilfe ihrer Eltern.
+gedenken|G|G|یادبود/ commémorer|Wir gedenken der Opfer des Krieges.
+sich erfreuen|G|G|بهره‌مند بودن از|Er erfreut sich bester Gesundheit.
+sich schämen|G|G|خجالت کشیدن از|Sie schämt sich ihrer Worte.
+sich rühmen|G|G|فخر فروختن به|Er rühmt sich seiner Erfolge.
+verdächtigen|G|G|مظنون دانستن به|Man verdächtigt ihn des Diebstahls.
+anklagen|G|G|متهم کردن به|Der Staatsanwalt klagt ihn des Betrugs an.
+bezichtigen|G|G|متهم کردن به (رسمی)|Man bezichtigt ihn der Lüge.
+sich entsinnen|G|G|به یاد آوردن (رسمی)|Ich entsinne mich jenes Abends.
+sich bemächtigen|G|G|تسلط یافتن بر|Die Panik bemächtigte sich der Menge.
 `;
 
 export const makeId = (verb: string, prep: string) => `${verb}|${prep}`;
 export const parseVP = (raw: string, custom = false): VP[] =>
   raw.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
     const [verb, prep, k, fa, ex] = l.split('|').map(x => (x || '').trim());
-    if (!verb || !prep || (k !== 'A' && k !== 'D') || !ex) return null;
-    return { id: makeId(verb, prep), verb, prep: prep.toLowerCase(), kase: k as 'A' | 'D', fa, ex, custom } as VP;
+    if (!verb || !prep || (k !== 'A' && k !== 'D' && k !== 'G' && k !== 'A/D') || !ex) return null;
+    return { id: makeId(verb, prep), verb, prep: prep.toLowerCase(), kase: k as 'A' | 'D' | 'G' | 'A/D', fa, ex, custom } as VP;
   }).filter((x): x is VP => !!x);
 
 export const VERB_PREPS: VP[] = parseVP(RAW);
@@ -251,9 +261,9 @@ const INDEX = () => {
   return m;
 };
 
-/** VP از خودِ سرِ پسونددار فعل («sich sträuben gegen +A»، «gedeihen +D») — وقتی دیتاست جواب نمی‌دهد */
+/** VP از خودِ سرِ پسونددار فعل («sich sträuben gegen +A»، «gedeihen +D»، «bedürfen +G») — وقتی دیتاست جواب نمی‌دهد */
 const vpFromHead = (de: string): VP | null => {
-  const m = /^(.+?)\s*\+\s*([ad])\b\.?\s*$/i.exec((de || '').trim());
+  const m = /^(.+?)\s*\+\s*([adg](?:\/[adg])?)\b\.?\s*$/i.exec((de || '').trim());
   if (!m) return null;
   const words = m[1].trim().split(/\s+/);
   const last = (words[words.length - 1] || '').toLowerCase();
@@ -261,10 +271,13 @@ const vpFromHead = (de: string): VP | null => {
   const verb = hasPrep ? words.slice(0, -1).join(' ') : m[1].trim();
   if (!verb) return null;
   const prep = hasPrep ? last : '';
-  return { id: makeId(verb, prep), verb, prep, kase: m[2].toUpperCase() as 'A' | 'D', fa: '', ex: '' };
+  // پذیرش حالت‌های A / D / G / A/D — حروف بزرگ标准化
+  const k = m[2].toUpperCase();
+  if (!/^[ADG](\/[ADG])?$/.test(k)) return null;
+  return { id: makeId(verb, prep), verb, prep, kase: k as 'A' | 'D' | 'G' | 'A/D', fa: '', ex: '' };
 };
 
-/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم، بدون sich، یا با سرِ پسونددار «warten auf +A»)؛ بی‌نتیجه = null */
+/** فعل+حرف اضافهٔ متناظر با این واژه (تطبیق مستقیم، بدون sich، یا با سرِ پسونددار «warten auf +A»؛ بی‌نتیجه = null) */
 export const verbPrepOf = (de: string): VP | null => {
   const t = (de || '').trim();
   if (!t) return null;
@@ -282,6 +295,32 @@ export const verbPrepOf = (de: string): VP | null => {
   return vpFromHead(t);
 };
 
+/* ============================================================
+ * درخواست کاربر: فعل‌های متعدی رایج که فقط شیء حالت اکوزاتیو می‌گیرند (بدون حرف اضافه)
+ * باید هم پسوند +A داشته باشند حتی اگر حرف اضافه‌ای ندارند.
+ * این فعل‌ها در دیتاست با prep='' kase='A' ثبت می‌شوند تا در نمایش/فلش‌کارت/واژگان
+ * پسوند +A بگیرند. این فهرست کوتاه است و فقط شامل فعل‌های بسیار پرکاربرد است؛
+ * فعلی که در این فهرست یا دیتاست بالا نباشد، بدون حالت می‌ماند (چیزی از خود نمی‌سازیم).
+ * ============================================================ */
+const BARE_AKK_VERBS = new Set<string>(
+  ('essen trinken lesen schreiben kaufen machen sehen hören brauchen finden geben nehmen haben wissen lernen lieben hassen spielen arbeiten kosten tragen waschen kochen fahren gehen sagen bringen schicken zeigen erzählen fragen antworten verstehen vergessen repeat vergessen benutzen erwähnen erklären wiederholen beginnen beenden öffnen schließen treffen besuchen besitzen verkaufen bestellen bezahlen probieren tragen legen stellen setzen legen hängen stecken werfen fangen halten begrüßen einladen(err) feiern annehmen behalten verlieren gewinnen suchen finden vermissen ändern prüfen testen retten töten lieben mögen wollen dürfen können sollen müssen werden bleiben heißen nennen kennen fühlen spüren bemerken beobachten')
+    .split(/\s+/).map(x => x.toLowerCase())
+);
+/* چند فعل رایج داتیو (بدون حرف اضافه): کمک کردن/تشکر کردن/پیروی کردن/جواب دادن */
+const BARE_DAT_VERBS = new Set<string>(
+  ('helfen danken folgen gehorchen begegnen antworten gehören passen schmecken stehen glauben')
+    .split(/\s+/).map(x => x.toLowerCase())
+);
+
+/** آیا این فعل (بدون sich، پایه) در فهرست «حالت‌دار بدون حرف اضافه» هست؟ */
+export function bareCaseVerb(base: string): 'A' | 'D' | null {
+  const t = (base || '').trim().toLowerCase();
+  if (!t) return null;
+  if (BARE_AKK_VERBS.has(t)) return 'A';
+  if (BARE_DAT_VERBS.has(t)) return 'D';
+  return null;
+}
+
 const vowel = (p: string) => /^[aeiouäöü]/i.test(p);
 export const woForm = (p: string) => 'wo' + (vowel(p) ? 'r' : '') + p;   // woran, worauf, wofür …
 export const daForm = (p: string) => 'da' + (vowel(p) ? 'r' : '') + p;   // daran, darauf, dafür …
@@ -296,13 +335,15 @@ export const splitEx = (ex: string, prep: string): [string, string, string] | nu
 };
 export const blankEx = (ex: string, prep: string): string => { const p = splitEx(ex, prep); return p ? `${p[0]}${p[0] && !p[0].endsWith(' ') ? ' ' : ''}____${p[2]}` : ex; };
 
-/** CEFR level of a verb: A1–A2 / B1 (default) / B2 / C1. User-added verbs carry their own level in `lvl`. */
-export const LEVELS = ['A1–A2', 'B1', 'B2', 'C1'];
+/** CEFR level of a verb: A1–A2 / B1 (default) / B2 / C1 / C2. User-added verbs carry their own level in `lvl`. */
+export const LEVELS = ['A1–A2', 'B1', 'B2', 'C1', 'C2'];
 const ids = (s: string) => new Set(s.split(',').map(x => x.trim()));
 const L_A2 = ids('denken|an, schreiben|an, arbeiten|an, teilnehmen|an, warten|auf, sich freuen|auf, antworten|auf, aufpassen|auf, Lust haben|auf, stammen|aus, sich bedanken|bei, sich entschuldigen|bei, helfen|bei, bleiben|bei, sich interessieren|für, danken|für, sich bedanken|für, sprechen|mit, anfangen|mit, aufhören|mit, telefonieren|mit, sich treffen|mit, sich verabreden|mit, fragen|nach, suchen|nach, riechen|nach, schmecken|nach, sprechen|über, sich freuen|über, lachen|über, bitten|um, sich kümmern|um, träumen|von, erzählen|von, sich verabschieden|von, Angst haben|vor, einladen|zu, gehören|zu, gratulieren|zu');
 const L_B2 = ids('leiden|an, zweifeln|an, sich beteiligen|an, liegen|an, sterben|an, angewiesen sein|auf, sich beziehen|auf, verzichten|auf, sich eignen|für, sich einsetzen|für, gelten|für, sich wehren|gegen, stimmen|gegen, etwas haben|gegen, investieren|in, umgehen|mit, ausgehen|von, überzeugen|von, sich richten|nach, sich streiten|über, kämpfen|um, raten|zu, sich entschließen|zu, zwingen|zu, beitragen|zu, flüchten|vor, Respekt haben|vor, sich schützen|vor');
 const L_C1 = ids('beruhen|auf, bestehen|auf, verfügen|über, verstoßen|gegen, streben|nach, neigen|zu, sich auseinandersetzen|mit, folgen|aus, sich einmischen|in, sich täuschen|in, sich irren|in, trauern|um, sich bemühen|um');
-export const levelOf = (v: VP): string => v.lvl || (L_A2.has(v.id) ? 'A1–A2' : L_C1.has(v.id) ? 'C1' : L_B2.has(v.id) ? 'B2' : 'B1');
+// درخواست کاربر: افزودن سطح C2 — فعلی که از سطح C1 هم فراترند (رسمی، نوشتاری، ادبی)؛ هیچ فعلی از C1 به پایین منتقل نشد
+const L_C2 = ids('bedürfen|G, gedenken|G, sich erfreuen|G, sich schämen|G, sich rühmen|G, verdächtigen|G, anklagen|G, bezichtigen|G, sich entsinnen|G, sich bemächtigen|G');
+export const levelOf = (v: VP): string => v.lvl || (L_A2.has(v.id) ? 'A1–A2' : L_C2.has(v.id) ? 'C2' : L_C1.has(v.id) ? 'C1' : L_B2.has(v.id) ? 'B2' : 'B1');
 
 /* ============================================================
  * درخواست کاربر — سرِ واژهٔ فعل با sich + حرف اضافه + حالت دستوری:
@@ -357,7 +398,7 @@ export function isVerbHead(de: string, opts: HeadAnnotationInput = {}): boolean 
 }
 
 /** دیتاست (سفارشی کاربر اول، بعد پایهٔ ویرایش‌شده) جفت حرف اضافه/حالت این فعل را دارد؟ */
-function datasetPrepCase(base: string): { prep: string; kase: 'A' | 'D' } | null {
+function datasetPrepCase(base: string): { prep: string; kase: 'A' | 'D' | 'G' | 'A/D' } | null {
   const t = (base || '').trim().toLowerCase();
   if (!t) return null;
   for (const vp of [...loadCustom(), ...effectiveBase()]) {
@@ -408,6 +449,8 @@ export function prepCaseFromNotes(notes?: string): { prep: string; kase: PrepCas
 /**
  * سرِ واژهٔ کامل فعل: [sich ]فعل[ حرف اضافه][ +حالت]
  * غیرفعل‌ها و واژه‌های بی‌داده دست‌نخورده برمی‌گردند؛ هرگز داده‌ای از خودش نمی‌سازد.
+ * درخواست کاربر: فعلی که حرف اضافه ندارد ولی حالت مشخصی می‌گیرد (مثل essen +A، helfen +D)
+ * هم پسوند حالت می‌گیرد — منبع: دیتاست (با prep خالی) یا فهرست فعل‌های متعدی/داتیو رایج.
  */
 export function annotatedHeadword(de: string, opts: HeadAnnotationInput = {}): string {
   const raw = String(de || '').trim().replace(/\s+/g, ' ');
@@ -420,7 +463,12 @@ export function annotatedHeadword(de: string, opts: HeadAnnotationInput = {}): s
   const fromDataset = datasetPrepCase(base);
   const fromNotes = fromDataset ? null : prepCaseFromNotes(opts.notes);
   const prep = fromDataset?.prep ?? fromNotes?.prep ?? '';
-  const kase = fromDataset?.kase ?? fromNotes?.kase ?? null;
+  let kase: 'A' | 'D' | 'G' | 'A/D' | null = fromDataset?.kase ?? fromNotes?.kase ?? null;
+  // درخواست کاربر: فعل متعدی/داتیو رایج بدون حرف اضافه هم پسوند حالت بگیرد
+  if (!kase && !prep) {
+    const bareK = bareCaseVerb(base);
+    if (bareK) kase = bareK;
+  }
   if (!refl && !kase) return raw;
   const parts: string[] = [];
   if (refl) parts.push('sich');
