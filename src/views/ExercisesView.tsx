@@ -194,8 +194,8 @@ const GRAMMATIK_CATS: GramCat[] = [
       { id: 'idioms_p', label: 'اصطلاحات (تمرین)', mode: 'idioms_p' },
       { id: 'konjunktiv', label: 'Konjunktiv II', mode: 'konjunktiv' },
       { id: 'passiv', label: 'Passiv', mode: 'passiv' },
-      { id: 'trennbar', label: 'Trennbare Verben', mode: 'trennbar' },
-      { id: 'dialog', label: 'دیالوگ و مکالمه', mode: 'dialog' },
+      { id: 'trennbar', label: 'Trennbare Verben', mode: 'trennbar' }
+      // درخواست کاربر ۲: «دیالوگ و مکالمه» از تب گرامر B2 حذف شد — حالا فقط در زیرتب sprechen قابل دسترس است (با امکانات صوتی جدید)
     ],
   },
 ];

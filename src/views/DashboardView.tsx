@@ -58,11 +58,19 @@ const useMinuteTick = (): number => {
   return minute * 60000;
 };
 
-/* ─────────────── صحنهٔ پویای زمان روز (درخواست کاربر ۱۳، اصلاح‌شده ۲) ───────────────
- * ۵ عکس واقعی کاربر ارسال کرده که در public/scenes/ قرار دارند.
- * عکس بزرگ‌تر شده، متن سلام روی آن overlay می‌شود با لایهٔ گرادیان که همیشه خوانا باشد.
+/* ─────────────── صحنهٔ پویای زمان روز (درخواست کاربر ۱۳ + اصلاح ۱ این دور) ───────────────
+ * عکس به‌عنوان پس‌زمینهٔ کل خوش‌آمدگویی. تاریخ + ۵ روز استمرار + ۱۱۲۹ واژه + متن سلام همگی به‌صورت
+ * overlay روی عکس قرار می‌گیرند با گرادیان تیره که همیشه خوانا بمانند.
  */
-const TimeScene: React.FC<{ hour: number; greeting: string }> = ({ hour, greeting }) => {
+const TimeScene: React.FC<{
+  hour: number;
+  greeting: string;
+  todayWeekday: string;
+  todayShamsi: string;
+  todayGreg: string;
+  streak: number;
+  wordCount: number;
+}> = ({ hour, greeting, todayWeekday, todayShamsi, todayGreg, streak, wordCount }) => {
   const phase: 'morning' | 'noon' | 'midday' | 'evening' | 'night' =
     hour < 5 ? 'night' :
     hour < 11 ? 'morning' :
@@ -81,16 +89,31 @@ const TimeScene: React.FC<{ hour: number; greeting: string }> = ({ hour, greetin
   const src = `${prefix}${img}`;
   return (
     <div
-      className="relative w-full h-28 md:h-32 rounded-2xl overflow-hidden border border-purple-200/70 dark:border-purple-800/70 shadow-inner"
+      className="relative w-full h-32 md:h-36 rounded-2xl overflow-hidden border border-purple-200/70 dark:border-purple-800/70 shadow-inner"
       role="img"
       aria-label={`صحنهٔ ${phase === 'night' ? 'شب' : phase === 'morning' ? 'صبح' : phase === 'noon' ? 'قبل از ظهر' : phase === 'midday' ? 'ظهر' : 'بعد از ظهر'}`}
     >
       <img src={src} alt="" className="absolute inset-0 w-full h-full object-cover" />
-      {/* لایهٔ گرادیان تیره برای خوانایی متن — روی همهٔ عکس‌ها نتیجهٔ خوب */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/55 via-black/30 to-black/55" />
-      {/* متن سلام روی عکس — همیشه سفید با سایه */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <b className="text-2xl md:text-3xl font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)] tracking-wide">
+      {/* لایهٔ گرادیان تیره برای خوانایی متن — همهٔ عکس‌ها نتیجهٔ خوب */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/45 to-black/65" />
+      {/* ردیف اول: تاریخ بالا-راست */}
+      <div className="absolute top-2 right-2 left-2 flex items-start justify-between gap-2">
+        <div />
+        <p className="text-[11px] md:text-xs text-white/95 drop-shadow text-left" dir="ltr">
+          {todayWeekday} • {todayShamsi} • {todayGreg}
+        </p>
+      </div>
+      {/* ردیف پایین: استمرار و واژه سمت راست، سلام در وسط */}
+      <div className="absolute bottom-2 right-2 left-2 flex items-end justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <span className="bg-white/15 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white drop-shadow flex items-center gap-1" title="روزهای پیاپی تمرین">
+            🔥 {streak} روز
+          </span>
+          <span className="bg-white/15 backdrop-blur-sm border border-white/20 px-2 py-0.5 rounded-lg text-[11px] font-bold text-white drop-shadow" title="کل واژگان">
+            📚 {wordCount} واژه
+          </span>
+        </div>
+        <b className="text-xl md:text-2xl font-extrabold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)] tracking-wide">
           {greeting} 👋
         </b>
       </div>
@@ -330,25 +353,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-4 text-right">
-      {/* ─────────── ۱) سربرگ خوش‌آمد فشرده (درخواست کاربر ۲) ─────────── */}
+      {/* ─────────── ۱) سربرگ خوش‌آمد فشرده (درخواست کاربر ۲ + اصلاح ۱ این دور) ───────────
+          اطلاعات (تاریخ + استمرار + تعداد واژه + سلام) همگی روی عکس overlay می‌شوند. */}
       <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl p-3 md:p-4 text-purple-900 dark:text-purple-100 shadow-xs">
-        {/* ردیف اول: تاریخ بالا، استمرار و واژه سمت چپ */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <p className="text-[11px] md:text-xs text-purple-800/80 dark:text-purple-300/80" dir="ltr">
-            {todayWeekday} • {todayShamsi} • {todayGreg}
-          </p>
-          <div className="flex flex-col items-end gap-0.5">
-            <span className="bg-white/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-center gap-1" title="روزهای پیاپی تمرین">
-              🔥 {streakCount(state.hist)} روز استمرار
-            </span>
-            <span className="bg-white/80 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded-lg text-[11px] font-bold" title="کل واژگان کتابخانه">
-              📚 {s.words.length} واژه
-            </span>
-          </div>
-        </div>
-
-        {/* عکس با overlay سلام روی آن — بزرگ‌تر و خوانا */}
-        <TimeScene hour={hour} greeting={greeting} />
+        {/* عکس پس‌زمینه با overlay همهٔ اطلاعات (تاریخ، استمرار، واژه، سلام) */}
+        <TimeScene
+          hour={hour}
+          greeting={greeting}
+          todayWeekday={todayWeekday}
+          todayShamsi={todayShamsi}
+          todayGreg={todayGreg}
+          streak={streakCount(state.hist)}
+          wordCount={s.words.length}
+        />
 
         {/* دو حلقهٔ پیشرفت زیر عکس (درخواست کاربر ۲/۳) */}
         <div className="flex items-center justify-around mt-3">
@@ -392,10 +409,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* دو دکمهٔ هم‌اندازه و کوتاه (درخواست کاربر ۲): جلسه روزانه + چالش امروز */}
+        {/* دو دکمهٔ هم‌اندازه کوتاه (درخواست کاربر ۱): جلسه روزانه + چالش امروز */}
         <div className="grid grid-cols-2 gap-2 mt-3">
-          {/* توصیه‌گر روزانه — جایگزین «کتابخانهٔ واژگان» (درخواست کاربر ۷)
-              درخواست کاربر ۵: فقط وقتی هدف روزانه به ۱۰۰٪ نرسیده نمایش داده شود */}
+          {/* توصیه‌گر روزانه — فقط وقتی هدف روزانه به ۱۰۰٪ نرسیده */}
           {ringProgress < 1 && (
             <SuggestionCard
               state={state}
@@ -411,7 +427,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }}
             />
           )}
-          {/* چالش روزانه (درخواست کاربر ۸) */}
+          {/* چالش روزانه */}
           <DailyChallengeCard
             state={state}
             onStart={(q: DailyQuest) => {
@@ -427,14 +443,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               }
             }}
           />
-          {/* درخواست کاربر ۵: وقتی هدف ۱۰۰٪ شد، یک پیام تبریک نشان بده */}
+          {/* وقتی هدف ۱۰۰٪ شد، یک پیام تبریک نشان بده */}
           {ringProgress >= 1 && totalTarget > 0 && (
-            <div className="rounded-xl p-2 border-2 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 flex items-center gap-2">
-              <span className="text-xl">🎉</span>
-              <div className="min-w-0">
-                <b className="text-xs font-extrabold text-emerald-900 dark:text-emerald-100 block">هدف امروز کامل شد!</b>
-                <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">آفرین — استراحت کن یا آزاد تمرین کن.</p>
-              </div>
+            <div className="rounded-xl px-2 h-9 border-2 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 flex items-center justify-center gap-1.5">
+              <span className="text-base">🎉</span>
+              <b className="text-xs font-extrabold text-emerald-900 dark:text-emerald-100">هدف امروز کامل شد!</b>
             </div>
           )}
         </div>
