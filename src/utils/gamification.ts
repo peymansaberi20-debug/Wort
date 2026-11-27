@@ -104,19 +104,20 @@ export function effectiveStreak(state: AppState): { streak: number; protectedByF
   const hasYesterday = state.hist.some(h => dstr(h.t) === yesterdayStr);
   // اگر دیروز تمرین بوده، streak فعلی در حال از دست رفتن است ولی هنوز حفظ شده
   if (hasYesterday) return { streak: realStreak, protectedByFreeze: false, freezesLeft: freeze.remaining };
-  // دیروز هم نبوده — آیا freeze داریم؟
+  // دیروز هم نبوده — آیا اصلاً streakای برای محافظت وجود دارد؟
+  // پیدا کردن آخرین streak با پرش از دیروز
+  const s = new Set(state.hist.map(x => dstr(x.t)));
+  let o = -2; // از روز قبل از دیروز
+  let prevStreak = 0;
+  while (s.has(dstr(dayStart(o)))) { prevStreak++; o--; }
+  // اگر هیچ streakای قبلاً نبوده، اصلاً freeze مصرف نکن — فقط ۰ برگردان
+  if (prevStreak === 0) return { streak: 0, protectedByFreeze: false, freezesLeft: freeze.remaining };
+  // streak وجود داشته — آیا freeze داریم؟
   if (freeze.remaining > 0 && !freeze.used.includes(yesterdayStr)) {
     // یکی مصرف کن
     const next: FreezeState = { ...freeze, remaining: freeze.remaining - 1, used: [...freeze.used, yesterdayStr] };
     saveFreeze(next);
-    // streak را به‌جای شکست، به streak قبل از دیروز بگیریم — ولی streakCount همین الان ۰ برمی‌گرداند
-    // پس یک مقدار تقریبی به‌صورت «streak قبل از دیروز - 1» برمی‌گردانیم تا انگیزه حفظ شود
-    // پیدا کردن آخرین streak با پرش از دیروز
-    const s = new Set(state.hist.map(x => dstr(x.t)));
-    let o = -2; // از روز قبل از دیروز
-    let n = 0;
-    while (s.has(dstr(dayStart(o)))) { n++; o--; }
-    return { streak: Math.max(0, n), protectedByFreeze: true, freezesLeft: next.remaining };
+    return { streak: Math.max(0, prevStreak), protectedByFreeze: true, freezesLeft: next.remaining };
   }
   // freeze هم نداریم — streak واقعاً به ۰ می‌رسد
   return { streak: 0, protectedByFreeze: false, freezesLeft: freeze.remaining };
