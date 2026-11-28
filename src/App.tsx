@@ -1064,6 +1064,7 @@ export default function App() {
                   onRenameCategory={handleRenameCategory}
                   onDeleteCategory={handleDeleteCategory}
                   onSelectWord={setSelectedWord}
+                  isWordProfileOpen={!!selectedWord}
                   onOpenWordManager={() => setIsWordManagerOpen(true)}
                   openCatMgrSignal={catMgrSignal}
                   renderGroupImport={close => (
