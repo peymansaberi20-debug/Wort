@@ -62,6 +62,8 @@ interface VocabularyViewProps {
   onRenameCategory: (oldCat: string, newCat: string) => void;
   onDeleteCategory: (cat: string) => void;
   onSelectWord: (word: Word) => void;
+  /** آیا پروفایل واژه (WordDetailModal) باز است؟ — برای بازگشت به کارت خانواده بعد از ویرایش */
+  isWordProfileOpen?: boolean;
   onOpenWordManager: () => void;
   onOpenGroupImport: () => void;
   openCatMgrSignal?: number;
@@ -84,6 +86,7 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   onRenameCategory,
   onDeleteCategory,
   onSelectWord,
+  isWordProfileOpen = false,
   onOpenWordManager,
   onOpenGroupImport,
   openCatMgrSignal,
@@ -204,6 +207,14 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
   const isFormOpen = tab === 'add';
   const setIsFormOpen = (v: boolean) => setTab(v ? 'add' : 'list');
 
+  // درخواست کاربر: id خانوادهٔ واژگانی که کارتش باز است — از WordFamiliesView به اینجا منتقل شده
+  // تا با باز شدن پروفایل واژه و رفتن به فرم ویرایش از بین نرود
+  const [openFamilyId, setOpenFamilyId] = useState<string | null>(null);
+  // درخواست کاربر: اگر ویرایش واژه از دل کارت خانواده شروع شده باشد،
+  // بعد از پایان ویرایش (ذخیره یا انصراف) و بسته شدن پروفایل، همین id دوباره باز می‌شود
+  const familyEditReturnRef = useRef<string | null>(null);
+  const prevEditingIdRef = useRef<string | null>(null);
+
   // Form Fields
   const [formDe, setFormDe] = useState(editingWord?.de || '');
   const [formArt, setFormArt] = useState(editingWord?.art || '');
@@ -294,6 +305,31 @@ export const VocabularyView: React.FC<VocabularyViewProps> = ({
       setIsFormOpen(true);
     }
   }, [editingWord]);
+
+  // درخواست کاربر: وقتی ویرایش واژه در حالی شروع می‌شود که کارت خانواده باز است، آن خانواده برای بازگشت یادآوری می‌شود
+  React.useEffect(() => {
+    const justStarted = !!editingWordId && !prevEditingIdRef.current;
+    prevEditingIdRef.current = editingWordId;
+    if (justStarted && openFamilyId) familyEditReturnRef.current = openFamilyId;
+  }, [editingWordId, openFamilyId]);
+
+  // درخواست کاربر: وقتی ویرایش تمام شد (ذخیره یا انصراف) و پروفایل واژه بسته شد،
+  // دقیقاً همان کارت خانواده‌ای که باز بود دوباره باز می‌شود
+  React.useEffect(() => {
+    const target = familyEditReturnRef.current;
+    if (!target) return;
+    if (editingWordId || isWordProfileOpen) return; // هنوز در جریان ویرایش هستیم یا پروفایل واژه باز است
+    if (tab !== 'list' && tab !== 'add') return;    // کاربر خودش تب دیگری را انتخاب کرده؛ دخالت نمی‌کنیم
+    familyEditReturnRef.current = null;
+    setOpenFamilyId(target);
+    setTab('families');
+  }, [editingWordId, isWordProfileOpen, tab]);
+
+  // انتخاب دستی یک خانوادهٔ دیگر = مسیر جدید؛ بازگشت خودکار قبلی دیگر معنا ندارد
+  const handleOpenFamilyChange = (id: string | null) => {
+    if (id !== null) familyEditReturnRef.current = null;
+    setOpenFamilyId(id);
+  };
 
   // Filtered and sorted words
   const filteredWords = useMemo(() => {
@@ -2108,6 +2144,8 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
       {tab === 'families' && renderEmbedTab('🌐', 'خانواده واژگان', 'families', (
         <WordFamiliesView
           words={words}
+          openFamilyId={openFamilyId}
+          onOpenFamilyChange={handleOpenFamilyChange}
           onSelectWord={onSelectWord}
           onAddWord={(de, art) => {
             // درخواست کاربر ۲: باز کردن فرم افزودن واژه با de و art از پیش پر شده
