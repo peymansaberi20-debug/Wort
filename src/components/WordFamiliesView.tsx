@@ -132,10 +132,11 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
  *   - سر در وسط بالا — بدون آیکن و فلش (درخواست کاربر ۱: واژه بالا است)
  *   - اعضا در سه گروه (اسم/فعل/صفت) زیر سر
  *   - خطوط عمودی (CSS) از سر به هر دسته، سپس خطوط افقی به هر عضو
- *   - چیدمان flex-wrap برای پویا بودن.
- *   - درخواست ۲: کلیک روی ghost → پنجرهٔ افزودن به واژگان (بدون برچسب متنی روی سرِ خانواده؛ توضیح پایین کافی است)
+ *   - چیدمان grid auto-fill برای هم‌اندازه بودن کارت‌ها و پویا بودن با کلمات طولانی.
+ *   - درخواست ۲: کلیک روی ghost → پنجرهٔ افزودن به واژگان
  *   - درخواست ۴: ترجمهٔ مهم زیر هر واژه (مخصوصاً ghost)
  *   - درخواست ۵: فونت‌ها بزرگ‌تر
+ *   - درخواست این دور (کلمات بزرگ): grid یکدست + فونت تطبیقی برای کلمات طولانی + جلوگیری از تکرار article.
  */
 const FamilyTreeModal: React.FC<{
   family: WordFamily;
@@ -165,6 +166,24 @@ const FamilyTreeModal: React.FC<{
     if (!fa) return '';
     const parts = fa.split(/[،,؛;\/|،]\s*|\s+یا\s+/).map(s => s.trim()).filter(s => s.length > 1);
     return parts.length > 0 ? parts[0] : fa;
+  };
+
+  // درخواست کاربر این دور: جلوگیری از تکرار article — اگر de با art شروع می‌شود، art را دوباره نشان نده
+  const formatWord = (m: FamilyMember): string => {
+    const de = m.word.de || '';
+    const art = m.word.art || '';
+    if (art && de.toLowerCase().startsWith(art.toLowerCase() + ' ')) {
+      return de; // de خودش article دارد — تکرار نده
+    }
+    return art ? `${art} ${de}` : de;
+  };
+
+  // درخواست کاربر این دور: فونت تطبیقی برای کلمات طولانی — طول نمایش + art
+  const wordFontSize = (m: FamilyMember): string => {
+    const display = formatWord(m);
+    if (display.length > 22) return 'text-sm';       // کلمات خیلی طولانی: کوچک‌تر
+    if (display.length > 14) return 'text-base';      // کلمات متوسط: معمولی
+    return 'text-base md:text-lg';                    // کلمات کوتاه: بزرگ
   };
 
   // کلیک روی یک عضو: اگر واقعی است، پروفایلش باز شود؛ اگر ghost است، پیام «افزودن» نشان داده شود
@@ -263,15 +282,17 @@ const FamilyTreeModal: React.FC<{
                   <div className="w-px h-3 bg-[#1f5fbf]/30 dark:bg-[#7fb0ff]/30 mb-1" />
                 )}
 
-                {/* اعضای این دسته — flex-wrap برای پویایی */}
-                <div className="flex flex-wrap items-stretch justify-center gap-2 w-full">
+                {/* درخواست کاربر این دور: اعضای این دسته — grid یکدست برای هم‌اندازه بودن کارت‌ها
+                     و پویا بودن با کلمات طولانی (به‌جای flex-1 که کارت‌ها را ناهماهنگ می‌کرد) */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full">
                   {branch.members.map((member, mi) => {
                     const fa = mainFa(member);
+                    const fontSize = wordFontSize(member);
                     return (
                       <button
                         key={`${member.word.id}-${mi}`}
                         onClick={() => handleMemberClick(member)}
-                        className={`relative z-10 flex flex-col items-center justify-center gap-0.5 px-3 py-2.5 rounded-xl bg-white dark:bg-[#1b2029] border-2 transition shadow-xs min-w-[100px] max-w-[200px] flex-1 ${
+                        className={`relative z-10 flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 rounded-xl bg-white dark:bg-[#1b2029] border-2 transition shadow-xs min-w-0 overflow-hidden ${
                           member.isGhost
                             ? 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30'
                             : 'border-[#dde1ea] dark:border-[#333b4a] hover:border-[#1f5fbf] dark:hover:border-[#7fb0ff] hover:shadow-md'
@@ -280,11 +301,16 @@ const FamilyTreeModal: React.FC<{
                       >
                         {/* دایرهٔ اتصال در بالای کارت */}
                         <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full ${branch.dotColor} ring-2 ring-white dark:ring-[#1b2029]`} />
-                        <span className="text-base font-bold text-slate-900 dark:text-slate-100 text-center break-words leading-tight" dir="ltr">
-                          {member.word.art ? `${member.word.art} ` : ''}{member.word.de}
+                        {/* واژه — فونت تطبیقی + break-words برای کلمات طولانی + hyphens-auto */}
+                        <span
+                          className={`${fontSize} font-bold text-slate-900 dark:text-slate-100 text-center break-words leading-tight w-full`}
+                          dir="ltr"
+                          style={{ hyphens: 'auto', WebkitHyphens: 'auto', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+                        >
+                          {formatWord(member)}
                         </span>
                         {/* ترجمهٔ مهم زیر هر واژه */}
-                        {fa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-center leading-tight break-words">{fa}</span>}
+                        {fa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-center leading-tight break-words w-full">{fa}</span>}
                         {/* درخواست کاربر ۲: badge برای اعضای ghost */}
                         {member.isGhost && (
                           <span className="mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
