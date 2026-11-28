@@ -2152,7 +2152,15 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
             // درخواست کاربر این دور: قبل از بستن کارت خانواده، آن را به‌عنوان مقصد بازگشت ذخیره کن
             // تا بعد از ذخیرهٔ واژه و بستن پروفایل، دقیقاً همین کارت خانواده دوباره باز شود.
             if (openFamilyId) familyEditReturnRef.current = openFamilyId;
+            // مهم: ترتیب این فراخوانی‌ها اهمیت دارد.
+            // ۱) خانواده را ببند (تا روی فرم تمرکز شود)
+            // ۲) حالت ویرایش را صفر کن (با useEffect مرتبط تداخل نکند)
+            // ۳) فرم را ریست کن (همهٔ فیلدها خالی شوند)
+            // ۴) مقادیر جدید را تنظیم کن
+            // ۵) تب add باز شود
+            setOpenFamilyId(null);
             onSetEditingWordId(null);
+            resetForm();
             setFormDe(de);
             setFormArt(art || '');
             setFormFa('');
