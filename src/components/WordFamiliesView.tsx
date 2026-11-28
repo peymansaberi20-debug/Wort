@@ -1,23 +1,7 @@
 /**
  * @license SPDX-License-Identifier: Apache-2.0
  *
- * WordFamiliesView.tsx — تب خانواده واژگان (درخواست کاربر ۳، اصلاح‌شده این دور)
- *
- * نمایش سرشاخه‌ها به‌صورت لیست ساده — روی هر کدام کلیک کنی → پنجرهٔ جدید باز می‌شود
- * و اعضای خانواده به‌صورت درختی واقعی با خطوط اتصال به واژهٔ اصلی نمایش داده می‌شوند.
- *
- * اصلاحات این دور:
- *  - حذف آیکون و فلش‌های چرخان از بالای کارت سرِ خانواده (درخواست ۱) — واژه بالا است.
- *  - کلیک روی واژه‌های توی واژگان نباشند (ghost) → پنجرهٔ «افزودن به واژگان» باز می‌شود (درخواست ۲)
- *  - برچسب متنی «در واژگان نیست — برای افزودن کلیک کن» زیر سرِ خانواده حذف شد؛
- *    توضیح پایین پنجره کافی است (درخواست جدید). خودِ قابلیت کلیک برای افزودن سرِ ghost دست‌نخورده مانده.
- *  - ترجمهٔ مهم زیر واژه‌های ghost (درخواست ۴)
- *  - فونت‌ها بزرگ‌تر (درخواست ۵)
- *  - تجمیع خانواده‌ها و فقط فعل‌های ساده به‌عنوان سرشاخه (درخواست ۶) — در wordFamily.ts پیاده‌سازی شده.
- *  - باز/بسته شدن کارت خانواده از بیرون (VocabularyView) کنترل می‌شود تا بعد از ویرایش واژه و بستن پروفایل،
- *    دقیقاً همان کارت دوباره باز شود.
- *  - این دور: هنگام افزودن واژهٔ ghost، ترجمهٔ فارسی و نوع واژه (اسم/فعل/صفت) هم به فرم افزودن پاس داده
- *    می‌شود (فرم پیش‌پر می‌شود)؛ بعد از ذخیره/انصراف، VocabularyView همان کارت خانواده را دوباره باز می‌کند.
+ * WordFamiliesView.tsx — تب خانواده واژگان (نسخه نهایی اصلاح‌شده)
  */
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -27,13 +11,7 @@ import { buildWordFamilies, WordFamily, FamilyMember } from '../utils/wordFamily
 interface Props {
   words: Word[];
   onSelectWord: (w: Word) => void;
-  /** درخواست کاربر ۲: افزودن یک واژهٔ جدید به واژگان — با de (و art/fa/pos اختیاری) آمادهٔ پر شدن */
   onAddWord?: (de: string, art?: string, fa?: string, pos?: string) => void;
-  /**
-   * درخواست کاربر: id خانوادهٔ باز (کنترل‌شده از بیرون).
-   * وقتی از تب خانواده واژه‌ای را ویرایش می‌کنی و پروفایلش را می‌بندی،
-   * همین id باعث می‌شود دقیقاً همان کارت خانواده دوباره باز شود.
-   */
   openFamilyId?: string | null;
   onOpenFamilyChange?: (id: string | null) => void;
 }
@@ -43,7 +21,6 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
   const [internalFamilyId, setInternalFamilyId] = useState<string | null>(null);
   const families = useMemo(() => buildWordFamilies(words), [words]);
 
-  // درخواست کاربر: انتخاب خانواده از بیرون کنترل می‌شود تا بعد از ویرایش/بستن پروفایل همان کارت باز بماند
   const isControlled = typeof onOpenFamilyChange === 'function';
   const selectedFamilyId = isControlled ? (openFamilyId ?? null) : internalFamilyId;
   const setSelectedFamilyId = (id: string | null) => {
@@ -67,7 +44,6 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
 
   return (
     <div className="space-y-3 text-right">
-      {/* جست‌وجو */}
       <input
         type="text"
         value={query}
@@ -76,7 +52,6 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
         className="w-full px-3.5 py-2.5 rounded-xl border border-[#dde1ea] dark:border-[#333b4a] bg-white dark:bg-[#141923] text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#4385e8]"
       />
 
-      {/* شمارش */}
       <div className="text-sm text-[#5d6676] dark:text-[#a3adbd] flex items-center gap-1.5">
         <span>🌐</span>
         <span>{filtered.length} خانواده واژگانی (از مجموع {families.length}) — روی هر سرشاخه بزن تا درختش را ببینی</span>
@@ -89,7 +64,6 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
             : 'خانواده‌ای با این جست‌وجو پیدا نشد.'}
         </div>
       ) : (
-        /* لیست سرشاخه‌ها — هر کدام یک ردیف با آیکن و نام + badge تعداد اعضا */
         <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
           {filtered.map(f => (
             <button
@@ -116,53 +90,39 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
         </div>
       )}
 
-      {/* پنجرهٔ درخت خانواده — به body منتقل می‌شود */}
       {selectedFamily && (
         <FamilyTreeModal
           family={selectedFamily}
           onClose={() => setSelectedFamilyId(null)}
           onSelectWord={onSelectWord}
           onAddWord={onAddWord}
+          selectedFamilyId={selectedFamilyId}
         />
       )}
     </div>
   );
 };
 
-/* ───────────── پنجرهٔ درخت خانواده با خطوط اتصال (پویا، اصلاح این دور) ─────────────
- * نمایش واقعی به‌صورت درخت:
- *   - سر در وسط بالا — بدون آیکون و فلش (درخواست کاربر ۱: واژه بالا است)
- *   - اعضا در سه گروه (اسم/فعل/صفت) زیر سر
- *   - خطوط عمودی (CSS) از سر به هر دسته، سپس خطوط افقی به هر عضو
- *   - چیدمان grid auto-fill برای هم‌اندازه بودن کارت‌ها و پویا بودن با کلمات طولانی.
- *   - درخواست ۲: کلیک روی ghost → پنجرهٔ افزودن به واژگان
- *   - درخواست ۴: ترجمهٔ مهم زیر هر واژه (مخصوصاً ghost)
- *   - درخواست ۵: فونت‌ها بزرگ‌تر
- *   - درخواست این دور (کلمات بزرگ): grid یکدست + فونت تطبیقی برای کلمات طولانی + جلوگیری از تکرار article.
- */
 const FamilyTreeModal: React.FC<{
   family: WordFamily;
   onClose: () => void;
   onSelectWord: (w: Word) => void;
   onAddWord?: (de: string, art?: string, fa?: string, pos?: string) => void;
-}> = ({ family, onClose, onSelectWord, onAddWord }) => {
+  selectedFamilyId: string | null;
+}> = ({ family, onClose, onSelectWord, onAddWord, selectedFamilyId }) => {
   const [addPrompt, setAddPrompt] = useState<{ de: string; art: string; fa: string; pos: string } | null>(null);
 
-  // دسته‌بندی اعضا بر اساس نقش
   const head = family.members.find(m => m.role === 'head');
   const nouns = family.members.filter(m => m.role === 'noun');
   const verbs = family.members.filter(m => m.role === 'verb');
   const adjs = family.members.filter(m => m.role === 'adj');
-  // نمایش به‌صورت یک ستون از اعضا (به ترتیب: اسم/فعل/صفت)
-  const branches: { members: FamilyMember[]; label: string; color: string; dotColor: string }[] = [
+
+  const branches = [
     { members: nouns, label: 'اسم (Nomen)', color: 'from-blue-500 to-indigo-500', dotColor: 'bg-blue-500' },
     { members: verbs, label: 'فعل (Verben)', color: 'from-emerald-500 to-teal-500', dotColor: 'bg-emerald-500' },
     { members: adjs, label: 'صفت (Adjektive)', color: 'from-amber-500 to-orange-500', dotColor: 'bg-amber-500' }
   ].filter(b => b.members.length > 0);
 
-  // تابع انتخاب مهم‌ترین ترجمهٔ هر واژه
-  // اگر ghost است، fa مستقیماً از buildWordFamilies آمده.
-  // اگر واقعی است، اولین معنی قبل از «،» / «؛» / «/» / «|»
   const mainFa = (m: FamilyMember): string => {
     const fa = (m.fa || '').trim();
     if (!fa) return '';
@@ -170,43 +130,45 @@ const FamilyTreeModal: React.FC<{
     return parts.length > 0 ? parts[0] : fa;
   };
 
-  // درخواست کاربر این دور: جلوگیری از تکرار article — اگر de با art شروع می‌شود، art را دوباره نشان نده
   const formatWord = (m: FamilyMember): string => {
     const de = m.word.de || '';
     const art = m.word.art || '';
     if (art && de.toLowerCase().startsWith(art.toLowerCase() + ' ')) {
-      return de; // de خودش article دارد — تکرار نده
+      return de;
     }
     return art ? `${art} ${de}` : de;
   };
 
-  // درخواست کاربر این دور: فونت تطبیقی برای کلمات طولانی — طول نمایش + art
   const wordFontSize = (m: FamilyMember): string => {
     const display = formatWord(m);
-    if (display.length > 22) return 'text-sm';       // کلمات خیلی طولانی: کوچک‌تر
-    if (display.length > 14) return 'text-base';      // کلمات متوسط: معمولی
-    return 'text-base md:text-lg';                    // کلمات کوتاه: بزرگ
+    if (display.length > 22) return 'text-sm';
+    if (display.length > 14) return 'text-base';
+    return 'text-base md:text-lg';
   };
 
-  // کلیک روی یک عضو: اگر واقعی است، پروفایلش باز شود؛ اگر ghost است، پیام «افزودن» نشان داده شود
   const handleMemberClick = (m: FamilyMember) => {
     if (m.isGhost) {
       setAddPrompt({ de: m.word.de, art: m.word.art || '', fa: m.fa, pos: m.word.pos || '' });
     } else {
+      // ذخیره کارت فعال جاری برای بازگشت دقیق پس از بستن پروفایل واژه
+      if (selectedFamilyId) {
+        localStorage.setItem('active_family_card', selectedFamilyId);
+      }
       onSelectWord(m.word);
     }
   };
 
-  // تأیید افزودن واژه → رفتن به فرم افزودن (VocabularyView)؛ کارت خانواده در VocabularyView به‌عنوان مقصد بازگشت ثبت می‌شود
   const confirmAddWord = () => {
     if (!addPrompt) return;
+    if (selectedFamilyId) {
+      localStorage.setItem('active_family_card', selectedFamilyId);
+    }
     onAddWord?.(addPrompt.de, addPrompt.art, addPrompt.fa, addPrompt.pos);
     setAddPrompt(null);
     onClose();
   };
 
   const totalMembers = branches.reduce((s, b) => s + b.members.length, 0);
-  // اگر هیچ شاخه‌ای نبود (تنها سر)
   if (totalMembers === 0 || !head) {
     return createPortal(
       <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose}>
@@ -226,7 +188,6 @@ const FamilyTreeModal: React.FC<{
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white dark:bg-[#1b2029] border border-[#dde1ea] dark:border-[#333b4a] rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl" dir="rtl">
-        {/* هدر */}
         <div dir="ltr" className="sticky top-0 z-10 bg-white/95 dark:bg-[#1b2029]/95 backdrop-blur-md px-4 py-3 border-b border-[#dde1ea] dark:border-[#333b4a] flex items-center justify-between gap-2">
           <button onClick={onClose} className="text-red-500 text-base font-bold px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30">✕ بستن</button>
           <h3 className="flex-1 text-right font-bold text-base md:text-lg text-slate-900 dark:text-slate-100">
@@ -234,9 +195,7 @@ const FamilyTreeModal: React.FC<{
           </h3>
         </div>
 
-        {/* بدنهٔ درخت — چیدمان پویا با خطوط CSS */}
         <div className="p-3 md:p-5">
-          {/* سرِ خانواده — درخواست کاربر ۱: بدون آیکون و فلش، فقط واژه بالا */}
           <div className="flex flex-col items-center mb-2">
             <b className="text-xs text-[#5d6676] dark:text-[#a3adbd] block mb-1">سرِ خانواده (Stamm) — فعل مصدر ساده</b>
             <button
@@ -250,25 +209,20 @@ const FamilyTreeModal: React.FC<{
             {mainFa(head) && <span className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{mainFa(head)}</span>}
           </div>
 
-          {/* خط عمودی از سر به پایین (به دسته‌ها) */}
           <div className="flex justify-center mb-0">
             <div className="w-px h-6 bg-[#1f5fbf]/40 dark:bg-[#7fb0ff]/40" />
           </div>
 
-          {/* هر دسته (اسم/فعل/صفت) به‌صورت یک ردیف کامل */}
           <div className="space-y-4">
             {branches.map((branch, bi) => (
               <div key={`branch-${bi}`} className="flex flex-col items-center">
-                {/* برچسب دسته */}
                 <div className={`text-xs font-bold px-2.5 py-1 rounded-full bg-gradient-to-r ${branch.color} text-white shadow-xs mb-2 z-10`}>
                   {branch.label} ({branch.members.length})
                 </div>
 
-                {/* خط افقی اتصال — فقط اگر بیش از ۱ عضو باشد */}
                 {branch.members.length > 1 && (
                   <div className="relative w-full h-4 mb-1">
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] max-w-[600px] h-px bg-[#1f5fbf]/30 dark:bg-[#7fb0ff]/30" />
-                    {/* خط عمودی کوتاه به هر کارت */}
                     {branch.members.map((_, mi) => (
                       <div
                         key={`vline-${mi}`}
@@ -284,8 +238,6 @@ const FamilyTreeModal: React.FC<{
                   <div className="w-px h-3 bg-[#1f5fbf]/30 dark:bg-[#7fb0ff]/30 mb-1" />
                 )}
 
-                {/* درخواست کاربر این دور: اعضای این دسته — grid یکدست برای هم‌اندازه بودن کارت‌ها
-                     و پویا بودن با کلمات طولانی (به‌جای flex-1 که کارت‌ها را ناهماهنگ می‌کرد) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full">
                   {branch.members.map((member, mi) => {
                     const fa = mainFa(member);
@@ -301,9 +253,7 @@ const FamilyTreeModal: React.FC<{
                         }`}
                         title={member.isGhost ? 'در واژگان نیست — کلیک کن تا اضافه‌اش کنی' : (member.word.fa || '')}
                       >
-                        {/* دایرهٔ اتصال در بالای کارت */}
                         <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full ${branch.dotColor} ring-2 ring-white dark:ring-[#1b2029]`} />
-                        {/* واژه — فونت تطبیقی + break-words برای کلمات طولانی + hyphens-auto */}
                         <span
                           className={`${fontSize} font-bold text-slate-900 dark:text-slate-100 text-center break-words leading-tight w-full`}
                           dir="ltr"
@@ -311,9 +261,7 @@ const FamilyTreeModal: React.FC<{
                         >
                           {formatWord(member)}
                         </span>
-                        {/* ترجمهٔ مهم زیر هر واژه */}
                         {fa && <span className="text-xs text-[#5d6676] dark:text-[#a3adbd] text-center leading-tight break-words w-full">{fa}</span>}
-                        {/* درخواست کاربر ۲: badge برای اعضای ghost */}
                         {member.isGhost && (
                           <span className="mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
                             + افزودن به واژگان
@@ -327,16 +275,13 @@ const FamilyTreeModal: React.FC<{
             ))}
           </div>
 
-          {/* توضیح */}
           <div className="text-center text-xs text-[#5d6676] dark:text-[#a3adbd] mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
             💡 روی هر واژهٔ موجود بزن تا پروفایلش باز شود.
             <br />کلمه‌های نارنجی «+ افزودن» در واژگان نیستند — کلیک کن تا به واژگان اضافه شوند.
-            <br />معنی زیر هر واژه، مهم‌ترین معناست؛ برای جزئیات بیشتر روی واژه بزن.
           </div>
         </div>
       </div>
 
-      {/* پنجرهٔ تأیید افزودن واژه (درخواست کاربر ۲) */}
       {addPrompt && (
         createPortal(
           <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) setAddPrompt(null); }}>
