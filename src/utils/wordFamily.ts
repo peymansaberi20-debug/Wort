@@ -79,13 +79,25 @@ const PARTICIPLE_TO_INFINITIVE: Record<string, string> = {
   'gesessen': 'sitzen', 'gehalten': 'halten', 'getragen': 'tragen',
   'geworfen': 'werfen', 'gezogen': 'ziehen', 'geschlossen': 'schließen',
   'gemessen': 'messen', 'vergessen': 'vergessen', 'gelassen': 'lassen',
-  'gelitten': 'leiden', 'gelitten2': 'leiden', 'geritten': 'reiten',
-  'gebissen': 'beißen', 'gefolgen': 'folgen'
+  'gelitten': 'leiden', 'geritten': 'reiten',
+  'gebissen': 'beißen', 'gefolgen': 'folgen',
+  'geplant': 'planen', 'gemacht': 'machen', 'gesagt': 'sagen',
+  'gelernt': 'lernen', 'gekauft': 'kaufen', 'gearbeitet': 'arbeiten',
+  'gespielt': 'spielen', 'gewohnt': 'wohnen', 'gebraucht': 'gebrauchen'
 };
 
 /**
  * استخراج سرِ خانواده (فعل مصدر ساده) از یک رشتهٔ آلمانی.
  * اگر رشته اسم یا صفت باشد → null (سرشاخه فعل نیست).
+ *
+ * درخواست کاربر این دور (اصلاح): فقط پیشوندهای جداشدنی (separable) حذف می‌شوند؛
+ * پیشوندهای جدا نشدنی (be-, ent-, er-, ge-, miss-, ver-, zer-, emp-) که معنای جدید می‌سازند
+ * حذف نمی‌شوند. مثلاً:
+ *   - "abbrechen" → "brechen" (separable prefix "ab-"، ریشهٔ واقعی "brechen")
+ *   - "abgebrochen" → "brechen" (حذف "ab-" + تبدیل "gebrochen" به "brechen")
+ *   - "veranstalten" → "veranstalten" (inseparable "ver-"، خودش مصدر است، "anstalten" نه)
+ *   - "verstehen" → "verstehen" (inseparable، خودش فعل مستقل)
+ *   - "sich engagieren" → "engagieren" (sich حذف، خودش مصدر)
  */
 const extractVerbRoot = (de: string): string | null => {
   let s = nz(de).replace(/^(der|die|das|sich)\s+/, '').trim();
@@ -95,32 +107,32 @@ const extractVerbRoot = (de: string): string | null => {
   // ۱. اگر در جدول Partizip II بود → مصدر معادل
   if (PARTICIPLE_TO_INFINITIVE[s]) return PARTICIPLE_TO_INFINITIVE[s];
 
-  // ۲. حذف پیشوند ge- + پسوند -t یا -en برای تشخیص Partizip II
-  // مثلاً ge+mach+t → mach
+  // ۲. اگر با "ge" شروع و با "t" تمام → Partizip II ضعیف (geXt → X-en)
   if (/^ge.+t$/.test(s) && s.length > 5) {
     const candidate = s.replace(/^ge/, '').replace(/t$/, '');
-    // اگر به یک مصدر معقول می‌رسیم (طول >= ۳ و تماماً حروف کوچک)
     if (candidate.length >= 3 && /^[a-zäöüß]+$/.test(candidate)) {
-      // برگرداندن به حالت مصدر با افزودن -en اگر فعلاً -en ندارد
       const withEn = /en$/.test(candidate) ? candidate : candidate + 'en';
       return withEn;
     }
   }
 
-  // ۳. حذف پیشوندهای جداشدنی و جدا نشدنی متداول
-  const allPrefixes = [...COMMON_SEPARABLE_PREFIXES, ...COMMON_INSEPARABLE_PREFIXES].sort((a, b) => b.length - a.length);
-  for (const p of allPrefixes) {
+  // ۳. حذف پیشوندهای جداشدنی (فقط separable، نه inseparable).
+  //    اگر بعد از حذف پیشوند، در جدول Partizip II بود → مصدر معادل.
+  //    اگر بعد از حذف پیشوند، به "-en" / "-eln" / "-ern" ختم شد → آن را به‌عنوان مصدر برگردان.
+  for (const p of [...COMMON_SEPARABLE_PREFIXES].sort((a, b) => b.length - a.length)) {
     if (s.startsWith(p) && s.length > p.length + 2) {
       const rest = s.slice(p.length);
-      // اگر بعد از حذف پیشوند، مصدر معقول داریم (با -en تمام می‌شود)
-      if (/en$/.test(rest) && rest.length >= 3) {
+      if (PARTICIPLE_TO_INFINITIVE[rest]) return PARTICIPLE_TO_INFINITIVE[rest];
+      if (/(en|eln|ern)$/.test(rest) && rest.length >= 3) {
         return rest;
       }
     }
   }
 
-  // ۴. اگر خودش -en دارد، خودش سرشاخه است
-  if (/en$/.test(s)) return s;
+  // ۴. اگر با "-en" یا "-eln" یا "-ern" تمام → خودش مصدر است
+  if (/(en|eln|ern)$/.test(s) && s.length >= 4) {
+    return s;
+  }
 
   return null;
 };
@@ -205,8 +217,10 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
     const famAgg = ensureFamily(rootLemma, rootDe, headFa, rootWord);
 
     // افزودن خود واژه به‌عنوان عضو (اگر خودش سرشاخه نیست و هنوز اضافه نشده)
+    // درخواست کاربر (اصلاح این دور): مقایسهٔ زیرساخت‌ها باید بر اساس lemmaKey باشد، نه nz؛
+    //   nz(m.word.de) شامل «der/die/das/sich» می‌ماند ولی wLemma آن‌ها را حذف می‌کند → تکرار اعضا رخ می‌داد (مثلاً «sich engagieren»).
     const wLemma = lemmaKey(w.de);
-    if (wLemma !== rootLemma && !famAgg.members.some(m => nz(m.word.de) === wLemma && !m.isGhost)) {
+    if (wLemma !== rootLemma && !famAgg.members.some(m => lemmaKey(m.word.de) === wLemma && !m.isGhost)) {
       const role: FamilyMember['role'] = isVerbPos(w.pos) ? 'verb' : isNounPos(w.pos) ? 'noun' : 'adj';
       famAgg.members.push({
         word: w,
@@ -224,10 +238,10 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
       const mw = byLemma.get(mk);
       const exists = !!mw;
       // اگر واژه در واژگان موجود است و در members فعلی موجود است، رد شو
-      if (mw && famAgg.members.some(m => nz(m.word.de) === mk && !m.isGhost)) continue;
+      if (mw && famAgg.members.some(m => lemmaKey(m.word.de) === mk && !m.isGhost)) continue;
       // اگر قبلاً به‌عنوان ghost اضافه شده و حالا نسخهٔ واقعی داریم، ghost را حذف کن
       if (mw) {
-        famAgg.members = famAgg.members.filter(m => !(nz(m.word.de) === mk && m.isGhost));
+        famAgg.members = famAgg.members.filter(m => !(lemmaKey(m.word.de) === mk && m.isGhost));
         famAgg.members.push({
           word: mw,
           role: 'noun',
@@ -235,6 +249,19 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
           fa: mw.fa || nf.fa
         });
       } else {
+        // ghost — درخواست کاربر (اصلاح این دور): اگر قبلاً با همین lemmaKey اضافه شده، رد شو
+        // (اگر ترجمهٔ جدید غیرخالی است و قدیمی خالی، به‌روزرسانی کن)
+        const existingIdx = famAgg.members.findIndex(m => lemmaKey(m.word.de) === mk && m.isGhost);
+        if (existingIdx >= 0) {
+          if (!famAgg.members[existingIdx].fa && nf.fa) {
+            famAgg.members[existingIdx] = {
+              ...famAgg.members[existingIdx],
+              fa: nf.fa,
+              word: { ...famAgg.members[existingIdx].word, fa: nf.fa }
+            };
+          }
+          continue;
+        }
         // ghost — ترجمه از پرانتز استخراج شده
         const ghost: Word = {
           ...w,
@@ -252,9 +279,9 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
       const vw = byLemma.get(vk);
       // خود سرشاخه را رد کن — آن جدا اضافه می‌شود
       if (vk === rootLemma) continue;
-      if (vw && famAgg.members.some(m => nz(m.word.de) === vk && !m.isGhost)) continue;
+      if (vw && famAgg.members.some(m => lemmaKey(m.word.de) === vk && !m.isGhost)) continue;
       if (vw) {
-        famAgg.members = famAgg.members.filter(m => !(nz(m.word.de) === vk && m.isGhost));
+        famAgg.members = famAgg.members.filter(m => !(lemmaKey(m.word.de) === vk && m.isGhost));
         famAgg.members.push({
           word: vw,
           role: 'verb',
@@ -262,6 +289,18 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
           fa: vw.fa || vf.fa
         });
       } else {
+        // ghost — dedup مشابه اسم‌ها
+        const existingIdx = famAgg.members.findIndex(m => lemmaKey(m.word.de) === vk && m.isGhost);
+        if (existingIdx >= 0) {
+          if (!famAgg.members[existingIdx].fa && vf.fa) {
+            famAgg.members[existingIdx] = {
+              ...famAgg.members[existingIdx],
+              fa: vf.fa,
+              word: { ...famAgg.members[existingIdx].word, fa: vf.fa }
+            };
+          }
+          continue;
+        }
         const ghost: Word = {
           ...w,
           id: `ghost-${vk}-${w.id}`,
@@ -276,9 +315,9 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
     for (const af of fam.adjsFa) {
       const ak = lemmaKey(af.de);
       const aw = byLemma.get(ak);
-      if (aw && famAgg.members.some(m => nz(m.word.de) === ak && !m.isGhost)) continue;
+      if (aw && famAgg.members.some(m => lemmaKey(m.word.de) === ak && !m.isGhost)) continue;
       if (aw) {
-        famAgg.members = famAgg.members.filter(m => !(nz(m.word.de) === ak && m.isGhost));
+        famAgg.members = famAgg.members.filter(m => !(lemmaKey(m.word.de) === ak && m.isGhost));
         famAgg.members.push({
           word: aw,
           role: 'adj',
@@ -286,6 +325,18 @@ export const buildWordFamilies = (words: Word[]): WordFamily[] => {
           fa: aw.fa || af.fa
         });
       } else {
+        // ghost — dedup مشابه اسم‌ها
+        const existingIdx = famAgg.members.findIndex(m => lemmaKey(m.word.de) === ak && m.isGhost);
+        if (existingIdx >= 0) {
+          if (!famAgg.members[existingIdx].fa && af.fa) {
+            famAgg.members[existingIdx] = {
+              ...famAgg.members[existingIdx],
+              fa: af.fa,
+              word: { ...famAgg.members[existingIdx].word, fa: af.fa }
+            };
+          }
+          continue;
+        }
         const ghost: Word = {
           ...w,
           id: `ghost-${ak}-${w.id}`,
