@@ -8,10 +8,14 @@
  *
  * اصلاحات این دور:
  *  - حذف آیکن و فلش‌های چرخان از بالای کارت سرِ خانواده (درخواست ۱) — واژه بالا است.
- *  - کلیک روی واژه‌های توی واژگان نباشند (ghost) → پیام «در واژگان نیست — اضافه می‌کنی؟» + باز شدن پنجرهٔ افزودن (درخواست ۲)
+ *  - کلیک روی واژه‌های توی واژگان نباشند (ghost) → پنجرهٔ «افزودن به واژگان» باز می‌شود (درخواست ۲)
+ *  - برچسب متنی «در واژگان نیست — برای افزودن کلیک کن» زیر سرِ خانواده حذف شد؛
+ *    توضیح پایین پنجره کافی است (درخواست جدید). خودِ قابلیت کلیک برای افزودن سرِ ghost دست‌نخورده مانده.
  *  - ترجمهٔ مهم زیر واژه‌های ghost (درخواست ۴)
  *  - فونت‌ها بزرگ‌تر (درخواست ۵)
  *  - تجمیع خانواده‌ها و فقط فعل‌های ساده به‌عنوان سرشاخه (درخواست ۶) — در wordFamily.ts پیاده‌سازی شده.
+ *  - باز/بسته شدن کارت خانواده از بیرون (VocabularyView) کنترل می‌شود تا بعد از ویرایش واژه و بستن پروفایل،
+ *    دقیقاً همان کارت دوباره باز شود.
  */
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -23,12 +27,31 @@ interface Props {
   onSelectWord: (w: Word) => void;
   /** درخواست کاربر ۲: افزودن یک واژهٔ جدید به واژگان — با de آمادهٔ پر شدن */
   onAddWord?: (de: string, art?: string) => void;
+  /**
+   * درخواست کاربر: id خانوادهٔ باز (کنترل‌شده از بیرون).
+   * وقتی از تب خانواده واژه‌ای را ویرایش می‌کنی و پروفایلش را می‌بندی،
+   * همین id باعث می‌شود دقیقاً همان کارت خانواده دوباره باز شود.
+   */
+  openFamilyId?: string | null;
+  onOpenFamilyChange?: (id: string | null) => void;
 }
 
-export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWord }) => {
+export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWord, openFamilyId, onOpenFamilyChange }) => {
   const [query, setQuery] = useState('');
-  const [selectedFamily, setSelectedFamily] = useState<WordFamily | null>(null);
+  const [internalFamilyId, setInternalFamilyId] = useState<string | null>(null);
   const families = useMemo(() => buildWordFamilies(words), [words]);
+
+  // درخواست کاربر: انتخاب خانواده از بیرون کنترل می‌شود تا بعد از ویرایش/بستن پروفایل همان کارت باز بماند
+  const isControlled = typeof onOpenFamilyChange === 'function';
+  const selectedFamilyId = isControlled ? (openFamilyId ?? null) : internalFamilyId;
+  const setSelectedFamilyId = (id: string | null) => {
+    if (isControlled) onOpenFamilyChange?.(id);
+    else setInternalFamilyId(id);
+  };
+  const selectedFamily = useMemo(
+    () => (selectedFamilyId ? families.find(f => f.id === selectedFamilyId) || null : null),
+    [families, selectedFamilyId]
+  );
 
   const filtered = useMemo(() => {
     if (!query.trim()) return families;
@@ -69,7 +92,7 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
           {filtered.map(f => (
             <button
               key={f.id}
-              onClick={() => setSelectedFamily(f)}
+              onClick={() => setSelectedFamilyId(f.id)}
               className="w-full px-3 py-3 flex items-center justify-between gap-2 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition text-right"
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -95,7 +118,7 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
       {selectedFamily && (
         <FamilyTreeModal
           family={selectedFamily}
-          onClose={() => setSelectedFamily(null)}
+          onClose={() => setSelectedFamilyId(null)}
           onSelectWord={onSelectWord}
           onAddWord={onAddWord}
         />
@@ -110,7 +133,7 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
  *   - اعضا در سه گروه (اسم/فعل/صفت) زیر سر
  *   - خطوط عمودی (CSS) از سر به هر دسته، سپس خطوط افقی به هر عضو
  *   - چیدمان flex-wrap برای پویا بودن.
- *   - درخواست ۲: کلیک روی ghost → پیام + گزینهٔ «افزودن به واژگان»
+ *   - درخواست ۲: کلیک روی ghost → پنجرهٔ افزودن به واژگان (بدون برچسب متنی روی سرِ خانواده؛ توضیح پایین کافی است)
  *   - درخواست ۴: ترجمهٔ مهم زیر هر واژه (مخصوصاً ghost)
  *   - درخواست ۵: فونت‌ها بزرگ‌تر
  */
@@ -199,15 +222,11 @@ const FamilyTreeModal: React.FC<{
               onClick={() => handleMemberClick(head)}
               className="font-bold text-lg md:text-xl text-slate-900 dark:text-slate-100 hover:text-[#1f5fbf] dark:hover:text-[#7fb0ff] transition text-center"
               dir="ltr"
+              title={head.isGhost ? 'در واژگان نیست — کلیک کن تا اضافه شود' : (head.word.fa || '')}
             >
               {family.head}
             </button>
             {mainFa(head) && <span className="text-sm text-[#5d6676] dark:text-[#a3adbd]">{mainFa(head)}</span>}
-            {head.isGhost && (
-              <span className="mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
-                ⚠️ در واژگان نیست — برای افزودن کلیک کن
-              </span>
-            )}
           </div>
 
           {/* خط عمودی از سر به پایین (به دسته‌ها) */}
