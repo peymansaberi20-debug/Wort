@@ -7,7 +7,7 @@
  * و اعضای خانواده به‌صورت درختی واقعی با خطوط اتصال به واژهٔ اصلی نمایش داده می‌شوند.
  *
  * اصلاحات این دور:
- *  - حذف آیکن و فلش‌های چرخان از بالای کارت سرِ خانواده (درخواست ۱) — واژه بالا است.
+ *  - حذف آیکون و فلش‌های چرخان از بالای کارت سرِ خانواده (درخواست ۱) — واژه بالا است.
  *  - کلیک روی واژه‌های توی واژگان نباشند (ghost) → پنجرهٔ «افزودن به واژگان» باز می‌شود (درخواست ۲)
  *  - برچسب متنی «در واژگان نیست — برای افزودن کلیک کن» زیر سرِ خانواده حذف شد؛
  *    توضیح پایین پنجره کافی است (درخواست جدید). خودِ قابلیت کلیک برای افزودن سرِ ghost دست‌نخورده مانده.
@@ -16,6 +16,8 @@
  *  - تجمیع خانواده‌ها و فقط فعل‌های ساده به‌عنوان سرشاخه (درخواست ۶) — در wordFamily.ts پیاده‌سازی شده.
  *  - باز/بسته شدن کارت خانواده از بیرون (VocabularyView) کنترل می‌شود تا بعد از ویرایش واژه و بستن پروفایل،
  *    دقیقاً همان کارت دوباره باز شود.
+ *  - این دور: هنگام افزودن واژهٔ ghost، ترجمهٔ فارسی و نوع واژه (اسم/فعل/صفت) هم به فرم افزودن پاس داده
+ *    می‌شود (فرم پیش‌پر می‌شود)؛ بعد از ذخیره/انصراف، VocabularyView همان کارت خانواده را دوباره باز می‌کند.
  */
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -25,8 +27,8 @@ import { buildWordFamilies, WordFamily, FamilyMember } from '../utils/wordFamily
 interface Props {
   words: Word[];
   onSelectWord: (w: Word) => void;
-  /** درخواست کاربر ۲: افزودن یک واژهٔ جدید به واژگان — با de آمادهٔ پر شدن */
-  onAddWord?: (de: string, art?: string) => void;
+  /** درخواست کاربر ۲: افزودن یک واژهٔ جدید به واژگان — با de (و art/fa/pos اختیاری) آمادهٔ پر شدن */
+  onAddWord?: (de: string, art?: string, fa?: string, pos?: string) => void;
   /**
    * درخواست کاربر: id خانوادهٔ باز (کنترل‌شده از بیرون).
    * وقتی از تب خانواده واژه‌ای را ویرایش می‌کنی و پروفایلش را می‌بندی،
@@ -129,7 +131,7 @@ export const WordFamiliesView: React.FC<Props> = ({ words, onSelectWord, onAddWo
 
 /* ───────────── پنجرهٔ درخت خانواده با خطوط اتصال (پویا، اصلاح این دور) ─────────────
  * نمایش واقعی به‌صورت درخت:
- *   - سر در وسط بالا — بدون آیکن و فلش (درخواست کاربر ۱: واژه بالا است)
+ *   - سر در وسط بالا — بدون آیکون و فلش (درخواست کاربر ۱: واژه بالا است)
  *   - اعضا در سه گروه (اسم/فعل/صفت) زیر سر
  *   - خطوط عمودی (CSS) از سر به هر دسته، سپس خطوط افقی به هر عضو
  *   - چیدمان grid auto-fill برای هم‌اندازه بودن کارت‌ها و پویا بودن با کلمات طولانی.
@@ -142,9 +144,9 @@ const FamilyTreeModal: React.FC<{
   family: WordFamily;
   onClose: () => void;
   onSelectWord: (w: Word) => void;
-  onAddWord?: (de: string, art?: string) => void;
+  onAddWord?: (de: string, art?: string, fa?: string, pos?: string) => void;
 }> = ({ family, onClose, onSelectWord, onAddWord }) => {
-  const [addPrompt, setAddPrompt] = useState<{ de: string; art: string; fa: string } | null>(null);
+  const [addPrompt, setAddPrompt] = useState<{ de: string; art: string; fa: string; pos: string } | null>(null);
 
   // دسته‌بندی اعضا بر اساس نقش
   const head = family.members.find(m => m.role === 'head');
@@ -189,16 +191,16 @@ const FamilyTreeModal: React.FC<{
   // کلیک روی یک عضو: اگر واقعی است، پروفایلش باز شود؛ اگر ghost است، پیام «افزودن» نشان داده شود
   const handleMemberClick = (m: FamilyMember) => {
     if (m.isGhost) {
-      setAddPrompt({ de: m.word.de, art: m.word.art || '', fa: m.fa });
+      setAddPrompt({ de: m.word.de, art: m.word.art || '', fa: m.fa, pos: m.word.pos || '' });
     } else {
       onSelectWord(m.word);
     }
   };
 
-  // تأیید افزودن واژه → بستن پنجرهٔ درخت، رفتن به تب افزودن واژه
+  // تأیید افزودن واژه → رفتن به فرم افزودن (VocabularyView)؛ کارت خانواده در VocabularyView به‌عنوان مقصد بازگشت ثبت می‌شود
   const confirmAddWord = () => {
     if (!addPrompt) return;
-    onAddWord?.(addPrompt.de, addPrompt.art);
+    onAddWord?.(addPrompt.de, addPrompt.art, addPrompt.fa, addPrompt.pos);
     setAddPrompt(null);
     onClose();
   };
@@ -234,7 +236,7 @@ const FamilyTreeModal: React.FC<{
 
         {/* بدنهٔ درخت — چیدمان پویا با خطوط CSS */}
         <div className="p-3 md:p-5">
-          {/* سرِ خانواده — درخواست کاربر ۱: بدون آیکن و فلش، فقط واژه بالا */}
+          {/* سرِ خانواده — درخواست کاربر ۱: بدون آیکون و فلش، فقط واژه بالا */}
           <div className="flex flex-col items-center mb-2">
             <b className="text-xs text-[#5d6676] dark:text-[#a3adbd] block mb-1">سرِ خانواده (Stamm) — فعل مصدر ساده</b>
             <button
