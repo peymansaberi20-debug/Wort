@@ -2149,6 +2149,9 @@ className="bg-gradient-to-r from-[#1f5fbf] to-[#6b4fd8] text-white px-4 py-2 rou
           onSelectWord={onSelectWord}
           onAddWord={(de, art) => {
             // درخواست کاربر ۲: باز کردن فرم افزودن واژه با de و art از پیش پر شده
+            // درخواست کاربر این دور: قبل از بستن کارت خانواده، آن را به‌عنوان مقصد بازگشت ذخیره کن
+            // تا بعد از ذخیرهٔ واژه و بستن پروفایل، دقیقاً همین کارت خانواده دوباره باز شود.
+            if (openFamilyId) familyEditReturnRef.current = openFamilyId;
             onSetEditingWordId(null);
             setFormDe(de);
             setFormArt(art || '');
